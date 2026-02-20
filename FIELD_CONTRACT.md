@@ -170,7 +170,7 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `status-dot`, `status-label`, `mode`, `last-update`, `market`
 
 ### Signal Core
-`goldcon`, `goldcon-decision`, `goldcon-score`, `goldcon-conf`, `goldcon-scenario`, `goldcon-blocked`, `gauge-needle`, `gauge-arc`
+`goldcon`, `goldcon-decision`, `goldcon-score`, `goldcon-conf`, `goldcon-scenario`, `goldcon-blocked`, `signal-segments`
 
 ### Account & Stats
 `balance`, `equity`, `pnl`, `price`, `price-label`

@@ -265,11 +265,17 @@ function render(state) {
       el("goldcon-scenario").textContent = state.market?.reason || "—";
     }
     
-    // Reset gauge
-    const gaugeArc = el("gauge-arc");
-    const gaugeNeedle = el("gauge-needle");
-    if (gaugeArc) gaugeArc.style.strokeDashoffset = 251.2;
-    if (gaugeNeedle) gaugeNeedle.style.transform = "rotate(-90deg)";
+    // Reset Segmented Bar
+    const segmentsContainer = el("signal-segments");
+    if (segmentsContainer) {
+      const segments = segmentsContainer.children;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg) {
+          seg.className = "flex-1 rounded-sm transition-all duration-700 bg-gray-800";
+        }
+      }
+    }
   } else {
     const decision = la.decision || "HOLD";
     const score = la.final_score;
@@ -305,18 +311,41 @@ function render(state) {
       blockedEl.className = "hidden text-xs text-amber-400 mt-2 font-medium";
     }
     
-    // Update gauge
-    const gaugeArc = el("gauge-arc");
-    const gaugeNeedle = el("gauge-needle");
-    if (gaugeArc && gaugeNeedle && score != null) {
+    // Update Segmented Bar
+    const segmentsContainer = el("signal-segments");
+    if (segmentsContainer && score != null) {
       const clampedScore = Math.max(0, Math.min(100, score));
-      // Arc length is 251.2, so offset goes from 251.2 (0%) to 0 (100%)
-      const dashOffset = 251.2 - (251.2 * (clampedScore / 100));
-      gaugeArc.style.strokeDashoffset = dashOffset;
+      const numSegments = 12;
+      const activeCount = Math.ceil((clampedScore / 100) * numSegments);
       
-      // Needle rotation goes from -90deg (0%) to 90deg (100%)
-      const rotation = -90 + (180 * (clampedScore / 100));
-      gaugeNeedle.style.transform = `rotate(${rotation}deg)`;
+      const segments = segmentsContainer.children;
+      for (let i = 0; i < numSegments; i++) {
+        const seg = segments[i];
+        if (!seg) continue;
+        
+        // Reset classes
+        seg.className = "flex-1 rounded-sm transition-all duration-700 bg-gray-800";
+        
+        // Determine color zone based on segment index
+        // 0-35 SELL (roughly segments 0-3) -> RED
+        // 35-65 HOLD (roughly segments 4-7) -> YELLOW
+        // 65-100 BUY (roughly segments 8-11) -> GREEN
+        let colorClass = "";
+        if (i < 4) colorClass = "segment-red";
+        else if (i < 8) colorClass = "segment-yellow";
+        else colorClass = "segment-green";
+        
+        if (i < activeCount) {
+          seg.classList.add("active");
+          seg.classList.add(colorClass);
+          seg.classList.remove("bg-gray-800");
+          
+          // Add pulse to the very last active segment
+          if (i === activeCount - 1) {
+            seg.classList.add("pulse");
+          }
+        }
+      }
     }
   }
 
