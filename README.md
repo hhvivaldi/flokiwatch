@@ -1,291 +1,251 @@
-# 🤖 XAU/USD Trading Bot
+# 🤖 FlokiWatch — XAU/USD Trading Bot
 
-Bot de trading automático para XAU/USD (Ouro) usando análise técnica, sentimento de notícias e Machine Learning.
+Fully automated trading bot for XAU/USD (Gold) using technical analysis, news sentiment, machine learning, and a 5-pillar "Central Brain" decision engine.
 
-## 📋 Visão Geral
+## 📋 Overview
 
-O bot opera **100% automaticamente** no MetaTrader 5:
-- Abre trades sozinho
-- Gerencia posições (TP parcial, trailing stop)
-- Fecha trades sozinho
-- Envia alertas para Discord
+The bot operates **100% autonomously** on MetaTrader 5:
+- Opens trades automatically based on multi-pillar analysis
+- Manages positions (breakeven, trailing stop)
+- Closes trades automatically (TP/SL/trailing)
+- Sends real-time alerts to Discord
 
-**Você só precisa acompanhar pelo Discord!**
+**Just monitor via Discord and the FlokiWatch dashboard!**
 
-## 🏗️ Arquitetura
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TRADING BOT XAU/USD                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │   TÉCNICO    │  │    NEWS      │  │     ML       │       │
-│  │   (45%)      │  │   (40%)      │  │   (15%)      │       │
-│  │              │  │              │  │              │       │
-│  │ - EMAs       │  │ - Headlines  │  │ - Gradient   │       │
-│  │ - RSI        │  │ - DXY        │  │   Boost      │       │
-│  │ - MACD       │  │ - Yields     │  │ - 53.56%     │       │
-│  │ - Bollinger  │  │ - VIX        │  │   accuracy   │       │
-│  │ - Stochastic │  │              │  │              │       │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
-│         │                 │                 │                │
-│         └────────────┬────┴────────────────┘                │
-│                      ▼                                       │
-│              ┌───────────────┐                              │
-│              │  CONFLUENCE   │                              │
-│              │    ENGINE     │                              │
-│              │  Score 0-100  │                              │
-│              └───────┬───────┘                              │
-│                      ▼                                       │
-│              ┌───────────────┐                              │
-│              │   DECISION    │                              │
-│              │    SYSTEM     │                              │
-│              │ BUY/SELL/HOLD │                              │
-│              └───────┬───────┘                              │
-│                      ▼                                       │
-│              ┌───────────────┐                              │
-│              │    SAFETY     │                              │
-│              │    CHECKS     │                              │
-│              └───────┬───────┘                              │
-│                      ▼                                       │
-│              ┌───────────────┐                              │
-│              │     RISK      │                              │
-│              │   MANAGER     │                              │
-│              │ Lot/SL/TP     │                              │
-│              └───────┬───────┘                              │
-│                      ▼                                       │
-│              ┌───────────────┐                              │
-│              │   EXECUTOR    │──────────► MT5               │
-│              │  (AUTOMÁTICO) │                              │
-│              └───────────────┘                              │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## 📁 Estrutura de Arquivos
+## 🏗️ Architecture
 
 ```
-XAUUSD/
-├── main.py              # Loop principal do bot
-├── config.py            # Configurações (editar antes de usar!)
-├── confluence.py        # Sistema de confluência
-├── risk_manager.py      # Gestão de risco
-├── executor.py          # Execução de ordens MT5
-├── monitor.py           # Monitoramento de posições
-├── safety_checks.py     # Validações de segurança
-├── technical_analyzer.py # Análise técnica
-├── ml_predictor.py      # Predição ML
-├── news_sentiment.py    # Score de notícias
-├── alerts.py            # Alertas Discord
-├── logger.py            # Sistema de logs
-├── data/                # Dados históricos
-├── models/              # Modelos ML salvos
-└── logs/                # Arquivos de log
+┌─────────────────────────────────────────────────────────────────┐
+│                     FLOKIWATCH CENTRAL BRAIN                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
+│  │  TECHNICAL │ │  MOMENTUM  │ │    NEWS    │ │  CALENDAR  │   │
+│  │   (35%)    │ │   (20%)    │ │   (20%)    │ │   (10%)    │   │
+│  │            │ │            │ │            │ │            │   │
+│  │ - EMAs     │ │ - ADX/DI   │ │ - Headlines│ │ - Events   │   │
+│  │ - RSI/MACD │ │ - Volume   │ │ - DXY/VIX  │ │ - Phases   │   │
+│  │ - Bollinger│ │ - Breakout │ │ - Yields   │ │ - Bias     │   │
+│  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘   │
+│        │              │              │              │           │
+│        └──────────────┴──────┬───────┴──────────────┘           │
+│                              │                                   │
+│                    ┌─────────┴─────────┐                        │
+│                    │   ML ENSEMBLE     │                        │
+│                    │      (15%)        │                        │
+│                    │ XGB+LGB+CatBoost  │                        │
+│                    │   H1 + H4 blend   │                        │
+│                    └─────────┬─────────┘                        │
+│                              ▼                                   │
+│                    ┌───────────────────┐                        │
+│                    │  SCENARIO ENGINE  │                        │
+│                    │  Dynamic weights  │                        │
+│                    │  Score 0-100      │                        │
+│                    └─────────┬─────────┘                        │
+│                              ▼                                   │
+│                    ┌───────────────────┐                        │
+│                    │  GPT VALIDATOR    │                        │
+│                    │  Confidence ±15   │                        │
+│                    └─────────┬─────────┘                        │
+│                              ▼                                   │
+│                    ┌───────────────────┐                        │
+│                    │  SAFETY CHECKS    │                        │
+│                    │  + Volatility     │                        │
+│                    │    Guard          │                        │
+│                    └─────────┬─────────┘                        │
+│                              ▼                                   │
+│                    ┌───────────────────┐                        │
+│                    │  RISK MANAGER     │──────────► MT5         │
+│                    │  ATR-based SL/TP  │                        │
+│                    └───────────────────┘                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## ⚙️ Configuração
+## 📁 Project Structure
 
-### 1. Editar `config.py`
-
-```python
-# Conta MT5
-MT5_ACCOUNT = 12345678        # Seu número de conta
-MT5_PASSWORD = "sua_senha"    # Sua senha
-MT5_SERVER = "ICMarkets-Demo" # Servidor do broker
-
-# Parâmetros de risco
-CAPITAL_INICIAL = 1000        # Capital em USD
-RISK_PER_TRADE = 2.0          # Risco por trade (%)
-
-# Discord Webhook (já configurado)
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/..."
-
-# Modo de operação
-DRY_RUN = True  # True = teste, False = real
+```
+flokiwatch/
+├── main.py                 # Main bot loop
+├── config.py               # Configuration (loads from .env)
+├── central_brain.py        # 5-pillar decision engine
+├── confluence.py           # Legacy confluence system (fallback)
+├── risk_manager.py         # Position sizing, SL/TP calculation
+├── executor.py             # MT5 order execution
+├── monitor.py              # Position monitoring (breakeven, trailing)
+├── safety_checks.py        # Safety validations
+├── volatility_guard.py     # Extreme volatility detection
+├── technical_analyzer.py   # Technical indicators
+├── momentum_detector.py    # Momentum analysis
+├── ml_predictor.py         # ML ensemble predictions
+├── news_score_hybrid.py    # GPT-powered news scoring
+├── economic_calendar.py    # Economic calendar integration
+├── gpt_confidence.py       # GPT confidence validator
+├── support_resistance.py   # S/R zone detection
+├── alerts.py               # Discord notifications
+├── db_writer.py            # SQLite history database
+├── state_writer.py         # Dashboard state file
+├── dashboard/              # FlokiWatch web dashboard
+├── scripts/                # Training & analysis scripts
+├── models/                 # ML model configs (JSON)
+├── data/                   # Runtime data (gitignored)
+└── logs/                   # Log files (gitignored)
 ```
 
-### 2. Instalar Dependências
+## ⚙️ Setup
+
+### 1. Clone and Install
 
 ```bash
-pip install MetaTrader5 pandas numpy scikit-learn tensorflow requests joblib imbalanced-learn
+git clone https://github.com/hhvivaldi/flokiwatch.git
+cd flokiwatch
+pip install -r requirements.txt
 ```
 
-### 3. Configurar MT5
+### 2. Configure Environment
 
-1. Abrir MetaTrader 5
-2. Ferramentas → Opções → Expert Advisors
-3. Marcar "Permitir negociação algorítmica"
-4. Marcar "Permitir importação de DLL"
-
-## 🚀 Como Usar
-
-### Modo Teste (DRY RUN)
+Copy `.env.example` to `.env` and fill in your credentials:
 
 ```bash
-# Rodar bot em modo teste (não executa ordens reais)
-python main.py --dry-run
-
-# Executar uma única análise
-python main.py --test
-
-# Testar conexão Discord
-python main.py --discord-test
+cp .env.example .env
 ```
 
-### Modo LIVE
+Required variables:
+- `MT5_ACCOUNT` — Your MT5 account number
+- `MT5_PASSWORD` — Your MT5 password
+- `MT5_SERVER` — Broker server (e.g., ICMarkets-Demo)
+- `MT5_TERMINAL_PATH` — Path to terminal64.exe
+- `DISCORD_WEBHOOK_URL` — Discord webhook for alerts
+- `OPENAI_API_KEY` — OpenAI API key for GPT features
+
+### 3. Configure MT5
+
+1. Open MetaTrader 5
+2. Tools → Options → Expert Advisors
+3. Enable "Allow algorithmic trading"
+4. Enable "Allow DLL imports"
+
+### 4. Train ML Models (Optional)
+
+Models are included, but to retrain:
 
 ```bash
-# Rodar bot em modo real (CUIDADO!)
-python main.py --live
+python scripts/collect_training_data.py
+python scripts/train_ensemble.py
 ```
 
-## 📊 Sistema de Decisão
+## 🚀 Usage
 
-### Thresholds
+### Start the Bot
 
-| Score | Decisão | Ação |
-|-------|---------|------|
-| > 70 | STRONG_BUY | ✅ Abre BUY |
-| 65-70 | BUY | ✅ Abre BUY |
-| 55-65 | WEAK_BUY | ⏸️ Aguarda |
-| 45-55 | HOLD | ⏸️ Aguarda |
-| 35-45 | WEAK_SELL | ⏸️ Aguarda |
-| 30-35 | SELL | ✅ Abre SELL |
-| < 30 | STRONG_SELL | ✅ Abre SELL |
+```bash
+python main.py
+```
 
-### Pesos de Confluência
+The bot will:
+1. Connect to MT5
+2. Run analysis every 5 minutes
+3. Execute trades when conditions are met
+4. Monitor positions every 10 seconds
+5. Send Discord alerts for all events
 
-- **Técnico**: 45%
-- **News**: 40%
-- **ML**: 15% (só se probabilidade ≥ 0.55)
+### Start the Dashboard
 
-Se ML não for confiável:
-- **Técnico**: 52.9%
-- **News**: 47.1%
+```bash
+cd dashboard
+python server.py
+```
 
-## 🛡️ Safety Checks
+Access at `http://localhost:5000`
 
-O bot **NÃO** opera quando:
+## 📊 Decision System
 
-- ❌ MT5 desconectado
-- ❌ Asian session (00-06 GMT)
-- ❌ Sexta após 17h GMT
-- ❌ 3+ perdas consecutivas (pausa 24h)
-- ❌ 3+ posições abertas
-- ❌ Perda diária > 6%
-- ❌ High-impact news próximas
+### Score Thresholds
 
-## 💰 Gestão de Risco
+| Score | Decision | Action |
+|-------|----------|--------|
+| ≥ 65 | BUY | ✅ Opens BUY position |
+| 35-65 | HOLD | ⏸️ No action |
+| ≤ 35 | SELL | ✅ Opens SELL position |
+
+### Confidence Gate
+
+Trades only execute if confidence ≥ 55%. Lower confidence = forced HOLD.
+
+### Scenario Multipliers
+
+The brain adjusts weights based on detected scenarios:
+- `alinhamento_perfeito` (1.15×) — All pillars agree
+- `momentum_forte` (1.10×) — Strong momentum detected
+- `lateralizacao` (0.85×) — Ranging market
+- `sinais_conflitantes` (0.80×) — Conflicting signals
+- `volatilidade_extrema` (0.00×) — Extreme volatility block
+
+## 🛡️ Safety Features
+
+The bot **blocks trades** when:
+- ❌ MT5 disconnected
+- ❌ Market closed (weekend, daily pause 21:00-22:00 UTC)
+- ❌ 3+ consecutive losses (24h pause)
+- ❌ 3+ open positions
+- ❌ Daily loss > 6%
+- ❌ Extreme volatility (>1.8% M5 candle)
+- ❌ During high-impact news release
+- ❌ Spread > 5 pips
+
+## 💰 Risk Management
 
 ### Position Sizing
 
 ```
-Risco por trade: 2% do capital
+Risk per trade: 2% of capital
 Lot size = (Capital × 2%) / (SL_pips × $10)
-
-Exemplo:
-$1000 × 2% = $20 de risco
-$20 / (15 pips × $10) = 0.13 lotes
-Arredondado: 0.10 lotes (máximo conservador)
 ```
 
 ### Stop Loss / Take Profit
 
-Baseado em ATR (Average True Range):
+ATR-based (Average True Range):
+- **SL**: 1.5 × ATR (min 150, max 800 pips)
+- **TP**: 3.0 × ATR
 
-- **SL**: 1.5 × ATR
-- **TP1**: 2.0 × ATR (fecha 50%)
-- **TP2**: 3.0 × ATR (fecha resto)
+### Position Management
 
-### Gestão Automática
+1. **Breakeven**: SL moves to entry at 0.7 × SL distance profit
+2. **Trailing**: Activates at 0.7 × SL distance, trails at 0.7 × ATR
+3. **Max Duration**: Auto-close after 24h if profit < 5 pips
 
-1. **TP1 atingido**: Fecha 50%, move SL para breakeven
-2. **Trailing Stop**: Após TP1, SL segue o preço
-3. **Timeout**: Fecha após 24h se lucro < 5 pips
-4. **Drawdown**: Fecha se perda > 30 pips
+## 📱 Discord Alerts
 
-## 📱 Alertas Discord
+- 🤖 Bot started/stopped
+- 🟢 BUY signal detected
+- 🔴 SELL signal detected
+- ✅ Order executed
+- 🔒 Breakeven activated
+- � Trailing stop updated
+- � Trade closed (TP/SL/Trailing)
+- ⛔ Signal blocked (safety)
+- 💓 Hourly heartbeat (when idle)
+- ⚠️ Critical errors
 
-O bot envia alertas para:
+## 📈 Performance
 
-- 🤖 Bot iniciado/parado
-- 🟢 Sinal BUY detectado
-- 🔴 Sinal SELL detectado
-- ✅ Ordem executada
-- 🎉 TP1 atingido
-- 💰 TP2 atingido
-- 🔴 Stop Loss atingido
-- ⛔ Sinal bloqueado (safety)
-- ⚠️ Erros críticos
-- 📊 Resumo diário
+Backtest results (Jan-Feb 2026):
 
-## 📈 Performance Esperada
+| Metric | In-Sample | Out-of-Sample |
+|--------|-----------|---------------|
+| Trades | 33 | 56 |
+| Win Rate | 81.8% | 67.9% |
+| Profit Factor | 3.53 | 1.62 |
+| Max Drawdown | $137 | $123 |
 
-Com base nos testes:
+## ⚠️ Disclaimer
 
-| Métrica | Valor |
-|---------|-------|
-| ML Accuracy | 53.56% |
-| ML AUC | 0.5471 |
-| Win Rate Esperado | 55-60% |
-| Risk/Reward | 1:1.33 (TP1), 1:2.0 (TP2) |
-
-## ⚠️ Avisos Importantes
-
-1. **SEMPRE teste em DRY_RUN primeiro** (24-48h)
-2. **Comece com capital pequeno** no modo LIVE
-3. **Monitore pelo Discord** nas primeiras semanas
-4. **Não modifique trades manualmente** - deixe o bot gerenciar
-5. **Mantenha MT5 aberto** no VPS/computador
-
-## 🔧 Troubleshooting
-
-### MT5 não conecta
-
-```python
-# Verificar se MT5 está instalado e aberto
-import MetaTrader5 as mt5
-print(mt5.initialize())
-print(mt5.last_error())
-```
-
-### Discord não envia
-
-```bash
-# Testar webhook
-python main.py --discord-test
-```
-
-### Bot não opera
-
-1. Verificar horário (evita Asian session)
-2. Verificar se há posições abertas (max 3)
-3. Verificar logs em `/logs/`
-
-## 📝 Logs
-
-Logs são salvos em `logs/trading_bot_YYYY-MM-DD.log`
-
-Formato:
-```
-2026-01-26 14:35:22 | INFO     | Análise completa | Tech:65 News:72 ML:58 Final:67
-2026-01-26 14:35:23 | INFO     | Decisão: BUY (confiança: medium)
-2026-01-26 14:35:24 | SUCCESS  | Ordem executada | Ticket:12345 Lot:0.02
-```
-
-## 🎯 Próximos Passos
-
-1. ✅ Configurar `config.py`
-2. ✅ Testar conexão MT5
-3. ✅ Testar conexão Discord
-4. ✅ Rodar em DRY_RUN por 24-48h
-5. ✅ Verificar alertas Discord
-6. ✅ Analisar logs
-7. 🚀 Ativar modo LIVE
+1. **Always test in DEMO mode first**
+2. **Start with small capital** in LIVE mode
+3. **Monitor via Discord** during initial weeks
+4. **Do not manually modify trades** — let the bot manage
+5. **Keep MT5 running** on VPS or dedicated machine
 
 ---
 
-**Desenvolvido para trading de XAU/USD no MetaTrader 5**
-
-*Use por sua conta e risco. Trading envolve risco de perda de capital.*
+**Trading involves risk of capital loss. Use at your own risk.**
