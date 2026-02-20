@@ -305,7 +305,7 @@ GPT_CONFIDENCE_CACHE_THRESHOLD = 5      # Only re-call GPT if pillar changed ≥
 # ============================================================================
 MTF_TREND_ENABLED = True                 # Enable Multi-TF trend check
 MTF_TREND_ALIGN_BONUS = 10               # Confidence bonus when trade aligns with D1+H4 trend
-MTF_TREND_CONFLICT_PENALTY = 20          # Confidence penalty when trade conflicts with D1+H4 trend
+MTF_TREND_CONFLICT_PENALTY = 10          # Confidence penalty when trade conflicts with D1+H4 trend (reduced from 20)
 MTF_EMA_PERIOD = 50                      # EMA period for trend detection (price vs EMA50)
 
 # ============================================================================
