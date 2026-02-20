@@ -1347,6 +1347,8 @@ class TradingBot:
                 "hold_forced": hold_forced,
                 "original_decision": original_decision,
                 "hold_reason": hold_reason,
+                "mtf_trend": brain_result.mtf_trend,
+                "volume_gate": brain_result.volume_gate,
             }
         except Exception:
             pass

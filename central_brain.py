@@ -44,6 +44,8 @@ class BrainResult:
     alerts: List[str]                # List of alerts
     raw_data: Dict                   # All raw data
     gpt_validation: Optional[Dict] = None  # GPT Confidence Validator result
+    mtf_trend: Optional[Dict] = None      # Multi-TF trend data for dashboard
+    volume_gate: Optional[Dict] = None    # Volume gate data for dashboard
     timestamp: datetime = field(default_factory=datetime.now)
 
 
@@ -1391,14 +1393,40 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
     )
     
     # STEP 10.3: Multi-TF Trend Alignment
-    mtf_adj, mtf_confs, mtf_alerts = _check_mtf_trend_alignment(decision)
+    d1_trend = _get_mtf_trend_direction("D1")
+    h4_trend = _get_mtf_trend_direction("H4")
+    mtf_adj, mtf_confs, mtf_alerts = _check_mtf_trend_alignment(decision, d1_trend, h4_trend)
     if mtf_adj != 0:
         confidence = max(0, min(100, confidence + mtf_adj))
     all_confirmations.extend(mtf_confs)
     all_alerts.extend(mtf_alerts)
     
+    # Build MTF trend data for dashboard
+    mtf_trend_data = {
+        "d1_direction": d1_trend,
+        "h4_direction": h4_trend,
+        "alignment": "n/a",
+        "confidence_adjustment": mtf_adj,
+    }
+    if d1_trend and h4_trend and d1_trend == h4_trend:
+        trade_bullish = decision in ("BUY", "STRONG_BUY")
+        trade_bearish = decision in ("SELL", "STRONG_SELL")
+        if decision == "HOLD":
+            mtf_trend_data["alignment"] = "n/a"
+        elif (d1_trend == "bullish" and trade_bullish) or (d1_trend == "bearish" and trade_bearish):
+            mtf_trend_data["alignment"] = "aligned"
+        else:
+            mtf_trend_data["alignment"] = "conflict"
+    elif d1_trend and h4_trend:
+        mtf_trend_data["alignment"] = "mixed"
+    
     # Add Volume Gate alert if penalty was applied
     import config as _cfg
+    volume_gate_data = {
+        "volume_ratio": round(volume_ratio, 2),
+        "status": "normal",
+        "confidence_adjustment": 0,
+    }
     if getattr(_cfg, 'VOLUME_GATE_ENABLED', True):
         severe_threshold = getattr(_cfg, 'VOLUME_GATE_SEVERE_THRESHOLD', 0.3)
         moderate_threshold = getattr(_cfg, 'VOLUME_GATE_MODERATE_THRESHOLD', 0.5)
@@ -1407,8 +1435,12 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         
         if volume_ratio < severe_threshold:
             all_alerts.append(f"Volume Gate: {volume_ratio:.1f}x average (severe) → -{severe_penalty} conf")
+            volume_gate_data["status"] = "very_low"
+            volume_gate_data["confidence_adjustment"] = -severe_penalty
         elif volume_ratio < moderate_threshold:
             all_alerts.append(f"Volume Gate: {volume_ratio:.1f}x average (moderate) → -{moderate_penalty} conf")
+            volume_gate_data["status"] = "low"
+            volume_gate_data["confidence_adjustment"] = -moderate_penalty
     
     # Apply parabolic penalty (-30%) after confidence calculation
     if parabolic_penalty:
@@ -1471,6 +1503,8 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         confirmations=all_confirmations,
         alerts=all_alerts,
         raw_data=raw_data,
+        mtf_trend=mtf_trend_data,
+        volume_gate=volume_gate_data,
     )
 
 

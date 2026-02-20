@@ -342,7 +342,7 @@ function render(state) {
 
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);
-  renderIntelFeed(la.intel_feed);
+  renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
 }
 
 /* ================================================================
@@ -398,7 +398,7 @@ function categoryBadge(cat) {
   return `<span class="px-1 py-0.5 rounded text-[9px] font-bold uppercase ${m.cls}">${m.label}</span>`;
 }
 
-function renderIntelFeed(feed) {
+function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const section = el("intel-feed-section");
   const contentEls = section.querySelectorAll(".intel-feed-content");
   const empty = section.querySelector(".intel-feed-empty");
@@ -634,6 +634,54 @@ function renderIntelFeed(feed) {
     tagsEl.insertAdjacentHTML("beforeend",
       `<span class="inline-block text-xs px-1.5 py-0.5 rounded border border-amber-800 text-amber-400 bg-amber-900/20">&#9888; ${a}</span>`
     );
+  }
+
+  // MTF Trend
+  if (mtfTrend) {
+    const d1Dir = mtfTrend.d1_direction;
+    const h4Dir = mtfTrend.h4_direction;
+    const alignment = mtfTrend.alignment;
+    const mtfAdj = mtfTrend.confidence_adjustment || 0;
+
+    const dirColor = (dir) => dir === "bullish" ? "text-green-400" : dir === "bearish" ? "text-red-400" : "text-gray-500";
+    const dirLabel = (dir) => dir ? dir.charAt(0).toUpperCase() + dir.slice(1) : "—";
+    
+    const alignColor = alignment === "aligned" ? "text-green-400" : alignment === "conflict" ? "text-red-400" : alignment === "mixed" ? "text-yellow-400" : "text-gray-500";
+    const alignLabel = alignment === "aligned" ? "Aligned ✓" : alignment === "conflict" ? "Conflict ✗" : alignment === "mixed" ? "Mixed" : "N/A";
+    
+    const adjColor = mtfAdj > 0 ? "text-green-400" : mtfAdj < 0 ? "text-red-400" : "text-gray-500";
+    const adjText = mtfAdj > 0 ? `+${mtfAdj}` : mtfAdj < 0 ? `${mtfAdj}` : "0";
+
+    const mtfD1El = document.getElementById("mtf-d1");
+    const mtfH4El = document.getElementById("mtf-h4");
+    const mtfAlignEl = document.getElementById("mtf-alignment");
+    const mtfAdjEl = document.getElementById("mtf-adj");
+
+    if (mtfD1El) { mtfD1El.className = dirColor(d1Dir); mtfD1El.textContent = dirLabel(d1Dir); }
+    if (mtfH4El) { mtfH4El.className = dirColor(h4Dir); mtfH4El.textContent = dirLabel(h4Dir); }
+    if (mtfAlignEl) { mtfAlignEl.className = alignColor; mtfAlignEl.textContent = alignLabel; }
+    if (mtfAdjEl) { mtfAdjEl.className = adjColor; mtfAdjEl.textContent = adjText; }
+  }
+
+  // Volume Gate
+  if (volumeGate) {
+    const volRatio = volumeGate.volume_ratio;
+    const volStatus = volumeGate.status;
+    const volAdj = volumeGate.confidence_adjustment || 0;
+
+    const statusColor = volStatus === "normal" ? "text-green-400" : volStatus === "low" ? "text-yellow-400" : volStatus === "very_low" ? "text-red-400" : "text-gray-500";
+    const statusLabel = volStatus === "normal" ? "Normal ✓" : volStatus === "low" ? "Low ⚠" : volStatus === "very_low" ? "Very Low ✗" : "—";
+    
+    const adjColor = volAdj > 0 ? "text-green-400" : volAdj < 0 ? "text-red-400" : "text-gray-500";
+    const adjText = volAdj > 0 ? `+${volAdj}` : volAdj < 0 ? `${volAdj}` : "0";
+
+    const volRatioEl = document.getElementById("vol-ratio");
+    const volStatusEl = document.getElementById("vol-status");
+    const volAdjEl = document.getElementById("vol-adj");
+
+    if (volRatioEl) { volRatioEl.className = statusColor; volRatioEl.textContent = volRatio != null ? `${volRatio.toFixed(1)}x avg` : "—"; }
+    if (volStatusEl) { volStatusEl.className = statusColor; volStatusEl.textContent = statusLabel; }
+    if (volAdjEl) { volAdjEl.className = adjColor; volAdjEl.textContent = adjText; }
   }
 }
 
