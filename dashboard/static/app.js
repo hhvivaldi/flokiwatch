@@ -272,7 +272,8 @@ function render(state) {
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         if (seg) {
-          seg.className = "flex-1 rounded-sm transition-all duration-700 bg-gray-800";
+          seg.className = "flex-1 rounded transition-all duration-700 bg-gray-800";
+          seg.style.height = "48px";
         }
       }
     }
@@ -324,7 +325,8 @@ function render(state) {
         if (!seg) continue;
         
         // Reset classes
-        seg.className = "flex-1 rounded-sm transition-all duration-700 bg-gray-800";
+        seg.className = "flex-1 rounded transition-all duration-700 bg-gray-800";
+        seg.style.height = "48px";
         
         // Determine color zone based on segment index
         // 0-35 SELL (roughly segments 0-3) -> RED
