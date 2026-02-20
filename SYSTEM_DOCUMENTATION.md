@@ -441,6 +441,12 @@ XAUUSD/
 | Multi-TF Trend Confirmation | ✅ Completed | D1+H4 EMA50 trend check. Aligned trades +10 conf, conflicting -20 conf. Prevents counter-trend trades like Bot-SELL-34/35. Config: `MTF_TREND_ENABLED`, `MTF_TREND_ALIGN_BONUS`, `MTF_TREND_CONFLICT_PENALTY`. |
 | Volume Gate | ✅ Completed | Penalizes low-volume trades. <0.5x avg: -15 conf, <0.3x avg: -25 conf. Config: `VOLUME_GATE_ENABLED`, thresholds configurable. |
 | MACD Divergence Adjustment | ✅ Tuned | Reduced from ±25 to ±15 points. Too aggressive in strong trends. Config: `MACD_DIVERGENCE_ADJUSTMENT`. |
+| Spread Monitoring | ✅ Completed | Checks spread before entry, delays if >5.0 pips, retries every 30s for up to 5 min. Prevents bad fills during volatile spreads. |
+| S/R Zones on MT5 Chart | ✅ Completed | Bridge pattern (Python writes `sr_zones.json`, MQL5 EA draws lines). 8 nearest zones, line width by strength. See Section 13.1. |
+| Trade History Dashboard (/history) | ✅ Completed | Full trade table, equity curve, monthly summary, backtest vs live comparison. FastAPI endpoint + dedicated HTML page. |
+| News Feed Expansion (14 RSS feeds) | ✅ Completed | Expanded from 4 to 14 feeds covering geopolitics, crises, monetary policy, safe haven, sanctions. Broader headline coverage for GPT sentiment. |
+| GitHub Version Control | ✅ Completed | Private repo at github.com/hhvivaldi/flokiwatch. All code versioned with descriptive commits. |
+| FIELD_CONTRACT.md | ✅ Completed | Data interface contract between bot (`state_writer.py`) and dashboard (`app.js`). Prevents ID mismatch bugs. |
 
 ### Optimization Roadmap Summary (Feb 2026)
 

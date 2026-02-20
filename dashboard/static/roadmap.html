@@ -107,6 +107,78 @@
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
+              <div class="text-sm text-gray-200 font-semibold">Spread Monitoring</div>
+              <div class="text-xs text-gray-500 mt-0.5">Implemented. Checks spread before entry, delays if >5.0 pips, retries every 30s for up to 5 min.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Multi-TF Trend Confirmation</div>
+              <div class="text-xs text-gray-500 mt-0.5">Implemented. D1/H4 EMA50 trend check. +10 aligned, -10 conflict. Combined with Volume Gate.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Volume Gate</div>
+              <div class="text-xs text-gray-500 mt-0.5">Confidence penalty for low volume: -15 (<0.5x avg), -25 (<0.3x avg).</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">MACD Divergence Adjustment</div>
+              <div class="text-xs text-gray-500 mt-0.5">Reduced from ±25 to ±15 points. False signals in strong trends.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">S/R Zones on MT5 Chart</div>
+              <div class="text-xs text-gray-500 mt-0.5">Bridge pattern (Python writes JSON, MQL5 EA draws lines). 8 nearest zones, width by strength.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Trade History Dashboard (/history)</div>
+              <div class="text-xs text-gray-500 mt-0.5">Full trade table, equity curve, monthly summary, backtest vs live comparison.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">GitHub Version Control</div>
+              <div class="text-xs text-gray-500 mt-0.5">Private repo at github.com/hhvivaldi/flokiwatch.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">FIELD_CONTRACT.md</div>
+              <div class="text-xs text-gray-500 mt-0.5">Data interface contract between bot and dashboard.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">News Feed Expansion (14 RSS feeds)</div>
+              <div class="text-xs text-gray-500 mt-0.5">Expanded from 4 to 14 feeds covering geopolitics, crises, monetary policy, safe haven, sanctions.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
               <div class="text-sm text-gray-200 font-semibold">MT5 terminal pinning</div>
               <div class="text-xs text-gray-500 mt-0.5">Fixed multi-terminal connection bug — bot now pins to the correct MT5 terminal via explicit path, preventing stale position data from wrong terminals.</div>
             </div>
@@ -232,23 +304,7 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-semibold">1. Spread Monitoring</div>
-              <div class="text-xs text-gray-500 mt-0.5">Check spread before entry, delay if too wide. No backtest needed.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-semibold">2. Multi-TF Confirmation</div>
-              <div class="text-xs text-gray-500 mt-0.5">H4/D1 trend direction as confidence adjustment in Central Brain. Needs backtest.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-semibold">3. Candlestick Pattern Recognition</div>
+              <div class="text-sm text-gray-200 font-semibold">1. Candlestick Pattern Recognition</div>
               <div class="text-xs text-gray-500 mt-0.5">Expand visual context features (morning/evening star, three soldiers, hammer at S/R). Needs backtest.</div>
             </div>
           </div>
@@ -256,7 +312,7 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-semibold">4. M5 Entry Timing</div>
+              <div class="text-sm text-gray-200 font-semibold">2. M5 Entry Timing</div>
               <div class="text-xs text-gray-500 mt-0.5">Wait for favorable M5 pullback before entering. Needs backtest.</div>
             </div>
           </div>
@@ -264,7 +320,7 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-semibold">5. Adaptive Trailing Stop</div>
+              <div class="text-sm text-gray-200 font-semibold">3. Adaptive Trailing Stop</div>
               <div class="text-xs text-gray-500 mt-0.5">Dynamic trailing distance based on momentum strength. Needs backtest.</div>
             </div>
           </div>
