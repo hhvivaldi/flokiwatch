@@ -9,12 +9,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
 
     <link rel="stylesheet" href="/static/style.css" />
 
     <style>
-      html, body { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      html, body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
     </style>
   </head>
 
@@ -68,17 +69,72 @@
       <div id="stale-overlay" class="hidden"></div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 stale-dim">
         <section class="lg:col-span-2">
-          <div id="goldcon" class="relative bg-gray-900/60 border border-gray-700 rounded-xl p-4 scanlines">
-            <div class="text-xs text-gray-400 tracking-widest">FLOKI SIGNAL</div>
-            <div class="mt-2" id="goldcon-decision">HOLD</div>
-            <div id="goldcon-blocked" class="hidden text-xs text-amber-400 mt-1 font-semibold"></div>
-            <div class="mt-2 text-xs text-gray-300">
-              SCORE: <span id="goldcon-score" class="text-gray-100">—</span>
-              <span class="text-gray-600">|</span>
-              CONFIDENCE: <span id="goldcon-conf" class="text-gray-100">—</span>
-            </div>
-            <div class="mt-1 text-xs text-gray-400">
-              SCENARIO: <span id="goldcon-scenario" class="text-gray-200">—</span>
+          <div id="goldcon" class="relative bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500">
+            <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+            
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 relative z-10">
+              <div class="flex-1">
+                <div class="text-xs font-semibold text-gray-400 tracking-[0.2em] uppercase mb-1">FLOKI SIGNAL</div>
+                <div class="mt-2 transition-colors duration-300" id="goldcon-decision">HOLD</div>
+                <div id="goldcon-blocked" class="hidden text-xs text-amber-400 mt-2 font-medium"></div>
+                
+                <div class="mt-4 flex items-center gap-4 text-sm bg-black/20 rounded-lg p-3 border border-white/5 w-fit backdrop-blur-sm">
+                  <div class="flex flex-col">
+                    <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Score</span>
+                    <span id="goldcon-score" class="font-mono text-lg font-semibold text-gray-100">—</span>
+                  </div>
+                  <div class="w-px h-8 bg-gray-700/50"></div>
+                  <div class="flex flex-col">
+                    <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Confidence</span>
+                    <span id="goldcon-conf" class="font-mono text-lg font-semibold text-gray-100">—</span>
+                  </div>
+                </div>
+                
+                <div class="mt-4 text-sm text-gray-400 flex items-start gap-2 bg-gray-800/30 rounded-lg p-3 border border-gray-700/30">
+                  <svg class="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <span class="text-xs text-gray-500 uppercase tracking-wider block mb-0.5">Scenario</span>
+                    <span id="goldcon-scenario" class="text-gray-200 font-medium leading-tight">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Gauge Visualization -->
+              <div class="relative w-48 h-24 flex-shrink-0 mx-auto sm:mx-0 mt-4 sm:mt-0">
+                <svg viewBox="0 0 200 100" class="w-full h-full drop-shadow-lg">
+                  <!-- Background Arc -->
+                  <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="rgba(55, 65, 81, 0.4)" stroke-width="12" stroke-linecap="round" />
+                  
+                  <!-- Color Gradient Def -->
+                  <defs>
+                    <linearGradient id="gauge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#ef4444" /> <!-- Red -->
+                      <stop offset="50%" stop-color="#eab308" /> <!-- Yellow -->
+                      <stop offset="100%" stop-color="#22c55e" /> <!-- Green -->
+                    </linearGradient>
+                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
+
+                  <!-- Value Arc (Masked via CSS) -->
+                  <path id="gauge-arc" d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="url(#gauge-gradient)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2" class="transition-all duration-1000 ease-out" filter="url(#glow)" />
+                  
+                  <!-- Needle -->
+                  <g id="gauge-needle" class="transition-transform duration-1000 ease-out origin-bottom" style="transform-origin: 100px 90px; transform: rotate(-90deg);">
+                    <circle cx="100" cy="90" r="6" fill="#1f2937" stroke="#4b5563" stroke-width="2" />
+                    <path d="M 96 90 L 100 25 L 104 90 Z" fill="#9ca3af" />
+                  </g>
+                  
+                  <!-- Labels -->
+                  <text x="20" y="105" text-anchor="middle" class="text-[10px] fill-gray-500 font-mono font-medium">0</text>
+                  <text x="100" y="45" text-anchor="middle" class="text-[10px] fill-gray-500 font-mono font-medium">50</text>
+                  <text x="180" y="105" text-anchor="middle" class="text-[10px] fill-gray-500 font-mono font-medium">100</text>
+                </svg>
+              </div>
             </div>
           </div>
 

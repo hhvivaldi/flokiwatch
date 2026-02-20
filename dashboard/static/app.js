@@ -51,9 +51,9 @@ function fmtDuration(seconds) {
 
 function badgeClassByDecision(decision) {
   const d = (decision || "").toUpperCase();
-  if (d.includes("BUY")) return { border: "border-green-500", bg: "bg-green-900/20", text: "text-green-400", glow: "glow-green" };
-  if (d.includes("SELL")) return { border: "border-red-500", bg: "bg-red-900/20", text: "text-red-400", glow: "glow-red" };
-  return { border: "border-yellow-500", bg: "bg-yellow-900/20", text: "text-yellow-300", glow: "glow-yellow" };
+  if (d.includes("BUY")) return { border: "border-green-500", bg: "bg-green-900/20", text: "text-green-400", glow: "glow-green animate-pulse" };
+  if (d.includes("SELL")) return { border: "border-red-500", bg: "bg-red-900/20", text: "text-red-400", glow: "glow-red animate-pulse" };
+  return { border: "border-yellow-500", bg: "bg-yellow-900/20", text: "text-yellow-400", glow: "glow-yellow" };
 }
 
 function pillColor(score) {
@@ -246,7 +246,7 @@ function render(state) {
   const card = el("goldcon");
 
   if (marketClosed) {
-    card.className = "relative bg-gray-800/40 border-gray-600 border-2 rounded-xl p-4 scanlines";
+    card.className = "relative bg-gray-800/40 border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
     const reason = state.market?.reason || "";
     const isPausa = reason.toLowerCase().includes("pausa") || reason.toLowerCase().includes("daily pause");
     el("goldcon-decision").textContent = isPausa ? "DAILY PAUSE" : "MARKET CLOSED";
@@ -260,14 +260,23 @@ function render(state) {
     } else {
       el("goldcon-scenario").textContent = state.market?.reason || "—";
     }
+    
+    // Reset gauge
+    const gaugeArc = el("gauge-arc");
+    const gaugeNeedle = el("gauge-needle");
+    if (gaugeArc) gaugeArc.style.strokeDashoffset = 251.2;
+    if (gaugeNeedle) gaugeNeedle.style.transform = "rotate(-90deg)";
   } else {
     const decision = la.decision || "HOLD";
     const score = la.final_score;
     const conf = la.confidence;
     const cls = badgeClassByDecision(decision);
-    card.className = `relative ${cls.bg} ${cls.border} border-2 rounded-xl p-4 scanlines ${cls.glow}`;
+    
+    // Apply new mockup styling classes to the card
+    card.className = `relative ${cls.bg} ${cls.border} backdrop-blur-md border-2 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500 group`;
+    
     el("goldcon-decision").textContent = decision;
-    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-bold leading-none ${cls.text} text-shadow-soft`;
+    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-bold leading-none ${cls.text} text-shadow-soft transition-colors duration-300`;
     el("goldcon-score").textContent = fmtNum(score, 1);
     el("goldcon-conf").textContent = `${fmtNum(conf, 1)}%`;
     const scenarioDisplay = {
@@ -286,10 +295,24 @@ function render(state) {
     const blockedEl = el("goldcon-blocked");
     if (la.hold_forced && la.original_decision) {
       blockedEl.textContent = `${la.original_decision} blocked — ${la.hold_reason || "insufficient confidence"}`;
-      blockedEl.className = "text-xs text-amber-400 mt-1 font-semibold";
+      blockedEl.className = "text-xs text-amber-400 mt-2 font-medium block";
     } else {
       blockedEl.textContent = "";
-      blockedEl.className = "hidden text-xs text-amber-400 mt-1 font-semibold";
+      blockedEl.className = "hidden text-xs text-amber-400 mt-2 font-medium";
+    }
+    
+    // Update gauge
+    const gaugeArc = el("gauge-arc");
+    const gaugeNeedle = el("gauge-needle");
+    if (gaugeArc && gaugeNeedle && score != null) {
+      const clampedScore = Math.max(0, Math.min(100, score));
+      // Arc length is 251.2, so offset goes from 251.2 (0%) to 0 (100%)
+      const dashOffset = 251.2 - (251.2 * (clampedScore / 100));
+      gaugeArc.style.strokeDashoffset = dashOffset;
+      
+      // Needle rotation goes from -90deg (0%) to 90deg (100%)
+      const rotation = -90 + (180 * (clampedScore / 100));
+      gaugeNeedle.style.transform = `rotate(${rotation}deg)`;
     }
   }
 

@@ -16,12 +16,12 @@
 }
 
 .text-shadow-soft {
-  text-shadow: 0 0 18px rgba(56, 189, 248, 0.18);
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.2);
 }
 
-.glow-green { box-shadow: 0 0 0 1px rgba(34,197,94,0.25), 0 0 30px rgba(34,197,94,0.12); }
-.glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.25), 0 0 30px rgba(234,179,8,0.10); }
-.glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.25), 0 0 30px rgba(239,68,68,0.10); }
+.glow-green { box-shadow: 0 0 0 1px rgba(34,197,94,0.3), 0 0 40px rgba(34,197,94,0.15); }
+.glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.3), 0 0 40px rgba(234,179,8,0.15); }
+.glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.3), 0 0 40px rgba(239,68,68,0.15); }
 
 /* Stale/Offline UI */
 
