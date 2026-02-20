@@ -209,13 +209,18 @@ def detect_candlestick_patterns(df: pd.DataFrame, sr_zones: list = None,
     """
     Detect candlestick patterns with S/R proximity scaling.
     
-    Patterns detected:
+    NOTE: As of Feb 2026, this is an INFORMATIONAL feature only.
+    The ±8 point cap on visual adjustments is too small to move the final score
+    across BUY/SELL/HOLD thresholds. Patterns show in dashboard Intel Feed for
+    visual reference but do not affect trading decisions.
+    Future option: raise cap to ±12 or move adjustment to confidence.
+    
+    Patterns detected (reversal only — continuation patterns disabled):
         - Morning Star / Evening Star (3-candle reversal)
-        - Three White Soldiers / Three Black Crows (3-candle continuation)
         - Hammer / Shooting Star (1-candle reversal)
         - Doji at key levels (1-candle indecision, only scores near S/R)
-        - Engulfing (existing, 2-candle reversal)
-        - Pin Bar (existing, 1-candle rejection)
+        - Engulfing (2-candle reversal)
+        - Pin Bar (1-candle rejection)
     
     Priority: Multi-candle > Single-candle structured > Doji
     No double-counting: only highest-priority pattern scores.
