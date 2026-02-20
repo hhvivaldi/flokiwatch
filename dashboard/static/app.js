@@ -59,9 +59,9 @@ function badgeClassByDecision(decision) {
 function pillColor(score) {
   const s = Number(score);
   if (Number.isNaN(s)) return "bg-gray-700";
-  if (s < 40) return "bg-red-500";
-  if (s > 60) return "bg-green-500";
-  return "bg-yellow-500";
+  if (s < 40) return "bg-gradient-to-r from-red-600 to-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]";
+  if (s > 60) return "bg-gradient-to-r from-green-600 to-green-400 shadow-[0_0_12px_rgba(74,222,128,0.6)]";
+  return "bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.6)]";
 }
 
 function renderPillar(rowId, score) {
@@ -70,7 +70,7 @@ function renderPillar(rowId, score) {
   const s = Number(score);
   const pct = Number.isNaN(s) ? 0 : Math.max(0, Math.min(100, s));
   bar.style.width = `${pct}%`;
-  bar.className = `h-2 rounded ${pillColor(s)}`;
+  bar.className = `h-2 rounded-full transition-all duration-1000 ease-out ${pillColor(s)}`;
   val.textContent = fmtNum(s, 1);
 }
 
@@ -108,16 +108,20 @@ function renderPositions(positions) {
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="bg-gray-900/60 border border-gray-700 rounded-lg p-3">
-        <div class="flex items-center justify-between">
-          <div class="text-xs text-gray-200">#${p.ticket} <span class="ml-2 px-2 py-0.5 rounded border border-gray-600 text-gray-300">${p.direction}</span> <span class="ml-2 text-gray-400">${p.volume} lot</span></div>
-          <div class="text-xs ${pnlClass}">${fmtMoney(pnl)} (${fmtNum(p.profit_pips, 0)} pips)</div>
+      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-xs font-mono font-medium text-gray-200">
+            <span class="text-gray-500 mr-1">#</span>${p.ticket} 
+            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600/50 text-gray-300 bg-gray-800/50">${p.direction}</span> 
+            <span class="ml-2 text-gray-400">${p.volume} lot</span>
+          </div>
+          <div class="text-xs font-mono font-bold ${pnlClass}">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)} p)</span></div>
         </div>
-        <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-400">
-          <div>Entry: <span class="text-gray-200">${fmtNum(p.open_price, 2)}</span></div>
-          <div>SL: <span class="text-gray-200">${fmtNum(p.sl, 2)}</span></div>
-          <div>TP: <span class="text-gray-200">${fmtNum(p.tp, 2)}</span></div>
-          <div>Now: <span class="text-gray-200">${fmtNum(p.current_price, 2)}</span></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] font-mono font-medium text-gray-500 uppercase tracking-widest bg-black/20 rounded-lg p-2 border border-white/5">
+          <div><span class="block mb-0.5">Entry</span><span class="text-gray-200">${fmtNum(p.open_price, 2)}</span></div>
+          <div><span class="block mb-0.5">SL</span><span class="text-gray-200">${fmtNum(p.sl, 2)}</span></div>
+          <div><span class="block mb-0.5">TP</span><span class="text-gray-200">${fmtNum(p.tp, 2)}</span></div>
+          <div><span class="block mb-0.5">Now</span><span class="text-gray-200">${fmtNum(p.current_price, 2)}</span></div>
         </div>
       </div>
       `
@@ -184,12 +188,12 @@ function renderTrades(trades, daily) {
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="flex items-center justify-between text-xs border-b border-gray-800 py-2">
-        <div class="text-gray-400">${time}</div>
-        <div class="text-gray-200">${t.direction || "—"}</div>
-        <div class="text-gray-400 truncate max-w-[16rem]">${displayReason}</div>
-        <div class="${pnlClass}">${pnlDisplay}</div>
-        <div class="text-gray-500">${icon}</div>
+      <div class="flex items-center justify-between text-[11px] font-mono border-b border-gray-800/60 py-2.5 px-2 hover:bg-gray-800/30 transition-colors duration-200 rounded-lg group">
+        <div class="text-gray-500 font-medium">${time}</div>
+        <div class="text-gray-300 font-bold">${t.direction || "—"}</div>
+        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-medium tracking-wide">${displayReason}</div>
+        <div class="${pnlClass} font-bold">${pnlDisplay}</div>
+        <div class="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50 text-gray-400">${icon}</div>
       </div>
       `
     );
@@ -452,22 +456,22 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
       const titleTrunc = h.title.length > 90 ? h.title.slice(0, 90) + "..." : h.title;
       const methodTag = h.method === "gpt" ? "GPT" : "KW";
       hlContainer.insertAdjacentHTML("beforeend", `
-        <div class="intel-headline flex items-stretch gap-2 group">
-          <div class="w-1 rounded-full flex-shrink-0 ${sc.bg} opacity-60"></div>
-          <div class="flex-1 min-w-0 py-1">
-            <div class="text-xs text-gray-200 leading-snug truncate" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
-            <div class="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+        <div class="intel-headline flex items-stretch gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-default border border-transparent hover:border-white/10">
+          <div class="w-1.5 rounded-full flex-shrink-0 ${sc.bg} opacity-80 shadow-[0_0_8px_currentColor]"></div>
+          <div class="flex-1 min-w-0 py-0.5">
+            <div class="text-xs text-gray-200 leading-snug truncate font-medium" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
+            <div class="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 font-mono">
               ${categoryBadge(h.category)}
               <span>${age} ago</span>
             </div>
           </div>
           <div class="flex-shrink-0 flex items-center">
             <div class="intel-robot-bubble">
-              <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini">
-              <div class="intel-bubble">
-                <div class="text-xs font-bold ${sc.text}">${fmtNum(h.score, 0)}/100</div>
-                <div class="text-xs text-gray-400">${sc.label}</div>
-                <div class="text-xs text-gray-500 mt-0.5">via ${methodTag}</div>
+              <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-md ring-1 ring-white/10">
+              <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50">
+                <div class="text-xs font-bold ${sc.text} font-mono">${fmtNum(h.score, 0)}/100</div>
+                <div class="text-[10px] font-semibold tracking-wider uppercase text-gray-400 mt-0.5">${sc.label}</div>
+                <div class="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">via ${methodTag}</div>
               </div>
             </div>
           </div>
@@ -492,19 +496,20 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const unit = macroUnit(key);
 
     macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="bg-gray-800/60 border ${sc.border} rounded p-2 intel-macro-card">
-        <div class="flex items-center justify-between">
-          <div class="text-xs text-gray-400 tracking-wider">${macroLabel(key)}</div>
-          <div class="text-xs ${sc.text}">${fmtNum(m.score, 0)}</div>
+      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+        <div class="flex items-center justify-between relative z-10">
+          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)}</div>
+          <div class="text-xs font-bold font-mono ${sc.text}">${fmtNum(m.score, 0)}</div>
         </div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-sm text-gray-100 font-bold">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
-          <span class="text-xs ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
+        <div class="flex items-baseline gap-2 mt-2 relative z-10">
+          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
-        <div class="intel-robot-bubble inline-flex mt-1">
-          <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini">
-          <div class="intel-bubble">
-            <div class="text-xs text-gray-300">${impact}</div>
+        <div class="intel-robot-bubble inline-flex mt-2 relative z-10">
+          <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10">
+          <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50 p-2">
+            <div class="text-xs text-gray-300 font-medium">${impact}</div>
           </div>
         </div>
       </div>
@@ -739,9 +744,9 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
 
 function decisionColor(d) {
   const s = (d || "").toUpperCase();
-  if (s.includes("BUY")) return "text-green-400 border-green-700 bg-green-900/20";
-  if (s.includes("SELL")) return "text-red-400 border-red-700 bg-red-900/20";
-  return "text-yellow-300 border-yellow-700 bg-yellow-900/20";
+  if (s.includes("BUY")) return "text-green-400 border-green-700/50 bg-green-900/20 shadow-sm shadow-green-900/10";
+  if (s.includes("SELL")) return "text-red-400 border-red-700/50 bg-red-900/20 shadow-sm shadow-red-900/10";
+  return "text-yellow-300 border-yellow-700/50 bg-yellow-900/20 shadow-sm shadow-yellow-900/10";
 }
 
 function renderRecentDecisions(decisions) {
@@ -749,7 +754,7 @@ function renderRecentDecisions(decisions) {
   if (!container) return;
 
   if (!decisions || decisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-500">NO DECISIONS YET</span>`;
+    container.innerHTML = `<span class="text-gray-500 font-medium tracking-wide text-[11px] uppercase">NO DECISIONS YET</span>`;
     return;
   }
 
@@ -759,13 +764,14 @@ function renderRecentDecisions(decisions) {
     const decision = d.decision || "HOLD";
     const score = d.score != null ? Number(d.score).toFixed(1) : "—";
     const cls = decisionColor(decision);
-    container.insertAdjacentHTML("beforeend",
-      `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded border ${cls}">` +
-        `<span class="text-gray-500">${time}</span> ` +
-        `<span class="font-bold">${decision}</span> ` +
-        `<span class="text-gray-400">${score}</span>` +
-      `</span>`
-    );
+
+    container.insertAdjacentHTML("beforeend", `
+      <div class="flex items-center gap-1.5 px-2 py-1 rounded-md border ${cls} backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5">
+        <span class="text-[10px] text-gray-500 font-mono tracking-wider opacity-80">${time}</span>
+        <span class="font-bold text-[10px] tracking-wide uppercase">${decision}</span>
+        <span class="text-[10px] font-mono opacity-90 font-medium pl-1 border-l border-current/20">${score}</span>
+      </div>
+    `);
   }
 }
 

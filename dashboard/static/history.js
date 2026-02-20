@@ -87,11 +87,11 @@ class HistoryApp {
         ];
         
         grid.innerHTML = cards.map(c => `
-            <div class="about-card p-4 flex flex-col justify-center items-center text-center">
-                <div class="text-xs text-gray-500 tracking-widest mb-1 flex items-center gap-1">
-                    <span>${c.icon}</span> ${c.label}
+            <div class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-center items-center text-center">
+                <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500 mb-2 flex items-center gap-1.5">
+                    <span class="text-sm">${c.icon}</span> ${c.label}
                 </div>
-                <div class="text-xl sm:text-2xl font-bold ${c.color || 'text-gray-200'}">${c.value}</div>
+                <div class="text-xl sm:text-2xl font-bold font-mono ${c.color || 'text-gray-100'}">${c.value}</div>
             </div>
         `).join('');
     }
