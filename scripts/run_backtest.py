@@ -28,7 +28,7 @@ import MetaTrader5 as mt5
 import config
 from technical_analyzer import calculate_indicators, calculate_technical_score, analyze_technical_detailed, get_atr_value, calculate_visual_features
 from momentum_detector import analyze_momentum, calculate_adx, analyze_volume, count_consecutive_candles, analyze_atr_trend, detect_breakout, calculate_momentum_score
-from central_brain import analyze_with_brain, is_actionable_signal, get_trade_direction, set_base_weights, reset_base_weights
+from central_brain import analyze_with_brain, is_actionable_signal, get_trade_direction, set_base_weights, reset_base_weights, _check_mtf_trend_alignment
 from risk_manager import calculate_sl_tp
 from ml_predictor import MLPredictor
 from support_resistance import detect_zones_dual, get_sr_context, adjust_sl_tp_for_sr, is_near_strong_zone, format_zones_for_explanation
@@ -191,7 +191,7 @@ def fetch_data_chunked(symbol: str, timeframe, start: datetime, end: datetime, c
 
 
 def collect_all_data() -> Dict[str, pd.DataFrame]:
-    """Collect M5, M15, H1, H4 data for the backtest period."""
+    """Collect M5, M15, H1, H4, D1 data for the backtest period."""
     # Extra buffer for warmup
     warmup_start = BT_START - timedelta(days=7)
 
@@ -203,6 +203,10 @@ def collect_all_data() -> Dict[str, pd.DataFrame]:
 
     data['h4'] = fetch_data("XAUUSD", mt5.TIMEFRAME_H4, warmup_start - timedelta(days=30), BT_END)
     print(f"  H4: {len(data['h4'])} candles")
+
+    # D1 for MTF trend check (need ~60 bars for EMA50)
+    data['d1'] = fetch_data("XAUUSD", mt5.TIMEFRAME_D1, warmup_start - timedelta(days=90), BT_END)
+    print(f"  D1: {len(data['d1'])} candles")
 
     # M5: use chunked fetch for long periods (MT5 limits ~35k candles per request)
     m5_start = BT_START - timedelta(days=2)
@@ -432,6 +436,43 @@ def compute_m5_reversal(df_m5: pd.DataFrame, h1_time: datetime, direction: str) 
     desc = f"M5 {'reversal ' + reversal_strength if reversal_detected else 'OK'}: {move_pct:+.2f}%"
     return {"reversal_detected": reversal_detected, "reversal_strength": reversal_strength,
             "recent_move_pct": round(move_pct, 4), "description": desc}
+
+
+def compute_mtf_trend(df_d1: pd.DataFrame, df_h4: pd.DataFrame, h1_time: datetime,
+                      ema_period: int = 50) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Compute D1 and H4 trend direction at a given H1 candle time using EMA.
+    
+    Args:
+        df_d1: D1 DataFrame with OHLCV
+        df_h4: H4 DataFrame with OHLCV
+        h1_time: Current H1 candle time
+        ema_period: EMA period for trend detection (default 50)
+    
+    Returns:
+        Tuple: (d1_trend, h4_trend) - each is "bullish", "bearish", or None
+    """
+    def get_trend(df: pd.DataFrame, ref_time: datetime) -> Optional[str]:
+        if df is None or len(df) == 0:
+            return None
+        mask = df['datetime'] <= ref_time
+        df_slice = df[mask]
+        if len(df_slice) < ema_period:
+            return None
+        df_slice = df_slice.tail(ema_period + 10).copy()
+        df_slice['ema'] = df_slice['close'].ewm(span=ema_period, adjust=False).mean()
+        current_price = float(df_slice['close'].iloc[-1])
+        current_ema = float(df_slice['ema'].iloc[-1])
+        if current_price > current_ema:
+            return "bullish"
+        elif current_price < current_ema:
+            return "bearish"
+        return None
+    
+    d1_trend = get_trend(df_d1, h1_time)
+    h4_trend = get_trend(df_h4, h1_time)
+    
+    return d1_trend, h4_trend
 
 
 # ============================================================================
@@ -1015,6 +1056,7 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
     """
     df_h1 = data['h1'].copy()
     df_h4 = data['h4'].copy()
+    df_d1 = data.get('d1', pd.DataFrame()).copy()  # D1 for MTF trend check
     df_m5 = data['m5'].copy()
 
     # Initialize ML predictor (offline) — reuse if provided
@@ -1280,6 +1322,16 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
             sr_conf_adj_applied = sr_dir_ctx.confidence_adjustment
             if sr_conf_adj_applied != 0:
                 confidence = max(0, min(100, confidence + sr_conf_adj_applied))
+
+        # ============================================================
+        # MTF Trend Confirmation (backtest mode - use historical data)
+        # ============================================================
+        if getattr(config, 'MTF_TREND_ENABLED', True) and len(df_d1) > 0:
+            d1_trend, h4_trend = compute_mtf_trend(df_d1, df_h4, h1_time, 
+                                                    ema_period=getattr(config, 'MTF_EMA_PERIOD', 50))
+            mtf_adj, mtf_confs, mtf_alerts = _check_mtf_trend_alignment(decision, d1_trend, h4_trend)
+            if mtf_adj != 0:
+                confidence = max(0, min(100, confidence + mtf_adj))
 
         # ============================================================
         # Filters
