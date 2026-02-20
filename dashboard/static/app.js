@@ -624,28 +624,32 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   }
 
   // GPT Validator
-  const gptEl = el("intel-gpt");
-  const gpt = feed.gpt_validator;
-  if (gpt && gpt.action) {
-    gptEl.classList.remove("hidden");
-    const actionColors = {
-      "CONFIRM": "border-gray-600 text-gray-400",
-      "BOOST": "border-green-600 text-green-400",
-      "REDUCE": "border-red-600 text-red-400",
-    };
-    const ac = actionColors[gpt.action] || "border-gray-600 text-gray-400";
-    const sign = gpt.action === "BOOST" ? "+" : (gpt.action === "REDUCE" ? "-" : "");
-    const adjText = gpt.adjustment > 0 ? ` (${sign}${gpt.adjustment})` : "";
-    gptEl.innerHTML = `
-      <div class="flex items-center gap-2 text-xs">
-        <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini">
-        <span class="px-1.5 py-0.5 border rounded ${ac} font-bold">${gpt.action}${adjText}</span>
-        <span class="text-gray-500 truncate max-w-md">${gpt.reason || ""}</span>
+  const gptContainer = el("intel-gpt");
+  if (feed.gpt_validation) {
+    const action = feed.gpt_validation.action || "CONFIRM";
+    const text = feed.gpt_validation.reason || "No detail";
+    let bg = "bg-gray-800/50";
+    let border = "border-gray-700/50";
+    let textCls = "text-gray-300";
+    
+    if (action === "BOOST") { bg = "bg-green-900/20"; border = "border-green-700/50"; textCls = "text-green-400"; }
+    else if (action === "REDUCE") { bg = "bg-yellow-900/20"; border = "border-yellow-700/50"; textCls = "text-yellow-400"; }
+    else if (action === "BLOCK") { bg = "bg-red-900/20"; border = "border-red-700/50"; textCls = "text-red-400"; }
+
+    gptContainer.innerHTML = `
+      <div class="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border ${border} ${bg} backdrop-blur-sm w-full">
+        <div class="mt-0.5 sm:mt-1 flex-shrink-0">
+          <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-md ring-2 ring-white/10 opacity-90">
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}</div>
+          <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-sans break-words whitespace-normal">${text.replace(/"/g, '&quot;')}</div>
+        </div>
       </div>
     `;
+    gptContainer.classList.remove("hidden");
   } else {
-    gptEl.classList.add("hidden");
-    gptEl.innerHTML = "";
+    gptContainer.classList.add("hidden");
   }
 
   // Candlestick Patterns
