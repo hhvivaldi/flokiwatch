@@ -299,3 +299,26 @@ GPT_CONFIDENCE_TIMEOUT = 12             # Timeout in seconds for GPT call
 GPT_CONFIDENCE_TEMPERATURE = 0.1        # Low = more deterministic
 GPT_CONFIDENCE_MAX_ADJUSTMENT = 15      # Maximum confidence adjustment (±)
 GPT_CONFIDENCE_CACHE_THRESHOLD = 5      # Only re-call GPT if pillar changed ≥5 pts or scenario changed
+
+# ============================================================================
+# MULTI-TF TREND CONFIRMATION
+# ============================================================================
+MTF_TREND_ENABLED = True                 # Enable Multi-TF trend check
+MTF_TREND_ALIGN_BONUS = 10               # Confidence bonus when trade aligns with D1+H4 trend
+MTF_TREND_CONFLICT_PENALTY = 20          # Confidence penalty when trade conflicts with D1+H4 trend
+MTF_EMA_PERIOD = 50                      # EMA period for trend detection (price vs EMA50)
+
+# ============================================================================
+# VOLUME GATE
+# ============================================================================
+VOLUME_GATE_ENABLED = True               # Enable volume gate penalties
+VOLUME_GATE_MODERATE_THRESHOLD = 0.5     # Volume < 0.5x average triggers moderate penalty
+VOLUME_GATE_MODERATE_PENALTY = 15        # Confidence penalty for moderate low volume
+VOLUME_GATE_SEVERE_THRESHOLD = 0.3       # Volume < 0.3x average triggers severe penalty
+VOLUME_GATE_SEVERE_PENALTY = 25          # Confidence penalty for severe low volume
+
+# ============================================================================
+# MACD DIVERGENCE
+# ============================================================================
+MACD_DIVERGENCE_ADJUSTMENT = 15          # Score adjustment for MACD divergence (reduced from 25)
+

@@ -236,11 +236,13 @@ def _analyze_technical_context(tech_data: Dict, ml_data: Dict, momentum_data: Di
         bars_since = divergence.get("bars_since", 0)
         # Only consider fresh divergence (recent peak/valley, <= 8 bars ago)
         if bars_since <= 8:
+            import config as _cfg
+            macd_adj = getattr(_cfg, 'MACD_DIVERGENCE_ADJUSTMENT', 15)
             if div_type == "bearish":
-                adjustment -= 25
+                adjustment -= macd_adj
                 alerts.append(f"MACD bearish divergence detected ({bars_since} bars ago) - possible downward reversal")
             elif div_type == "bullish":
-                adjustment += 25
+                adjustment += macd_adj
                 alerts.append(f"MACD bullish divergence detected ({bars_since} bars ago) - possible upward reversal")
     
     # --- Price above ALL EMAs + Strong momentum ---
@@ -800,6 +802,20 @@ def _calculate_confidence(scenario_multiplier: float, confirmations: List[str],
     }
     confidence += momentum_map.get(momentum_strength, 0)
     
+    # Volume Gate penalty
+    import config as _cfg
+    if getattr(_cfg, 'VOLUME_GATE_ENABLED', True):
+        volume_ratio = kwargs.get('volume_ratio', 1.0)
+        severe_threshold = getattr(_cfg, 'VOLUME_GATE_SEVERE_THRESHOLD', 0.3)
+        moderate_threshold = getattr(_cfg, 'VOLUME_GATE_MODERATE_THRESHOLD', 0.5)
+        severe_penalty = getattr(_cfg, 'VOLUME_GATE_SEVERE_PENALTY', 25)
+        moderate_penalty = getattr(_cfg, 'VOLUME_GATE_MODERATE_PENALTY', 15)
+        
+        if volume_ratio < severe_threshold:
+            confidence -= severe_penalty
+        elif volume_ratio < moderate_threshold:
+            confidence -= moderate_penalty
+    
     # Fundamentals
     if fundamental_alignment == "positive":
         confidence += 10
@@ -1006,6 +1022,128 @@ def _build_explanation(decision: str, final_score: float, scenario: str,
 # ============================================================================
 # STEP 8.5: M5 ADJUSTMENT ("now" awareness)
 # ============================================================================
+
+def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
+    """
+    Get trend direction for a specific timeframe using EMA50.
+    
+    Args:
+        timeframe: "D1" or "H4"
+    
+    Returns:
+        "bullish", "bearish", or None if data unavailable
+    """
+    try:
+        import MetaTrader5 as mt5
+        import config as _cfg
+        
+        tf_map = {
+            "D1": mt5.TIMEFRAME_D1,
+            "H4": mt5.TIMEFRAME_H4,
+        }
+        tf = tf_map.get(timeframe)
+        if tf is None:
+            return None
+        
+        ema_period = getattr(_cfg, 'MTF_EMA_PERIOD', 50)
+        # Need enough bars for EMA calculation
+        bars_needed = ema_period + 10
+        
+        rates = mt5.copy_rates_from_pos("XAUUSD", tf, 0, bars_needed)
+        if rates is None or len(rates) < ema_period:
+            return None
+        
+        # Calculate EMA50
+        import pandas as pd
+        df = pd.DataFrame(rates)
+        df['ema'] = df['close'].ewm(span=ema_period, adjust=False).mean()
+        
+        current_price = float(df['close'].iloc[-1])
+        current_ema = float(df['ema'].iloc[-1])
+        
+        if current_price > current_ema:
+            return "bullish"
+        elif current_price < current_ema:
+            return "bearish"
+        else:
+            return None
+            
+    except Exception:
+        return None
+
+
+def _check_mtf_trend_alignment(decision: str, d1_trend: Optional[str] = None, 
+                                h4_trend: Optional[str] = None) -> Tuple[float, List[str], List[str]]:
+    """
+    Check if trade direction aligns with D1 and H4 trend.
+    
+    If both D1 and H4 agree on direction:
+    - Trade aligns: +10 confidence bonus
+    - Trade conflicts: -20 confidence penalty
+    
+    Args:
+        decision: "BUY", "SELL", "HOLD", etc.
+        d1_trend: Optional pre-calculated D1 trend (for backtest)
+        h4_trend: Optional pre-calculated H4 trend (for backtest)
+    
+    Returns:
+        Tuple: (confidence_adjustment, confirmations, alerts)
+    """
+    import config as _cfg
+    
+    if not getattr(_cfg, 'MTF_TREND_ENABLED', True):
+        return 0.0, [], []
+    
+    confirmations = []
+    alerts = []
+    adjustment = 0.0
+    
+    # Get trend directions (use provided values or fetch from MT5)
+    if d1_trend is None:
+        d1_trend = _get_mtf_trend_direction("D1")
+    if h4_trend is None:
+        h4_trend = _get_mtf_trend_direction("H4")
+    
+    # If we can't determine both trends, no adjustment
+    if d1_trend is None or h4_trend is None:
+        return 0.0, [], []
+    
+    # Check if D1 and H4 agree
+    if d1_trend != h4_trend:
+        # Mixed signals - no adjustment
+        return 0.0, [], []
+    
+    # Both timeframes agree
+    mtf_direction = d1_trend  # "bullish" or "bearish"
+    
+    # Determine trade direction
+    trade_bullish = decision in ("BUY", "STRONG_BUY")
+    trade_bearish = decision in ("SELL", "STRONG_SELL")
+    
+    if decision == "HOLD":
+        # No adjustment for HOLD
+        return 0.0, [], []
+    
+    align_bonus = getattr(_cfg, 'MTF_TREND_ALIGN_BONUS', 10)
+    conflict_penalty = getattr(_cfg, 'MTF_TREND_CONFLICT_PENALTY', 20)
+    
+    if mtf_direction == "bullish":
+        if trade_bullish:
+            adjustment = align_bonus
+            confirmations.append(f"MTF trend aligned: D1+H4 bullish, trade BUY (+{align_bonus} conf)")
+        elif trade_bearish:
+            adjustment = -conflict_penalty
+            alerts.append(f"MTF trend CONFLICT: D1+H4 bullish but trade SELL (-{conflict_penalty} conf)")
+    elif mtf_direction == "bearish":
+        if trade_bearish:
+            adjustment = align_bonus
+            confirmations.append(f"MTF trend aligned: D1+H4 bearish, trade SELL (+{align_bonus} conf)")
+        elif trade_bullish:
+            adjustment = -conflict_penalty
+            alerts.append(f"MTF trend CONFLICT: D1+H4 bearish but trade BUY (-{conflict_penalty} conf)")
+    
+    return adjustment, confirmations, alerts
+
 
 def _apply_m5_adjustment(final_score: float, m5_data: Dict) -> tuple:
     """
@@ -1237,6 +1375,9 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         parabolic_penalty = True
     
     # STEP 10: Calculate confidence
+    # Get volume ratio for Volume Gate
+    volume_ratio = momentum_data.get("volume", {}).get("volume_ratio", 1.0)
+    
     confidence, confidence_level = _calculate_confidence(
         confidence_multiplier, all_confirmations, all_alerts,
         ml_confidence, momentum_strength, fund_alignment,
@@ -1245,8 +1386,29 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         decision=decision,
         volatility_status=volatility_status,
         news_score=original_scores["news"],
-        scenario=scenario
+        scenario=scenario,
+        volume_ratio=volume_ratio
     )
+    
+    # STEP 10.3: Multi-TF Trend Alignment
+    mtf_adj, mtf_confs, mtf_alerts = _check_mtf_trend_alignment(decision)
+    if mtf_adj != 0:
+        confidence = max(0, min(100, confidence + mtf_adj))
+    all_confirmations.extend(mtf_confs)
+    all_alerts.extend(mtf_alerts)
+    
+    # Add Volume Gate alert if penalty was applied
+    import config as _cfg
+    if getattr(_cfg, 'VOLUME_GATE_ENABLED', True):
+        severe_threshold = getattr(_cfg, 'VOLUME_GATE_SEVERE_THRESHOLD', 0.3)
+        moderate_threshold = getattr(_cfg, 'VOLUME_GATE_MODERATE_THRESHOLD', 0.5)
+        severe_penalty = getattr(_cfg, 'VOLUME_GATE_SEVERE_PENALTY', 25)
+        moderate_penalty = getattr(_cfg, 'VOLUME_GATE_MODERATE_PENALTY', 15)
+        
+        if volume_ratio < severe_threshold:
+            all_alerts.append(f"Volume Gate: {volume_ratio:.1f}x average (severe) → -{severe_penalty} conf")
+        elif volume_ratio < moderate_threshold:
+            all_alerts.append(f"Volume Gate: {volume_ratio:.1f}x average (moderate) → -{moderate_penalty} conf")
     
     # Apply parabolic penalty (-30%) after confidence calculation
     if parabolic_penalty:
