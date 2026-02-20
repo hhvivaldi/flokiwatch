@@ -638,12 +638,12 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const above = srZones.filter(z => z.position === "above");
     const below = srZones.filter(z => z.position === "below");
     // Resistance (above) — right column
-    let aboveHtml = '<div><div class="text-red-400 font-bold mb-1">&#9650; RESISTANCE</div>';
+    let aboveHtml = '<div class="shrink-0"><div class="text-red-400 font-bold mb-1">&#9650; RESISTANCE</div>';
     if (above.length === 0) { aboveHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of above) { aboveHtml += zoneRow(z, "text-red-300", "border-red-700"); }
     aboveHtml += '</div>';
     // Support (below) — left column
-    let belowHtml = '<div><div class="text-green-400 font-bold mb-1">&#9660; SUPPORT</div>';
+    let belowHtml = '<div class="shrink-0 pr-3 border-r border-gray-700/50"><div class="text-green-400 font-bold mb-1">&#9660; SUPPORT</div>';
     if (below.length === 0) { belowHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of below) { belowHtml += zoneRow(z, "text-green-300", "border-green-700"); }
     belowHtml += '</div>';
