@@ -659,6 +659,8 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   if (feed.gpt_validator) {
     const action = feed.gpt_validator.action || "CONFIRM";
     const text = feed.gpt_validator.reason || "No detail";
+    const adj = feed.gpt_validator.adjustment;
+    const adjStr = (adj != null && adj !== 0) ? ` (${adj > 0 ? '+' : ''}${adj})` : "";
     let bg = "bg-gray-800/50";
     let border = "border-gray-700/50";
     let textCls = "text-gray-300";
@@ -673,7 +675,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-md ring-2 ring-white/10 opacity-90">
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}</div>
+          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
           <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-sans break-words whitespace-normal">${text.replace(/"/g, '&quot;')}</div>
         </div>
       </div>
