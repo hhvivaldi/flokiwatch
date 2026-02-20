@@ -309,52 +309,9 @@ def detect_candlestick_patterns(df: pd.DataFrame, sr_zones: list = None,
                 "priority": 1,
             })
     
-    # Three White Soldiers: 3 consecutive bullish, bodies > 50% of range, each closing higher
-    if c3 is not None:
-        candles = [c2, c1, c0]
-        all_bullish = all(c['close'] > c['open'] for c in candles)
-        bodies_strong = all(
-            (c['close'] - c['open']) > (c['high'] - c['low']) * 0.5
-            for c in candles
-        )
-        closes_rising = c0['close'] > c1['close'] > c2['close']
-        
-        if all_bullish and bodies_strong and closes_rising:
-            # Reduce score if far from S/R (exhaustion signal)
-            base_score = 2.0 if sr_distance_atr > 1.5 else 4.0
-            final_score = base_score * sr_mult
-            detected_patterns.append({
-                "name": "Three White Soldiers",
-                "direction": "bullish",
-                "base_score": base_score,
-                "sr_multiplier": sr_mult,
-                "final_score": round(final_score, 1),
-                "priority": 1,
-                "extended": sr_distance_atr > 1.5,
-            })
-    
-    # Three Black Crows: 3 consecutive bearish, bodies > 50% of range, each closing lower
-    if c3 is not None:
-        candles = [c2, c1, c0]
-        all_bearish = all(c['close'] < c['open'] for c in candles)
-        bodies_strong = all(
-            (c['open'] - c['close']) > (c['high'] - c['low']) * 0.5
-            for c in candles
-        )
-        closes_falling = c0['close'] < c1['close'] < c2['close']
-        
-        if all_bearish and bodies_strong and closes_falling:
-            base_score = -2.0 if sr_distance_atr > 1.5 else -4.0
-            final_score = base_score * sr_mult
-            detected_patterns.append({
-                "name": "Three Black Crows",
-                "direction": "bearish",
-                "base_score": base_score,
-                "sr_multiplier": sr_mult,
-                "final_score": round(final_score, 1),
-                "priority": 1,
-                "extended": sr_distance_atr > 1.5,
-            })
+    # NOTE: Three White Soldiers / Three Black Crows DISABLED
+    # Backtest showed 40% WR and -$194 P&L — continuation patterns hurt the system
+    # Keeping only reversal patterns (Morning Star, Evening Star, Engulfing, Pin Bar, Hammer, Shooting Star, Doji)
     
     # ========== 2-CANDLE PATTERNS ==========
     

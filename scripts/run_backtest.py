@@ -1556,7 +1556,8 @@ def generate_report(trades: List[SimTrade], trades_no_visual: Optional[List[SimT
                     trades_no_pyramid: Optional[List[SimTrade]] = None,
                     pyramid_stats_off: Optional[Dict] = None,
                     trades_no_early_exit: Optional[List[SimTrade]] = None,
-                    sr_comparison: Optional[Dict] = None) -> str:
+                    sr_comparison: Optional[Dict] = None,
+                    pattern_comparison: Optional[Dict] = None) -> str:
     """Generate comprehensive backtest report."""
     lines = []
     lines.append("=" * 70)
@@ -2094,12 +2095,57 @@ def generate_report(trades: List[SimTrade], trades_no_visual: Optional[List[SimT
                 lines.append(f"    Wins: {added_wins}, P&L: ${added_pnl:+.2f}")
 
     # ============================================================
-    # CANDLESTICK PATTERN ANALYSIS
+    # PATTERNS ON vs OFF COMPARISON
+    # ============================================================
+    if pattern_comparison is not None:
+        lines.append(f"\n{'─' * 50}")
+        lines.append(f"  🕯️ PATTERNS ON vs OFF COMPARISON")
+        lines.append(f"{'─' * 50}")
+        
+        def _calc_pattern_stats(tlist):
+            if not tlist:
+                return {'trades': 0, 'wins': 0, 'wr': 0, 'pnl': 0, 'pips': 0, 'pf': 0}
+            w = [t for t in tlist if t.profit_pips > 0]
+            l = [t for t in tlist if t.profit_pips <= 0]
+            gp = sum(t.profit_usd for t in w)
+            gl = abs(sum(t.profit_usd for t in l))
+            return {
+                'trades': len(tlist), 'wins': len(w),
+                'wr': len(w) / len(tlist) * 100,
+                'pnl': sum(t.profit_usd for t in tlist),
+                'pips': sum(t.profit_pips for t in tlist),
+                'pf': gp / gl if gl > 0 else float('inf'),
+            }
+        
+        off_stats = _calc_pattern_stats(pattern_comparison.get('patterns_off', []))
+        on_stats = _calc_pattern_stats(pattern_comparison.get('patterns_on', []))
+        
+        lines.append(f"\n  {'':>20} {'Patterns OFF':>14} {'Patterns ON':>14} {'Delta':>10}")
+        lines.append(f"  {'Trades':>20} {off_stats['trades']:>14} {on_stats['trades']:>14} {on_stats['trades']-off_stats['trades']:>+10}")
+        lines.append(f"  {'Win Rate':>20} {off_stats['wr']:>13.1f}% {on_stats['wr']:>13.1f}% {on_stats['wr']-off_stats['wr']:>+9.1f}%")
+        lines.append(f"  {'P&L $':>20} ${off_stats['pnl']:>+12.2f} ${on_stats['pnl']:>+12.2f} ${on_stats['pnl']-off_stats['pnl']:>+9.2f}")
+        lines.append(f"  {'Pips':>20} {off_stats['pips']:>+13.1f} {on_stats['pips']:>+13.1f} {on_stats['pips']-off_stats['pips']:>+9.1f}")
+        lines.append(f"  {'Profit Factor':>20} {off_stats['pf']:>14.2f} {on_stats['pf']:>14.2f}")
+        
+        # Verdict
+        delta_pnl = on_stats['pnl'] - off_stats['pnl']
+        delta_wr = on_stats['wr'] - off_stats['wr']
+        if delta_pnl > 0 and delta_wr >= 0:
+            lines.append(f"\n  ✅ Patterns ON is BETTER: +${delta_pnl:.2f} P&L, +{delta_wr:.1f}% WR")
+        elif delta_pnl > 0:
+            lines.append(f"\n  ⚠️ Patterns ON has better P&L (+${delta_pnl:.2f}) but lower WR ({delta_wr:.1f}%)")
+        elif delta_pnl < 0:
+            lines.append(f"\n  ❌ Patterns ON is WORSE: ${delta_pnl:.2f} P&L, {delta_wr:.1f}% WR — DO NOT DEPLOY")
+        else:
+            lines.append(f"\n  ➖ No significant difference")
+    
+    # ============================================================
+    # CANDLESTICK PATTERN ANALYSIS (from Patterns ON run)
     # ============================================================
     pattern_trades = [t for t in trades if t.candlestick_pattern]
     if pattern_trades:
         lines.append(f"\n{'─' * 50}")
-        lines.append(f"  🕯️ CANDLESTICK PATTERN ANALYSIS")
+        lines.append(f"  🕯️ CANDLESTICK PATTERN BREAKDOWN")
         lines.append(f"{'─' * 50}")
         
         # Group by pattern
@@ -2123,26 +2169,36 @@ def generate_report(trades: List[SimTrade], trades_no_visual: Optional[List[SimT
             avg_sr_mult = np.mean([t.candlestick_sr_mult for t in d['trades']])
             lines.append(f"  {p:<25} {count:>7} {d['wins']:>5} {wr:>6.1f}% ${d['pnl']:>+9.2f} {d['pips']:>+7.1f} {avg_sr_mult:>7.2f}×")
         
-        # Patterns with S/R boost (multiplier > 1.0)
+        # S/R Proximity Impact Analysis
         sr_boosted = [t for t in pattern_trades if t.candlestick_sr_mult > 1.0]
         no_sr_boost = [t for t in pattern_trades if t.candlestick_sr_mult == 1.0]
         
-        if sr_boosted and no_sr_boost:
+        lines.append(f"\n  S/R Proximity Impact:")
+        if sr_boosted:
             sr_wins = sum(1 for t in sr_boosted if t.profit_pips > 0)
-            no_sr_wins = sum(1 for t in no_sr_boost if t.profit_pips > 0)
-            sr_wr = sr_wins / len(sr_boosted) * 100 if sr_boosted else 0
-            no_sr_wr = no_sr_wins / len(no_sr_boost) * 100 if no_sr_boost else 0
+            sr_wr = sr_wins / len(sr_boosted) * 100
             sr_pnl = sum(t.profit_usd for t in sr_boosted)
-            no_sr_pnl = sum(t.profit_usd for t in no_sr_boost)
-            
-            lines.append(f"\n  S/R Proximity Impact:")
             lines.append(f"    WITH S/R boost (×>1.0):    {len(sr_boosted)} trades, WR {sr_wr:.1f}%, P&L ${sr_pnl:+.2f}")
+        else:
+            lines.append(f"    WITH S/R boost (×>1.0):    0 trades")
+        
+        if no_sr_boost:
+            no_sr_wins = sum(1 for t in no_sr_boost if t.profit_pips > 0)
+            no_sr_wr = no_sr_wins / len(no_sr_boost) * 100
+            no_sr_pnl = sum(t.profit_usd for t in no_sr_boost)
             lines.append(f"    WITHOUT S/R boost (×1.0):  {len(no_sr_boost)} trades, WR {no_sr_wr:.1f}%, P&L ${no_sr_pnl:+.2f}")
-            
+        else:
+            lines.append(f"    WITHOUT S/R boost (×1.0):  0 trades")
+        
+        if sr_boosted and no_sr_boost:
+            sr_wr = sum(1 for t in sr_boosted if t.profit_pips > 0) / len(sr_boosted) * 100
+            no_sr_wr = sum(1 for t in no_sr_boost if t.profit_pips > 0) / len(no_sr_boost) * 100
             if sr_wr > no_sr_wr:
                 lines.append(f"    ✅ Patterns near S/R zones have HIGHER win rate (+{sr_wr - no_sr_wr:.1f}%)")
-            else:
+            elif sr_wr < no_sr_wr:
                 lines.append(f"    ⚠️ Patterns near S/R zones have LOWER win rate ({sr_wr - no_sr_wr:.1f}%)")
+            else:
+                lines.append(f"    ➖ No difference in win rate")
     
     # ============================================================
     # FEB 16 VALIDATION
@@ -2272,34 +2328,29 @@ def main():
             NEUTRAL_NEWS = _make_news_dict(args.news_score)
 
         print("\n" + "=" * 60)
-        print(f"  RUNNING BACKTEST (visual: {'ON' if config.VISUAL_FEATURES_ENABLED else 'OFF'}, news={BT_NEWS_SCORE:.0f})")
+        print(f"  RUNNING BACKTEST (news={BT_NEWS_SCORE:.0f})")
         print(f"  Period: {BT_START.strftime('%Y-%m-%d')} → {BT_END.strftime('%Y-%m-%d %H:%M')}")
         print("=" * 60)
 
-        # Run 1: Baseline (no S/R)
-        print("\n--- Run 1: Baseline (no S/R) ---")
-        trades_baseline, pyr_stats_on = run_backtest(data, disable_visual=False, sr_enabled=False, models_dir=bt_models_dir)
+        # Run A: Patterns OFF (baseline) — disable visual features
+        print("\n--- Run A: Patterns OFF (baseline) ---")
+        trades_patterns_off, pyr_stats_off = run_backtest(data, disable_visual=True, sr_enabled=True, sr_tp_adjust=True, models_dir=bt_models_dir)
 
-        # Run 2: S/R ON + TP adjustment ON
-        print("\n--- Run 2: S/R ON + TP adjust ON ---")
-        trades_sr_tp_on, _ = run_backtest(data, disable_visual=False, sr_enabled=True, sr_tp_adjust=True, models_dir=bt_models_dir)
+        # Run B: Patterns ON with S/R enabled — test proximity scaling
+        print("\n--- Run B: Patterns ON + S/R enabled ---")
+        trades_patterns_on, pyr_stats_on = run_backtest(data, disable_visual=False, sr_enabled=True, sr_tp_adjust=True, models_dir=bt_models_dir)
 
-        # Run 3: S/R ON + TP adjustment OFF
-        print("\n--- Run 3: S/R ON + TP adjust OFF ---")
-        trades_sr_tp_off, _ = run_backtest(data, disable_visual=False, sr_enabled=True, sr_tp_adjust=False, models_dir=bt_models_dir)
-
-        # Build S/R comparison data
-        sr_comparison = {
-            'baseline': trades_baseline,
-            'sr_tp_on': trades_sr_tp_on,
-            'sr_tp_off': trades_sr_tp_off,
+        # Build pattern comparison data
+        pattern_comparison = {
+            'patterns_off': trades_patterns_off,
+            'patterns_on': trades_patterns_on,
         }
 
-        # Generate report (baseline as primary trades)
+        # Generate report (patterns ON as primary trades)
         report = generate_report(
-            trades_baseline,
+            trades_patterns_on,
             pyramid_stats=pyr_stats_on,
-            sr_comparison=sr_comparison,
+            pattern_comparison=pattern_comparison,
         )
         print(report)
 
@@ -2311,10 +2362,10 @@ def main():
         print(f"\n📄 Report saved: {report_path}")
 
         # Save trades CSV
-        if trades_baseline:
+        if trades_patterns_on:
             csv_path = os.path.join(ROOT_DIR, "data", f"backtest_trades_{timestamp}.csv")
             rows = []
-            for t in trades_baseline:
+            for t in trades_patterns_on:
                 rows.append({
                     'ticket': t.ticket, 'direction': t.direction,
                     'entry_time': t.entry_time, 'entry_price': t.entry_price,
