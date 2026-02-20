@@ -54,7 +54,7 @@ main.py (Orquestrador)
 | Passo | Descrição |
 |-------|-----------|
 | 1 | Receber dados dos 5 pilares |
-| 2 | Analisar contexto técnico (RSI extremos, divergências MACD, Bollinger squeeze) |
+| 2 | Analisar contexto técnico (RSI extremos, divergências MACD ±15pts, Bollinger squeeze) |
 | 3 | Validar ML (concordância ML vs técnico, confiança) |
 | 4 | Avaliar momentum (direção por votação: ADX +DI/-DI, velas, breakout) |
 | 5 | Analisar contexto fundamental (sentimento notícias) |
@@ -124,11 +124,32 @@ Base: 50 × scenario_multiplier
 + Confirmações: +3 cada | - Alertas: -3 cada
 + ML: >70%→+15, >60%→+10, >55%→+5, ≥50%→0, <50%→-10
 + Momentum: very_strong→+15, strong→+10, moderate→0, weak/very_weak→-10
++ Volume Gate: <0.3x avg→-25, <0.5x avg→-15 (NEW Feb 2026)
++ MTF Trend: aligned→+10, conflict→-20 (NEW Feb 2026)
 + Fundamentals: positive→+10, negative→-10
 + Calendar: alinhado→+10, contra→-15
 - Indecision (score 45-55): até -20
 = Clamp [0, 100]
 ```
+
+### 6.1 Multi-TF Trend Confirmation (NEW Feb 2026)
+
+Verifica se a direção do trade está alinhada com a tendência D1 e H4 usando EMA50:
+- **Cálculo:** Price > EMA50 = bullish, Price < EMA50 = bearish
+- **Se D1 e H4 concordam:**
+  - Trade alinhado com tendência: **+10 confiança**
+  - Trade contra tendência: **-20 confiança**
+- **Se D1 e H4 discordam:** Sem ajuste (sinais mistos)
+
+**Motivação:** Trades Bot-SELL-34/35 (Feb 20, 2026) venderam contra uptrend claro D1+H4 com volume baixo. MTF teria aplicado -20 conf, Volume Gate -25 conf → ambos bloqueados (conf < 35%).
+
+### 6.2 Volume Gate (NEW Feb 2026)
+
+Penaliza trades com volume baixo (falsos breakouts):
+- **Volume < 0.3x média:** -25 confiança (severo)
+- **Volume < 0.5x média:** -15 confiança (moderado)
+
+**Config:** `VOLUME_GATE_ENABLED`, `VOLUME_GATE_MODERATE_THRESHOLD`, `VOLUME_GATE_SEVERE_THRESHOLD`
 
 Níveis: very_high(≥80), high(≥65), moderate(≥50), low(≥35), very_low(<35).
 
@@ -417,6 +438,9 @@ XAUUSD/
 | Explicit Regime Detection | ❌ Abandoned | All regimes profitable. Trending 72% WR (PF 2.08), Ranging 70% WR (PF 2.49), Normal 74.7% WR. Only Volatile-Trend negative but 12 trades (statistically irrelevant). Central Brain scenarios already provide effective implicit regime detection. |
 | Multi-Asset Correlation Filter | ❌ Abandoned | Conflict trades (BUY gold + DXY rising) have HIGHER WR (76.0%) than aligned trades (70.7%). Bot already incorporates macro in scoring — when it overrides macro headwinds, those are high-conviction trades. Filtering would remove $1,578-$2,174 in profit. |
 | Weight Optimization | ✅ Completed | 96 five-pillar + 19 three-pillar combinations tested via walk-forward (12M train / 6M test). Best combo improved test PF by only +0.04 (below +0.10 threshold). Current weights confirmed near-optimal. PF range across all combos: 1.70-2.13 (train), 2.13-2.55 (test) — narrow band confirms robustness to weight changes. |
+| Multi-TF Trend Confirmation | ✅ Completed | D1+H4 EMA50 trend check. Aligned trades +10 conf, conflicting -20 conf. Prevents counter-trend trades like Bot-SELL-34/35. Config: `MTF_TREND_ENABLED`, `MTF_TREND_ALIGN_BONUS`, `MTF_TREND_CONFLICT_PENALTY`. |
+| Volume Gate | ✅ Completed | Penalizes low-volume trades. <0.5x avg: -15 conf, <0.3x avg: -25 conf. Config: `VOLUME_GATE_ENABLED`, thresholds configurable. |
+| MACD Divergence Adjustment | ✅ Tuned | Reduced from ±25 to ±15 points. Too aggressive in strong trends. Config: `MACD_DIVERGENCE_ADJUSTMENT`. |
 
 ### Optimization Roadmap Summary (Feb 2026)
 
