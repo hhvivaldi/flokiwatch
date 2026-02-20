@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>History - FlokiWatch</title>
+    <link rel="icon" type="image/png" href="/image/flokiwatch.png">
+    
+    <!-- Tailwind CSS (via CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Style overrides -->
+    <link rel="stylesheet" href="/static/style.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gray: {
+                850: '#1f2937',
+                900: '#111827',
+                950: '#030712',
+              }
+            },
+            fontFamily: {
+              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
+              sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', "Segoe UI", 'Roboto', "Helvetica Neue", 'Arial', "Noto Sans", 'sans-serif', "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"],
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+
+  <body class="bg-black text-white">
+
+    <!-- Header -->
+    <div class="bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
+      <div class="flex items-center justify-between text-xs">
+        <a href="/" class="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          <span class="tracking-wider">BACK TO DASHBOARD</span>
+        </a>
+        <nav class="flex gap-4 sm:gap-6 items-center">
+          <a href="/" class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">DASHBOARD</a>
+          <a href="/history" class="text-sm font-semibold text-gray-200 hover:text-white transition-colors duration-200">HISTORY</a>
+          <a href="/roadmap" class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ROADMAP</a>
+          <a href="/about" class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ABOUT</a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon">
+          <span class="hidden sm:inline text-white font-bold tracking-wider text-sm">FLOKIWATCH</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-8">
+      
+      <div class="mb-8 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-wider text-cyan-400">Trade History & Performance</h1>
+          <div class="text-xs text-gray-500 tracking-widest mt-1">LIVE DATA FROM SQLITE DB</div>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-gray-500">
+            <span id="last-updated">Last updated: --</span>
+            <div id="loading-indicator" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Global Stats Grid -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="global-stats-grid">
+        <!-- Rendered by JS -->
+      </section>
+
+      <!-- Charts & Backtest Comparison -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Equity Curve -->
+        <div class="lg:col-span-2 about-card p-4 h-[350px] flex flex-col">
+          <h2 class="about-card-title mb-4">Equity Curve</h2>
+          <div class="relative flex-grow w-full h-full">
+            <canvas id="equityChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Backtest Comparison -->
+        <div class="about-card p-4">
+          <h2 class="about-card-title mb-4">Live vs Backtest</h2>
+          <p class="text-xs text-gray-500 mb-4">Ref: v3.1 (Aug 2024 - Feb 2026)</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead>
+                <tr class="text-xs text-gray-500 border-b border-gray-800">
+                  <th class="pb-2 font-normal">Metric</th>
+                  <th class="pb-2 font-normal text-right">Backtest</th>
+                  <th class="pb-2 font-normal text-right">Live</th>
+                </tr>
+              </thead>
+              <tbody id="comparison-table-body" class="divide-y divide-gray-800/50">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Monthly Summary -->
+      <section class="about-card p-4 mb-8">
+        <h2 class="about-card-title mb-4">Monthly Summary</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead>
+              <tr class="text-xs text-gray-500 border-b border-gray-800 bg-gray-900/50">
+                <th class="p-3 font-medium rounded-tl-lg">Month</th>
+                <th class="p-3 font-medium text-right">Trades</th>
+                <th class="p-3 font-medium text-right">W/L/BE</th>
+                <th class="p-3 font-medium text-right">Win Rate</th>
+                <th class="p-3 font-medium text-right">P&L</th>
+                <th class="p-3 font-medium text-right">PF</th>
+                <th class="p-3 font-medium text-right rounded-tr-lg">Max DD</th>
+              </tr>
+            </thead>
+            <tbody id="monthly-table-body" class="divide-y divide-gray-800/50">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Trade History Table -->
+      <section class="about-card p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="about-card-title mb-0">Trade History</h2>
+            <div class="text-xs text-gray-500">
+                Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+            </div>
+        </div>
+        
+        <div class="overflow-x-auto min-h-[400px]">
+          <table class="w-full text-sm text-left whitespace-nowrap">
+            <thead>
+              <tr class="text-xs text-gray-500 border-b border-gray-800 bg-gray-900/50">
+                <th class="p-3 font-medium rounded-tl-lg cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('open_time')">Date/Time ↕</th>
+                <th class="p-3 font-medium cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('direction')">Dir ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('open_price')">Entry ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('close_price')">Exit ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('profit')">P&L $ ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('pips')">Pips ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('duration_minutes')">Dur (m) ↕</th>
+                <th class="p-3 font-medium text-right cursor-pointer hover:text-cyan-400" onclick="historyApp.sortTrades('confidence')">Conf % ↕</th>
+                <th class="p-3 font-medium">Scenario</th>
+                <th class="p-3 font-medium rounded-tr-lg">Close Reason</th>
+              </tr>
+            </thead>
+            <tbody id="trades-table-body" class="divide-y divide-gray-800/50">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-800">
+            <button id="btn-prev" class="px-3 py-1 bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs" onclick="historyApp.prevPage()">Previous</button>
+            <div class="flex gap-1" id="pagination-numbers">
+                <!-- Rendered by JS -->
+            </div>
+            <button id="btn-next" class="px-3 py-1 bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs" onclick="historyApp.nextPage()">Next</button>
+        </div>
+      </section>
+
+    </main>
+
+    <script src="/static/history.js"></script>
+  </body>
+</html>

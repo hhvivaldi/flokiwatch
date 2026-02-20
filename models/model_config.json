@@ -1,0 +1,17 @@
+{
+  "sequence_length": 24,
+  "prediction_horizon": 1,
+  "threshold_up": 0.0005,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15,
+  "n_features": 28,
+  "metrics": {
+    "accuracy": 0.42533081285444235,
+    "precision": 0.42533081285444235,
+    "recall": 1.0,
+    "f1": 0.596816976127321,
+    "auc": 0.5449590643274853
+  },
+  "trained_at": "2026-01-25T22:45:28.966843"
+}

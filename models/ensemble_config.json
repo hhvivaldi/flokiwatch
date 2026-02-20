@@ -1,0 +1,381 @@
+{
+  "model_type": "ensemble",
+  "algos": [
+    "xgb",
+    "lgb",
+    "cat"
+  ],
+  "horizons": [
+    "h1",
+    "h4"
+  ],
+  "horizon_blend": {
+    "h1": 0.4,
+    "h4": 0.6
+  },
+  "ensemble_weights": {
+    "h1": {
+      "xgb": 0.3352,
+      "lgb": 0.3337,
+      "cat": 0.3311
+    },
+    "h4": {
+      "xgb": 0.3345,
+      "lgb": 0.3312,
+      "cat": 0.3343
+    }
+  },
+  "h4_label_type": "close",
+  "h4_label_comparison": {
+    "max_auc": 0.754023,
+    "close_auc": 0.710448
+  },
+  "models": {
+    "xgb_h1": {
+      "model_file": "ensemble_xgb_h1.json",
+      "features": [
+        "price_change_H4",
+        "momentum_x_volume",
+        "dist_ema21_H4",
+        "macd_momentum",
+        "price_change_4h",
+        "volatility_4h",
+        "price_change_1h",
+        "hour",
+        "dist_ema9",
+        "gold_return_lag1",
+        "volume_spike_M5",
+        "is_ny_open",
+        "volatility_24h",
+        "dist_ema50",
+        "xag_change_1h",
+        "rsi_momentum",
+        "price_change_M30",
+        "price_change_1W",
+        "price_change_24h"
+      ],
+      "n_features": 19,
+      "params": {
+        "n_estimators": 493,
+        "max_depth": 5,
+        "learning_rate": 0.010151648137272875,
+        "subsample": 0.7035385841456533,
+        "colsample_bytree": 0.7973271232531391,
+        "min_child_weight": 6,
+        "reg_alpha": 0.027817246735846096,
+        "reg_lambda": 1.174193433957964
+      },
+      "holdout_metrics": {
+        "accuracy": 0.669447,
+        "precision": 0.49217,
+        "recall": 0.709677,
+        "f1": 0.581242,
+        "auc": 0.73956,
+        "optimal_threshold": 0.27
+      },
+      "probability_percentiles": {
+        "p5": 0.05198524259030819,
+        "p10": 0.0728087529540062,
+        "p25": 0.13618338853120804,
+        "p50": 0.2572110593318939,
+        "p75": 0.39345480501651764,
+        "p90": 0.5634032964706422,
+        "p95": 0.6799873650074004
+      },
+      "wf_auc_overall": 0.79406,
+      "wf_auc_mean": 0.778775,
+      "wf_auc_std": 0.036811
+    },
+    "xgb_h4": {
+      "model_file": "ensemble_xgb_h4.json",
+      "features": [
+        "price_change_H4",
+        "momentum_x_volume",
+        "volume_spike_M5",
+        "dist_ema21_H4",
+        "hour",
+        "price_change_4h",
+        "dist_ema9",
+        "macd_momentum",
+        "dxy_change_1d",
+        "price_change_1h",
+        "volatility_24h",
+        "dxy_x_vix",
+        "yields_10y_change",
+        "price_vs_ema50_D1",
+        "vix_level",
+        "rsi_14",
+        "dist_ema50",
+        "price_change_24h",
+        "atr_ratio_H1_vs_D1",
+        "dist_ema21",
+        "price_change_M30"
+      ],
+      "n_features": 21,
+      "params": {
+        "n_estimators": 376,
+        "max_depth": 3,
+        "learning_rate": 0.012178314535895702,
+        "subsample": 0.7608289822897649,
+        "colsample_bytree": 0.7766228152955813,
+        "min_child_weight": 10,
+        "reg_alpha": 0.009951131801272542,
+        "reg_lambda": 5.979618765944325
+      },
+      "holdout_metrics": {
+        "accuracy": 0.672594,
+        "precision": 0.511392,
+        "recall": 0.627329,
+        "f1": 0.563459,
+        "auc": 0.705665,
+        "optimal_threshold": 0.27
+      },
+      "probability_percentiles": {
+        "p5": 0.09394273348152637,
+        "p10": 0.1122293546795845,
+        "p25": 0.16063452139496803,
+        "p50": 0.2450585886836052,
+        "p75": 0.3429574742913246,
+        "p90": 0.481259748339653,
+        "p95": 0.6014773398637772
+      },
+      "wf_auc_overall": 0.741857,
+      "wf_auc_mean": 0.721133,
+      "wf_auc_std": 0.029137
+    },
+    "lgb_h1": {
+      "model_file": "ensemble_lgb_h1.txt",
+      "features": [
+        "momentum_x_volume",
+        "price_change_H4",
+        "dist_ema21_H4",
+        "volatility_4h",
+        "hour",
+        "macd_momentum",
+        "price_change_4h",
+        "dist_ema9",
+        "price_change_1h",
+        "volume_spike_M5",
+        "dist_ema50",
+        "gold_return_lag1",
+        "is_ny_open",
+        "volatility_24h",
+        "rsi_momentum",
+        "price_change_1W",
+        "xag_change_1h",
+        "price_change_M30",
+        "dxy_x_vix",
+        "yields_10y_change",
+        "dist_ema21"
+      ],
+      "n_features": 21,
+      "params": {
+        "n_estimators": 390,
+        "max_depth": 4,
+        "learning_rate": 0.020069267812346463,
+        "subsample": 0.8400887896485885,
+        "colsample_bytree": 0.7228946931877194,
+        "min_child_samples": 11,
+        "reg_alpha": 0.0010147100301805077,
+        "reg_lambda": 7.145727155344316,
+        "num_leaves": 20
+      },
+      "holdout_metrics": {
+        "accuracy": 0.65902,
+        "precision": 0.482105,
+        "recall": 0.73871,
+        "f1": 0.583439,
+        "auc": 0.735161,
+        "optimal_threshold": 0.26
+      },
+      "probability_percentiles": {
+        "p5": 0.0464714821259759,
+        "p10": 0.06822780102379489,
+        "p25": 0.13540898796166007,
+        "p50": 0.2587432924388696,
+        "p75": 0.3879486270752759,
+        "p90": 0.5612850863537047,
+        "p95": 0.6626058752087931
+      },
+      "wf_auc_overall": 0.790606,
+      "wf_auc_mean": 0.774974,
+      "wf_auc_std": 0.03698
+    },
+    "lgb_h4": {
+      "model_file": "ensemble_lgb_h4.txt",
+      "features": [
+        "price_change_H4",
+        "momentum_x_volume",
+        "volume_spike_M5",
+        "hour",
+        "dist_ema21_H4",
+        "dist_ema9",
+        "price_change_4h",
+        "macd_momentum",
+        "dxy_change_1d",
+        "price_change_1h",
+        "price_vs_ema50_D1",
+        "volatility_24h",
+        "dxy_x_vix",
+        "yields_10y_change",
+        "vix_level",
+        "rsi_14",
+        "dist_ema50",
+        "dist_ema21",
+        "price_change_24h",
+        "price_change_M30"
+      ],
+      "n_features": 20,
+      "params": {
+        "n_estimators": 193,
+        "max_depth": 3,
+        "learning_rate": 0.021037462101805657,
+        "subsample": 0.9308452941259061,
+        "colsample_bytree": 0.8826019779595476,
+        "min_child_samples": 41,
+        "reg_alpha": 0.0015057333531045042,
+        "reg_lambda": 0.010485450505393712,
+        "num_leaves": 46
+      },
+      "holdout_metrics": {
+        "accuracy": 0.667364,
+        "precision": 0.505025,
+        "recall": 0.624224,
+        "f1": 0.558333,
+        "auc": 0.704185,
+        "optimal_threshold": 0.27
+      },
+      "probability_percentiles": {
+        "p5": 0.09783450021543737,
+        "p10": 0.11605641329610124,
+        "p25": 0.16458984328588588,
+        "p50": 0.24170574460475924,
+        "p75": 0.3378432597334814,
+        "p90": 0.46595700819819164,
+        "p95": 0.5938465341171204
+      },
+      "wf_auc_overall": 0.73466,
+      "wf_auc_mean": 0.713757,
+      "wf_auc_std": 0.028209
+    },
+    "cat_h1": {
+      "model_file": "ensemble_cat_h1.cbm",
+      "features": [
+        "price_change_H4",
+        "momentum_x_volume",
+        "dist_ema21_H4",
+        "macd_momentum",
+        "volatility_4h",
+        "price_change_4h",
+        "dist_ema50",
+        "hour",
+        "price_change_1h",
+        "dist_ema9",
+        "gold_return_lag1",
+        "volume_spike_M5",
+        "rsi_momentum",
+        "is_ny_open",
+        "price_change_1W",
+        "volatility_24h",
+        "session",
+        "xag_change_1h",
+        "dist_ema21",
+        "rsi_H4",
+        "price_change_M30",
+        "vix_level",
+        "momentum_M15"
+      ],
+      "n_features": 23,
+      "params": {
+        "iterations": 203,
+        "depth": 6,
+        "learning_rate": 0.08618326549470452,
+        "l2_leaf_reg": 8.433522022416698,
+        "subsample": 0.8061476142598094,
+        "min_data_in_leaf": 22
+      },
+      "holdout_metrics": {
+        "accuracy": 0.669447,
+        "precision": 0.492027,
+        "recall": 0.696774,
+        "f1": 0.576769,
+        "auc": 0.730672,
+        "optimal_threshold": 0.27
+      },
+      "probability_percentiles": {
+        "p5": 0.040227772951799544,
+        "p10": 0.06318060153864023,
+        "p25": 0.1350752091207306,
+        "p50": 0.2511240125519344,
+        "p75": 0.39027105285820074,
+        "p90": 0.5786195701494513,
+        "p95": 0.7074411158518791
+      },
+      "wf_auc_overall": 0.784354,
+      "wf_auc_mean": 0.770835,
+      "wf_auc_std": 0.039862
+    },
+    "cat_h4": {
+      "model_file": "ensemble_cat_h4.cbm",
+      "features": [
+        "price_change_H4",
+        "momentum_x_volume",
+        "dist_ema21_H4",
+        "price_change_4h",
+        "volume_spike_M5",
+        "hour",
+        "macd_momentum",
+        "dist_ema9",
+        "dxy_x_vix",
+        "price_change_1h",
+        "session",
+        "dxy_change_1d",
+        "dist_ema50",
+        "yields_10y_change",
+        "volatility_24h",
+        "rsi_H4",
+        "rsi_momentum",
+        "volatility_4h",
+        "dist_ema21",
+        "price_vs_ema50_D1",
+        "vix_level",
+        "rsi_14",
+        "price_change_24h",
+        "price_change_1W",
+        "atr_ratio_H1_vs_D1",
+        "xag_xau_ratio",
+        "price_change_M30"
+      ],
+      "n_features": 27,
+      "params": {
+        "iterations": 197,
+        "depth": 5,
+        "learning_rate": 0.03939577013187892,
+        "l2_leaf_reg": 7.216888234861127,
+        "subsample": 0.8310010690377408,
+        "min_data_in_leaf": 41
+      },
+      "holdout_metrics": {
+        "accuracy": 0.640167,
+        "precision": 0.476496,
+        "recall": 0.692547,
+        "f1": 0.564557,
+        "auc": 0.704719,
+        "optimal_threshold": 0.26
+      },
+      "probability_percentiles": {
+        "p5": 0.07687294227012834,
+        "p10": 0.10756955971463522,
+        "p25": 0.16600517245210608,
+        "p50": 0.2558088286644164,
+        "p75": 0.35987666249981215,
+        "p90": 0.5289781436468668,
+        "p95": 0.6584044599896277
+      },
+      "wf_auc_overall": 0.741487,
+      "wf_auc_mean": 0.724326,
+      "wf_auc_std": 0.029138
+    }
+  },
+  "trained_at": "2026-02-18T20:39:17.016187"
+}

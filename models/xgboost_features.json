@@ -1,0 +1,22 @@
+[
+  "price_change_H4",
+  "dist_ema21_H4",
+  "volatility_4h",
+  "price_change_4h",
+  "hour",
+  "macd_momentum",
+  "price_change_1h",
+  "volume_spike_M5",
+  "dist_ema9",
+  "gold_return_lag1",
+  "is_ny_open",
+  "dist_ema50",
+  "volatility_24h",
+  "rsi_momentum",
+  "price_change_1W",
+  "xag_change_1h",
+  "dxy_change_1d",
+  "rsi_H4",
+  "yields_10y_change",
+  "vix_level"
+]

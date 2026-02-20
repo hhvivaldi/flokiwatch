@@ -1,0 +1,50 @@
+{
+  "model_type": "xgboost",
+  "model_file": "xgboost_model.json",
+  "features_file": "xgboost_features.json",
+  "n_features": 20,
+  "label_threshold_pct": 0.15,
+  "prediction_horizon": 1,
+  "xgboost_params": {
+    "n_estimators": 442,
+    "max_depth": 6,
+    "learning_rate": 0.011682494564412876,
+    "subsample": 0.78714622545667,
+    "colsample_bytree": 0.8820421927775844,
+    "min_child_weight": 9,
+    "reg_alpha": 0.3451688586298358,
+    "reg_lambda": 0.46152790814419004
+  },
+  "probability_percentiles": {
+    "p5": 0.04340343177318573,
+    "p10": 0.06298153102397919,
+    "p25": 0.11998837441205978,
+    "p50": 0.2340773642063141,
+    "p75": 0.3794393539428711,
+    "p90": 0.5634512305259705,
+    "p95": 0.6768473982810974
+  },
+  "holdout_metrics": {
+    "accuracy": 0.719043,
+    "precision": 0.542773,
+    "recall": 0.615385,
+    "f1": 0.576803,
+    "auc": 0.749017,
+    "optimal_threshold": 0.31
+  },
+  "walk_forward_metrics": {
+    "accuracy": 0.817299,
+    "accuracy_std": 0.068249,
+    "precision": 0.65413,
+    "precision_std": 0.067159,
+    "recall": 0.200403,
+    "recall_std": 0.059074,
+    "f1": 0.301727,
+    "f1_std": 0.064502,
+    "auc": 0.778462,
+    "auc_std": 0.039141,
+    "auc_overall": 0.794882
+  },
+  "trained_at": "2026-02-13T19:28:03.986546",
+  "training_data": "C:\\Users\\Hermano\\OneDrive\\Desktop\\XAUUSD\\data\\training_dataset.csv"
+}

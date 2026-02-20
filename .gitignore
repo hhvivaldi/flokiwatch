@@ -1,0 +1,62 @@
+# ============================================================================
+# FlokiWatch XAUUSD Trading Bot - .gitignore
+# ============================================================================
+
+# Environment variables (API keys, credentials)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================================================================
+# LOGS (runtime logs - regenerated each session)
+# ============================================================================
+logs/
+
+# ============================================================================
+# DATA (runtime state, databases, large files)
+# ============================================================================
+data/history.db
+data/bot_state.json
+data/*.csv
+data/*.txt
+data/*.json
+
+# ============================================================================
+# MODELS (binary files - regenerated from training scripts)
+# ============================================================================
+models/*.pkl
+models/*.keras
+models/*.cbm
+models/*.txt
+models_v3_backup/
+
+# Training artifacts
+catboost_info/
+
+# ============================================================================
+# DRY RUN REPORTS (test outputs)
+# ============================================================================
+dry_run_report_*.txt
+
+# ============================================================================
+# BROWSER SAVES / MISC
+# ============================================================================
+*.mhtml
+
+# OS
+.DS_Store
+Thumbs.db

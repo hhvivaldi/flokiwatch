@@ -1,0 +1,1984 @@
+"""
+MAIN - Main Trading Bot
+Orchestrator of the XAU/USD automated trading system
+"""
+
+import os
+import sys
+import time
+import signal
+import json
+import subprocess
+from datetime import datetime, timedelta
+from typing import Optional
+import traceback
+
+# Add directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import config
+from logger import log
+from state_writer import write_state, add_closed_trade
+from db_writer import init_db, record_analysis, record_trade_open, record_trade_close
+from alerts import (
+    alert_bot_started, alert_bot_stopped, alert_signal_detected,
+    alert_safety_block, alert_error, alert_daily_summary, discord,
+    alert_heartbeat_full, alert_heartbeat_short,
+    alert_market_closed, alert_market_open,
+    alert_m5_reversal_block, alert_trade_resolved,
+    alert_spread_delay, alert_spread_skip
+)
+from confluence import analyze_confluence
+from confluence import is_actionable_signal as confluence_is_actionable
+from confluence import get_trade_direction as confluence_get_direction
+from risk_manager import calculate_position_size, calculate_sl_tp
+from safety_checks import is_safe_to_trade, record_trade_result, record_trade_opened, record_close_type, get_safety_status, is_market_open
+from executor import (
+    connect_mt5, disconnect_mt5, is_mt5_connected,
+    get_account_balance, execute_buy, execute_sell, get_positions, executor,
+    get_recent_closed_deals, get_deal_history
+)
+from monitor import monitor_positions, get_positions_summary, close_all_positions
+from technical_analyzer import get_mt5_data, calculate_indicators, calculate_technical_score, get_atr_value
+
+
+# ============================================================================
+# NEWS CACHE (avoid excessive requests)
+# ============================================================================
+
+class NewsCache:
+    """Cache for news score"""
+    
+    def __init__(self, cache_minutes: int = 30):
+        self.cache_minutes = cache_minutes
+        self.last_fetch = None
+        self.cached_score = 50.0
+        self.cached_data = {}
+    
+    def get_score(self) -> tuple:
+        """Return news score (from cache or updated)"""
+        now = datetime.now()
+        
+        # Check if cache is still valid
+        if self.last_fetch and (now - self.last_fetch) < timedelta(minutes=self.cache_minutes):
+            return self.cached_score, self.cached_data
+        
+        # Update cache
+        try:
+            from news_sentiment import get_hybrid_score
+            result = get_hybrid_score()
+            
+            self.cached_score = result.get('score', 50.0)
+            self.cached_data = result
+            self.last_fetch = now
+            
+            log.info(f"News score updated: {self.cached_score:.1f}")
+            
+        except Exception as e:
+            log.warning(f"Error getting news score: {e}")
+            # Keep previous cache
+        
+        return self.cached_score, self.cached_data
+
+
+news_cache = NewsCache(cache_minutes=config.NEWS_CACHE_MINUTES)
+
+
+# ============================================================================
+# TRADING BOT
+# ============================================================================
+
+class TradingBot:
+    """Main trading bot"""
+    
+    def __init__(self):
+        self.running = False
+        self.mode = config.TRADING_MODE  # "DRY_RUN", "DEMO", "LIVE"
+        self.dry_run = (self.mode == "DRY_RUN")
+        self.is_live = (self.mode == "LIVE")
+        self.executes_trades = (self.mode in ("DEMO", "LIVE"))
+        self.last_analysis = None
+        self.last_known_price = None
+        self.session_start_time = None
+        self.session_analyses = 0
+        self.daily_stats = {
+            'trades': 0,
+            'wins': 0,
+            'losses': 0,
+            'breakevens': 0,
+            'pnl': 0.0,
+            'date': datetime.now().date()
+        }
+
+        # Closed trades today (for dashboard)
+        self.closed_trades_today = []
+        
+        # Heartbeat tracking
+        self.last_heartbeat = None
+        self.last_heartbeat_scenario = None
+        self.last_heartbeat_score = None
+        
+        # Temporary data from last analysis (for heartbeat)
+        self._last_calendar_data = None
+        self._last_vol_status = None
+        self._last_current_price = None
+        self._last_scenario_description = None
+        self._last_gpt_validation = None
+        
+        # Cycle Memory (cycle memory for temporal context)
+        from cycle_memory import CycleMemory
+        self.cycle_memory = CycleMemory()
+        
+        # Market state tracking (for open/close detection)
+        self.market_was_open = True  # Assume open at startup
+        self._last_keepalive_log = None  # Timestamp of last keepalive log (market closed)
+        
+        # GPT Confidence Validator stats
+        self.gpt_stats = {"confirm": 0, "boost": 0, "reduce": 0, "from_cache": 0}
+        
+        # Configure shutdown handler
+        signal.signal(signal.SIGINT, self._shutdown_handler)
+        signal.signal(signal.SIGTERM, self._shutdown_handler)
+    
+    def _shutdown_handler(self, signum, frame):
+        """Graceful shutdown handler"""
+        log.info("Shutdown signal received...")
+        self.running = False
+
+    def _load_persisted_state(self) -> None:
+        try:
+            state_path = os.path.abspath(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"))
+            if not os.path.exists(state_path):
+                return
+
+            with open(state_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+
+            last_analysis = payload.get("last_analysis")
+            if isinstance(last_analysis, dict) and last_analysis:
+                has_real_data = any(
+                    last_analysis.get(k) is not None
+                    for k in ("decision", "final_score", "current_price")
+                )
+                if has_real_data:
+                    self.last_analysis = last_analysis
+
+            daily_stats = payload.get("daily_stats")
+            if isinstance(daily_stats, dict) and daily_stats:
+                if isinstance(daily_stats.get("date"), str):
+                    try:
+                        daily_stats["date"] = datetime.strptime(daily_stats["date"], "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                self.daily_stats = daily_stats
+
+            lkp = payload.get("last_known_price")
+            if lkp is not None:
+                self.last_known_price = float(lkp)
+
+            trade_history = payload.get("trade_history")
+            if isinstance(trade_history, list):
+                self.closed_trades_today = trade_history
+        except Exception as e:
+            log.debug(f"Failed to load persisted dashboard state: {e}")
+
+    def _reconcile_with_mt5(self) -> None:
+        """Reconcile saved state with MT5 reality.
+        
+        MT5 is the source of truth. Three passes:
+        
+        Pass 1 — Build closed_trades_today from TODAY's MT5 deals:
+          - Replaces what was in bot_state.json
+          - Only deals with close_time.date() == today go to dashboard
+        
+        Pass 2 — Register orphan historical trades in SQLite:
+          - Bot trades (comment "Bot-") from previous days not in SQLite
+          - Go ONLY to SQLite (history), NOT to dashboard "today"
+        
+        Pass 3 — Fix trades in SQLite without close or with estimation:
+          - Trades with close_price NULL or close_reason "estimado"
+          - Update with real MT5 data
+        """
+        try:
+            if not self.executes_trades:
+                return
+            
+            account_info = executor.get_account_info()
+            if not account_info:
+                log.warning("Reconciliation: could not get MT5 account info")
+                return
+            
+            mt5_balance = account_info['balance']
+            today = datetime.now().date()
+            
+            saved_pnl = float(self.daily_stats.get('pnl', 0.0) or 0.0)
+            saved_date = self.daily_stats.get('date')
+            
+            # If saved state is from another day, clear (daily reset will handle)
+            if saved_date and saved_date != today:
+                log.info(f"Reconciliation: saved state is from {saved_date}, today is {today} — daily reset will fix")
+                return
+            
+            # Get ALL real closing deals from MT5 (last 7 days + today)
+            real_deals = get_recent_closed_deals(hours=168)
+            
+            # Index real deals by position_id
+            real_deals_by_pos = {}
+            for d in real_deals:
+                real_deals_by_pos[d['position_id']] = d
+            
+            # Separate today's deals vs historical
+            today_deals = [d for d in real_deals if d['close_time'].date() == today]
+            historical_deals = [d for d in real_deals if d['close_time'].date() != today]
+            
+            log.info(
+                f"Reconciliation: {len(real_deals)} total deals | "
+                f"{len(today_deals)} today | {len(historical_deals)} historical"
+            )
+            
+            # ================================================================
+            # PASS 1: Build closed_trades_today from MT5 (today)
+            # MT5 is the source of truth — replaces what was in bot_state
+            # ================================================================
+            self.closed_trades_today = []
+            
+            for deal in today_deals:
+                pos_id = deal['position_id']
+                log.info(
+                    f"  Today #{pos_id}: {deal['direction']} | "
+                    f"open={deal.get('open_price', '?')} → close={deal['close_price']:.2f} | "
+                    f"P&L=${deal['profit']:+.2f} | {deal['reason']} | {deal['close_time'].strftime('%H:%M')}"
+                )
+                # Derive close_type from reason + P&L heuristic
+                # On restart, monitor state is lost — MT5 only reports "Stop Loss" or "Take Profit"
+                # Heuristic fallback: profit > $1 = trailing, profit ~$0 = breakeven, profit < 0 = SL
+                deal_reason = deal['reason']
+                deal_profit = deal['profit']
+                if deal_reason == "Take Profit":
+                    deal_close_type = "tp"
+                elif deal_reason == "Stop Loss":
+                    if deal_profit > 1.0:
+                        deal_close_type = "trailing"
+                    elif deal_profit >= 0:
+                        deal_close_type = "breakeven"
+                    else:
+                        deal_close_type = "sl"
+                else:
+                    deal_close_type = "sl"
+                
+                self.closed_trades_today.append({
+                    "ticket": pos_id, "direction": deal['direction'],
+                    "volume": deal['volume'],
+                    "open_price": deal.get('open_price'),
+                    "close_price": deal['close_price'],
+                    "profit": deal_profit,
+                    "reason": deal_reason,
+                    "close_time": deal['close_time'].isoformat(),
+                    "close_type": deal_close_type,
+                    "estimated": deal.get('estimated', False),
+                })
+                # Ensure it's in SQLite
+                record_trade_close(
+                    ticket=pos_id, close_price=deal['close_price'],
+                    profit=deal['profit'], close_reason=deal['reason'],
+                    close_time=deal['close_time'].isoformat(),
+                )
+            
+            # ================================================================
+            # PASS 2: Record orphan historical trades in SQLite ONLY
+            # (bot trades from previous days not yet in SQLite)
+            # ================================================================
+            try:
+                import sqlite3
+                db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+                conn = sqlite3.connect(db_path, timeout=5)
+                all_sqlite_tickets = {
+                    row[0] for row in conn.execute("SELECT ticket FROM trades").fetchall()
+                }
+                
+                # Fix trades in SQLite without close, estimation, or pending
+                unclosed = conn.execute(
+                    "SELECT ticket, direction, open_price FROM trades "
+                    "WHERE close_price IS NULL OR close_reason LIKE '%estimado%' OR close_reason LIKE '%pending%' OR profit IS NULL"
+                ).fetchall()
+                conn.close()
+                
+                # Historical orphans → SQLite only
+                orphan_count = 0
+                for deal in historical_deals:
+                    pos_id = deal['position_id']
+                    comment = deal.get('comment', '')
+                    if not comment.startswith('Bot-'):
+                        continue
+                    if pos_id in all_sqlite_tickets:
+                        continue
+                    orphan_count += 1
+                    log.info(
+                        f"  Historical #{pos_id}: {deal['direction']} | "
+                        f"open={deal.get('open_price', '?')} → close={deal['close_price']:.2f} | "
+                        f"P&L=${deal['profit']:+.2f} | {deal['reason']} | "
+                        f"{deal['close_time'].strftime('%m-%d %H:%M')} → SQLite"
+                    )
+                    from db_writer import record_trade_open
+                    record_trade_open(
+                        ticket=pos_id, direction=deal['direction'],
+                        volume=deal['volume'],
+                        open_price=deal.get('open_price') or deal['close_price'],
+                        sl=0, tp=0,
+                        open_time=deal['close_time'].isoformat(),
+                        comment=deal.get('comment', 'recovered'),
+                    )
+                    record_trade_close(
+                        ticket=pos_id, close_price=deal['close_price'],
+                        profit=deal['profit'], close_reason=deal['reason'],
+                        close_time=deal['close_time'].isoformat(),
+                    )
+                    all_sqlite_tickets.add(pos_id)
+                
+                if orphan_count:
+                    log.info(f"  → {orphan_count} historical orphan trades registered in SQLite")
+                
+                # ============================================================
+                # PASS 3: Fix trades in SQLite without correct close
+                # ============================================================
+                if unclosed:
+                    log.info(f"  Pass 3: {len(unclosed)} trades without correct close in SQLite")
+                    for ticket, direction, open_price in unclosed:
+                        deal = real_deals_by_pos.get(ticket)
+                        if deal:
+                            log.info(
+                                f"    Resolved #{ticket}: close={deal['close_price']:.2f} | "
+                                f"P&L=${deal['profit']:+.2f} | {deal['reason']}"
+                            )
+                            record_trade_close(
+                                ticket=ticket, close_price=deal['close_price'],
+                                profit=deal['profit'], close_reason=deal['reason'],
+                                close_time=deal['close_time'].isoformat(),
+                            )
+                            # Update closed_trades_today if this trade is there as pending
+                            for t in self.closed_trades_today:
+                                if t.get('ticket') == ticket and t.get('pending'):
+                                    t['profit'] = deal['profit']
+                                    t['close_price'] = deal['close_price']
+                                    t['reason'] = deal['reason']
+                                    t['pending'] = False
+                                    t['estimated'] = False
+                                    log.info(f"    → Updated pending trade #{ticket} in dashboard with real P&L")
+                                    break
+                            # Send Discord resolution notification
+                            try:
+                                acct = executor.get_account_info()
+                                bal = acct['balance'] if acct else config.CAPITAL_INICIAL
+                                pct = (deal['profit'] / bal) * 100 if bal else 0
+                                alert_trade_resolved(
+                                    ticket=ticket,
+                                    direction=deal.get('direction', direction or '?'),
+                                    profit=deal['profit'],
+                                    profit_percent=pct,
+                                    reason=deal['reason'],
+                                )
+                            except Exception as e_alert:
+                                log.debug(f"    Alert trade resolved error: {e_alert}")
+                        else:
+                            open_positions = executor.get_open_positions()
+                            still_open = any(p.ticket == ticket for p in open_positions)
+                            if still_open:
+                                # Check staleness: how long since SQLite recorded the close?
+                                try:
+                                    c2 = sqlite3.connect(db_path, timeout=5)
+                                    row = c2.execute(
+                                        "SELECT close_time FROM trades WHERE ticket = ?", (ticket,)
+                                    ).fetchone()
+                                    c2.close()
+                                    if row and row[0]:
+                                        close_dt = datetime.fromisoformat(row[0])
+                                        age_min = (datetime.now() - close_dt).total_seconds() / 60
+                                        if age_min > 240:  # >4 hours — stale, try direct lookup
+                                            log.warning(
+                                                f"    #{ticket}: MT5 says open but closed {age_min:.0f}min ago "
+                                                f"— attempting direct deal lookup"
+                                            )
+                                            direct_deal = get_deal_history(ticket, open_price=open_price or 0)
+                                            if direct_deal and not direct_deal.get('pending'):
+                                                log.info(
+                                                    f"    Resolved #{ticket} (direct): close={direct_deal['close_price']:.2f} | "
+                                                    f"P&L=${direct_deal['profit']:+.2f} | {direct_deal['reason']}"
+                                                )
+                                                record_trade_close(
+                                                    ticket=ticket, close_price=direct_deal['close_price'],
+                                                    profit=direct_deal['profit'], close_reason=direct_deal['reason'],
+                                                    close_time=direct_deal['close_time'].isoformat(),
+                                                )
+                                                for t in self.closed_trades_today:
+                                                    if t.get('ticket') == ticket and t.get('pending'):
+                                                        t['profit'] = direct_deal['profit']
+                                                        t['close_price'] = direct_deal['close_price']
+                                                        t['reason'] = direct_deal['reason']
+                                                        t['pending'] = False
+                                                        t['estimated'] = False
+                                                        log.info(f"    → Updated pending trade #{ticket} in dashboard with real P&L")
+                                                        break
+                                                try:
+                                                    acct = executor.get_account_info()
+                                                    bal = acct['balance'] if acct else config.CAPITAL_INICIAL
+                                                    pct = (direct_deal['profit'] / bal) * 100 if bal else 0
+                                                    alert_trade_resolved(
+                                                        ticket=ticket,
+                                                        direction=direct_deal.get('direction', direction or '?'),
+                                                        profit=direct_deal['profit'],
+                                                        profit_percent=pct,
+                                                        reason=direct_deal['reason'],
+                                                    )
+                                                except Exception as e_alert:
+                                                    log.debug(f"    Alert trade resolved error: {e_alert}")
+                                            else:
+                                                log.warning(
+                                                    f"    #{ticket}: direct lookup also failed after {age_min:.0f}min "
+                                                    f"— possible wrong MT5 terminal or stale data"
+                                                )
+                                        elif age_min > 60:
+                                            log.warning(
+                                                f"    #{ticket}: MT5 says open but closed {age_min:.0f}min ago "
+                                                f"— possible stale terminal data"
+                                            )
+                                        else:
+                                            log.debug(f"    #{ticket}: still open in MT5 — ignored")
+                                    else:
+                                        log.debug(f"    #{ticket}: still open in MT5 — ignored")
+                                except Exception as e_stale:
+                                    log.debug(f"    #{ticket}: staleness check error: {e_stale}")
+                                    log.debug(f"    #{ticket}: still open in MT5 — ignored")
+                            else:
+                                log.info(f"    #{ticket}: no deal in MT5 and not open — unavailable")
+                
+            except Exception as e:
+                log.warning(f"Reconciliation Pass 2/3 error: {e}")
+            
+            # ================================================================
+            # Rebuild daily_stats from closed_trades_today
+            # ================================================================
+            # Exclude pending trades from stats (they have profit=None)
+            confirmed_trades = [t for t in self.closed_trades_today if not t.get('pending', False)]
+            pending_trades = [t for t in self.closed_trades_today if t.get('pending', False)]
+            new_trades = len(confirmed_trades)
+            new_wins = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) > 0)
+            new_losses = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) < 0)
+            new_breakevens = new_trades - new_wins - new_losses
+            new_pnl = sum(float(t.get('profit', 0) or 0) for t in confirmed_trades)
+            if pending_trades:
+                log.info(f"  {len(pending_trades)} trade(s) still pending P&L confirmation")
+            
+            self.daily_stats['trades'] = new_trades
+            self.daily_stats['wins'] = new_wins
+            self.daily_stats['losses'] = new_losses
+            self.daily_stats['breakevens'] = new_breakevens
+            self.daily_stats['pnl'] = new_pnl
+            
+            log.info(
+                f"Reconciliation complete: balance=${mt5_balance:.2f} | "
+                f"Trades today: {new_trades} (W:{new_wins} L:{new_losses}) | "
+                f"PnL today: ${new_pnl:+.2f}"
+            )
+            
+        except Exception as e:
+            log.warning(f"Reconciliation failed (non-blocking): {e}")
+
+    def _resolve_pending_trades(self) -> None:
+        """Periodically attempt to resolve pending trades with real MT5 deal data.
+        
+        Called every analysis cycle (~300s). When a trade closes and the MT5 API
+        doesn't return the closing deal within the retry window, the trade stays
+        as 'pending'. This method re-queries MT5 until the deal appears.
+        """
+        try:
+            pending = [t for t in self.closed_trades_today if t.get('pending')]
+            if not pending:
+                return
+            
+            log.info(f"Resolving {len(pending)} pending trade(s)...")
+            resolved_any = False
+            
+            for trade in pending:
+                ticket = trade.get('ticket')
+                if not ticket:
+                    continue
+                
+                deal = get_deal_history(
+                    ticket,
+                    open_price=trade.get('open_price'),
+                    tp_price=trade.get('orig_tp'),
+                    sl_price=trade.get('orig_sl'),
+                )
+                
+                if deal and not deal.get('pending'):
+                    # Real deal found — resolve
+                    trade['profit'] = deal['profit']
+                    trade['close_price'] = deal['close_price']
+                    trade['reason'] = deal['reason']
+                    trade['pending'] = False
+                    trade['estimated'] = False
+                    resolved_any = True
+                    
+                    log.info(
+                        f"  ✅ Resolved #{ticket}: close={deal['close_price']:.2f} | "
+                        f"P&L=${deal['profit']:+.2f} | {deal['reason']}"
+                    )
+                    
+                    # Update SQLite
+                    record_trade_close(
+                        ticket=ticket, close_price=deal['close_price'],
+                        profit=deal['profit'], close_reason=deal['reason'],
+                        close_time=deal.get('close_time', datetime.now()).isoformat() if hasattr(deal.get('close_time', ''), 'isoformat') else str(deal.get('close_time', '')),
+                    )
+                    
+                    # Discord notification
+                    try:
+                        acct = executor.get_account_info()
+                        bal = acct['balance'] if acct else config.CAPITAL_INICIAL
+                        pct = (deal['profit'] / bal) * 100 if bal else 0
+                        alert_trade_resolved(
+                            ticket=ticket,
+                            direction=trade.get('direction', '?'),
+                            profit=deal['profit'],
+                            profit_percent=pct,
+                            reason=deal['reason'],
+                        )
+                    except Exception as e_alert:
+                        log.debug(f"  Alert trade resolved error: {e_alert}")
+                else:
+                    log.debug(f"  #{ticket}: deal still not in MT5 history — will retry next cycle")
+            
+            if resolved_any:
+                # Rebuild daily_stats
+                confirmed = [t for t in self.closed_trades_today if not t.get('pending', False)]
+                still_pending = [t for t in self.closed_trades_today if t.get('pending', False)]
+                self.daily_stats['trades'] = len(confirmed)
+                self.daily_stats['wins'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) > 0)
+                self.daily_stats['losses'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) < 0)
+                self.daily_stats['breakevens'] = self.daily_stats['trades'] - self.daily_stats['wins'] - self.daily_stats['losses']
+                self.daily_stats['pnl'] = sum(float(t.get('profit', 0) or 0) for t in confirmed)
+                if still_pending:
+                    log.info(f"  {len(still_pending)} trade(s) still pending")
+                write_state(self)
+                
+        except Exception as e:
+            log.debug(f"Resolve pending trades error (non-blocking): {e}")
+
+    def _launch_dashboard_server(self) -> None:
+        try:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            dashboard_dir = os.path.join(base_dir, "dashboard")
+            server_py = os.path.join(dashboard_dir, "server.py")
+            if not os.path.exists(server_py):
+                return
+
+            env = os.environ.copy()
+            env["DASHBOARD_STATE_FILE"] = os.path.abspath(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"))
+
+            cmd = [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "dashboard.server:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8080",
+            ]
+
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+
+            subprocess.Popen(
+                cmd,
+                cwd=base_dir,
+                env=env,
+                creationflags=creationflags,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            log.debug(f"Failed to launch dashboard server: {e}")
+    
+    def start(self):
+        """Start the bot"""
+        self.session_start_time = datetime.now()
+        self.session_analyses = 0
+
+        self._load_persisted_state()
+        init_db()
+        
+        log.info("")
+        log.info("=" * 60)
+        log.info("🚀 SESSION START")
+        log.info("=" * 60)
+        log.info(f"Timestamp: {self.session_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        mode_labels = {
+            "DRY_RUN": "DRY RUN (pure simulation)",
+            "DEMO": "DEMO MT5 (real execution, fake $)",
+            "LIVE": "LIVE (real execution, real $)",
+        }
+        mode_label = mode_labels.get(self.mode, self.mode)
+        log.info(f"Mode: {mode_label}")
+        log.info(f"Symbol: {config.SYMBOL} | Timeframe: {config.TIMEFRAME}")
+        log.info(f"Analysis: {config.ANALYSIS_INTERVAL_SECONDS}s | Monitor: {config.MONITOR_INTERVAL_SECONDS}s")
+        log.info(f"Central Brain: {'ON' if config.USE_CENTRAL_BRAIN else 'OFF (confluence)'}")
+        log.info(f"GPT Headlines: {'ON (' + config.GPT_MODEL + ')' if getattr(config, 'USE_GPT_HEADLINES', False) else 'OFF (keywords)'}")
+        log.info(f"Min confidence: {config.BRAIN_MIN_CONFIDENCE}%")
+        log.info(f"Risk/trade: {config.RISK_PER_TRADE}% | Max daily loss: {config.MAX_DAILY_LOSS}%")
+        log.info(f"SL: {config.MIN_SL_PIPS}-{config.MAX_SL_PIPS} pips | Breakeven: {config.BREAKEVEN_TRIGGER_PIPS} pips | Trailing: {config.TRAILING_TRIGGER_PIPS}/{config.TRAILING_DISTANCE_PIPS} pips")
+        
+        # Connect MT5
+        if self.executes_trades:
+            # DEMO and LIVE: full connection with order execution
+            if not connect_mt5():
+                log.error("Failed to connect MT5. Aborting.")
+                alert_error("Startup Failed", "Could not connect to MT5")
+                return False
+            
+            account_info = executor.get_account_info()
+            if account_info:
+                log.info(f"Account: {account_info['login']}")
+                log.info(f"Balance: ${account_info['balance']:.2f}")
+                log.info(f"Leverage: 1:{account_info['leverage']}")
+                if self.mode == "DEMO":
+                    log.info("⚠️ DEMO MODE - Real orders on DEMO account (fake money)")
+        else:
+            log.info("DRY RUN mode - MT5 will not be connected for real orders")
+            # Initialize MT5 for data only
+            import MetaTrader5 as mt5
+            if not mt5.initialize():
+                log.warning("MT5 not available for data. Using simulated data.")
+        
+        # Reconcile saved state with MT5 (fix trades that closed during downtime)
+        self._reconcile_with_mt5()
+        
+        # Send Discord alert
+        alert_bot_started(mode_label)
+        
+        self._launch_dashboard_server()
+
+        self.running = True
+        log.success("Bot started successfully!")
+        
+        write_state(self)
+        
+        return True
+    
+    def stop(self, reason: str = "Manual"):
+        """Stop the bot"""
+        self.running = False
+
+        write_state(self)
+        
+        # Calculate runtime
+        stop_time = datetime.now()
+        runtime = stop_time - self.session_start_time if self.session_start_time else timedelta(0)
+        hours, remainder = divmod(int(runtime.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        runtime_str = f"{hours}h {minutes}m {seconds}s"
+        
+        # Send daily summary
+        self._send_daily_summary()
+        
+        # Disconnect MT5
+        if self.executes_trades:
+            disconnect_mt5()
+        
+        # Discord alert
+        alert_bot_stopped(reason)
+        
+        # Log session summary
+        stats = self.daily_stats
+        log.info("")
+        log.info("=" * 60)
+        log.info("🛑 SESSION STOP")
+        log.info("=" * 60)
+        log.info(f"Reason: {reason}")
+        log.info(f"Start:   {self.session_start_time.strftime('%Y-%m-%d %H:%M:%S') if self.session_start_time else 'N/A'}")
+        log.info(f"End:     {stop_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        log.info(f"Duration: {runtime_str}")
+        log.info(f"Analyses performed: {self.session_analyses}")
+        log.info(f"Trades: {stats['trades']} (W:{stats['wins']} L:{stats['losses']})")
+        log.info(f"Session PnL: ${stats['pnl']:+.2f}")
+        gpt = self.gpt_stats
+        log.info(f"GPT Validator: CONFIRM:{gpt['confirm']} BOOST:{gpt['boost']} REDUCE:{gpt['reduce']} (cache:{gpt['from_cache']})")
+        log.info("=" * 60)
+        log.info("")
+    
+    def run(self):
+        """Main bot loop"""
+        if not self.start():
+            return
+        
+        log.info("Entering main loop...")
+        
+        while self.running:
+            try:
+                # Daily reset
+                self._check_daily_reset()
+                
+                # Check if market is open
+                market_open, market_reason, next_open = is_market_open()
+                
+                if not market_open:
+                    # === MARKET CLOSED ===
+                    # Transition: open → closed (send alert once)
+                    if self.market_was_open:
+                        self.market_was_open = False
+                        next_open_str = next_open.strftime('%Y-%m-%d %H:%M UTC') if next_open else "unknown"
+                        log.info(f"🌙 Market closed: {market_reason}")
+                        log.info(f"   Next open: {next_open_str}")
+                        alert_market_closed(market_reason, f"Next open: {next_open_str}")
+                    
+                    # Monitor continues managing existing positions (trailing, breakeven)
+                    self._monitor_cycle()
+
+                    write_state(self)
+                    
+                    # Differential sleep: daily pause (60s) vs weekend (300s)
+                    is_weekend = "Weekend" in market_reason
+                    sleep_seconds = 300 if is_weekend else 60
+                    
+                    for _ in range(sleep_seconds):
+                        if not self.running:
+                            break
+                        time.sleep(1)
+                    
+                    # Periodic keepalive log (to show the bot is alive)
+                    keepalive_interval = 3600 if is_weekend else 600  # 1h weekend, 10 min daily pause
+                    now = datetime.now()
+                    if self._last_keepalive_log is None or (now - self._last_keepalive_log).total_seconds() >= keepalive_interval:
+                        next_open_str = next_open.strftime('%Y-%m-%d %H:%M UTC') if next_open else "unknown"
+                        close_type = "weekend" if is_weekend else "daily pause"
+                        log.info(f"💤 Market closed ({close_type}). Next open: {next_open_str}")
+                        self._last_keepalive_log = now
+                    
+                    continue
+                
+                # === MARKET OPEN ===
+                # Transition: closed → open (send alert once)
+                if not self.market_was_open:
+                    self.market_was_open = True
+                    self._last_keepalive_log = None
+                    log.info("☀️ Market open! Bot active.")
+                    alert_market_open()
+                
+                # Execute analysis cycle
+                self._analysis_cycle()
+                self.session_analyses += 1
+                
+                # Monitor open positions
+                self._monitor_cycle()
+                
+                # Wait for next cycle with monitor sub-loop
+                # If positions open: monitor every 30s
+                # If not: normal 300s sleep
+                elapsed = 0
+                interval = config.ANALYSIS_INTERVAL_SECONDS
+                monitor_interval = config.MONITOR_INTERVAL_SECONDS
+                
+                while elapsed < interval and self.running:
+                    # Sleep for monitor interval or remaining time
+                    sleep_time = min(monitor_interval, interval - elapsed)
+                    for _ in range(sleep_time):
+                        if not self.running:
+                            break
+                        time.sleep(1)
+                    elapsed += sleep_time
+                    
+                    # If not yet time for next analysis, run monitor
+                    if elapsed < interval and self.running and self.executes_trades:
+                        positions = executor.get_open_positions()
+                        if positions:
+                            log.debug(f"Monitor tick: {len(positions)} open position(s) ({elapsed}s/{interval}s)")
+                            self._monitor_cycle()
+                
+            except KeyboardInterrupt:
+                log.info("User interruption...")
+                break
+                
+            except Exception as e:
+                log.error(f"Error in main loop: {e}")
+                log.error(traceback.format_exc())
+                alert_error("Loop Error", str(e))
+                
+                # Wait before retrying
+                time.sleep(60)
+        
+        self.stop("Loop ended")
+    
+    def _analysis_cycle(self):
+        """Analysis and decision cycle"""
+        try:
+            log.info("-" * 40)
+            log.info(f"📊 Analysis: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # Resolve any pending trades from previous cycles
+            self._resolve_pending_trades()
+            
+            # 1. Get technical data
+            df = get_mt5_data()
+            
+            if df is None or len(df) < 50:
+                log.warning("Insufficient data for analysis")
+                return
+            
+            # 2. Calculate indicators
+            df = calculate_indicators(df)
+            
+            # ================================================================
+            # CENTRAL BRAIN (or fallback to confluence)
+            # ================================================================
+            if config.USE_CENTRAL_BRAIN:
+                try:
+                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                        self._brain_analysis(df)
+                except Exception as e:
+                    log.error(f"⚠️ Brain failed! Error: {e}")
+                    log.error(traceback.format_exc())
+                    log.warning("Using confluence as fallback...")
+                    alert_error("Brain Degraded", f"Brain failed: {e}. Using confluence as fallback.")
+                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                        self._confluence_analysis(df)
+            else:
+                decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                    self._confluence_analysis(df)
+            
+            if decision is None:
+                return
+            
+            # Analysis log
+            log.analysis(tech_score, news_score, ml_score, final_score)
+            if direction is None and decision != "HOLD":
+                log.decision(f"FORCED HOLD ({decision} blocked: conf {confidence:.1f}% < {config.BRAIN_MIN_CONFIDENCE}%)", confidence, final_score)
+            else:
+                log.decision(decision, confidence, final_score)
+            
+            # Check if actionable signal
+            if direction is None:
+                log.info(f"   Decision: {decision} - Waiting...")
+                # Heartbeat: sign of life on Discord when in HOLD
+                if config.USE_CENTRAL_BRAIN:
+                    self._check_heartbeat(decision, final_score, confidence, tech_score, news_score, ml_score, explanation)
+                return
+            
+            # Signal detected!
+            log.info(f"   🔔 SIGNAL: {decision} ({direction})")
+            
+            # Alert Discord
+            alert_signal_detected(
+                decision=decision,
+                final_score=final_score,
+                tech_score=tech_score,
+                news_score=news_score,
+                ml_score=ml_score,
+                confidence=confidence,
+                brain_summary=explanation
+            )
+            
+            # Safety Checks
+            positions_list = get_positions() if self.executes_trades else []
+            account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
+            open_positions = len(positions_list)
+            mt5_connected = is_mt5_connected() if self.executes_trades else True
+            
+            is_safe, reasons = is_safe_to_trade(
+                account_balance=account_balance,
+                open_positions=open_positions,
+                mt5_connected=mt5_connected,
+                has_high_impact_news=False,
+                trade_direction=direction,
+                open_positions_list=positions_list
+            )
+            
+            if not is_safe:
+                reason_str = "; ".join(reasons)
+                log.safety_block(reason_str)
+                alert_safety_block(decision, final_score, reason_str)
+                return
+            
+            # M5 Reversal Detection (anti-lag filter)
+            try:
+                from momentum_detector import check_m5_reversal
+                m5_check = check_m5_reversal(direction)
+                log.info(f"   🔄 M5 Check: {m5_check['description']}")
+                
+                if m5_check["reversal_detected"]:
+                    if m5_check["reversal_strength"] == "strong":
+                        log.safety_block(f"Strong M5 reversal: {m5_check['description']}")
+                        alert_m5_reversal_block(direction, m5_check["recent_move_pct"], m5_check["description"])
+                        return
+                    elif m5_check["reversal_strength"] == "moderate":
+                        confidence -= config.M5_REVERSAL_CONFIDENCE_PENALTY
+                        log.info(f"   ⚠️ Moderate M5 reversal: confidence reduced {config.M5_REVERSAL_CONFIDENCE_PENALTY} → {confidence:.1f}")
+                        if confidence < config.BRAIN_MIN_CONFIDENCE:
+                            log.safety_block(f"Moderate M5 reversal reduced confidence below minimum ({confidence:.1f} < {config.BRAIN_MIN_CONFIDENCE})")
+                            alert_m5_reversal_block(direction, m5_check["recent_move_pct"], m5_check["description"])
+                            return
+            except Exception as e:
+                log.warning(f"M5 reversal check error (ignored): {e}")
+            
+            # Spread Check with Retry Loop
+            spread = executor.get_spread()
+            if spread is not None:
+                log.info(f"   📊 Spread: {spread:.1f} pips")
+                
+                if spread > config.MAX_SPREAD_PIPS:
+                    log.warning(f"   ⏳ Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry")
+                    alert_spread_delay(spread, config.MAX_SPREAD_PIPS, 1)
+                    
+                    # Retry loop
+                    for retry in range(2, config.SPREAD_MAX_RETRIES + 1):
+                        time.sleep(config.SPREAD_RETRY_INTERVAL_SECONDS)
+                        spread = executor.get_spread()
+                        
+                        if spread is None:
+                            log.warning(f"   ⚠️ Could not get spread on retry #{retry}")
+                            continue
+                        
+                        log.info(f"   📊 Spread retry #{retry}: {spread:.1f} pips")
+                        
+                        if spread <= config.MAX_SPREAD_PIPS:
+                            log.info(f"   ✅ Spread normalized: {spread:.1f} pips — proceeding with entry")
+                            break
+                    else:
+                        # Exhausted all retries
+                        log.warning(f"   ⛔ Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped")
+                        alert_spread_skip(direction, spread if spread else 0, final_score)
+                        return
+            else:
+                log.warning("   ⚠️ Could not get spread — proceeding anyway")
+            
+            # Calculate risk
+            atr = get_atr_value(df)
+            
+            prices = executor.get_current_price()
+            if prices:
+                entry_price = prices[1] if direction == "BUY" else prices[0]
+            else:
+                entry_price = df['close'].iloc[-1]
+            
+            levels = calculate_sl_tp(entry_price, direction, atr)
+            
+            sl_pips = levels.sl_pips
+            pos_size = calculate_position_size(account_balance, config.RISK_PER_TRADE, sl_pips)
+            
+            log.info(f"   Entry: {entry_price:.2f}")
+            log.info(f"   SL: {levels.stop_loss:.2f} ({levels.sl_pips:.0f} pips)")
+            log.info(f"   TP1: {levels.take_profit_1:.2f} ({levels.tp1_pips:.0f} pips)")
+            log.info(f"   Lot: {pos_size.lot_size}")
+            
+            # Execute trade
+            comment = f"Bot-{decision}-{final_score:.0f}"
+            
+            if direction == "BUY":
+                order_result = execute_buy(
+                    lot_size=pos_size.lot_size,
+                    sl=levels.stop_loss,
+                    tp=levels.take_profit_1,
+                    comment=comment
+                )
+            else:
+                order_result = execute_sell(
+                    lot_size=pos_size.lot_size,
+                    sl=levels.stop_loss,
+                    tp=levels.take_profit_1,
+                    comment=comment
+                )
+            
+            if order_result.success:
+                log.success(f"Trade executed! Ticket: {order_result.ticket}")
+                self.daily_stats['trades'] += 1
+                record_trade_opened(direction)
+                record_trade_open(
+                    ticket=order_result.ticket,
+                    direction=direction,
+                    volume=pos_size.lot_size,
+                    open_price=entry_price,
+                    sl=levels.stop_loss,
+                    tp=levels.take_profit_1,
+                    comment=comment,
+                )
+            else:
+                log.error(f"Failed to execute trade: {order_result.error_message}")
+        finally:
+            # Persist state for dashboard (must never block the bot)
+            write_state(self)
+    
+    def _brain_analysis(self, df):
+        """
+        Analysis via Central Brain.
+        
+        Returns:
+            Tuple: (decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation)
+            direction is None if not actionable
+        """
+        from technical_analyzer import analyze_technical_detailed
+        from ml_predictor import get_ml_detailed, set_news_data_for_ml
+        from news_score_hybrid import get_news_detailed, get_hybrid_score_cached
+        from momentum_detector import analyze_momentum
+        from central_brain import analyze_with_brain, is_actionable_signal, get_trade_direction
+        from economic_calendar import get_calendar_data, get_upcoming_events
+        from volatility_guard import get_volatility_status
+        
+        log.info("   🧠 Mode: CENTRAL BRAIN")
+        
+        # Detailed technical analysis
+        tech_data = analyze_technical_detailed(df)
+        log.info(f"   Technical: {tech_data['score']:.1f}/100")
+        
+        # Detailed news (fetched BEFORE ML — ML uses DXY/VIX/Yields as features)
+        try:
+            news_data = get_news_detailed()
+        except Exception as e:
+            log.warning(f"News error: {e}")
+            news_data = {
+                "score": 50.0, "dxy": {}, "yields": {}, "vix": {},
+                "sentiment": {"headlines_score": 50, "normalized": 0},
+                "high_impact_news_soon": False, "geopolitical_risk": "low",
+                "anomalies": [], "error": str(e),
+            }
+        dxy_val = news_data.get('dxy', {}).get('value')
+        yields_val = news_data.get('yields', {}).get('value')
+        vix_val = news_data.get('vix', {}).get('value')
+        news_extra = []
+        if dxy_val is not None:
+            news_extra.append(f"DXY: {dxy_val}")
+        if yields_val is not None:
+            news_extra.append(f"10Y: {yields_val}%")
+        if vix_val is not None:
+            news_extra.append(f"VIX: {vix_val}")
+        news_suffix = f" ({', '.join(news_extra)})" if news_extra else ""
+        log.info(f"   News: {news_data['score']:.1f}/100{news_suffix}")
+        
+        # Cache news_data for ML (used by get_ml_score elsewhere)
+        set_news_data_for_ml(news_data)
+        
+        # Detailed ML (uses news_data for DXY/VIX/Yields features)
+        try:
+            ml_data = get_ml_detailed(df, news_data)
+        except Exception as e:
+            log.warning(f"ML error: {e}")
+            ml_data = {
+                "score": 50.0, "prediction": "neutral", "probability": 0.5,
+                "max_confidence": 0.5, "pattern": "indefinido",
+                "similar_patterns_count": None, "historical_success_rate": None,
+                "error": str(e),
+            }
+        ml_h1 = ml_data.get('score_h1', ml_data['score'])
+        ml_h4 = ml_data.get('score_h4', ml_data['score'])
+        log.info(f"   ML: {ml_data['score']:.1f}/100 (H1: {ml_h1:.1f}, H4: {ml_h4:.1f}, blend 40/60) ({ml_data['prediction']}, conf: {ml_data['max_confidence']:.0%})")
+        
+        # Momentum
+        momentum_data = analyze_momentum(df)
+        log.info(f"   Momentum: {momentum_data['score']:.1f}/100")
+        
+        # Economic Calendar (5th pillar)
+        try:
+            calendar_data = get_calendar_data()
+        except Exception as e:
+            log.warning(f"Calendar error: {e}")
+            calendar_data = {
+                "score": 50.0, "bias": "NEUTRAL", "phase": "normal",
+                "phase_description": "Calendar error - neutral mode",
+                "events": [], "events_count": 0, "closest_event": None,
+                "source": "error_fallback", "error": str(e),
+            }
+        log.info(f"   Calendar: {calendar_data['score']:.1f}/100 (phase: {calendar_data['phase']}, bias: {calendar_data['bias']}, source: {calendar_data['source']})")
+        
+        # Volatility Guard
+        try:
+            vol_status = get_volatility_status()
+        except Exception as e:
+            log.warning(f"Volatility Guard error: {e}")
+            vol_status = {
+                "status": "NORMAL", "last_extreme_candle": None,
+                "minutes_since_extreme": None, "extreme_percent": 0,
+                "description": f"Error: {e} — neutral mode",
+            }
+        log.info(f"   Volatility: {vol_status['status']} ({vol_status['description']})")
+        
+        # M5 Status (visibility in all cycles + input for score adjustment)
+        m5_status = None
+        try:
+            from momentum_detector import get_m5_status
+            m5_status = get_m5_status()
+            log.info(f"   M5: {m5_status['description']}")
+        except Exception as e:
+            log.debug(f"   M5 status error: {e}")
+        
+        # Update monitor with volatility status
+        from monitor import monitor as _monitor_instance
+        _monitor_instance.set_volatility_status(vol_status['status'])
+        
+        # Current price
+        # Prefer MT5 tick (real-time) when market open and available;
+        # fallback to last candle close (H1) when market closed or tick unavailable.
+        current_price = float(df['close'].iloc[-1])
+        try:
+            market_open, _, _ = is_market_open()
+            if market_open:
+                tick_prices = executor.get_current_price()
+                if tick_prices:
+                    bid, ask = tick_prices
+                    current_price = float((bid + ask) / 2)
+        except Exception:
+            pass
+        
+        # S/R Zone Detection (informational only — zero trade impact)
+        sr_brain_data = None
+        self._last_sr_zones = []
+        try:
+            from support_resistance import detect_zones_triple, is_near_strong_zone
+            from technical_analyzer import get_atr_value
+            import MetaTrader5 as mt5
+            import pandas as pd
+            # Fetch dedicated H1 data for S/R (main df only has ANALYSIS_BARS=100)
+            h1_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, config.SR_LOOKBACK_H1 + 50)
+            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, config.SR_LOOKBACK_H4 + 50)
+            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, config.SR_LOOKBACK_D1 + 20)
+            df_h1_sr = None
+            if h1_rates_sr is not None and len(h1_rates_sr) > 0:
+                df_h1_sr = pd.DataFrame(h1_rates_sr)
+                df_h1_sr['datetime'] = pd.to_datetime(df_h1_sr['time'], unit='s')
+            df_h4 = None
+            if h4_rates is not None and len(h4_rates) > 0:
+                df_h4 = pd.DataFrame(h4_rates)
+                df_h4['datetime'] = pd.to_datetime(df_h4['time'], unit='s')
+            df_d1 = None
+            if d1_rates is not None and len(d1_rates) > 0:
+                df_d1 = pd.DataFrame(d1_rates)
+                df_d1['datetime'] = pd.to_datetime(df_d1['time'], unit='s')
+            # Use dedicated H1 if available, fall back to main df
+            df_h1_for_sr = df_h1_sr if df_h1_sr is not None else df
+            if df_h4 is not None:
+                sr_zones = detect_zones_triple(
+                    df_h1_for_sr, df_h4, df_d1=df_d1,
+                    merge_pips=config.SR_ZONE_MERGE_PIPS,
+                    merge_pips_d1=config.SR_ZONE_MERGE_PIPS_D1,
+                    max_age_bars=config.SR_ZONE_MAX_AGE_BARS,
+                    min_touches=config.SR_MIN_TOUCHES,
+                    lookback_h1=config.SR_LOOKBACK_H1,
+                    lookback_h4=config.SR_LOOKBACK_H4,
+                    lookback_d1=config.SR_LOOKBACK_D1,
+                )
+                atr_for_sr = get_atr_value(df)
+                near_zone, zone_info = is_near_strong_zone(
+                    sr_zones, current_price, atr_for_sr,
+                    min_touches=config.SR_SCENARIO_MIN_TOUCHES,
+                )
+                zone_info_dict = None
+                if zone_info is not None:
+                    zone_info_dict = {
+                        "midpoint": zone_info.midpoint,
+                        "touches": zone_info.touches,
+                        "zone_type": zone_info.zone_type,
+                        "timeframe": zone_info.timeframe,
+                        "price_low": zone_info.price_low,
+                        "price_high": zone_info.price_high,
+                        "confluence": zone_info.confluence,
+                    }
+                sr_brain_data = {
+                    "confidence_adjustment": 0.0,
+                    "confirmations": [],
+                    "alerts": [],
+                    "description": "",
+                    "near_strong_zone": near_zone,
+                    "near_zone_info": zone_info_dict,
+                }
+                self._last_sr_zones = sr_zones
+                zone_count = len(sr_zones)
+                strong_count = sum(1 for z in sr_zones if z.touches >= 3)
+                d1_count = sum(1 for z in sr_zones if z.timeframe == "D1")
+                h4_count = sum(1 for z in sr_zones if z.timeframe == "H4")
+                h1_count = sum(1 for z in sr_zones if z.timeframe == "H1")
+                mtf_count = sum(1 for z in sr_zones if len(z.confluence) >= 2)
+                log.info(f"   S/R: {zone_count} zones (D1:{d1_count} H4:{h4_count} H1:{h1_count} | {strong_count} strong, {mtf_count} MTF) | Near strong zone: {near_zone}")
+                self._write_sr_zones_json(current_price)
+        except Exception as e:
+            log.debug(f"   S/R detection error (non-blocking): {e}")
+        
+        # Central Brain
+        brain_result = analyze_with_brain(tech_data, ml_data, momentum_data, news_data, current_price, calendar_data=calendar_data, volatility_status=vol_status, m5_data=m5_status, sr_data=sr_brain_data)
+        
+        # Record snapshot in Cycle Memory
+        from cycle_memory import CycleSnapshot
+        snapshot = CycleSnapshot(
+            timestamp=datetime.now(),
+            score=brain_result.final_score,
+            confidence=brain_result.confidence,
+            decision=brain_result.decision,
+            scenario=brain_result.scenario,
+            tech_score=tech_data.get('score', 50),
+            ml_score=ml_data.get('score', 50),
+            momentum_score=momentum_data.get('score', 50),
+            momentum_direction=brain_result.explanation.split('Direction: ')[-1].split('\n')[0] if 'Direction: ' in brain_result.explanation else 'neutral',
+            momentum_strength=brain_result.explanation.split('Strength: ')[-1].split(' |')[0] if 'Strength: ' in brain_result.explanation else 'moderate',
+            news_score=news_data.get('score', 50),
+            current_price=current_price,
+        )
+        self.cycle_memory.add(snapshot)
+        
+        # GPT Confidence Validator
+        cycle_history = self.cycle_memory.format_for_gpt()
+        if getattr(config, 'USE_GPT_CONFIDENCE', False) and vol_status.get('status') != 'EXTREME':
+            try:
+                from gpt_confidence import validate_confidence
+                gpt_result = validate_confidence(
+                    brain_result, tech_data, ml_data, momentum_data,
+                    news_data, calendar_data, vol_status, current_price,
+                    cycle_history=cycle_history
+                )
+                
+                if gpt_result["action"] == "BOOST" and gpt_result["adjustment"] > 0:
+                    brain_result.confidence = min(100, brain_result.confidence + gpt_result["adjustment"])
+                elif gpt_result["action"] == "REDUCE" and gpt_result["adjustment"] > 0:
+                    brain_result.confidence = max(0, brain_result.confidence - gpt_result["adjustment"])
+                
+                # Re-classificar confidence_level
+                if brain_result.confidence >= 80:
+                    brain_result.confidence_level = "VERY_HIGH"
+                elif brain_result.confidence >= 65:
+                    brain_result.confidence_level = "HIGH"
+                elif brain_result.confidence >= 50:
+                    brain_result.confidence_level = "MEDIUM"
+                elif brain_result.confidence >= 35:
+                    brain_result.confidence_level = "LOW"
+                else:
+                    brain_result.confidence_level = "VERY_LOW"
+                
+                brain_result.gpt_validation = gpt_result
+                
+                # Increment stats
+                self.gpt_stats[gpt_result["action"].lower()] += 1
+                if gpt_result.get("from_cache"):
+                    self.gpt_stats["from_cache"] += 1
+                
+                cache_tag = " (cache)" if gpt_result.get("from_cache") else ""
+                if gpt_result["action"] != "CONFIRM" and gpt_result["adjustment"] > 0:
+                    sign = "+" if gpt_result["action"] == "BOOST" else "-"
+                    log.info(f"   🤖 GPT: {gpt_result['action']} ({sign}{gpt_result['adjustment']}) — {gpt_result['reason']}{cache_tag}")
+                else:
+                    log.info(f"   🤖 GPT: CONFIRM — {gpt_result['reason']}{cache_tag}")
+                
+            except Exception as e:
+                log.warning(f"GPT Confidence error (fallback CONFIRM): {e}")
+                self.gpt_stats["confirm"] += 1
+        
+        # Detailed log
+        log.info(f"   🧠 Scenario: {brain_result.scenario_description}")
+        log.info(f"   🧠 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
+        log.info(f"   🧠 Decision: {brain_result.decision}")
+        
+        # Full explanation log in DEBUG
+        for line in brain_result.explanation.split('\n'):
+            log.debug(f"   {line}")
+        
+        # Build concise summary for Discord
+        summary_lines = [
+            f"Scenario: {brain_result.scenario_description}",
+        ]
+        # Top confirmations (max 3)
+        for conf in brain_result.confirmations[:3]:
+            summary_lines.append(f"• {conf}")
+        # Top alerts (max 2)
+        for alert in brain_result.alerts[:2]:
+            summary_lines.append(f"⚠ {alert}")
+        summary_lines.append(f"Confidence: {brain_result.confidence_level} ({brain_result.confidence:.0f}/100)")
+        # GPT Validator info
+        if brain_result.gpt_validation and brain_result.gpt_validation.get("action"):
+            gpt = brain_result.gpt_validation
+            if gpt["action"] != "CONFIRM" and gpt["adjustment"] > 0:
+                sign = "+" if gpt["action"] == "BOOST" else "-"
+                summary_lines.append(f"🤖 GPT: {gpt['action']} ({sign}{gpt['adjustment']}) — {gpt.get('reason', '')}")
+            else:
+                summary_lines.append(f"🤖 GPT: CONFIRM")
+        brain_summary = "\n".join(summary_lines)
+        
+        # Store data for heartbeat
+        self._last_calendar_data = calendar_data
+        self._last_vol_status = vol_status
+        self._last_current_price = current_price
+        self._last_scenario_description = brain_result.scenario_description
+        self._last_gpt_validation = brain_result.gpt_validation
+        
+        # Check minimum confidence
+        direction = None
+        hold_forced = False
+        original_decision = None
+        hold_reason = None
+        if is_actionable_signal(brain_result.decision):
+            if brain_result.confidence >= config.BRAIN_MIN_CONFIDENCE:
+                direction = get_trade_direction(brain_result.decision)
+            else:
+                hold_forced = True
+                original_decision = brain_result.decision
+                hold_reason = f"confidence {brain_result.confidence:.1f}% < {config.BRAIN_MIN_CONFIDENCE}%"
+                log.info(f"   ⚠️ Confidence ({brain_result.confidence:.1f}) below minimum ({config.BRAIN_MIN_CONFIDENCE}) - forced HOLD")
+        
+        # Persist last_analysis for dashboard
+        try:
+            # Build intel_feed from existing cache (no extra requests)
+            intel_feed = self._build_intel_feed(
+                news_data, calendar_data, brain_result, get_hybrid_score_cached
+            )
+
+            self.last_analysis = {
+                "timestamp": datetime.now().isoformat(),
+                "decision": "HOLD" if hold_forced else brain_result.decision,
+                "final_score": brain_result.final_score,
+                "confidence": brain_result.confidence,
+                "confidence_level": brain_result.confidence_level,
+                "scenario": brain_result.scenario,
+                "scenario_description": brain_result.scenario_description,
+                "tech_score": float(tech_data.get("score", 50.0)),
+                "news_score": float(news_data.get("score", 50.0)),
+                "ml_score": float(ml_data.get("score", 50.0)),
+                "momentum_score": float(momentum_data.get("score", 50.0)),
+                "calendar_score": float(calendar_data.get("score", 50.0)) if calendar_data else 50.0,
+                "current_price": float(current_price),
+                "volatility_status": vol_status.get("status", "NORMAL") if vol_status else "NORMAL",
+                "volatility_description": vol_status.get("description", "") if vol_status else "",
+                "gpt_validation": brain_result.gpt_validation,
+                "intel_feed": intel_feed,
+                "hold_forced": hold_forced,
+                "original_decision": original_decision,
+                "hold_reason": hold_reason,
+            }
+        except Exception:
+            pass
+        
+        record_analysis(self.last_analysis)
+        
+        return (
+            brain_result.decision,
+            brain_result.final_score,
+            brain_result.confidence,
+            direction,
+            tech_data['score'],
+            news_data['score'],
+            ml_data['score'],
+            brain_summary,
+        )
+    
+    def _confluence_analysis(self, df):
+        """
+        Analysis via confluence.py (fallback).
+        
+        Returns:
+            Tuple: (decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation)
+            direction is None if not actionable
+        """
+        log.info("   📊 Mode: CONFLUENCE (fallback)")
+        
+        # Technical Score
+        tech_score, tech_breakdown = calculate_technical_score(df)
+        log.info(f"   Technical: {tech_score:.1f}/100")
+        
+        # News Score (with cache)
+        news_score, news_data = news_cache.get_score()
+        log.info(f"   News: {news_score:.1f}/100")
+        
+        # Score ML
+        try:
+            from ml_predictor import get_ml_score
+            ml_score, ml_prob = get_ml_score(df)
+        except:
+            ml_score, ml_prob = 50.0, 0.5
+        log.info(f"   ML: {ml_score:.1f}/100 (prob: {ml_prob:.3f})")
+        
+        # Confluence
+        result = analyze_confluence(tech_score, news_score, ml_score, ml_prob)
+        
+        direction = None
+        if confluence_is_actionable(result.decision):
+            direction = confluence_get_direction(result.decision)
+        
+        # Persist last_analysis for dashboard (modo confluence)
+        try:
+            current_price = float(df['close'].iloc[-1])
+            try:
+                market_open, _, _ = is_market_open()
+                if market_open:
+                    tick_prices = executor.get_current_price()
+                    if tick_prices:
+                        bid, ask = tick_prices
+                        current_price = float((bid + ask) / 2)
+            except Exception:
+                pass
+        except Exception:
+            current_price = 0.0
+        try:
+            self.last_analysis = {
+                "timestamp": datetime.now().isoformat(),
+                "decision": result.decision,
+                "final_score": result.final_score,
+                "confidence": result.confidence,
+                "confidence_level": "N/A",
+                "scenario": "confluence",
+                "scenario_description": "Confluence (fallback)",
+                "tech_score": float(tech_score),
+                "news_score": float(news_score),
+                "ml_score": float(ml_score),
+                "momentum_score": 50.0,
+                "calendar_score": 50.0,
+                "current_price": current_price,
+                "volatility_status": "NORMAL",
+                "volatility_description": "",
+                "gpt_validation": None,
+            }
+        except Exception:
+            pass
+        
+        record_analysis(self.last_analysis)
+        
+        return (
+            result.decision,
+            result.final_score,
+            result.confidence,
+            direction,
+            tech_score,
+            news_score,
+            ml_score,
+            "",
+        )
+    
+    def _check_heartbeat(self, decision, final_score, confidence, tech_score, news_score, ml_score, explanation):
+        """
+        Check if a heartbeat should be sent to Discord.
+        Only sends if: in HOLD, no open positions, and minimum interval has passed.
+        Two modes: full (scenario changed) vs short (everything the same).
+        """
+        # Check for open positions
+        has_positions = False
+        if self.executes_trades:
+            try:
+                has_positions = len(get_positions()) > 0
+            except Exception:
+                pass
+        
+        if has_positions:
+            return
+        
+        # Check minimum interval
+        now = datetime.now()
+        if self.last_heartbeat and (now - self.last_heartbeat) < timedelta(minutes=config.HEARTBEAT_INTERVAL_MINUTES):
+            return
+        
+        # Decide mode: full vs short
+        scenario_changed = (
+            self.last_heartbeat_scenario is None or
+            self._last_scenario_description != self.last_heartbeat_scenario
+        )
+        score_changed = (
+            self.last_heartbeat_score is None or
+            abs(final_score - self.last_heartbeat_score) >= config.HEARTBEAT_SCORE_CHANGE_THRESHOLD
+        )
+        
+        if scenario_changed or score_changed:
+            # FULL Heartbeat
+            dominant = self._get_dominant_pillar(tech_score, news_score, ml_score)
+            vol_status_str = self._last_vol_status.get('status', 'NORMAL') if self._last_vol_status else 'NORMAL'
+            
+            # Calendar info
+            calendar_info = ""
+            if self._last_calendar_data:
+                closest = self._last_calendar_data.get('closest_event')
+                if closest:
+                    ev_name = closest.get('name', '?')
+                    phase = self._last_calendar_data.get('phase', 'normal')
+                    phase_desc = self._last_calendar_data.get('phase_description', '')
+                    calendar_info = f"{ev_name} ({phase_desc})" if phase != 'normal' else f"{ev_name} (no immediate impact)"
+            
+            # GPT Validator info
+            gpt_info = ""
+            if self._last_gpt_validation and self._last_gpt_validation.get("action"):
+                gpt = self._last_gpt_validation
+                gpt_info = f"{gpt['action']}"
+                if gpt["adjustment"] > 0:
+                    sign = "+" if gpt["action"] == "BOOST" else "-"
+                    gpt_info += f" ({sign}{gpt['adjustment']})"
+                gpt_info += f" — {gpt.get('reason', '')}"
+            
+            alert_heartbeat_full(
+                current_price=self._last_current_price or 0,
+                final_score=final_score,
+                confidence=confidence,
+                scenario=self._last_scenario_description or decision,
+                dominant_pillar=dominant,
+                volatility_status=vol_status_str,
+                calendar_info=calendar_info,
+                gpt_info=gpt_info
+            )
+            log.info(f"   💤 FULL Heartbeat sent to Discord")
+        else:
+            # SHORT Heartbeat
+            alert_heartbeat_short()
+            log.info(f"   🔄 Short heartbeat sent to Discord")
+        
+        # Update tracking
+        self.last_heartbeat = now
+        self.last_heartbeat_scenario = self._last_scenario_description
+        self.last_heartbeat_score = final_score
+    
+    def _get_dominant_pillar(self, tech_score, news_score, ml_score):
+        """Identify the pillar that contributes most to the HOLD decision (furthest from 50)."""
+        pillars = {
+            "Technical": tech_score,
+            "News": news_score,
+            "ML": ml_score,
+        }
+        
+        # The most extreme pillar (furthest from 50) is the one that "pulls" the most
+        dominant_name = max(pillars, key=lambda k: abs(pillars[k] - 50))
+        dominant_score = pillars[dominant_name]
+        
+        if dominant_score < 50:
+            direction = "bearish"
+        elif dominant_score > 50:
+            direction = "bullish"
+        else:
+            direction = "neutral"
+        
+        return f"{dominant_name}: {dominant_score:.0f}/100 ({direction})"
+    
+    @staticmethod
+    def _safe_str(s):
+        """Sanitize string to remove surrogates that break UTF-8 encoding."""
+        if not isinstance(s, str):
+            return s
+        return s.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+
+    def _write_sr_zones_json(self, current_price: float):
+        """Write nearest S/R zones to JSON for MQL5 EA to draw on chart."""
+        try:
+            import json
+            sr_zones_raw = getattr(self, '_last_sr_zones', []) or []
+            cp = current_price
+            if not sr_zones_raw or not cp:
+                log.debug(f"   S/R JSON: skipped (zones={len(sr_zones_raw)}, price={cp})")
+                return
+
+            above = sorted([z for z in sr_zones_raw if z.midpoint > cp], key=lambda z: z.midpoint)[:4]
+            below = sorted([z for z in sr_zones_raw if z.midpoint <= cp], key=lambda z: -z.midpoint)[:4]
+
+            zones_out = []
+            for z in above + below:
+                zones_out.append({
+                    "price": round(z.midpoint, 2),
+                    "zone_type": z.zone_type,
+                    "touches": z.touches,
+                    "timeframe": z.timeframe,
+                    "confluence": z.confluence if z.confluence else [],
+                    "strength": z.strength,
+                    "position": "above" if z.midpoint > cp else "below",
+                })
+
+            payload = {
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "current_price": round(cp, 2),
+                "zones_count": len(zones_out),
+                "zones": zones_out,
+            }
+
+            json_path = getattr(config, 'SR_ZONES_JSON_PATH', None)
+            if json_path:
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, indent=2)
+                log.info(f"   S/R JSON: wrote {len(zones_out)} zones to MQL5\\Files\\sr_zones.json")
+        except Exception as e:
+            log.warning(f"   S/R JSON write error (non-blocking): {e}")
+
+    def _build_intel_feed(self, news_data, calendar_data, brain_result, get_hybrid_score_cached_fn):
+        """Build intel_feed dict for dashboard from existing cached data (zero extra requests)."""
+        try:
+            _s = self._safe_str
+            # Headlines + macro from hybrid cache
+            cached = get_hybrid_score_cached_fn()
+            result = cached.get("result", {})
+            components = result.get("components", {})
+
+            # Top 8 headlines (most recent / highest weight first — already sorted)
+            raw_headlines = components.get("headlines", {}).get("details", [])
+            headlines = [
+                {
+                    "title": _s(h.get("title", "")),
+                    "score": h.get("score", 50),
+                    "method": h.get("method", "keywords"),
+                    "age_hours": h.get("age_hours", 0),
+                    "source": _s(h.get("source", "")),
+                    "category": h.get("category", "gold"),
+                }
+                for h in raw_headlines[:8]
+            ]
+
+            # Macro components
+            dxy_comp = components.get("dxy", {})
+            yields_comp = components.get("yields", {})
+            vix_comp = components.get("vix", {})
+
+            macro = {
+                "dxy": {
+                    "value": dxy_comp.get("current"),
+                    "change_pct": dxy_comp.get("change_percent"),
+                    "score": dxy_comp.get("score", 50),
+                },
+                "yields": {
+                    "value": yields_comp.get("current"),
+                    "change_pct": yields_comp.get("change_percent"),
+                    "score": yields_comp.get("score", 50),
+                },
+                "vix": {
+                    "value": vix_comp.get("current"),
+                    "change_pct": vix_comp.get("change_percent"),
+                    "score": vix_comp.get("score", 50),
+                    "is_extreme": vix_comp.get("is_extreme", False),
+                },
+            }
+
+            # Cache age
+            cache_age_minutes = cached.get("cache_age_minutes", 0)
+
+            # Analysis method
+            analysis_method = components.get("headlines", {}).get("analysis_method", "keywords")
+            # The method is per-headline; get the dominant one
+            if headlines:
+                gpt_count = sum(1 for h in headlines if h.get("method") == "gpt")
+                analysis_method = "gpt" if gpt_count > len(headlines) / 2 else "keywords"
+
+            # Calendar details
+            cal = calendar_data or {}
+            closest_event = cal.get("closest_event")
+            
+            # Upcoming events (HIGH + MEDIUM for dashboard visibility)
+            try:
+                from economic_calendar import get_upcoming_events
+                upcoming = get_upcoming_events(max_events=5)
+                for evt in upcoming:
+                    if isinstance(evt.get("name"), str):
+                        evt["name"] = _s(evt["name"])
+            except Exception:
+                upcoming = []
+            
+            # Override phase_description when NORMAL but upcoming events exist
+            phase_desc = cal.get("phase_description", "")
+            if cal.get("phase") == "normal" and upcoming:
+                n_high = sum(1 for e in upcoming if e.get("importance") == "HIGH")
+                n_med = sum(1 for e in upcoming if e.get("importance") == "MEDIUM")
+                parts = []
+                if n_high: parts.append(f"{n_high} HIGH")
+                if n_med: parts.append(f"{n_med} MEDIUM")
+                phase_desc = f"No active HIGH events — {', '.join(parts)} upcoming"
+            
+            cal_info = {
+                "phase": cal.get("phase", "normal"),
+                "bias": cal.get("bias", "NEUTRAL"),
+                "closest_event": _s(closest_event.get("name", "")) if isinstance(closest_event, dict) else "",
+                "phase_description": _s(phase_desc),
+                "upcoming_events": upcoming,
+            }
+
+            # GPT Validator
+            gpt_val = brain_result.gpt_validation or {}
+            gpt_info = {
+                "action": gpt_val.get("action", ""),
+                "adjustment": gpt_val.get("adjustment", 0),
+                "reason": gpt_val.get("reason", ""),
+            } if gpt_val.get("action") else None
+
+            # Confirmations & alerts from brain
+            confirmations = list(brain_result.confirmations[:5]) if brain_result.confirmations else []
+            alerts = list(brain_result.alerts[:5]) if brain_result.alerts else []
+
+            # S/R Zones for dashboard (4 above + 4 below current price)
+            sr_zones_display = []
+            try:
+                sr_zones_raw = getattr(self, '_last_sr_zones', []) or []
+                cp = getattr(self, '_last_current_price', None) or 0
+                above = sorted([z for z in sr_zones_raw if z.midpoint > cp], key=lambda z: z.midpoint)[:4]
+                below = sorted([z for z in sr_zones_raw if z.midpoint <= cp], key=lambda z: -z.midpoint)[:4]
+                PIP = 0.1
+                for z in above:
+                    sr_zones_display.append({
+                        "price": round(z.midpoint, 2), "zone_type": z.zone_type,
+                        "touches": z.touches, "timeframe": z.timeframe,
+                        "dist_pips": round(abs(z.midpoint - cp) / PIP, 0),
+                        "position": "above",
+                        "confluence": z.confluence,
+                        "strength": z.strength,
+                    })
+                for z in below:
+                    sr_zones_display.append({
+                        "price": round(z.midpoint, 2), "zone_type": z.zone_type,
+                        "touches": z.touches, "timeframe": z.timeframe,
+                        "dist_pips": round(abs(cp - z.midpoint) / PIP, 0),
+                        "position": "below",
+                        "confluence": z.confluence,
+                        "strength": z.strength,
+                    })
+            except Exception:
+                pass
+
+            return {
+                "headlines": headlines,
+                "macro": macro,
+                "anomalies": result.get("anomalies", []),
+                "analysis_method": analysis_method,
+                "news_score": float(news_data.get("score", 50.0)),
+                "cache_age_minutes": round(cache_age_minutes, 1),
+                "calendar": cal_info,
+                "gpt_validator": gpt_info,
+                "confirmations": confirmations,
+                "alerts": alerts,
+                "sr_zones": sr_zones_display,
+            }
+        except Exception as e:
+            log.debug(f"_build_intel_feed: {e}")
+            return None
+    
+    def _monitor_cycle(self):
+        """Position monitoring cycle"""
+        if not self.executes_trades:
+            return
+        
+        actions = monitor_positions()
+        
+        for action in actions:
+            log.info(f"   Monitor: {action['action']} - Ticket {action.get('ticket', 'N/A')}")
+            
+            # Update statistics
+            if action['action'] in ['TIMEOUT_CLOSE', 'DRAWDOWN_CLOSE', 'BROKER_CLOSE']:
+                profit = action.get('profit', 0)
+                is_pending = action.get('pending', False)
+                
+                if not is_pending:
+                    # Real P&L confirmed — count in daily stats
+                    self.daily_stats['trades'] += 1
+                    if profit > 0:
+                        self.daily_stats['wins'] += 1
+                    elif profit < 0:
+                        self.daily_stats['losses'] += 1
+                    else:
+                        self.daily_stats['breakevens'] = self.daily_stats.get('breakevens', 0) + 1
+                    self.daily_stats['pnl'] += profit
+                
+                # Save to dashboard history
+                add_closed_trade(self, {
+                    "ticket": action.get("ticket"),
+                    "direction": action.get("direction"),
+                    "volume": action.get("volume"),
+                    "open_price": action.get("open_price"),
+                    "close_price": action.get("close_price"),
+                    "profit": profit if not is_pending else None,
+                    "reason": action.get("reason"),
+                    "close_time": action.get("close_time"),
+                    "close_type": action.get("close_type"),
+                    "estimated": action.get("estimated", False),
+                    "pending": is_pending,
+                    "outcome": action.get("outcome"),
+                    "orig_tp": action.get("orig_tp"),
+                    "orig_sl": action.get("orig_sl"),
+                })
+                
+                # Save to SQLite history
+                close_reason = action.get("reason", "unknown")
+                if is_pending:
+                    close_reason = f"{close_reason} (pending)"
+                record_trade_close(
+                    ticket=action.get("ticket"),
+                    close_price=action.get("close_price"),
+                    profit=profit if not is_pending else None,
+                    close_reason=close_reason,
+                    close_time=action.get("close_time"),
+                )
+                
+                # Record for safety checks (cooldown applies even for pending)
+                record_trade_result(profit)
+                
+                # Record close type for dynamic cooldown
+                close_type = action.get('close_type', 'sl')
+                trade_dir = action.get('direction', 'BUY')
+                record_close_type(trade_dir, close_type)
+        
+        # Persist state after monitor cycle
+        write_state(self)
+    
+    def _check_daily_reset(self):
+        """Check and reset daily statistics"""
+        today = datetime.now().date()
+        
+        if today != self.daily_stats['date']:
+            # Send previous day summary
+            self._send_daily_summary()
+            
+            # Reset
+            self.daily_stats = {
+                'trades': 0,
+                'wins': 0,
+                'losses': 0,
+                'breakevens': 0,
+                'pnl': 0.0,
+                'date': today
+            }
+            self.gpt_stats = {"confirm": 0, "boost": 0, "reduce": 0, "from_cache": 0}
+
+            # Reset daily dashboard history
+            self.closed_trades_today = []
+            
+            log.info("Daily statistics reset")
+
+            write_state(self)
+    
+    def _send_daily_summary(self):
+        """Send daily summary"""
+        has_trades = self.daily_stats['trades'] > 0
+        has_gpt = sum(self.gpt_stats[k] for k in ("confirm", "boost", "reduce")) > 0
+        
+        if not has_trades and not has_gpt:
+            return
+        
+        account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
+        pnl_percent = (self.daily_stats['pnl'] / account_balance) * 100 if account_balance > 0 else 0
+        
+        alert_daily_summary(
+            trades_total=self.daily_stats['trades'],
+            wins=self.daily_stats['wins'],
+            losses=self.daily_stats['losses'],
+            pnl=self.daily_stats['pnl'],
+            pnl_percent=pnl_percent,
+            current_balance=account_balance + self.daily_stats['pnl'],
+            gpt_stats=self.gpt_stats if has_gpt else None
+        )
+
+
+# ============================================================================
+# TEST FUNCTIONS
+# ============================================================================
+
+def run_single_analysis():
+    """Run a single analysis (for testing)"""
+    print("=" * 60)
+    print("🧪 SINGLE ANALYSIS (TEST)")
+    print("=" * 60)
+    
+    # Initialize MT5 for data
+    import MetaTrader5 as mt5
+    if not mt5.initialize():
+        print("⚠️ MT5 not available")
+        return
+    
+    # Get data
+    df = get_mt5_data()
+    
+    if df is None:
+        print("❌ No data")
+        mt5.shutdown()
+        return
+    
+    # Calculate indicators
+    df = calculate_indicators(df)
+    
+    # Technical Score
+    tech_score, tech_breakdown = calculate_technical_score(df)
+    print(f"\n📊 Technical Score: {tech_score:.1f}/100")
+    for k, v in tech_breakdown.items():
+        print(f"   {k}: {v}")
+    
+    # Score News
+    try:
+        from news_sentiment import get_hybrid_score
+        news_result = get_hybrid_score()
+        news_score = news_result.get('score', 50.0)
+    except:
+        news_score = 50.0
+    print(f"\n📰 News Score: {news_score:.1f}/100")
+    
+    # Score ML
+    try:
+        from ml_predictor import get_ml_score
+        ml_score, ml_prob = get_ml_score(df)
+    except:
+        ml_score, ml_prob = 50.0, 0.5
+    print(f"\n🤖 ML Score: {ml_score:.1f}/100 (prob: {ml_prob:.3f})")
+    
+    # Confluence
+    result = analyze_confluence(tech_score, news_score, ml_score, ml_prob)
+    
+    print(f"\n🎯 CONFLUENCE:")
+    print(f"   Final Score: {result.final_score:.1f}/100")
+    print(f"   Decision: {result.decision}")
+    print(f"   Confidence: {result.confidence}")
+    print(f"   ML included: {'Yes' if result.ml_included else 'No'}")
+    
+    # ATR and levels
+    atr = get_atr_value(df)
+    current_price = df['close'].iloc[-1]
+    
+    print(f"\n📈 Current price: {current_price:.2f}")
+    print(f"   ATR(14): {atr:.2f}")
+    
+    if is_actionable_signal(result.decision):
+        direction = get_trade_direction(result.decision)
+        levels = calculate_sl_tp(current_price, direction, atr)
+        
+        print(f"\n💰 LEVELS FOR {direction}:")
+        print(f"   Entry: {current_price:.2f}")
+        print(f"   SL: {levels.stop_loss:.2f} ({levels.sl_pips:.0f} pips)")
+        print(f"   TP1: {levels.take_profit_1:.2f} ({levels.tp1_pips:.0f} pips)")
+        print(f"   TP2: {levels.take_profit_2:.2f} ({levels.tp2_pips:.0f} pips)")
+        print(f"   R:R 1: 1:{levels.risk_reward_1}")
+        print(f"   R:R 2: 1:{levels.risk_reward_2}")
+    
+    mt5.shutdown()
+    print("\n✅ Analysis complete!")
+
+
+def test_discord_connection():
+    """Test Discord connection"""
+    print("🧪 Testing Discord connection...")
+    result = discord.send("🤖 XAU/USD Trading Bot connection test", alert_type="info")
+    print(f"   Result: {'✅ OK' if result else '❌ Failed'}")
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+def main():
+    """Main function"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='XAU/USD Trading Bot')
+    parser.add_argument('--test', action='store_true', help='Run single test analysis')
+    parser.add_argument('--discord-test', action='store_true', help='Test Discord connection')
+    parser.add_argument('--dry-run', action='store_true', help='Force DRY RUN mode (simulation)')
+    parser.add_argument('--demo', action='store_true', help='Force DEMO mode (MT5 demo, fake $)')
+    parser.add_argument('--live', action='store_true', help='Force LIVE mode (MT5 real, real $)')
+    
+    args = parser.parse_args()
+    
+    # Override mode if specified via CLI
+    if args.dry_run:
+        config.TRADING_MODE = "DRY_RUN"
+    elif args.demo:
+        config.TRADING_MODE = "DEMO"
+    elif args.live:
+        config.TRADING_MODE = "LIVE"
+    config.DRY_RUN = (config.TRADING_MODE == "DRY_RUN")
+    
+    # Execute action
+    if args.test:
+        run_single_analysis()
+    elif args.discord_test:
+        test_discord_connection()
+    else:
+        # Run bot
+        bot = TradingBot()
+        bot.run()
+
+
+if __name__ == "__main__":
+    main()
