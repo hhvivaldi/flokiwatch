@@ -1198,6 +1198,19 @@ class TradingBot:
                 mtf_count = sum(1 for z in sr_zones if len(z.confluence) >= 2)
                 log.info(f"   S/R: {zone_count} zones (D1:{d1_count} H4:{h4_count} H1:{h1_count} | {strong_count} strong, {mtf_count} MTF) | Near strong zone: {near_zone}")
                 self._write_sr_zones_json(current_price)
+                
+                # Detect candlestick patterns with S/R proximity scaling
+                from technical_analyzer import detect_candlestick_patterns
+                self._last_candlestick_patterns = detect_candlestick_patterns(
+                    df, sr_zones=sr_zones, current_price=current_price, atr=atr_for_sr
+                )
+                primary_pattern = self._last_candlestick_patterns.get("primary_pattern")
+                if primary_pattern:
+                    p_name = primary_pattern.get("name", "")
+                    p_dir = primary_pattern.get("direction", "")
+                    p_score = primary_pattern.get("final_score", 0)
+                    p_mult = primary_pattern.get("sr_multiplier", 1.0)
+                    log.info(f"   Pattern: {p_name} ({p_dir}) | score: {p_score:+.1f} (×{p_mult:.2f} S/R)")
         except Exception as e:
             log.debug(f"   S/R detection error (non-blocking): {e}")
         
@@ -1724,6 +1737,30 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Candlestick patterns for dashboard
+            candlestick_patterns_display = None
+            try:
+                patterns_data = getattr(self, '_last_candlestick_patterns', None)
+                if patterns_data and patterns_data.get("primary_pattern"):
+                    primary = patterns_data["primary_pattern"]
+                    sr_ctx = patterns_data.get("sr_context")
+                    sr_context_str = ""
+                    if sr_ctx:
+                        sr_context_str = f"Near {sr_ctx['timeframe']} {sr_ctx['zone_type'].lower()} @ {sr_ctx['price']:.2f} ({sr_ctx['touches']} touches)"
+                    candlestick_patterns_display = {
+                        "primary": {
+                            "name": primary.get("name"),
+                            "direction": primary.get("direction"),
+                            "base_score": primary.get("base_score"),
+                            "sr_multiplier": primary.get("sr_multiplier"),
+                            "final_score": primary.get("final_score"),
+                            "sr_context": sr_context_str,
+                        },
+                        "all_patterns": [p.get("name") for p in patterns_data.get("patterns", [])],
+                    }
+            except Exception:
+                pass
+
             return {
                 "headlines": headlines,
                 "macro": macro,
@@ -1736,6 +1773,7 @@ class TradingBot:
                 "confirmations": confirmations,
                 "alerts": alerts,
                 "sr_zones": sr_zones_display,
+                "candlestick_patterns": candlestick_patterns_display,
             }
         except Exception as e:
             log.debug(f"_build_intel_feed: {e}")

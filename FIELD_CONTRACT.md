@@ -103,6 +103,20 @@
 | `intel_feed.confirmations` | array | `main.py` | `renderIntelFeed()` → `#intel-tags` |
 | `intel_feed.alerts` | array | `main.py` | `renderIntelFeed()` → `#intel-tags` |
 | `intel_feed.sr_zones` | array | `main.py` | `renderIntelFeed()` → `#intel-sr-zones` |
+| `intel_feed.candlestick_patterns` | object \| null | `main.py` | `renderIntelFeed()` → `#intel-patterns` |
+
+### `last_analysis.intel_feed.candlestick_patterns` Object
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `candlestick_patterns.primary` | object | `main.py` | `renderIntelFeed()` → pattern display |
+| `candlestick_patterns.primary.name` | string | `main.py` | pattern name (e.g., "Morning Star") |
+| `candlestick_patterns.primary.direction` | `"bullish"` \| `"bearish"` | `main.py` | direction color |
+| `candlestick_patterns.primary.base_score` | float | `main.py` | base score before S/R multiplier |
+| `candlestick_patterns.primary.sr_multiplier` | float | `main.py` | S/R proximity multiplier (1.0-2.0) |
+| `candlestick_patterns.primary.final_score` | float | `main.py` | final score after multiplier |
+| `candlestick_patterns.primary.sr_context` | string | `main.py` | S/R zone context description |
+| `candlestick_patterns.all_patterns` | array | `main.py` | list of all detected pattern names |
 
 ### `last_analysis.mtf_trend` Object (Multi-TF Trend Confirmation)
 
@@ -168,7 +182,7 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `positions`, `positions-empty`, `positions-count`, `last-trade-evidence`, `lte-dir`, `lte-pnl`, `lte-reason`, `lte-time`, `trades-count`, `trades-w`, `trades-l`, `trades-be`, `trades-wr`
 
 ### OSINT Feed
-`intel-feed-section`, `intel-method`, `intel-cache-age`, `intel-headlines`, `intel-macro`, `intel-calendar`, `intel-sr`, `intel-sr-zones`, `intel-gpt`, `intel-tags`, `intel-bottom`, `intel-cached-badge`, `intel-mtf`, `intel-volume`
+`intel-feed-section`, `intel-method`, `intel-cache-age`, `intel-headlines`, `intel-macro`, `intel-calendar`, `intel-sr`, `intel-sr-zones`, `intel-gpt`, `intel-tags`, `intel-bottom`, `intel-cached-badge`, `intel-mtf`, `intel-volume`, `intel-patterns`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`

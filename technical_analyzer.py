@@ -95,7 +95,421 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_visual_features(df: pd.DataFrame) -> Dict:
+def _detect_approach_direction(df: pd.DataFrame, lookback: int = 3) -> Optional[str]:
+    """
+    Detect if price approached from above (bearish) or below (bullish) in last N candles.
+    Used for doji context — doji at support is only bullish if price arrived from above.
+    
+    Returns:
+        "bearish" if price moved down toward current level
+        "bullish" if price moved up toward current level
+        None if sideways/unclear
+    """
+    if df is None or len(df) < lookback + 1:
+        return None
+    
+    recent = df.tail(lookback + 1)
+    start_close = float(recent.iloc[0]['close'])
+    end_close = float(recent.iloc[-1]['close'])
+    
+    if start_close <= 0:
+        return None
+    
+    move_pct = (end_close - start_close) / start_close * 100
+    
+    if move_pct < -0.15:
+        return "bearish"
+    elif move_pct > 0.15:
+        return "bullish"
+    return None
+
+
+def _get_sr_proximity_multiplier(current_price: float, atr: float, sr_zones: list) -> Tuple[float, Optional[dict]]:
+    """
+    Calculate S/R proximity multiplier for candlestick pattern scoring.
+    
+    Returns:
+        Tuple: (multiplier, zone_info_dict or None)
+        
+    Multiplier logic:
+        - Within 0.3×ATR of D1 zone (30+ touches): 2.0×
+        - Within 0.3×ATR of D1 zone (10-29 touches): 1.75×
+        - Within 0.5×ATR of H4 zone (10+ touches) or MTF confluence: 1.5×
+        - Within 0.5×ATR of any zone (4+ touches): 1.25×
+        - No nearby strong zone: 1.0×
+    """
+    if not sr_zones or atr <= 0:
+        return 1.0, None
+    
+    best_multiplier = 1.0
+    best_zone = None
+    
+    for zone in sr_zones:
+        dist = abs(current_price - zone.midpoint)
+        touches = zone.touches
+        tf = zone.timeframe
+        confluence = getattr(zone, 'confluence', [])
+        
+        # D1 zone within 0.3×ATR
+        if tf == "D1" and dist <= atr * 0.3:
+            if touches >= 30 and best_multiplier < 2.0:
+                best_multiplier = 2.0
+                best_zone = zone
+            elif touches >= 10 and best_multiplier < 1.75:
+                best_multiplier = 1.75
+                best_zone = zone
+        
+        # H4 zone within 0.5×ATR with 10+ touches or MTF confluence
+        if tf == "H4" and dist <= atr * 0.5:
+            has_confluence = len(confluence) >= 2
+            if (touches >= 10 or has_confluence) and best_multiplier < 1.5:
+                best_multiplier = 1.5
+                best_zone = zone
+        
+        # Any zone within 0.5×ATR with 4+ touches
+        if dist <= atr * 0.5 and touches >= 4 and best_multiplier < 1.25:
+            best_multiplier = 1.25
+            best_zone = zone
+    
+    zone_info = None
+    if best_zone:
+        zone_info = {
+            "price": best_zone.midpoint,
+            "touches": best_zone.touches,
+            "timeframe": best_zone.timeframe,
+            "zone_type": best_zone.zone_type,
+            "dist_pips": round(abs(current_price - best_zone.midpoint) / 0.1, 0),
+        }
+    
+    return best_multiplier, zone_info
+
+
+def _get_nearest_sr_distance(current_price: float, atr: float, sr_zones: list) -> float:
+    """
+    Get distance to nearest S/R zone in ATR units.
+    Used for continuation pattern scoring reduction when far from S/R.
+    
+    Returns:
+        Distance in ATR units (e.g., 1.5 means 1.5×ATR away)
+    """
+    if not sr_zones or atr <= 0:
+        return 999.0
+    
+    min_dist = float('inf')
+    for zone in sr_zones:
+        dist = abs(current_price - zone.midpoint)
+        if dist < min_dist:
+            min_dist = dist
+    
+    return min_dist / atr
+
+
+def detect_candlestick_patterns(df: pd.DataFrame, sr_zones: list = None, 
+                                 current_price: float = None, atr: float = None) -> Dict:
+    """
+    Detect candlestick patterns with S/R proximity scaling.
+    
+    Patterns detected:
+        - Morning Star / Evening Star (3-candle reversal)
+        - Three White Soldiers / Three Black Crows (3-candle continuation)
+        - Hammer / Shooting Star (1-candle reversal)
+        - Doji at key levels (1-candle indecision, only scores near S/R)
+        - Engulfing (existing, 2-candle reversal)
+        - Pin Bar (existing, 1-candle rejection)
+    
+    Priority: Multi-candle > Single-candle structured > Doji
+    No double-counting: only highest-priority pattern scores.
+    
+    Returns:
+        Dict with detected patterns, scores, and S/R context
+    """
+    result = {
+        "patterns": [],
+        "primary_pattern": None,
+        "total_adjustment": 0.0,
+        "sr_multiplier": 1.0,
+        "sr_context": None,
+    }
+    
+    if df is None or len(df) < 4:
+        return result
+    
+    sr_zones = sr_zones or []
+    if current_price is None:
+        current_price = float(df.iloc[-1]['close'])
+    if atr is None:
+        atr = float((df['high'] - df['low']).tail(14).mean())
+    
+    # Get S/R proximity multiplier
+    sr_mult, sr_zone_info = _get_sr_proximity_multiplier(current_price, atr, sr_zones)
+    result["sr_multiplier"] = sr_mult
+    result["sr_context"] = sr_zone_info
+    
+    # Get distance to nearest S/R for continuation pattern adjustment
+    sr_distance_atr = _get_nearest_sr_distance(current_price, atr, sr_zones)
+    
+    # Get approach direction for doji context
+    approach_dir = _detect_approach_direction(df, lookback=3)
+    
+    # Candle data
+    c0 = df.iloc[-1]  # Current candle
+    c1 = df.iloc[-2]  # Previous candle
+    c2 = df.iloc[-3]  # 2 candles ago
+    c3 = df.iloc[-4] if len(df) >= 4 else None  # 3 candles ago
+    
+    detected_patterns = []
+    
+    # ========== 3-CANDLE PATTERNS (highest priority) ==========
+    
+    # Morning Star: bearish → small body/doji → bullish (body > 50% of first)
+    if c3 is not None:
+        c2_body = c2['close'] - c2['open']
+        c1_body = abs(c1['close'] - c1['open'])
+        c1_range = c1['high'] - c1['low']
+        c0_body = c0['close'] - c0['open']
+        
+        c2_bearish = c2_body < 0
+        c1_small = c1_range > 0 and c1_body < c1_range * 0.3
+        c0_bullish = c0_body > 0
+        c0_strong = abs(c0_body) > abs(c2_body) * 0.5
+        
+        if c2_bearish and c1_small and c0_bullish and c0_strong:
+            base_score = 4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Morning Star",
+                "direction": "bullish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 1,
+            })
+    
+    # Evening Star: bullish → small body/doji → bearish (body > 50% of first)
+    if c3 is not None:
+        c2_body = c2['close'] - c2['open']
+        c1_body = abs(c1['close'] - c1['open'])
+        c1_range = c1['high'] - c1['low']
+        c0_body = c0['close'] - c0['open']
+        
+        c2_bullish = c2_body > 0
+        c1_small = c1_range > 0 and c1_body < c1_range * 0.3
+        c0_bearish = c0_body < 0
+        c0_strong = abs(c0_body) > abs(c2_body) * 0.5
+        
+        if c2_bullish and c1_small and c0_bearish and c0_strong:
+            base_score = -4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Evening Star",
+                "direction": "bearish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 1,
+            })
+    
+    # Three White Soldiers: 3 consecutive bullish, bodies > 50% of range, each closing higher
+    if c3 is not None:
+        candles = [c2, c1, c0]
+        all_bullish = all(c['close'] > c['open'] for c in candles)
+        bodies_strong = all(
+            (c['close'] - c['open']) > (c['high'] - c['low']) * 0.5
+            for c in candles
+        )
+        closes_rising = c0['close'] > c1['close'] > c2['close']
+        
+        if all_bullish and bodies_strong and closes_rising:
+            # Reduce score if far from S/R (exhaustion signal)
+            base_score = 2.0 if sr_distance_atr > 1.5 else 4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Three White Soldiers",
+                "direction": "bullish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 1,
+                "extended": sr_distance_atr > 1.5,
+            })
+    
+    # Three Black Crows: 3 consecutive bearish, bodies > 50% of range, each closing lower
+    if c3 is not None:
+        candles = [c2, c1, c0]
+        all_bearish = all(c['close'] < c['open'] for c in candles)
+        bodies_strong = all(
+            (c['open'] - c['close']) > (c['high'] - c['low']) * 0.5
+            for c in candles
+        )
+        closes_falling = c0['close'] < c1['close'] < c2['close']
+        
+        if all_bearish and bodies_strong and closes_falling:
+            base_score = -2.0 if sr_distance_atr > 1.5 else -4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Three Black Crows",
+                "direction": "bearish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 1,
+                "extended": sr_distance_atr > 1.5,
+            })
+    
+    # ========== 2-CANDLE PATTERNS ==========
+    
+    # Engulfing (existing logic, priority 2)
+    c0_body = c0['close'] - c0['open']
+    c1_body = c1['close'] - c1['open']
+    
+    # Bullish engulfing
+    if c1_body < 0 and c0_body > 0:
+        if c0['close'] > c1['open'] and c0['open'] < c1['close']:
+            base_score = 4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Bullish Engulfing",
+                "direction": "bullish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 2,
+            })
+    
+    # Bearish engulfing
+    if c1_body > 0 and c0_body < 0:
+        if c0['close'] < c1['open'] and c0['open'] > c1['close']:
+            base_score = -4.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Bearish Engulfing",
+                "direction": "bearish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 2,
+            })
+    
+    # ========== 1-CANDLE PATTERNS (priority 2 for structured, 3 for doji) ==========
+    
+    c0_high = c0['high']
+    c0_low = c0['low']
+    c0_open = c0['open']
+    c0_close = c0['close']
+    c0_range = c0_high - c0_low
+    c0_body_size = abs(c0_close - c0_open)
+    
+    if c0_range > 0:
+        upper_shadow = c0_high - max(c0_open, c0_close)
+        lower_shadow = min(c0_open, c0_close) - c0_low
+        body_ratio = c0_body_size / c0_range
+        
+        # Hammer: small body at top, lower shadow ≥ 2× body, minimal upper shadow
+        is_hammer = (
+            body_ratio < 0.35 and
+            lower_shadow >= c0_body_size * 2 and
+            upper_shadow < c0_body_size * 0.5
+        )
+        
+        if is_hammer:
+            base_score = 2.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Hammer",
+                "direction": "bullish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 2,
+            })
+        
+        # Shooting Star: small body at bottom, upper shadow ≥ 2× body, minimal lower shadow
+        is_shooting_star = (
+            body_ratio < 0.35 and
+            upper_shadow >= c0_body_size * 2 and
+            lower_shadow < c0_body_size * 0.5
+        )
+        
+        if is_shooting_star:
+            base_score = -2.0
+            final_score = base_score * sr_mult
+            detected_patterns.append({
+                "name": "Shooting Star",
+                "direction": "bearish",
+                "base_score": base_score,
+                "sr_multiplier": sr_mult,
+                "final_score": round(final_score, 1),
+                "priority": 2,
+            })
+        
+        # Pin Bar (existing logic, priority 2)
+        if body_ratio < 0.3:
+            if lower_shadow > c0_range * 0.6:
+                base_score = 3.0
+                final_score = base_score * sr_mult
+                detected_patterns.append({
+                    "name": "Bullish Pin Bar",
+                    "direction": "bullish",
+                    "base_score": base_score,
+                    "sr_multiplier": sr_mult,
+                    "final_score": round(final_score, 1),
+                    "priority": 2,
+                })
+            elif upper_shadow > c0_range * 0.6:
+                base_score = -3.0
+                final_score = base_score * sr_mult
+                detected_patterns.append({
+                    "name": "Bearish Pin Bar",
+                    "direction": "bearish",
+                    "base_score": base_score,
+                    "sr_multiplier": sr_mult,
+                    "final_score": round(final_score, 1),
+                    "priority": 2,
+                })
+        
+        # Doji at key level (priority 3, only scores near S/R with approach)
+        is_doji = body_ratio < 0.1
+        
+        if is_doji and sr_mult > 1.0 and approach_dir is not None:
+            # Doji at support with bearish approach → bullish signal
+            # Doji at resistance with bullish approach → bearish signal
+            zone_type = sr_zone_info.get("zone_type", "") if sr_zone_info else ""
+            
+            doji_direction = None
+            if zone_type in ("SUPPORT", "FLIP") and approach_dir == "bearish":
+                doji_direction = "bullish"
+            elif zone_type in ("RESISTANCE", "FLIP") and approach_dir == "bullish":
+                doji_direction = "bearish"
+            
+            if doji_direction:
+                base_score = 2.0 if doji_direction == "bullish" else -2.0
+                final_score = base_score * sr_mult
+                detected_patterns.append({
+                    "name": "Doji at Key Level",
+                    "direction": doji_direction,
+                    "base_score": base_score,
+                    "sr_multiplier": sr_mult,
+                    "final_score": round(final_score, 1),
+                    "priority": 3,
+                    "approach": approach_dir,
+                })
+    
+    # ========== SELECT PRIMARY PATTERN (highest priority, no double-counting) ==========
+    
+    if detected_patterns:
+        # Sort by priority (lower = higher priority), then by absolute score
+        detected_patterns.sort(key=lambda p: (p["priority"], -abs(p["final_score"])))
+        primary = detected_patterns[0]
+        result["primary_pattern"] = primary
+        result["total_adjustment"] = primary["final_score"]
+    
+    result["patterns"] = detected_patterns
+    
+    return result
+
+
+def calculate_visual_features(df: pd.DataFrame, sr_zones: list = None,
+                               current_price: float = None, atr: float = None) -> Dict:
     """
     Calculate visual context features that a human trader would see on the chart.
     
@@ -103,8 +517,13 @@ def calculate_visual_features(df: pd.DataFrame) -> Dict:
         1. consecutive_candles_H1: consecutive candles in the same direction
         2. body_size_trend_H1: bodies growing (momentum) vs shrinking (exhaustion)
         3. price_vs_range_20H1: price position in range of last 20 candles (0-1)
-        4. engulfing_pattern: last candle engulfed the previous one (reversal)
-        5. pin_bar: long shadow vs small body (price rejection)
+        4. candlestick_patterns: detected patterns with S/R proximity scaling
+    
+    Args:
+        df: DataFrame with OHLCV data
+        sr_zones: List of SRZone objects for proximity scaling
+        current_price: Current price (optional, defaults to last close)
+        atr: ATR value (optional, calculated from data if not provided)
     
     Returns:
         Dict with raw features, individual adjustments, and total adjustment (capped +/-8)
@@ -117,6 +536,7 @@ def calculate_visual_features(df: pd.DataFrame) -> Dict:
         "price_vs_range": 0.5,
         "engulfing": None,
         "pin_bar": None,
+        "candlestick_patterns": None,
         "adjustments": {},
         "total_adjustment": 0.0,
     }
@@ -209,47 +629,21 @@ def calculate_visual_features(df: pd.DataFrame) -> Dict:
         adjustments["price_vs_range"] = 3.0  # Near support
         total_adj += 3.0
     
-    # 4. Engulfing pattern
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
-    last_body = last['close'] - last['open']
-    prev_body = prev['close'] - prev['open']
+    # 4. Candlestick patterns with S/R proximity scaling (replaces old engulfing/pin_bar)
+    pattern_result = detect_candlestick_patterns(df, sr_zones, current_price, atr)
+    result["candlestick_patterns"] = pattern_result
     
-    # Bullish engulfing: prev bearish, last bullish, last body covers prev body
-    if prev_body < 0 and last_body > 0:
-        if last['close'] > prev['open'] and last['open'] < prev['close']:
-            result["engulfing"] = "bullish"
-            adjustments["engulfing"] = 4.0
-            total_adj += 4.0
-    # Bearish engulfing: prev bullish, last bearish, last body covers prev body
-    elif prev_body > 0 and last_body < 0:
-        if last['close'] < prev['open'] and last['open'] > prev['close']:
-            result["engulfing"] = "bearish"
-            adjustments["engulfing"] = -4.0
-            total_adj -= 4.0
-    
-    # 5. Pin bar detection
-    last_high = last['high']
-    last_low = last['low']
-    last_open = last['open']
-    last_close = last['close']
-    total_range = last_high - last_low
-    body_size = abs(last_close - last_open)
-    
-    if total_range > 0 and body_size < total_range * 0.3:
-        upper_shadow = last_high - max(last_open, last_close)
-        lower_shadow = min(last_open, last_close) - last_low
+    primary = pattern_result.get("primary_pattern")
+    if primary:
+        pattern_adj = primary.get("final_score", 0.0)
+        adjustments["candlestick_pattern"] = pattern_adj
+        total_adj += pattern_adj
         
-        # Bullish pin bar: long lower shadow (rejection of lower prices)
-        if lower_shadow > total_range * 0.6:
-            result["pin_bar"] = "bullish"
-            adjustments["pin_bar"] = 3.0
-            total_adj += 3.0
-        # Bearish pin bar: long upper shadow (rejection of higher prices)
-        elif upper_shadow > total_range * 0.6:
-            result["pin_bar"] = "bearish"
-            adjustments["pin_bar"] = -3.0
-            total_adj -= 3.0
+        # Set legacy fields for backward compatibility
+        if "Engulfing" in primary.get("name", ""):
+            result["engulfing"] = primary.get("direction")
+        if "Pin Bar" in primary.get("name", ""):
+            result["pin_bar"] = primary.get("direction")
     
     # Apply cap ±8
     capped_adj = max(-VISUAL_CAP, min(VISUAL_CAP, total_adj))

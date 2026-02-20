@@ -1,0 +1,359 @@
+/* Only additions to Tailwind */
+
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.03),
+    rgba(255,255,255,0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.text-shadow-soft {
+  text-shadow: 0 0 18px rgba(56, 189, 248, 0.18);
+}
+
+.glow-green { box-shadow: 0 0 0 1px rgba(34,197,94,0.25), 0 0 30px rgba(34,197,94,0.12); }
+.glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.25), 0 0 30px rgba(234,179,8,0.10); }
+.glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.25), 0 0 30px rgba(239,68,68,0.10); }
+
+/* Stale/Offline UI */
+
+#app.is-stale {
+  filter: grayscale(0.9);
+}
+
+#app.is-stale .stale-dim {
+  opacity: 0.55;
+}
+
+#stale-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  pointer-events: none;
+  z-index: 40;
+}
+
+#stale-overlay .label {
+  position: sticky;
+  top: 0;
+  margin: 0 auto;
+  width: fit-content;
+  padding: 6px 10px;
+  background: rgba(127, 29, 29, 0.65);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: rgba(254, 226, 226, 0.95);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+/* ================================================================
+   INTEL FEED
+   ================================================================ */
+
+.intel-headline {
+  border-bottom: 1px solid rgba(55, 65, 81, 0.4);
+  transition: background 0.15s;
+}
+
+.intel-headline:last-child {
+  border-bottom: none;
+}
+
+.intel-headline:hover {
+  background: rgba(55, 65, 81, 0.25);
+}
+
+/* Robot bubble tooltip */
+.intel-robot-bubble {
+  position: relative;
+  cursor: default;
+}
+
+.intel-robot-bubble .intel-bubble {
+  display: none;
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 8px;
+  padding: 6px 10px;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(75, 85, 99, 0.6);
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 30;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.intel-robot-bubble .intel-bubble::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: rgba(17, 24, 39, 0.95);
+  border-right: 1px solid rgba(75, 85, 99, 0.6);
+  border-top: 1px solid rgba(75, 85, 99, 0.6);
+}
+
+.intel-robot-bubble:hover .intel-bubble {
+  display: block;
+}
+
+/* Macro cards: bubble opens to the left on desktop */
+.intel-macro-card .intel-robot-bubble .intel-bubble {
+  right: auto;
+  left: 100%;
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+.intel-macro-card .intel-robot-bubble .intel-bubble::after {
+  right: auto;
+  left: -5px;
+  border-right: none;
+  border-top: none;
+  border-left: 1px solid rgba(75, 85, 99, 0.6);
+  border-bottom: 1px solid rgba(75, 85, 99, 0.6);
+}
+
+/* ================================================================
+   FLOKIWATCH BRANDING
+   ================================================================ */
+
+.floki-header-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  object-position: center 15%;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+.floki-intel-mini {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.floki-decorative {
+  height: 380px;
+  width: auto;
+  opacity: 0.75;
+  border-radius: 12px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ================================================================
+   ABOUT PAGE
+   ================================================================ */
+
+.about-hero-img-wrapper {
+  position: relative;
+  display: inline-block;
+  border-radius: 16px;
+  padding: 4px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.05));
+  box-shadow:
+    0 0 30px rgba(56, 189, 248, 0.12),
+    0 0 60px rgba(56, 189, 248, 0.06);
+}
+
+.about-hero-img {
+  width: 280px;
+  height: auto;
+  border-radius: 14px;
+  display: block;
+  filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.15));
+}
+
+.about-pixel-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  object-position: center 15%;
+  border-radius: 10px;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.18);
+}
+
+.about-section {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.about-card {
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(55, 65, 81, 0.7);
+  border-radius: 12px;
+  padding: 24px 28px;
+}
+
+.about-card-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(34, 211, 238);
+  margin-bottom: 12px;
+}
+
+.about-floki-natural-wrapper {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(55, 65, 81, 0.5);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.08);
+}
+
+.about-floki-natural {
+  width: 220px;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+}
+
+/* ================================================================
+   ROADMAP PAGE
+   ================================================================ */
+
+.roadmap-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.roadmap-badge-active {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: rgb(74, 222, 128);
+}
+
+.roadmap-badge-pending {
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  color: rgb(250, 204, 21);
+}
+
+.roadmap-badge-future {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: rgb(165, 180, 252);
+}
+
+.roadmap-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-left: 4px;
+}
+
+.roadmap-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.roadmap-dot-active {
+  background: rgb(34, 197, 94);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.roadmap-dot-pending {
+  background: rgb(234, 179, 8);
+  box-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+}
+
+.roadmap-dot-future {
+  background: rgb(99, 102, 241);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+}
+
+.roadmap-badge-completed {
+  background: rgba(107, 114, 128, 0.15);
+  border: 1px solid rgba(107, 114, 128, 0.4);
+  color: rgb(156, 163, 175);
+}
+
+.roadmap-dot-completed {
+  background: rgb(107, 114, 128);
+  box-shadow: none;
+}
+
+.roadmap-item-completed .text-gray-200 {
+  text-decoration: line-through;
+  color: rgb(107, 114, 128);
+}
+
+.roadmap-item-completed .text-gray-500 {
+  color: rgb(75, 85, 99);
+}
+
+/* ================================================================
+   RESPONSIVE — MOBILE (max 639px)
+   ================================================================ */
+
+@media (max-width: 639px) {
+  .floki-header-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .about-pixel-img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .about-card {
+    padding: 16px 20px;
+  }
+
+  .about-hero-img {
+    width: 200px;
+  }
+
+  .about-floki-natural {
+    width: 180px;
+  }
+
+  .intel-bubble {
+    white-space: normal;
+    max-width: 200px;
+  }
+
+  .intel-robot-bubble .intel-bubble {
+    white-space: normal;
+    max-width: 200px;
+  }
+}
+
+/* ================================================================
+   RESPONSIVE — TABLET (640px–1023px)
+   ================================================================ */
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .floki-decorative {
+    height: 280px;
+  }
+}
+

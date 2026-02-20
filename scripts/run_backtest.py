@@ -109,6 +109,10 @@ class SimTrade:
     momentum_score: float = 50.0
     confirmations: List[str] = field(default_factory=list)
     alerts: List[str] = field(default_factory=list)
+    # Candlestick pattern at entry
+    candlestick_pattern: str = ""
+    candlestick_score: float = 0.0
+    candlestick_sr_mult: float = 1.0
 
 
 # ============================================================================
@@ -1150,9 +1154,10 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
         if disable_visual:
             import technical_analyzer as _ta
             _orig_visual = _ta.calculate_visual_features
-            _ta.calculate_visual_features = lambda df: {
+            _ta.calculate_visual_features = lambda df, sr_zones=None, current_price=None, atr=None: {
                 "consecutive_candles": 0, "body_size_trend": "neutral",
                 "price_vs_range": 0.5, "engulfing": None, "pin_bar": None,
+                "candlestick_patterns": None,
                 "adjustments": {}, "total_adjustment": 0.0,
             }
 
@@ -1455,6 +1460,20 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
         if is_pyramid_attempt:
             pyramid_stats['allowed'] += 1
 
+        # Detect candlestick patterns with S/R proximity scaling
+        from technical_analyzer import detect_candlestick_patterns
+        pattern_result = detect_candlestick_patterns(
+            h1_slice, sr_zones=sr_zones, current_price=current_price, atr=atr
+        )
+        pattern_name = ""
+        pattern_score = 0.0
+        pattern_sr_mult = 1.0
+        primary_pattern = pattern_result.get("primary_pattern")
+        if primary_pattern:
+            pattern_name = primary_pattern.get("name", "")
+            pattern_score = primary_pattern.get("final_score", 0.0)
+            pattern_sr_mult = primary_pattern.get("sr_multiplier", 1.0)
+
         ticket_counter += 1
         trade = SimTrade(
             ticket=ticket_counter,
@@ -1475,6 +1494,9 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
             momentum_score=momentum_data.get('score', 50),
             confirmations=brain_result.confirmations[:5],
             alerts=brain_result.alerts[:5],
+            candlestick_pattern=pattern_name,
+            candlestick_score=pattern_score,
+            candlestick_sr_mult=pattern_sr_mult,
         )
 
         # Simulate trade immediately using M5 data (for pyramid/cooldown tracking in H1 loop)
@@ -1507,6 +1529,9 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
                 tech_score=t.tech_score, ml_score=t.ml_score,
                 momentum_score=t.momentum_score,
                 confirmations=list(t.confirmations), alerts=list(t.alerts),
+                candlestick_pattern=t.candlestick_pattern,
+                candlestick_score=t.candlestick_score,
+                candlestick_sr_mult=t.candlestick_sr_mult,
             )
             trades_for_resim.append(fresh)
 
@@ -2068,6 +2093,57 @@ def generate_report(trades: List[SimTrade], trades_no_visual: Optional[List[SimT
                 lines.append(f"\n  Trades ADDED by S/R (different decisions): {len(added_by_sr)}")
                 lines.append(f"    Wins: {added_wins}, P&L: ${added_pnl:+.2f}")
 
+    # ============================================================
+    # CANDLESTICK PATTERN ANALYSIS
+    # ============================================================
+    pattern_trades = [t for t in trades if t.candlestick_pattern]
+    if pattern_trades:
+        lines.append(f"\n{'─' * 50}")
+        lines.append(f"  🕯️ CANDLESTICK PATTERN ANALYSIS")
+        lines.append(f"{'─' * 50}")
+        
+        # Group by pattern
+        by_pattern = {}
+        for t in pattern_trades:
+            p = t.candlestick_pattern
+            if p not in by_pattern:
+                by_pattern[p] = {'trades': [], 'wins': 0, 'pnl': 0.0, 'pips': 0.0}
+            by_pattern[p]['trades'].append(t)
+            if t.profit_pips > 0:
+                by_pattern[p]['wins'] += 1
+            by_pattern[p]['pnl'] += t.profit_usd
+            by_pattern[p]['pips'] += t.profit_pips
+        
+        lines.append(f"\n  Trades with patterns: {len(pattern_trades)} / {len(trades)} ({len(pattern_trades)/len(trades)*100:.0f}%)")
+        lines.append(f"\n  {'Pattern':<25} {'Trades':>7} {'Wins':>5} {'WR%':>7} {'P&L $':>10} {'Pips':>8} {'Avg SR×':>8}")
+        
+        for p, d in sorted(by_pattern.items(), key=lambda x: -len(x[1]['trades'])):
+            count = len(d['trades'])
+            wr = d['wins'] / count * 100 if count > 0 else 0
+            avg_sr_mult = np.mean([t.candlestick_sr_mult for t in d['trades']])
+            lines.append(f"  {p:<25} {count:>7} {d['wins']:>5} {wr:>6.1f}% ${d['pnl']:>+9.2f} {d['pips']:>+7.1f} {avg_sr_mult:>7.2f}×")
+        
+        # Patterns with S/R boost (multiplier > 1.0)
+        sr_boosted = [t for t in pattern_trades if t.candlestick_sr_mult > 1.0]
+        no_sr_boost = [t for t in pattern_trades if t.candlestick_sr_mult == 1.0]
+        
+        if sr_boosted and no_sr_boost:
+            sr_wins = sum(1 for t in sr_boosted if t.profit_pips > 0)
+            no_sr_wins = sum(1 for t in no_sr_boost if t.profit_pips > 0)
+            sr_wr = sr_wins / len(sr_boosted) * 100 if sr_boosted else 0
+            no_sr_wr = no_sr_wins / len(no_sr_boost) * 100 if no_sr_boost else 0
+            sr_pnl = sum(t.profit_usd for t in sr_boosted)
+            no_sr_pnl = sum(t.profit_usd for t in no_sr_boost)
+            
+            lines.append(f"\n  S/R Proximity Impact:")
+            lines.append(f"    WITH S/R boost (×>1.0):    {len(sr_boosted)} trades, WR {sr_wr:.1f}%, P&L ${sr_pnl:+.2f}")
+            lines.append(f"    WITHOUT S/R boost (×1.0):  {len(no_sr_boost)} trades, WR {no_sr_wr:.1f}%, P&L ${no_sr_pnl:+.2f}")
+            
+            if sr_wr > no_sr_wr:
+                lines.append(f"    ✅ Patterns near S/R zones have HIGHER win rate (+{sr_wr - no_sr_wr:.1f}%)")
+            else:
+                lines.append(f"    ⚠️ Patterns near S/R zones have LOWER win rate ({sr_wr - no_sr_wr:.1f}%)")
+    
     # ============================================================
     # FEB 16 VALIDATION
     # ============================================================

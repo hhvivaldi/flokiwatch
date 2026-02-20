@@ -620,6 +620,31 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     gptEl.innerHTML = "";
   }
 
+  // Candlestick Patterns
+  const patternEl = el("intel-patterns");
+  const patterns = feed.candlestick_patterns;
+  if (patternEl) {
+    if (patterns && patterns.primary) {
+      patternEl.classList.remove("hidden");
+      const p = patterns.primary;
+      const dirColor = p.direction === "bullish" ? "text-green-400 border-green-700" : p.direction === "bearish" ? "text-red-400 border-red-700" : "text-gray-400 border-gray-700";
+      const scoreColor = p.final_score > 0 ? "text-green-400" : p.final_score < 0 ? "text-red-400" : "text-gray-400";
+      const multText = p.sr_multiplier > 1 ? `×${p.sr_multiplier.toFixed(2)}` : "";
+      const srText = p.sr_context || "";
+      patternEl.innerHTML = `
+        <div class="flex items-center gap-2 text-xs flex-wrap">
+          <span class="px-1.5 py-0.5 border rounded font-bold ${dirColor}">${p.name}</span>
+          <span class="${scoreColor} font-mono">${p.final_score > 0 ? "+" : ""}${p.final_score}</span>
+          ${multText ? `<span class="text-amber-400 text-[10px]">${multText} S/R</span>` : ""}
+          ${srText ? `<span class="text-gray-500 text-[10px] truncate max-w-xs">${srText}</span>` : ""}
+        </div>
+      `;
+    } else {
+      patternEl.classList.add("hidden");
+      patternEl.innerHTML = "";
+    }
+  }
+
   // Confirmations + Alerts tags
   const tagsEl = el("intel-tags");
   tagsEl.innerHTML = "";
