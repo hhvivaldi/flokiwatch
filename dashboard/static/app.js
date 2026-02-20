@@ -625,9 +625,9 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
 
   // GPT Validator
   const gptContainer = el("intel-gpt");
-  if (feed.gpt_validation) {
-    const action = feed.gpt_validation.action || "CONFIRM";
-    const text = feed.gpt_validation.reason || "No detail";
+  if (feed.gpt_validator) {
+    const action = feed.gpt_validator.action || "CONFIRM";
+    const text = feed.gpt_validator.reason || "No detail";
     let bg = "bg-gray-800/50";
     let border = "border-gray-700/50";
     let textCls = "text-gray-300";
