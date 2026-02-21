@@ -61,12 +61,12 @@ BT_START = datetime(2025, 8, 18)
 BT_END   = datetime(2026, 2, 20, 23, 59)
 
 ML_CONFLICT_KEY     = "ml_vs_tech_conflito"
-ML_CONFLICT_WEIGHTS = {"technical": 0.40, "ml": 0.15, "momentum": 0.22,
+ML_CONFLICT_WEIGHTS = {"technical": 0.45, "ml": 0.10, "momentum": 0.22,
                        "news": 0.15, "calendar": 0.08}
 ML_CONFLICT_MULT    = 0.95
 CONFLICT_TECH_MIN   = 65.0
 CONFLICT_ML_MAX     = 40.0
-CONFLICT_CONF_MIN   = 0.65
+# ml_confidence condition REMOVED per user request
 
 NEUTRAL_NEWS = {
     "score": 50.0,
@@ -96,8 +96,7 @@ def _patch_central_brain():
 
         def _conflict():
             return (tech_score >= CONFLICT_TECH_MIN and
-                    ml_score   <= CONFLICT_ML_MAX   and
-                    ml_confidence > CONFLICT_CONF_MIN)
+                    ml_score   <= CONFLICT_ML_MAX)
 
         # Extreme volatility (unchanged)
         vol = volatility_status or {}
@@ -151,7 +150,8 @@ def _unpatch_central_brain(orig_fn):
 # ============================================================================
 
 def _run_loop(data: Dict, bt_predictor, label: str,
-              feb20_log: Optional[list] = None) -> List[SimTrade]:
+              feb20_log: Optional[list] = None) -> tuple:
+    """Returns (trades, scenario_detections) where scenario_detections is count of times ml_vs_tech_conflito was detected."""
     df_h1 = data['h1'].copy()
     df_h4 = data['h4'].copy()
     df_d1 = data.get('d1', pd.DataFrame()).copy()
@@ -160,6 +160,7 @@ def _run_loop(data: Dict, bt_predictor, label: str,
     trades: List[SimTrade] = []
     open_trades: List[SimTrade] = []
     ticket_counter = 4000000
+    scenario_detections = 0  # Count scenario detections (not just trades)
 
     last_trade_time = {'BUY': None, 'SELL': None}
     last_close_type = {'BUY': None, 'SELL': None}
@@ -169,7 +170,7 @@ def _run_loop(data: Dict, bt_predictor, label: str,
 
     if not bt_indices:
         print(f"  ❌ No H1 candles for {label}")
-        return []
+        return [], 0
 
     total = len(bt_indices)
     print(f"\n🔄 {label}: {total} H1 candles ({BT_START.date()} → {BT_END.date()})")
@@ -282,6 +283,10 @@ def _run_loop(data: Dict, bt_predictor, label: str,
         confidence = brain_result.confidence
         scenario   = brain_result.scenario
 
+        # Count scenario detections (regardless of whether trade opens)
+        if scenario == ML_CONFLICT_KEY:
+            scenario_detections += 1
+
         # Feb 20 validation log (07:00-16:00 UTC)
         if feb20_log is not None:
             if h1_time.date() == datetime(2026, 2, 20).date() and 7 <= h1_time.hour <= 16:
@@ -375,13 +380,16 @@ def _run_loop(data: Dict, bt_predictor, label: str,
         # Open trade
         atr    = get_atr_value(h1_slice)
         levels = calculate_sl_tp(current_price, direction, atr)
+        sl_price = levels.stop_loss
+        tp_price = levels.take_profit_1
         if sr_zones:
             adj_sl, adj_tp, _ = adjust_sl_tp_for_sr(
-                levels['sl'], levels['tp'], direction, current_price,
-                sr_zones, atr, adjust_sl=False, adjust_tp=True,
+                current_price, sl_price, tp_price,
+                direction, atr, sr_zones,
+                sl_adjust_enabled=False, tp_adjust_enabled=True,
             )
-            levels['sl'] = adj_sl
-            levels['tp'] = adj_tp
+            sl_price = adj_sl
+            tp_price = adj_tp
 
         ticket_counter += 1
         trade = SimTrade(
@@ -389,8 +397,8 @@ def _run_loop(data: Dict, bt_predictor, label: str,
             direction=direction,
             entry_price=current_price,
             entry_time=h1_time,
-            sl=levels['sl'],
-            tp=levels['tp'],
+            sl=sl_price,
+            tp=tp_price,
             atr=atr,
             brain_score=brain_result.final_score,
             confidence=confidence,
@@ -415,7 +423,7 @@ def _run_loop(data: Dict, bt_predictor, label: str,
             )
             last_trade_time[direction] = trade.close_time or h1_time
 
-    return trades
+    return trades, scenario_detections
 
 
 # ============================================================================
@@ -458,7 +466,8 @@ def _calc_stats(trades: List[SimTrade]) -> Dict:
 # ============================================================================
 
 def generate_report(trades_a: List[SimTrade], trades_b: List[SimTrade],
-                    feb20_a: list, feb20_b: list) -> str:
+                    feb20_a: list, feb20_b: list,
+                    detections_a: int = 0, detections_b: int = 0) -> str:
     lines = []
     SEP  = "=" * 70
     THIN = "─" * 70
@@ -468,7 +477,7 @@ def generate_report(trades_a: List[SimTrade], trades_b: List[SimTrade],
     lines.append(f"  Period : {BT_START.strftime('%Y-%m-%d')} → {BT_END.strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"  Run A  : Baseline (current system, unmodified)")
     lines.append(f"  Run B  : ml_vs_tech_conflito ACTIVE")
-    lines.append(f"  Trigger: tech >= {CONFLICT_TECH_MIN:.0f}  AND  ml <= {CONFLICT_ML_MAX:.0f}  AND  ml_conf > {CONFLICT_CONF_MIN:.2f}")
+    lines.append(f"  Trigger: tech >= {CONFLICT_TECH_MIN:.0f}  AND  ml <= {CONFLICT_ML_MAX:.0f}")
     lines.append(f"  Weights: tech={ML_CONFLICT_WEIGHTS['technical']:.0%}  ml={ML_CONFLICT_WEIGHTS['ml']:.0%}  "
                  f"mom={ML_CONFLICT_WEIGHTS['momentum']:.0%}  news={ML_CONFLICT_WEIGHTS['news']:.0%}  "
                  f"cal={ML_CONFLICT_WEIGHTS['calendar']:.0%}")
@@ -502,7 +511,8 @@ def generate_report(trades_a: List[SimTrade], trades_b: List[SimTrade],
     ct_gl = abs(sum(t.profit_usd for t in ct_l))
     ct_pf = ct_gp / ct_gl if ct_gl > 0 else float('inf')
 
-    lines.append(f"\n  Scenario triggered : {len(ct)} times")
+    lines.append(f"\n  Scenario detected  : {detections_b} times (H1 candles where trigger fired)")
+    lines.append(f"  Trades opened      : {len(ct)} (subset that passed all filters)")
     if ct:
         lines.append(f"  Win / Loss         : {len(ct_w)} W / {len(ct_l)} L")
         lines.append(f"  Win Rate           : {len(ct_w)/len(ct)*100:.1f}%")
@@ -684,7 +694,7 @@ def main():
         print("\n" + "─" * 60)
         print("  Run A: Baseline (no changes)")
         print("─" * 60)
-        trades_a = _run_loop(data, bt_predictor, "Run A (Baseline)", feb20_log=feb20_a)
+        trades_a, detections_a = _run_loop(data, bt_predictor, "Run A (Baseline)", feb20_log=feb20_a)
 
         # ── Run B: ml_vs_tech_conflito active ─────────────────────────────
         print("\n" + "─" * 60)
@@ -692,12 +702,12 @@ def main():
         print("─" * 60)
         orig_fn = _patch_central_brain()
         try:
-            trades_b = _run_loop(data, bt_predictor, "Run B (Conflict)", feb20_log=feb20_b)
+            trades_b, detections_b = _run_loop(data, bt_predictor, "Run B (Conflict)", feb20_log=feb20_b)
         finally:
             _unpatch_central_brain(orig_fn)
 
         # ── Report ─────────────────────────────────────────────────────────
-        report = generate_report(trades_a, trades_b, feb20_a, feb20_b)
+        report = generate_report(trades_a, trades_b, feb20_a, feb20_b, detections_a, detections_b)
         print(report)
 
         # Save report
