@@ -81,64 +81,94 @@ NEUTRAL_NEWS = {
 }
 
 
-def _patch_central_brain_conflict():
+_ORIG_IDENTIFY_SCENARIO = None
+_ORIG_MAKE_DECISION = None
+
+
+def _unpatch_to_baseline():
+    """
+    Remove ml_vs_tech_conflito from production code so Run A is a true baseline.
+    """
+    global _ORIG_IDENTIFY_SCENARIO, _ORIG_MAKE_DECISION
     import central_brain as cb
 
-    cb.SCENARIO_WEIGHTS[ML_CONFLICT_KEY] = ML_CONFLICT_WEIGHTS.copy()
-    _orig = cb._identify_scenario
+    _ORIG_IDENTIFY_SCENARIO = cb._identify_scenario
+    _ORIG_MAKE_DECISION = cb._make_decision
 
-    def _patched(tech_data, ml_data, momentum_data, news_data, momentum_strength,
-                 calendar_data=None, volatility_status=None, sr_data=None):
-        tech_score = tech_data.get("score", 50)
-        ml_score = ml_data.get("score", 50)
+    cb.SCENARIO_WEIGHTS.pop(ML_CONFLICT_KEY, None)
 
-        def _conflict():
-            return tech_score >= CONFLICT_TECH_MIN and ml_score <= CONFLICT_ML_MAX
-
-        vol = volatility_status or {}
-        if vol.get("status") == "EXTREME":
-            pct = vol.get("extreme_percent", 0)
-            return "volatilidade_extrema", f"Extreme volatility ({pct:.1f}%) - BLOCK", 0.0
-
-        sr = sr_data or {}
-        if sr.get("near_strong_zone") and sr.get("near_zone_info"):
-            if _conflict():
-                return (
-                    ML_CONFLICT_KEY,
-                    f"Tech({tech_score:.0f}) vs ML({ml_score:.0f}) near S/R — ML weight minimised",
-                    ML_CONFLICT_MULT,
-                )
-            zi = sr["near_zone_info"]
-            return "zona_sr_forte", (
-                f"Near strong {zi.get('zone_type','?')} zone at {zi.get('midpoint',0):.2f} "
-                f"({zi.get('touches',0)} touches) - informational"
-            ), 1.00
-
-        result = _orig(
+    def _baseline_identify(tech_data, ml_data, momentum_data, news_data, momentum_strength,
+                           calendar_data=None, volatility_status=None, sr_data=None):
+        result = _ORIG_IDENTIFY_SCENARIO(
             tech_data, ml_data, momentum_data, news_data, momentum_strength,
             calendar_data=calendar_data,
             volatility_status=volatility_status,
             sr_data=sr_data,
         )
-
-        if result[0] in ("sinais_conflitantes", "momentum_forte") and _conflict():
-            return (
-                ML_CONFLICT_KEY,
-                f"Tech({tech_score:.0f}) vs ML({ml_score:.0f}) — ML weight minimised",
-                ML_CONFLICT_MULT,
-            )
-
+        if result[0] == ML_CONFLICT_KEY:
+            tech_score = tech_data.get("score", 50)
+            ml_score = ml_data.get("score", 50)
+            tech_bullish = tech_score >= 55
+            tech_bearish = tech_score <= 45
+            ml_bullish = ml_score >= 55
+            ml_bearish = ml_score <= 45
+            if (tech_bullish and ml_bearish) or (tech_bearish and ml_bullish):
+                return "sinais_conflitantes", "Technical and ML signals in conflict", 0.80
+            return "padrao", "Default scenario", 1.00
         return result
 
-    cb._identify_scenario = _patched
-    return _orig
+    def _baseline_decision(final_score: float, scenario: str) -> str:
+        if scenario == ML_CONFLICT_KEY:
+            scenario = "padrao"
+        return _ORIG_MAKE_DECISION(final_score, scenario)
+
+    cb._identify_scenario = _baseline_identify
+    cb._make_decision = _baseline_decision
 
 
-def _unpatch_central_brain(orig_fn):
+def _restore_production():
+    """
+    Restore production code (with ml_vs_tech_conflito + threshold 58).
+    """
+    global _ORIG_IDENTIFY_SCENARIO, _ORIG_MAKE_DECISION
     import central_brain as cb
 
-    cb._identify_scenario = orig_fn
-    cb.SCENARIO_WEIGHTS.pop(ML_CONFLICT_KEY, None)
+    if _ORIG_IDENTIFY_SCENARIO is not None:
+        cb._identify_scenario = _ORIG_IDENTIFY_SCENARIO
+    if _ORIG_MAKE_DECISION is not None:
+        cb._make_decision = _ORIG_MAKE_DECISION
+    cb.SCENARIO_WEIGHTS[ML_CONFLICT_KEY] = ML_CONFLICT_WEIGHTS.copy()
+
+
+def _patch_threshold_60():
+    """
+    For Run B: override BUY threshold to 60 instead of production's 58.
+    """
+    import central_brain as cb
+
+    _orig_decision = cb._make_decision
+
+    def _decision_60(final_score: float, scenario: str) -> str:
+        if scenario == ML_CONFLICT_KEY:
+            if final_score >= 75:
+                return "STRONG_BUY"
+            elif final_score >= 60:
+                return "BUY"
+            elif final_score <= 25:
+                return "STRONG_SELL"
+            elif final_score <= 35:
+                return "SELL"
+            else:
+                return "HOLD"
+        return _orig_decision(final_score, scenario)
+
+    cb._make_decision = _decision_60
+    return _orig_decision
+
+
+def _unpatch_threshold(orig_fn):
+    import central_brain as cb
+    cb._make_decision = orig_fn
 
 
 def _calc_stats(trades: List[SimTrade]) -> Dict:
@@ -693,12 +723,15 @@ def main():
         feb_b60: list = []
         feb_b58: list = []
 
+        _unpatch_to_baseline()
         print("\n" + "─" * 60)
-        print("  Run A: Baseline")
+        print("  Run A: Baseline (no ml_vs_tech_conflito)")
         print("─" * 60)
         trades_a, _, _ = _run_loop(data, bt_predictor, "Run A (Baseline)", feb20_log=feb_a)
 
-        orig_fn = _patch_central_brain_conflict()
+        _restore_production()
+
+        orig_60 = _patch_threshold_60()
         try:
             print("\n" + "─" * 60)
             print("  Run B: Conflict + BUY>=60")
@@ -710,19 +743,19 @@ def main():
                 feb20_log=feb_b60,
                 conflict_buy_threshold=60.0,
             )
-
-            print("\n" + "─" * 60)
-            print("  Run C: Conflict + BUY>=58")
-            print("─" * 60)
-            trades_b58, det_b58, forced_b58 = _run_loop(
-                data,
-                bt_predictor,
-                "Run C (BUY>=58)",
-                feb20_log=feb_b58,
-                conflict_buy_threshold=58.0,
-            )
         finally:
-            _unpatch_central_brain(orig_fn)
+            _unpatch_threshold(orig_60)
+
+        print("\n" + "─" * 60)
+        print("  Run C: Conflict + BUY>=58 (production)")
+        print("─" * 60)
+        trades_b58, det_b58, forced_b58 = _run_loop(
+            data,
+            bt_predictor,
+            "Run C (BUY>=58)",
+            feb20_log=feb_b58,
+            conflict_buy_threshold=58.0,
+        )
 
         report = generate_report(
             trades_a,
