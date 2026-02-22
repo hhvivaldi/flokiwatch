@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,9 +10,27 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+try:
+    from dotenv import load_dotenv
+    _dotenv_available = True
+except ImportError:
+    _dotenv_available = False
+
+try:
+    from openai import OpenAI
+    _openai_available = True
+except ImportError:
+    _openai_available = False
+
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
+
+if _dotenv_available:
+    try:
+        load_dotenv(dotenv_path=str((APP_DIR / ".." / ".env").resolve()), override=False)
+    except Exception:
+        pass
 
 STATE_FILE = Path(os.environ.get("DASHBOARD_STATE_FILE", str(APP_DIR / ".." / "data" / "bot_state.json"))).resolve()
 HISTORY_DB = Path(os.environ.get("HISTORY_DB_PATH", str(APP_DIR / ".." / "data" / "history.db"))).resolve()
@@ -27,6 +46,154 @@ app.mount("/image", StaticFiles(directory=str(APP_DIR / "image")), name="image")
 def _file_age_seconds(path: Path) -> float:
     st = path.stat()
     return max(0.0, datetime.now().timestamp() - st.st_mtime)
+
+
+def _get_history_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(HISTORY_DB), timeout=5)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _ensure_trade_reports_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS trade_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket INTEGER UNIQUE,
+            created_at TEXT NOT NULL,
+            model TEXT,
+            input_hash TEXT,
+            report_json TEXT
+        )"""
+    )
+    conn.commit()
+
+
+def _sha256_text(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def _redact_secrets(text: str) -> str:
+    if not text:
+        return text
+    t = str(text)
+    # Redact any OpenAI-style secret that starts with "sk-"
+    if "sk-" in t:
+        parts = t.split("sk-")
+        out = parts[0]
+        for p in parts[1:]:
+            # Replace token body up to next whitespace / quote / punctuation with ***
+            cut = len(p)
+            for i, ch in enumerate(p):
+                if ch.isspace() or ch in ('"', "'", ")", "]", "}", ",", ":"):
+                    cut = i
+                    break
+            out += "sk-***" + p[cut:]
+        return out
+    return t
+
+
+def _normalize_openai_error(err: str) -> str:
+    msg = (err or "").lower()
+    if "invalid_api_key" in msg or "incorrect api key" in msg or "api key provided" in msg:
+        return "invalid_api_key"
+    if "rate limit" in msg or "429" in msg:
+        return "rate_limited"
+    if "timeout" in msg:
+        return "timeout"
+    if "quota" in msg or "insufficient_quota" in msg:
+        return "insufficient_quota"
+    return "gpt_failed"
+
+
+def _calc_pips(direction: str, open_price: float, close_price: float) -> float:
+    if not open_price or not close_price:
+        return 0.0
+    if direction == "BUY":
+        return (close_price - open_price) * 10
+    if direction == "SELL":
+        return (open_price - close_price) * 10
+    return 0.0
+
+
+def _calc_rr(direction: str, open_price: float, sl: float, tp: float) -> Dict[str, Any]:
+    try:
+        if not open_price or not sl or not tp:
+            return {"risk": None, "reward": None, "rr": None}
+        if direction == "BUY":
+            risk = max(0.0, open_price - sl)
+            reward = max(0.0, tp - open_price)
+        elif direction == "SELL":
+            risk = max(0.0, sl - open_price)
+            reward = max(0.0, open_price - tp)
+        else:
+            return {"risk": None, "reward": None, "rr": None}
+        rr = (reward / risk) if risk and reward else None
+        return {"risk": risk, "reward": reward, "rr": rr}
+    except Exception:
+        return {"risk": None, "reward": None, "rr": None}
+
+
+GPT_TRADE_REPORT_SYSTEM_PROMPT = (
+    "You are a professional XAUUSD trade analyst. You will receive a CLOSED trade record and a nearby pre-trade system snapshot. "
+    "Write an objective, concise post-trade report in ENGLISH ONLY. Base your analysis only on the provided fields. "
+    "Do not invent indicators or facts not present. Avoid vague statements. Provide actionable improvements. "
+    "Return valid JSON with keys: summary (string), what_went_well (array of strings), what_went_wrong (array of strings), "
+    "key_risks_observed (array of strings), suggested_improvements (array of strings), confidence_in_assessment (low|medium|high)."
+)
+
+
+def _call_gpt_trade_report(payload: Dict[str, Any]) -> Dict[str, Any]:
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return {"ok": False, "error": "OPENAI_API_KEY missing"}
+    if not _openai_available:
+        return {"ok": False, "error": "openai package not installed"}
+
+    try:
+        client = OpenAI(api_key=api_key)
+        model = os.environ.get("GPT_MODEL", "gpt-4o-mini")
+        timeout = int(os.environ.get("GPT_TRADE_REPORT_TIMEOUT", "20"))
+        temperature = float(os.environ.get("GPT_TRADE_REPORT_TEMPERATURE", "0.2"))
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": GPT_TRADE_REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+            temperature=temperature,
+            response_format={"type": "json_object"},
+            timeout=timeout,
+        )
+
+        raw = resp.choices[0].message.content
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "invalid_response"}
+
+        def _as_list(v):
+            if v is None:
+                return []
+            if isinstance(v, list):
+                return [str(x) for x in v][:10]
+            return [str(v)][:10]
+
+        report = {
+            "summary": str(data.get("summary", ""))[:600],
+            "what_went_well": _as_list(data.get("what_went_well")),
+            "what_went_wrong": _as_list(data.get("what_went_wrong")),
+            "key_risks_observed": _as_list(data.get("key_risks_observed")),
+            "suggested_improvements": _as_list(data.get("suggested_improvements")),
+            "confidence_in_assessment": str(data.get("confidence_in_assessment", "medium")).lower(),
+        }
+        if report["confidence_in_assessment"] not in ("low", "medium", "high"):
+            report["confidence_in_assessment"] = "medium"
+
+        return {"ok": True, "model": model, "report": report}
+    except Exception as e:
+        # Never pass raw OpenAI errors back to the client (can include key fragments)
+        safe = _normalize_openai_error(str(e))
+        return {"ok": False, "error": safe}
 
 
 def _offline_state(reason: str, file_age_seconds: float) -> Dict[str, Any]:
@@ -122,8 +289,7 @@ def recent_decisions():
     if not HISTORY_DB.exists():
         return JSONResponse([])
     try:
-        conn = sqlite3.connect(str(HISTORY_DB), timeout=3)
-        conn.row_factory = sqlite3.Row
+        conn = _get_history_conn()
         rows = conn.execute(
             "SELECT timestamp, decision, final_score FROM analyses ORDER BY id DESC LIMIT 5"
         ).fetchall()
@@ -141,14 +307,14 @@ def history_data():
         return JSONResponse({"error": "History DB not found"})
         
     try:
-        conn = sqlite3.connect(str(HISTORY_DB), timeout=3)
-        conn.row_factory = sqlite3.Row
+        conn = _get_history_conn()
         
         # Get all closed trades and join with closest previous analysis
         query = """
             SELECT t.*, 
                    (SELECT confidence FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as confidence,
-                   (SELECT scenario FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as scenario
+                   (SELECT scenario FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as scenario,
+                   (SELECT scenario_description FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as scenario_description
             FROM trades t 
             WHERE t.close_time IS NOT NULL 
             ORDER BY t.close_time ASC
@@ -337,3 +503,133 @@ def history_data():
         import traceback
         traceback.print_exc()
         return JSONResponse({"error": str(e)})
+
+
+@app.get("/api/trade-report")
+def trade_report(ticket: int, force_refresh: int = 0):
+    if not HISTORY_DB.exists():
+        return JSONResponse({"ok": False, "error": "History DB not found"})
+
+    try:
+        conn = _get_history_conn()
+        _ensure_trade_reports_table(conn)
+
+        tr = conn.execute("SELECT * FROM trades WHERE ticket = ? LIMIT 1", (ticket,)).fetchone()
+        if not tr:
+            conn.close()
+            return JSONResponse({"ok": False, "error": "trade_not_found"})
+        trade = dict(tr)
+
+        open_time = trade.get("open_time")
+        analysis = None
+        if open_time:
+            a = conn.execute(
+                "SELECT * FROM analyses WHERE timestamp <= ? ORDER BY timestamp DESC LIMIT 1",
+                (open_time,),
+            ).fetchone()
+            if a:
+                analysis = dict(a)
+
+        direction = trade.get("direction")
+        open_p = float(trade.get("open_price") or 0.0)
+        close_p = float(trade.get("close_price") or 0.0)
+        sl = float(trade.get("sl") or 0.0)
+        tp = float(trade.get("tp") or 0.0)
+        profit = float(trade.get("profit") or 0.0)
+
+        pips = _calc_pips(direction, open_p, close_p)
+        rr = _calc_rr(direction, open_p, sl, tp)
+
+        payload = {
+            "trade": {
+                "ticket": trade.get("ticket"),
+                "direction": direction,
+                "volume": trade.get("volume"),
+                "open_price": trade.get("open_price"),
+                "close_price": trade.get("close_price"),
+                "sl": trade.get("sl"),
+                "tp": trade.get("tp"),
+                "profit": trade.get("profit"),
+                "pips": round(pips, 1),
+                "close_reason": trade.get("close_reason"),
+                "open_time": trade.get("open_time"),
+                "close_time": trade.get("close_time"),
+                "rr": rr,
+                "comment": trade.get("comment"),
+            },
+            "snapshot": {
+                "analysis_timestamp": (analysis or {}).get("timestamp"),
+                "decision": (analysis or {}).get("decision"),
+                "final_score": (analysis or {}).get("final_score"),
+                "confidence": (analysis or {}).get("confidence"),
+                "confidence_level": (analysis or {}).get("confidence_level"),
+                "tech_score": (analysis or {}).get("tech_score"),
+                "ml_score": (analysis or {}).get("ml_score"),
+                "momentum_score": (analysis or {}).get("momentum_score"),
+                "news_score": (analysis or {}).get("news_score"),
+                "calendar_score": (analysis or {}).get("calendar_score"),
+                "volatility_status": (analysis or {}).get("volatility_status"),
+                "scenario": (analysis or {}).get("scenario"),
+                "scenario_description": (analysis or {}).get("scenario_description"),
+                "gpt_action": (analysis or {}).get("gpt_action"),
+                "gpt_adjustment": (analysis or {}).get("gpt_adjustment"),
+            },
+        }
+
+        input_hash = _sha256_text(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+
+        cached_row = conn.execute(
+            "SELECT created_at, model, input_hash, report_json FROM trade_reports WHERE ticket = ? LIMIT 1",
+            (ticket,),
+        ).fetchone()
+
+        if cached_row and not force_refresh:
+            cached = dict(cached_row)
+            if cached.get("input_hash") == input_hash and cached.get("report_json"):
+                conn.close()
+                try:
+                    report_obj = json.loads(cached.get("report_json"))
+                except Exception:
+                    report_obj = None
+                return JSONResponse(
+                    {
+                        "ok": True,
+                        "ticket": ticket,
+                        "cached": True,
+                        "created_at": cached.get("created_at"),
+                        "model": cached.get("model"),
+                        "report": report_obj,
+                    }
+                )
+
+        result = _call_gpt_trade_report(payload)
+        if not result.get("ok"):
+            conn.close()
+            return JSONResponse({"ok": False, "error": result.get("error", "gpt_failed")})
+
+        created_at = datetime.now().isoformat()
+        model = result.get("model")
+        report_json = json.dumps(result.get("report"), ensure_ascii=False)
+        conn.execute(
+            "INSERT OR REPLACE INTO trade_reports (ticket, created_at, model, input_hash, report_json) VALUES (?, ?, ?, ?, ?)",
+            (ticket, created_at, model, input_hash, report_json),
+        )
+        conn.commit()
+        conn.close()
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "ticket": ticket,
+                "cached": False,
+                "created_at": created_at,
+                "model": model,
+                "report": result.get("report"),
+            }
+        )
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return JSONResponse({"ok": False, "error": _redact_secrets(str(e))})

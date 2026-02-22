@@ -7,6 +7,7 @@ class HistoryApp {
         this.pageSize = 20;
         this.currentSort = { column: 'close_time', direction: 'desc' };
         this.chart = null;
+        this.modalOpen = false;
         
         // Static backtest reference (v3.1 18-month Aug 2024 - Feb 2026)
         this.backtestRef = {
@@ -24,6 +25,22 @@ class HistoryApp {
     async init() {
         await this.fetchData();
         this.startPolling();
+        this.bindModalHandlers();
+    }
+
+    bindModalHandlers() {
+        const modal = document.getElementById('trade-report-modal');
+        if (!modal) return;
+        const closeBtn = document.getElementById('trade-report-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.closeTradeReport());
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.closeTradeReport();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modalOpen) this.closeTradeReport();
+        });
     }
 
     async fetchData() {
@@ -303,6 +320,135 @@ class HistoryApp {
         return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
     }
 
+    scenarioLabel(trade) {
+        const key = trade?.scenario;
+        const desc = trade?.scenario_description;
+        if (desc && typeof desc === 'string' && desc.trim().length > 0) return desc;
+
+        const map = {
+            'momentum_forte_confirmado': 'Strong confirmed momentum',
+            'rsi_extremo_com_momentum': 'Extreme RSI with momentum',
+            'divergencia_tecnica': 'Technical divergence',
+            'breakout_confirmado': 'Confirmed breakout',
+            'lateralizacao': 'Sideways / ranging',
+            'sinais_conflitantes': 'Conflicting signals',
+            'ml_vs_tech_conflito': 'Tech vs ML conflict (BUY threshold 58)',
+            'alinhamento_perfeito': 'Perfect alignment',
+            'janela_pos_evento': 'Post-event window with momentum',
+            'volatilidade_extrema': 'Extreme volatility (BLOCK)',
+            'zona_sr_forte': 'Near strong S/R zone',
+            'padrao': 'Default scenario',
+        };
+
+        if (key && map[key]) return map[key];
+        if (key) return String(key).replace(/_/g, ' ');
+        return '--';
+    }
+
+    openTradeReport(ticket) {
+        if (!ticket) return;
+
+        const modal = document.getElementById('trade-report-modal');
+        const body = document.getElementById('trade-report-body');
+        const meta = document.getElementById('trade-report-meta');
+        if (!modal || !body) return;
+
+        this.modalOpen = true;
+        modal.classList.remove('hidden');
+
+        if (meta) meta.textContent = `Ticket #${ticket} — Loading...`;
+        body.innerHTML = `
+            <div class="text-xs text-gray-500 font-mono">Fetching report from server...</div>
+        `;
+
+        this.fetchTradeReport(ticket);
+    }
+
+    closeTradeReport() {
+        const modal = document.getElementById('trade-report-modal');
+        if (!modal) return;
+        this.modalOpen = false;
+        modal.classList.add('hidden');
+    }
+
+    async fetchTradeReport(ticket) {
+        const body = document.getElementById('trade-report-body');
+        const meta = document.getElementById('trade-report-meta');
+        if (!body) return;
+
+        try {
+            const response = await fetch(`/api/trade-report?ticket=${encodeURIComponent(ticket)}`);
+            const result = await response.json();
+
+            if (!response.ok || !result || result.ok !== true) {
+                const err = (result && result.error) ? result.error : 'unknown_error';
+                if (meta) meta.textContent = `Ticket #${ticket}`;
+                body.innerHTML = `<div class="text-xs text-red-400 font-mono">Report unavailable: ${String(err)}</div>`;
+                return;
+            }
+
+            const createdAt = result.created_at ? new Date(result.created_at).toLocaleString() : '--';
+            const cached = result.cached === true;
+            const model = result.model || '';
+            const report = result.report || {};
+
+            const escapeHtml = (s) => {
+                const str = (s === null || s === undefined) ? '' : String(s);
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
+
+            if (meta) {
+                meta.textContent = `Ticket #${ticket} — ${cached ? 'CACHED' : 'NEW'} — ${createdAt}${model ? ' — ' + model : ''}`;
+            }
+
+            const list = (arr) => {
+                if (!arr || arr.length === 0) return '<div class="text-xs text-gray-600">—</div>';
+                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
+            };
+
+            body.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Summary</div>
+                        <div class="text-sm text-gray-200 mt-1">${escapeHtml(report.summary || '—')}</div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">What went well</div>
+                            ${list(report.what_went_well)}
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">What went wrong</div>
+                            ${list(report.what_went_wrong)}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Key risks observed</div>
+                            ${list(report.key_risks_observed)}
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Suggested improvements</div>
+                            ${list(report.suggested_improvements)}
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-gray-500 font-mono">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
+                </div>
+            `;
+        } catch (e) {
+            if (meta) meta.textContent = `Ticket #${ticket}`;
+            body.innerHTML = `<div class="text-xs text-red-400 font-mono">Report unavailable: ${String(e)}</div>`;
+        }
+    }
+
     renderTradesTable() {
         const tbody = document.getElementById('trades-table-body');
         const trades = this.data.trades || [];
@@ -352,6 +498,8 @@ class HistoryApp {
                 reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-green-400 bg-green-400/10 border border-green-400/20">TP</span>`;
             }
 
+            const reportBtn = t.ticket ? `<button class="ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-cyan-300 bg-cyan-300/10 border border-cyan-300/20 hover:bg-cyan-300/15 transition-colors" onclick="historyApp.openTradeReport(${t.ticket})">Report</button>` : '';
+
             return `
             <tr class="hover:bg-gray-800/30 transition-colors">
                 <td class="p-3 text-gray-400 text-xs">
@@ -365,8 +513,8 @@ class HistoryApp {
                 <td class="p-3 text-right text-gray-400">${t.pips ? t.pips.toFixed(1) : '--'}</td>
                 <td class="p-3 text-right text-gray-400">${t.duration_minutes || '--'}</td>
                 <td class="p-3 text-right text-cyan-400">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
-                <td class="p-3 text-gray-400 text-xs">${t.scenario ? t.scenario.replace(/_/g, ' ') : '--'}</td>
-                <td class="p-3">${reasonBadge}</td>
+                <td class="p-3 text-gray-400 text-xs">${this.scenarioLabel(t)}</td>
+                <td class="p-3">${reasonBadge}${reportBtn}</td>
             </tr>
             `;
         }).join('');
