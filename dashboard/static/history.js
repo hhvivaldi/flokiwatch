@@ -322,9 +322,6 @@ class HistoryApp {
 
     scenarioLabel(trade) {
         const key = trade?.scenario;
-        const desc = trade?.scenario_description;
-        if (desc && typeof desc === 'string' && desc.trim().length > 0) return desc;
-
         const map = {
             'momentum_forte_confirmado': 'Strong confirmed momentum',
             'rsi_extremo_com_momentum': 'Extreme RSI with momentum',
@@ -337,6 +334,7 @@ class HistoryApp {
             'janela_pos_evento': 'Post-event window with momentum',
             'volatilidade_extrema': 'Extreme volatility (BLOCK)',
             'zona_sr_forte': 'Near strong S/R zone',
+            'confluence': 'Confluence',
             'padrao': 'Default scenario',
         };
 
