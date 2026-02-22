@@ -1286,7 +1286,6 @@ class TradingBot:
         log.info(f"   🧠 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
         log.info(f"   🧠 Decision: {brain_result.decision}")
 
-        # Debug: conflict scenario + threshold override visibility
         try:
             if brain_result.scenario == "ml_vs_tech_conflito":
                 tech_s = float(tech_data.get('score', 50.0))
