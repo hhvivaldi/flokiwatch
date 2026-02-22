@@ -173,6 +173,13 @@ SCENARIO_WEIGHTS = {
         "news": 0.15,
         "calendar": 0.10,
     },
+    "ml_vs_tech_conflito": {
+        "technical": 0.45,
+        "ml": 0.10,
+        "momentum": 0.22,
+        "news": 0.15,
+        "calendar": 0.08,
+    },
     "padrao": BASE_WEIGHTS.copy(),
 }
 
@@ -194,6 +201,12 @@ THRESHOLDS_LATERAL = {
     "sell": 30,
     "strong_sell": 20,
 }
+
+ML_CONFLICT_KEY = "ml_vs_tech_conflito"
+CONFLICT_TECH_MIN = 65.0
+CONFLICT_ML_MAX = 40.0
+CONFLICT_BUY_THRESHOLD = 58.0
+ML_CONFLICT_MULT = 0.95
 
 
 # ============================================================================
@@ -572,6 +585,8 @@ def _identify_scenario(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
     ml_bearish = ml_prediction == "bearish" and ml_confidence > 0.55
     momentum_strong = momentum_strength in ("strong", "very_strong")
     momentum_weak = momentum_strength in ("weak", "very_weak")
+
+    is_conflict = tech_score >= CONFLICT_TECH_MIN and ml_score <= CONFLICT_ML_MAX
     
     # Calendar bias aligned with tech?
     cal_aligns_tech = (
@@ -594,6 +609,13 @@ def _identify_scenario(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         z_mid = sr_zone_info.get("midpoint", 0)
         z_touches = sr_zone_info.get("touches", 0)
         z_type = sr_zone_info.get("zone_type", "?")
+        if is_conflict:
+            return (
+                ML_CONFLICT_KEY,
+                (f"{ML_CONFLICT_KEY} (Tech={tech_score:.1f} vs ML={ml_score:.1f}) | "
+                 f"BUY threshold overridden: {CONFLICT_BUY_THRESHOLD:.0f} (near S/R)"),
+                ML_CONFLICT_MULT,
+            )
         return "zona_sr_forte", f"Near strong {z_type} zone at {z_mid:.2f} ({z_touches} touches) - informational", 1.00
 
     # SCENARIO G: Perfect Alignment — with RSI guard
@@ -634,7 +656,22 @@ def _identify_scenario(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
     
     # SCENARIO F: Conflicting Signals
     if (tech_bullish and ml_bearish) or (tech_bearish and ml_bullish):
+        if is_conflict:
+            return (
+                ML_CONFLICT_KEY,
+                (f"{ML_CONFLICT_KEY} (Tech={tech_score:.1f} vs ML={ml_score:.1f}) | "
+                 f"BUY threshold overridden: {CONFLICT_BUY_THRESHOLD:.0f}"),
+                ML_CONFLICT_MULT,
+            )
         return "sinais_conflitantes", "Technical and ML signals in conflict", 0.80
+
+    if is_conflict:
+        return (
+            ML_CONFLICT_KEY,
+            (f"{ML_CONFLICT_KEY} (Tech={tech_score:.1f} vs ML={ml_score:.1f}) | "
+             f"BUY threshold overridden: {CONFLICT_BUY_THRESHOLD:.0f}"),
+            ML_CONFLICT_MULT,
+        )
     
     # DEFAULT SCENARIO
     return "padrao", "Default scenario", 1.00
@@ -741,6 +778,10 @@ def _make_decision(final_score: float, scenario: str) -> str:
     Make decision based on score and scenario.
     """
     thresholds = THRESHOLDS_LATERAL if scenario == "lateralizacao" else THRESHOLDS_NORMAL
+    if scenario == ML_CONFLICT_KEY:
+        thresholds = thresholds.copy()
+        thresholds["buy"] = CONFLICT_BUY_THRESHOLD
+        thresholds["hold_upper"] = CONFLICT_BUY_THRESHOLD
     
     if final_score >= thresholds["strong_buy"]:
         return "STRONG_BUY"

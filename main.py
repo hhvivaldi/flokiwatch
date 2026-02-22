@@ -1285,6 +1285,21 @@ class TradingBot:
         log.info(f"   🧠 Scenario: {brain_result.scenario_description}")
         log.info(f"   🧠 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
         log.info(f"   🧠 Decision: {brain_result.decision}")
+
+        # Debug: conflict scenario + threshold override visibility
+        try:
+            if brain_result.scenario == "ml_vs_tech_conflito":
+                tech_s = float(tech_data.get('score', 50.0))
+                ml_s = float(ml_data.get('score', 50.0))
+                score = float(brain_result.final_score)
+                override_used = (58.0 <= score < 65.0) and (brain_result.decision in ("BUY", "STRONG_BUY"))
+                used_txt = "YES" if override_used else "NO"
+                log.info(
+                    f"   Scenario: ml_vs_tech_conflito (Tech={tech_s:.1f} vs ML={ml_s:.1f}) | "
+                    f"BUY threshold overridden: 58 | override_used={used_txt} | score={score:.1f}"
+                )
+        except Exception:
+            pass
         
         # Full explanation log in DEBUG
         for line in brain_result.explanation.split('\n'):

@@ -297,6 +297,7 @@ function render(state) {
       "breakout_confirmado": "Confirmed breakout",
       "lateralizacao": "Sideways / ranging",
       "sinais_conflitantes": "Conflicting signals",
+      "ml_vs_tech_conflito": "Tech vs ML conflict (BUY threshold 58)",
       "alinhamento_perfeito": "Perfect alignment",
       "padrao": "Default scenario",
       "post_event_momentum": "Post-event momentum",
