@@ -378,10 +378,17 @@ class HistoryApp {
 
         try {
             const response = await fetch(`/api/trade-report?ticket=${encodeURIComponent(ticket)}`);
-            const result = await response.json();
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (_) {
+                result = null;
+            }
 
             if (!response.ok || !result || result.ok !== true) {
-                const err = (result && result.error) ? result.error : 'unknown_error';
+                const err = (result && (result.error || result.detail || result.message))
+                    ? (result.error || result.detail || result.message)
+                    : `http_${response.status}`;
                 if (meta) meta.textContent = `Ticket #${ticket}`;
                 body.innerHTML = `<div class="text-xs text-red-400 font-mono">Report unavailable: ${String(err)}</div>`;
                 return;
