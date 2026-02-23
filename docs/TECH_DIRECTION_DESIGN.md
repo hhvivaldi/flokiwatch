@@ -390,54 +390,60 @@ These appear alongside existing alerts (MACD divergence, volume warnings, etc.).
 
 The `ml_vs_tech_conflito` scenario triggers when **Tech >= 65 AND ML <= 40**. With Tech Direction replacing Tech Score, the 65 threshold becomes much easier to reach.
 
-### Diagnostic Results
+### Tech Direction Frequency (17,704 H1 bars)
 
-| Metric | Current (Tech Score) | New (Tech Direction) |
-|--------|---------------------|---------------------|
-| Tech >= 65 frequency | 3.9% (26/662 trades) | **38.3%** (6,779/17,704 bars) |
-| ML <= 40 frequency | 40.0% (265/662 trades) | ~40% (unchanged) |
-| Conflict trigger rate | 0.8% (5 trades) | **~15.3%** (~101 trades) |
+| Threshold | Bars | Frequency |
+|-----------|------|-----------|
+| >= 65 | 6,779 | 38.3% |
+| >= 70 | 5,918 | 33.4% |
+| >= 75 | 4,757 | **26.9%** |
+| >= 80 | 3,496 | 19.7% |
+| >= 85 | 2,458 | **13.9%** |
+| >= 90 | 1,393 | 7.9% |
 
-**Impact**: The conflict scenario would fire **~20x more often** than designed.
+### Impact
 
-### Recommendation
+If `ml_vs_tech_conflito` fires 15%+ of the time (with threshold 65), it's no longer a special scenario — it becomes a mode of operation. That changes its nature entirely.
 
-Raise the Tech Direction threshold for `ml_vs_tech_conflito` to maintain similar trigger frequency:
-
-| Threshold | Tech Direction >= X | Estimated Frequency |
-|-----------|---------------------|---------------------|
-| 65 (current) | 38.3% | Too common |
-| 70 | 33.4% | Still common |
-| 75 | 26.9% | Moderate |
-| **80** | ~20% | **Similar to original intent** |
-
-**Proposed change**: `CONFLICT_TECH_MIN = 80` (up from 65)
-
-This keeps the scenario rare (~8% conflict rate with ML <= 40) while still catching genuine Tech/ML disagreements.
-
-### Alternative
-
-Keep threshold at 65 but accept that the scenario will fire more often. The scenario already has a confidence multiplier of 0.95 and uses threshold 58 instead of 65 for BUY. More frequent firing may actually be beneficial — it forces more conservative entries when Tech and ML disagree.
-
-**Decision needed**: Raise threshold to 80, or keep at 65 and accept higher trigger rate?
+The scenario was designed for **rare genuine disagreements**. The backtest must determine:
+1. Does the conflict scenario still add value with Tech Direction?
+2. If yes, what threshold works best?
+3. If no, drop it and simplify the system.
 
 ---
 
 ## Backtest Plan
 
-1. Create backtest branch: `feature/tech-direction-split`
-2. Implement changes
-3. **Test both threshold options** (65 vs 80) in backtest
-4. Run 6-month backtest with both systems:
-   - **Control**: Current system (tech_score with RSI/BB in score)
-   - **Test A**: New system with CONFLICT_TECH_MIN = 65
-   - **Test B**: New system with CONFLICT_TECH_MIN = 80
-5. Compare metrics:
-   - Win rate
-   - Profit factor
-   - Max drawdown
-   - Average confidence on winning vs losing trades
-   - Conflict scenario trigger frequency
+### Branch: `feature/tech-direction-split`
+
+### Control
+- Current system (tech_score with RSI/BB in score)
+- `ml_vs_tech_conflito` with CONFLICT_TECH_MIN = 65
+
+### Test Variants (all include Tech Direction + Tech Risk split)
+
+| Variant | ml_vs_tech_conflito | Threshold | Expected Trigger Rate |
+|---------|---------------------|-----------|----------------------|
+| **A** | DISABLED | — | 0% |
+| **B** | ENABLED | 75 | ~11% (26.9% × 40%) |
+| **C** | ENABLED | 85 | ~6% (13.9% × 40%) |
+
+### Metrics to Compare
+
+- Win rate
+- Profit factor
+- Max drawdown
+- Average confidence on winning vs losing trades
+- Conflict scenario trigger frequency (B and C only)
+- Number of trades blocked/modified by conflict scenario
+
+### Execution
+
+1. Create backtest branch
+2. Implement Tech Direction + Tech Risk split
+3. Add config flag for conflict scenario variants
+4. Run 6-month backtest for Control + A + B + C
+5. Generate comparison report
 6. Review results together before deployment
 
 ---
