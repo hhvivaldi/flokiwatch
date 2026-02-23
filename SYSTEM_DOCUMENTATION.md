@@ -68,7 +68,7 @@ main.py (Orquestrador)
 
 **Resultado (`BrainResult`):** decision, final_score, confidence, confidence_level, scenario, weights_used, confirmations, alerts, explanation, gpt_validation.
 
-**Limiares:** Normal: BUY≥65 / SELL≤35. Lateralização: BUY≥70 / SELL≤30. Confiança mínima: 35% (abaixo = HOLD Forçado).
+**Limiares:** Normal: BUY≥65 / SELL≤35. Lateralização: BUY≥70 / SELL≤30. Confiança mínima: 55% (abaixo = HOLD Forçado).
 
 ---
 
@@ -141,7 +141,7 @@ Verifica se a direção do trade está alinhada com a tendência D1 e H4 usando 
   - Trade contra tendência: **-20 confiança**
 - **Se D1 e H4 discordam:** Sem ajuste (sinais mistos)
 
-**Motivação:** Trades Bot-SELL-34/35 (Feb 20, 2026) venderam contra uptrend claro D1+H4 com volume baixo. MTF teria aplicado -20 conf, Volume Gate -25 conf → ambos bloqueados (conf < 35%).
+**Motivação:** Trades Bot-SELL-34/35 (Feb 20, 2026) venderam contra uptrend claro D1+H4 com volume baixo. MTF teria aplicado -20 conf, Volume Gate -25 conf → ambos bloqueados (conf < 55%).
 
 ### 6.2 Volume Gate (NEW Feb 2026)
 
@@ -362,7 +362,7 @@ OOS PF 1.62 > 1.5 target. Sistema validado, não overfitted.
 6. Volatility Guard (M5) → status
 7. Cérebro Central (12 passos) → BrainResult
 8. GPT Validator → ajuste confiança ±15
-9. Verificar mínimo 35% → HOLD Forçado se abaixo
+9. Verificar mínimo 55% → HOLD Forçado se abaixo
 10. Gravar SQLite + JSON + Cycle Memory
 
 **Execução (se BUY/SELL):**
