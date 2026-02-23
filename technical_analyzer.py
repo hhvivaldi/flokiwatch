@@ -743,6 +743,170 @@ def get_atr_value(df: pd.DataFrame) -> float:
     return df['atr_14'].iloc[-1]
 
 
+# ============================================================================
+# TECH DIRECTION SCORE (NEW - for Tech Direction/Risk split)
+# ============================================================================
+
+def calculate_tech_direction_score(df: pd.DataFrame) -> Tuple[float, Dict]:
+    """
+    Calculate Tech Direction score (0-100) using ONLY direction indicators.
+    Excludes RSI, Bollinger, Stochastic (those go to Tech Risk).
+    
+    Components:
+        1. Price vs EMAs (30 pts)
+        2. EMA Alignment with distance bonus (25 pts)
+        3. MACD Direction (30 pts)
+        4. Price Action on PREVIOUS closed candle (15 pts)
+    
+    Args:
+        df: DataFrame with calculated indicators
+    
+    Returns:
+        Tuple: (score 0-100, breakdown_dict)
+    """
+    if df is None or len(df) < 50:
+        return 50.0, {'error': 'Insufficient data'}
+    
+    last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
+    prev_prev = df.iloc[-3] if len(df) > 2 else prev
+    
+    breakdown = {}
+    
+    # 1. Price vs EMAs (30 pts max)
+    close = float(last['close'])
+    ema9 = float(last['ema_9'])
+    ema21 = float(last['ema_21'])
+    ema50 = float(last['ema_50'])
+    
+    ema_pts = 0
+    if close > ema9:
+        ema_pts += 6
+    if close > ema21:
+        ema_pts += 6
+    if close > ema50:
+        ema_pts += 6
+    # Scale 18 pts to 30 pts
+    ema_score = ema_pts * (30 / 18)
+    breakdown['price_vs_emas'] = round(ema_score, 1)
+    
+    # 2. EMA Alignment with distance bonus (25 pts max)
+    # Base alignment (0-15 pts)
+    if ema9 > ema21 > ema50:
+        base_align = 15  # Bullish
+    elif ema9 < ema21 < ema50:
+        base_align = 0   # Bearish
+    else:
+        base_align = 7   # Mixed
+    
+    # Distance bonus (0-10 pts) - only for aligned EMAs
+    dist_bonus = 0
+    if ema9 > ema21 > ema50 or ema9 < ema21 < ema50:
+        sep_9_21 = abs(ema9 - ema21) / ema21 * 100 if ema21 > 0 else 0
+        sep_21_50 = abs(ema21 - ema50) / ema50 * 100 if ema50 > 0 else 0
+        avg_sep = (sep_9_21 + sep_21_50) / 2
+        
+        if avg_sep >= 1.0:
+            dist_bonus = 10
+        elif avg_sep >= 0.5:
+            dist_bonus = 5 + (avg_sep - 0.5) * 10
+        elif avg_sep >= 0.1:
+            dist_bonus = 2 + (avg_sep - 0.1) * 7.5
+        else:
+            dist_bonus = avg_sep * 20
+    
+    alignment_score = base_align + dist_bonus
+    breakdown['ema_alignment'] = round(alignment_score, 1)
+    breakdown['ema_separation_pct'] = round(avg_sep if 'avg_sep' in dir() else 0, 2)
+    
+    # 3. MACD Direction (30 pts max)
+    macd = float(last['macd'])
+    macd_signal = float(last['macd_signal'])
+    macd_hist = float(last['macd_hist'])
+    prev_macd_hist = float(prev['macd_hist']) if 'macd_hist' in prev.index else macd_hist
+    
+    if macd > macd_signal:
+        macd_score = 25 if macd > 0 else 18
+    else:
+        macd_score = 7 if macd > 0 else 0
+    
+    # Histogram bonus (compare to previous closed candle)
+    if macd_hist > prev_macd_hist:
+        macd_score = min(macd_score + 5, 30)
+    
+    breakdown['macd'] = round(macd_score, 1)
+    
+    # 4. Price Action on PREVIOUS closed candle (15 pts max)
+    # Uses prev candle vs prev_prev to avoid intra-candle noise
+    pa_score = 0
+    if len(df) > 2:
+        prev_close = float(prev['close'])
+        prev_open = float(prev['open'])
+        prev_high = float(prev['high'])
+        prev_low = float(prev['low'])
+        pp_high = float(prev_prev['high'])
+        pp_low = float(prev_prev['low'])
+        
+        if prev_close > prev_open:
+            pa_score += 5  # Previous candle bullish
+        if prev_high > pp_high:
+            pa_score += 5  # Higher high
+        if prev_low > pp_low:
+            pa_score += 5  # Higher low
+    
+    breakdown['price_action'] = round(pa_score, 1)
+    
+    # Total (max 100)
+    total = ema_score + alignment_score + macd_score + pa_score
+    direction_score = max(0, min(100, total))
+    
+    return round(direction_score, 2), breakdown
+
+
+def get_tech_risk_data(df: pd.DataFrame) -> Dict:
+    """
+    Extract Tech Risk data (RSI, Bollinger position) for confidence adjustment.
+    These indicators are removed from Tech Direction but used for risk assessment.
+    
+    Args:
+        df: DataFrame with calculated indicators
+    
+    Returns:
+        Dict with rsi, bb_position (0-100), stoch_k
+    """
+    if df is None or len(df) < 20:
+        return {
+            'rsi': 50.0,
+            'bb_position': 50.0,
+            'stoch_k': 50.0,
+        }
+    
+    last = df.iloc[-1]
+    
+    # RSI
+    rsi = float(last['rsi_14']) if 'rsi_14' in last.index else 50.0
+    
+    # Bollinger position (0-100, where 100 = at upper band)
+    bb_upper = float(last['bb_upper']) if 'bb_upper' in last.index else 0
+    bb_lower = float(last['bb_lower']) if 'bb_lower' in last.index else 0
+    close = float(last['close'])
+    
+    bb_range = bb_upper - bb_lower
+    if bb_range > 0:
+        bb_position = (close - bb_lower) / bb_range * 100
+    else:
+        bb_position = 50.0
+    
+    # Stochastic
+    stoch_k = float(last['stoch_k']) if 'stoch_k' in last.index else 50.0
+    
+    return {
+        'rsi': round(rsi, 2),
+        'bb_position': round(bb_position, 2),
+        'stoch_k': round(stoch_k, 2),
+    }
+
+
 def analyze_technical() -> Tuple[float, Dict, float]:
     """
     Complete technical analysis.
@@ -951,9 +1115,18 @@ def analyze_technical_detailed(df: pd.DataFrame) -> Dict:
             "adjustments": {}, "total_adjustment": 0.0,
         }
     
+    # Calculate Tech Direction score (NEW)
+    direction_score, direction_breakdown = calculate_tech_direction_score(df)
+    
+    # Get Tech Risk data (NEW)
+    risk_data = get_tech_risk_data(df)
+    
     return {
         "score": score,
         "breakdown": breakdown,
+        "direction_score": direction_score,  # NEW: Tech Direction (0-100)
+        "direction_breakdown": direction_breakdown,  # NEW: Tech Direction breakdown
+        "risk_data": risk_data,  # NEW: RSI, BB position for confidence adjustment
         "rsi": {
             "value": round(rsi_value, 2),
             "level": rsi_level,
