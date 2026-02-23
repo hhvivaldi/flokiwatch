@@ -140,125 +140,85 @@ def apply_tech_risk_penalties(confidence: float, risk_data: Dict, decision: str)
 # MONKEY-PATCH FUNCTIONS
 # ============================================================================
 
-# Store original functions for clean restore
-_ORIGINAL_FUNCS = {}
+# Global flag to control Tech Direction mode
+_USE_TECH_DIRECTION = False
+_CONFLICT_THRESHOLD = None  # None = disabled, number = threshold
 
 
-def _patch_tech_direction(conflict_threshold: Optional[float] = None):
+def _enable_tech_direction(conflict_threshold: Optional[float] = None):
+    """Enable Tech Direction mode for subsequent runs."""
+    global _USE_TECH_DIRECTION, _CONFLICT_THRESHOLD
+    _USE_TECH_DIRECTION = True
+    _CONFLICT_THRESHOLD = conflict_threshold
+
+
+def _disable_tech_direction():
+    """Disable Tech Direction mode (use production code)."""
+    global _USE_TECH_DIRECTION, _CONFLICT_THRESHOLD
+    _USE_TECH_DIRECTION = False
+    _CONFLICT_THRESHOLD = None
+
+
+def _prepare_tech_data_for_brain(tech_data: Dict) -> Dict:
     """
-    Patch central_brain to use Tech Direction instead of tech_score.
+    Prepare tech_data for central_brain based on current mode.
     
-    Args:
-        conflict_threshold: If None, disable conflict scenario entirely.
-                           If set, use this threshold for ml_vs_tech_conflito.
+    In Tech Direction mode:
+        - Swap 'score' with 'direction_score' so brain uses Tech Direction
+        - Keep original 'score' as 'original_tech_score' for reference
+    
+    In production mode:
+        - Return tech_data unchanged
     """
-    import central_brain as cb
+    if not _USE_TECH_DIRECTION:
+        return tech_data
     
-    # Save originals ONCE
-    if 'calculate_final_score' not in _ORIGINAL_FUNCS:
-        _ORIGINAL_FUNCS['calculate_final_score'] = cb._calculate_final_score
-    if 'calculate_confidence' not in _ORIGINAL_FUNCS:
-        _ORIGINAL_FUNCS['calculate_confidence'] = cb._calculate_confidence
-    if 'identify_scenario' not in _ORIGINAL_FUNCS:
-        _ORIGINAL_FUNCS['identify_scenario'] = cb._identify_scenario
+    # Create a copy to avoid modifying original
+    modified = tech_data.copy()
     
-    orig_calc_score = _ORIGINAL_FUNCS['calculate_final_score']
-    orig_calc_conf = _ORIGINAL_FUNCS['calculate_confidence']
-    orig_identify = _ORIGINAL_FUNCS['identify_scenario']
+    # Swap scores: direction_score becomes the main score
+    if 'direction_score' in modified:
+        modified['original_tech_score'] = modified.get('score', 50)
+        modified['score'] = modified['direction_score']
     
-    # Patched _calculate_final_score: use direction_score instead of score
-    def _patched_calculate_final_score(tech_data, ml_data, momentum_data, news_data,
-                                        weights, calendar_data=None):
-        # Get direction_score if available, else fall back to score
-        tech_score = tech_data.get("direction_score", tech_data.get("score", 50))
-        ml_score = ml_data.get("score", 50)
-        momentum_score = momentum_data.get("score", 50)
-        news_score = news_data.get("score", 50)
-        calendar_score = calendar_data.get("score", 50) if calendar_data else 50
-        
-        final_score = (
-            tech_score * weights.get("technical", 0.30) +
-            ml_score * weights.get("ml", 0.25) +
-            momentum_score * weights.get("momentum", 0.15) +
-            news_score * weights.get("news", 0.20) +
-            calendar_score * weights.get("calendar", 0.10)
-        )
-        return final_score
-    
-    # Patched _calculate_confidence: add Tech Risk penalties
-    def _patched_calculate_confidence(final_score, decision, tech_data, ml_data,
-                                       momentum_data, news_data, scenario_mult,
-                                       volatility_status=None, m5_data=None,
-                                       sr_data=None, calendar_data=None):
-        # Call original confidence calculation
-        base_conf = orig_calc_conf(
-            final_score, decision, tech_data, ml_data, momentum_data, news_data,
-            scenario_mult, volatility_status, m5_data, sr_data, calendar_data
-        )
-        
-        # Apply Tech Risk penalties
-        risk_data = tech_data.get("risk_data", {})
-        if risk_data:
-            adjusted_conf, _ = apply_tech_risk_penalties(base_conf, risk_data, decision)
-            return adjusted_conf
-        return base_conf
-    
-    # Patched _identify_scenario: use direction_score for conflict detection
-    def _patched_identify_scenario(tech_data, ml_data, momentum_data, news_data,
-                                    momentum_strength, calendar_data=None,
-                                    volatility_status=None, sr_data=None):
-        # If conflict disabled, skip conflict detection entirely
-        if conflict_threshold is None:
-            # Call original but never trigger ml_vs_tech_conflito
-            result = orig_identify(
-                tech_data, ml_data, momentum_data, news_data, momentum_strength,
-                calendar_data, volatility_status, sr_data
-            )
-            # If original returned ml_vs_tech_conflito, downgrade to sinais_conflitantes
-            if result[0] == "ml_vs_tech_conflito":
-                return ("sinais_conflitantes", "Tech/ML conflict (scenario disabled)", 1.0)
-            return result
-        
-        # Use direction_score for conflict threshold check
-        tech_score = tech_data.get("direction_score", tech_data.get("score", 50))
-        ml_score = ml_data.get("score", 50)
-        
-        # Check conflict with new threshold
-        if tech_score >= conflict_threshold and ml_score <= CONFLICT_ML_MAX:
-            # Trigger conflict scenario with adjusted weights
-            return (
-                "ml_vs_tech_conflito",
-                f"Tech Direction ({tech_score:.0f}) vs ML ({ml_score:.0f}) conflict",
-                0.95,
-            )
-        
-        # Otherwise call original
-        return orig_identify(
-            tech_data, ml_data, momentum_data, news_data, momentum_strength,
-            calendar_data, volatility_status, sr_data
-        )
-    
-    # Apply patches
-    cb._calculate_final_score = _patched_calculate_final_score
-    cb._calculate_confidence = _patched_calculate_confidence
-    cb._identify_scenario = _patched_identify_scenario
+    return modified
 
 
-def _unpatch_tech_direction():
-    """Restore original central_brain functions."""
-    import central_brain as cb
+def _apply_tech_risk_to_confidence(confidence: float, tech_data: Dict, decision: str) -> float:
+    """
+    Apply Tech Risk penalties to confidence if in Tech Direction mode.
+    """
+    if not _USE_TECH_DIRECTION:
+        return confidence
     
-    if 'calculate_final_score' in _ORIGINAL_FUNCS:
-        cb._calculate_final_score = _ORIGINAL_FUNCS['calculate_final_score']
-    if 'calculate_confidence' in _ORIGINAL_FUNCS:
-        cb._calculate_confidence = _ORIGINAL_FUNCS['calculate_confidence']
-    if 'identify_scenario' in _ORIGINAL_FUNCS:
-        cb._identify_scenario = _ORIGINAL_FUNCS['identify_scenario']
+    risk_data = tech_data.get("risk_data", {})
+    if risk_data:
+        adjusted_conf, _ = apply_tech_risk_penalties(confidence, risk_data, decision)
+        return adjusted_conf
+    return confidence
 
 
-def _clear_patch_cache():
-    """Clear the original functions cache (call before Baseline run)."""
-    _ORIGINAL_FUNCS.clear()
+def _check_conflict_scenario(tech_data: Dict, ml_data: Dict) -> Tuple[bool, str]:
+    """
+    Check if ml_vs_tech_conflito should trigger based on current mode.
+    
+    Returns:
+        Tuple: (should_trigger, description)
+    """
+    if not _USE_TECH_DIRECTION:
+        return False, ""
+    
+    if _CONFLICT_THRESHOLD is None:
+        return False, "conflict_disabled"
+    
+    # Use direction_score for threshold check
+    tech_score = tech_data.get("direction_score", tech_data.get("score", 50))
+    ml_score = ml_data.get("score", 50)
+    
+    if tech_score >= _CONFLICT_THRESHOLD and ml_score <= CONFLICT_ML_MAX:
+        return True, f"Tech Direction ({tech_score:.0f}) vs ML ({ml_score:.0f})"
+    
+    return False, ""
 
 
 # ============================================================================
@@ -337,7 +297,9 @@ def _run_loop(data: Dict, bt_predictor, label: str,
             continue
 
         # Pillars
-        tech_data = analyze_technical_detailed(h1_slice)
+        tech_data_raw = analyze_technical_detailed(h1_slice)
+        # Prepare tech_data based on mode (swap score with direction_score if enabled)
+        tech_data = _prepare_tech_data_for_brain(tech_data_raw)
 
         bt_predictor.set_h4_features(compute_h4_features(df_h4, h1_time))
         bt_predictor.set_m5_features(compute_m5_features(df_m5, h1_time))
@@ -411,6 +373,9 @@ def _run_loop(data: Dict, bt_predictor, label: str,
         decision = brain_result.decision
         confidence = brain_result.confidence
         scenario = brain_result.scenario
+
+        # Apply Tech Risk penalties to confidence (only in Tech Direction mode)
+        confidence = _apply_tech_risk_to_confidence(confidence, tech_data_raw, decision)
 
         # Track conflict detections
         if scenario == "ml_vs_tech_conflito":
@@ -724,9 +689,8 @@ def main():
         print("  BASELINE: Current production code (no changes)")
         print("─" * 70)
         
-        # CRITICAL: Clear any cached patches and ensure clean state
-        _clear_patch_cache()
-        _unpatch_tech_direction()  # Ensure nothing is patched
+        # CRITICAL: Ensure Tech Direction mode is OFF for baseline
+        _disable_tech_direction()
         
         trades_baseline, meta_baseline = _run_loop(data, bt_predictor, "Baseline")
         results['Baseline'] = (trades_baseline, meta_baseline)
@@ -738,12 +702,10 @@ def main():
         print("  VARIANT A: Tech Direction + Tech Risk, conflict DISABLED")
         print("─" * 70)
         
-        _patch_tech_direction(conflict_threshold=None)  # Disable conflict
-        try:
-            trades_a, meta_a = _run_loop(data, bt_predictor, "Variant A")
-            results['A'] = (trades_a, meta_a)
-        finally:
-            _unpatch_tech_direction()
+        _enable_tech_direction(conflict_threshold=None)  # Disable conflict
+        trades_a, meta_a = _run_loop(data, bt_predictor, "Variant A")
+        results['A'] = (trades_a, meta_a)
+        _disable_tech_direction()
 
         # ══════════════════════════════════════════════════════════════════════
         # VARIANT B: Tech Direction + Tech Risk, conflict threshold 75
@@ -752,13 +714,10 @@ def main():
         print("  VARIANT B: Tech Direction + Tech Risk, conflict threshold 75")
         print("─" * 70)
         
-        _clear_patch_cache()  # Clear cache before re-patching
-        _patch_tech_direction(conflict_threshold=75)
-        try:
-            trades_b, meta_b = _run_loop(data, bt_predictor, "Variant B")
-            results['B'] = (trades_b, meta_b)
-        finally:
-            _unpatch_tech_direction()
+        _enable_tech_direction(conflict_threshold=75)
+        trades_b, meta_b = _run_loop(data, bt_predictor, "Variant B")
+        results['B'] = (trades_b, meta_b)
+        _disable_tech_direction()
 
         # ══════════════════════════════════════════════════════════════════════
         # VARIANT C: Tech Direction + Tech Risk, conflict threshold 85
@@ -767,13 +726,10 @@ def main():
         print("  VARIANT C: Tech Direction + Tech Risk, conflict threshold 85")
         print("─" * 70)
         
-        _clear_patch_cache()  # Clear cache before re-patching
-        _patch_tech_direction(conflict_threshold=85)
-        try:
-            trades_c, meta_c = _run_loop(data, bt_predictor, "Variant C")
-            results['C'] = (trades_c, meta_c)
-        finally:
-            _unpatch_tech_direction()
+        _enable_tech_direction(conflict_threshold=85)
+        trades_c, meta_c = _run_loop(data, bt_predictor, "Variant C")
+        results['C'] = (trades_c, meta_c)
+        _disable_tech_direction()
 
         # ══════════════════════════════════════════════════════════════════════
         # REPORT
