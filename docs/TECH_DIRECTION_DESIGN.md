@@ -384,19 +384,61 @@ These appear alongside existing alerts (MACD divergence, volume warnings, etc.).
 
 ---
 
+## ml_vs_tech_conflito Threshold Analysis
+
+### Problem
+
+The `ml_vs_tech_conflito` scenario triggers when **Tech >= 65 AND ML <= 40**. With Tech Direction replacing Tech Score, the 65 threshold becomes much easier to reach.
+
+### Diagnostic Results
+
+| Metric | Current (Tech Score) | New (Tech Direction) |
+|--------|---------------------|---------------------|
+| Tech >= 65 frequency | 3.9% (26/662 trades) | **38.3%** (6,779/17,704 bars) |
+| ML <= 40 frequency | 40.0% (265/662 trades) | ~40% (unchanged) |
+| Conflict trigger rate | 0.8% (5 trades) | **~15.3%** (~101 trades) |
+
+**Impact**: The conflict scenario would fire **~20x more often** than designed.
+
+### Recommendation
+
+Raise the Tech Direction threshold for `ml_vs_tech_conflito` to maintain similar trigger frequency:
+
+| Threshold | Tech Direction >= X | Estimated Frequency |
+|-----------|---------------------|---------------------|
+| 65 (current) | 38.3% | Too common |
+| 70 | 33.4% | Still common |
+| 75 | 26.9% | Moderate |
+| **80** | ~20% | **Similar to original intent** |
+
+**Proposed change**: `CONFLICT_TECH_MIN = 80` (up from 65)
+
+This keeps the scenario rare (~8% conflict rate with ML <= 40) while still catching genuine Tech/ML disagreements.
+
+### Alternative
+
+Keep threshold at 65 but accept that the scenario will fire more often. The scenario already has a confidence multiplier of 0.95 and uses threshold 58 instead of 65 for BUY. More frequent firing may actually be beneficial — it forces more conservative entries when Tech and ML disagree.
+
+**Decision needed**: Raise threshold to 80, or keep at 65 and accept higher trigger rate?
+
+---
+
 ## Backtest Plan
 
 1. Create backtest branch: `feature/tech-direction-split`
 2. Implement changes
-3. Run 6-month backtest with both systems:
+3. **Test both threshold options** (65 vs 80) in backtest
+4. Run 6-month backtest with both systems:
    - **Control**: Current system (tech_score with RSI/BB in score)
-   - **Test**: New system (tech_direction + tech_risk confidence)
-4. Compare metrics:
+   - **Test A**: New system with CONFLICT_TECH_MIN = 65
+   - **Test B**: New system with CONFLICT_TECH_MIN = 80
+5. Compare metrics:
    - Win rate
    - Profit factor
    - Max drawdown
    - Average confidence on winning vs losing trades
-5. Review results together before deployment
+   - Conflict scenario trigger frequency
+6. Review results together before deployment
 
 ---
 
