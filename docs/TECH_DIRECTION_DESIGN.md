@@ -1,5 +1,30 @@
 # Tech Direction / Tech Risk Split — Design Document (v2)
 
+## ❌ STATUS: ABANDONED (Feb 23, 2026)
+
+**Backtest Results (6-month period: Aug 2025 → Feb 2026)**
+
+| Metric | Baseline | Tech Direction | Delta |
+|--------|----------|----------------|-------|
+| Trades | 231 | 276 | +45 |
+| Win Rate | 72.7% | 67.0% | **-5.7%** |
+| Profit Factor | 2.24 | 1.71 | **-0.54** |
+| P&L | $2,258.51 | $1,634.38 | **-$624** |
+
+**Verdict**: The Tech Direction split WORSENS performance. PF drop of 0.54 is unacceptable.
+
+**Root Cause**: RSI/BB penalties in the current tech_score are protective, not bugs. They suppress the score during overbought conditions, preventing bad entries. Removing them (by splitting to Tech Direction) generates more low-quality entries.
+
+**Key Learnings**:
+1. EMAs and MACD are counter-productive for BUY direction (confirmed by diagnostic)
+2. RSI/BB penalties are a FEATURE, not a bug
+3. Tech Score has low predictive value for direction but protects against bad entries
+4. The +45 additional trades were net negative — more trades ≠ better
+
+**Note**: Conflict threshold variants (A/B/C) were identical due to a bug — the threshold override wasn't applied. All variants used default threshold 65. This bug needs fixing for future conflict scenario testing, but given the core result (Tech Direction split fails), it's lower priority.
+
+---
+
 Split the Technical pillar into two components: **Tech Direction** (for score calculation) and **Tech Risk** (for confidence adjustment).
 
 ---
