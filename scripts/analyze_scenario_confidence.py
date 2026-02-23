@@ -30,6 +30,8 @@ sys.path.insert(0, ROOT_DIR)
 
 # CSV with 662 trades that passed the 55% threshold
 CSV_PATH = os.path.join(ROOT_DIR, "data", "backtest_trades_20260218_2147.csv")
+# CSV with blocked signals (confidence < 55%)
+BLOCKED_CSV_PATH = os.path.join(ROOT_DIR, "data", "backtest_blocked_signals_20260223_2028.csv")
 OUTPUT_PATH = os.path.join(ROOT_DIR, "data", "scenario_confidence_analysis.txt")
 
 # Thresholds to analyze
@@ -356,6 +358,85 @@ def generate_report(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def load_blocked_signals(csv_path: str) -> pd.DataFrame:
+    """Load blocked signals CSV."""
+    if not os.path.exists(csv_path):
+        return pd.DataFrame()
+    df = pd.read_csv(csv_path)
+    df['time'] = pd.to_datetime(df['time'])
+    df['win'] = df['would_have_won']
+    return df
+
+
+def analyze_blocked_signals(blocked_df: pd.DataFrame) -> str:
+    """Analyze blocked signals that would have been trades if threshold were lower."""
+    lines = []
+    
+    lines.append(f"\n{'=' * 90}")
+    lines.append("  BLOCKED SIGNALS ANALYSIS (Confidence < 55%)")
+    lines.append(f"{'=' * 90}")
+    
+    if len(blocked_df) == 0:
+        lines.append("  No blocked signals data available.")
+        lines.append("  Run: python scripts/run_backtest.py to generate blocked signals CSV.")
+        return "\n".join(lines)
+    
+    total = len(blocked_df)
+    wins = blocked_df['would_have_won'].sum()
+    wr = wins / total * 100 if total > 0 else 0
+    total_pnl = blocked_df['profit_usd'].sum()
+    
+    # Profit factor
+    wins_df = blocked_df[blocked_df['would_have_won']]
+    losses_df = blocked_df[~blocked_df['would_have_won']]
+    gw = wins_df['profit_usd'].sum() if len(wins_df) > 0 else 0
+    gl = abs(losses_df['profit_usd'].sum()) if len(losses_df) > 0 else 0.01
+    pf = gw / gl if gl > 0 else float('inf')
+    
+    lines.append(f"\n  Total blocked signals: {total}")
+    lines.append(f"  Would-have-won: {wins} ({wr:.1f}%)")
+    lines.append(f"  Simulated P&L: ${total_pnl:+,.2f}")
+    lines.append(f"  Simulated PF: {pf:.2f}")
+    
+    # By scenario
+    lines.append(f"\n  By scenario:")
+    lines.append(f"  {'Scenario':<25} {'Count':>5} {'WR%':>7} {'P&L':>12} {'Avg Conf':>9}")
+    lines.append(f"  {'-' * 25} {'-' * 5} {'-' * 7} {'-' * 12} {'-' * 9}")
+    
+    for scenario in blocked_df['scenario'].unique():
+        s_df = blocked_df[blocked_df['scenario'] == scenario]
+        s_wins = s_df['would_have_won'].sum()
+        s_wr = s_wins / len(s_df) * 100 if len(s_df) > 0 else 0
+        s_pnl = s_df['profit_usd'].sum()
+        s_conf = s_df['confidence'].mean()
+        lines.append(f"  {scenario:<25} {len(s_df):>5} {s_wr:>6.1f}% ${s_pnl:>+10.2f} {s_conf:>8.1f}%")
+    
+    # By confidence bucket
+    lines.append(f"\n  By confidence level:")
+    lines.append(f"  {'Conf Range':<15} {'Count':>5} {'WR%':>7} {'P&L':>12}")
+    lines.append(f"  {'-' * 15} {'-' * 5} {'-' * 7} {'-' * 12}")
+    
+    buckets = [(0, 35), (35, 45), (45, 55)]
+    for lo, hi in buckets:
+        b_df = blocked_df[(blocked_df['confidence'] >= lo) & (blocked_df['confidence'] < hi)]
+        if len(b_df) > 0:
+            b_wins = b_df['would_have_won'].sum()
+            b_wr = b_wins / len(b_df) * 100
+            b_pnl = b_df['profit_usd'].sum()
+            lines.append(f"  {lo}-{hi}%{'':<10} {len(b_df):>5} {b_wr:>6.1f}% ${b_pnl:>+10.2f}")
+    
+    # Key insight
+    lines.append(f"\n  KEY INSIGHT:")
+    if pf >= 1.5:
+        lines.append(f"  ⚠️ Blocked signals have PF {pf:.2f} — LOWERING threshold would ADD profitable trades!")
+    elif pf >= 1.0:
+        lines.append(f"  ⚖️ Blocked signals have PF {pf:.2f} — marginal, threshold change has small impact.")
+    else:
+        lines.append(f"  ✅ Blocked signals have PF {pf:.2f} — BLOCKING them was CORRECT.")
+    
+    return "\n".join(lines)
+
+
 def analyze_marginal_trades(df: pd.DataFrame) -> str:
     """Deep dive into trades near the 55% threshold."""
     lines = []
@@ -423,6 +504,100 @@ def analyze_marginal_trades(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def analyze_combined_thresholds(df: pd.DataFrame, blocked_df: pd.DataFrame) -> str:
+    """Analyze what happens at different threshold levels with complete data."""
+    lines = []
+    
+    lines.append(f"\n{'=' * 90}")
+    lines.append("  COMPLETE THRESHOLD ANALYSIS (Executed + Blocked)")
+    lines.append(f"{'=' * 90}")
+    
+    if len(blocked_df) == 0:
+        lines.append("  No blocked signals data. Run backtest first.")
+        return "\n".join(lines)
+    
+    # Combine executed and blocked into one dataset
+    executed = df.copy()
+    executed['status'] = 'executed'
+    executed['win'] = executed['profit_pips'] > 0
+    
+    blocked = blocked_df.copy()
+    blocked['status'] = 'blocked'
+    blocked['win'] = blocked['would_have_won']
+    blocked['profit_pips'] = blocked['profit_pips']
+    blocked['profit_usd'] = blocked['profit_usd']
+    
+    # Standardize columns
+    common_cols = ['scenario', 'confidence', 'profit_pips', 'profit_usd', 'win', 'status', 'direction']
+    executed_std = executed[common_cols].copy()
+    blocked_std = blocked[common_cols].copy()
+    
+    all_signals = pd.concat([executed_std, blocked_std], ignore_index=True)
+    
+    lines.append(f"\n  Total signals: {len(all_signals)} (executed: {len(executed)}, blocked: {len(blocked)})")
+    
+    # Simulate different thresholds
+    lines.append(f"\n  {'Threshold':<12} {'Trades':>6} {'WR%':>7} {'P&L':>14} {'PF':>6} {'vs 55%':>10}")
+    lines.append(f"  {'-' * 12} {'-' * 6} {'-' * 7} {'-' * 14} {'-' * 6} {'-' * 10}")
+    
+    baseline_pnl = None
+    for threshold in [35, 45, 55, 65]:
+        passed = all_signals[all_signals['confidence'] >= threshold]
+        if len(passed) == 0:
+            continue
+        
+        wins = passed['win'].sum()
+        wr = wins / len(passed) * 100
+        pnl = passed['profit_usd'].sum()
+        
+        wins_df = passed[passed['win']]
+        losses_df = passed[~passed['win']]
+        gw = wins_df['profit_usd'].sum() if len(wins_df) > 0 else 0
+        gl = abs(losses_df['profit_usd'].sum()) if len(losses_df) > 0 else 0.01
+        pf = gw / gl if gl > 0 else float('inf')
+        
+        if threshold == 55:
+            baseline_pnl = pnl
+            diff_str = "(baseline)"
+        else:
+            diff = pnl - baseline_pnl if baseline_pnl else 0
+            diff_str = f"${diff:+.2f}"
+        
+        lines.append(f"  {threshold}%{'':<9} {len(passed):>6} {wr:>6.1f}% ${pnl:>+12.2f} {pf:>6.2f} {diff_str:>10}")
+    
+    # Recommendation
+    lines.append(f"\n  RECOMMENDATION:")
+    
+    # Calculate metrics for each threshold
+    t35 = all_signals[all_signals['confidence'] >= 35]
+    t45 = all_signals[all_signals['confidence'] >= 45]
+    t55 = all_signals[all_signals['confidence'] >= 55]
+    t65 = all_signals[all_signals['confidence'] >= 65]
+    
+    pnl_35 = t35['profit_usd'].sum() if len(t35) > 0 else 0
+    pnl_45 = t45['profit_usd'].sum() if len(t45) > 0 else 0
+    pnl_55 = t55['profit_usd'].sum() if len(t55) > 0 else 0
+    pnl_65 = t65['profit_usd'].sum() if len(t65) > 0 else 0
+    
+    best_threshold = 55
+    best_pnl = pnl_55
+    for t, p in [(35, pnl_35), (45, pnl_45), (65, pnl_65)]:
+        if p > best_pnl:
+            best_threshold = t
+            best_pnl = p
+    
+    if best_threshold == 55:
+        lines.append(f"  ✅ Current threshold (55%) is OPTIMAL. No change needed.")
+    elif best_threshold < 55:
+        lines.append(f"  ⚠️ LOWER threshold to {best_threshold}% would ADD ${best_pnl - pnl_55:+.2f} P&L")
+        lines.append(f"     But consider: more trades = more risk exposure, more monitoring needed.")
+    else:
+        lines.append(f"  📈 RAISE threshold to {best_threshold}% would ADD ${best_pnl - pnl_55:+.2f} P&L")
+        lines.append(f"     Fewer trades but higher quality.")
+    
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Scenario-based confidence threshold diagnostic')
     parser.add_argument('--full', action='store_true', help='Run full backtest scan (requires MT5)')
@@ -434,12 +609,27 @@ def main():
     
     print(f"Loading trades from {CSV_PATH}...")
     df = load_trades(CSV_PATH)
-    print(f"Loaded {len(df)} trades")
+    print(f"Loaded {len(df)} executed trades")
     print(f"Confidence range: {df['confidence'].min():.0f}% - {df['confidence'].max():.0f}%")
     print(f"Scenarios: {df['scenario'].nunique()}")
     
+    # Load blocked signals
+    blocked_df = load_blocked_signals(BLOCKED_CSV_PATH)
+    if len(blocked_df) > 0:
+        print(f"Loaded {len(blocked_df)} blocked signals from {BLOCKED_CSV_PATH}")
+    else:
+        print(f"⚠️ No blocked signals CSV found. Run backtest to generate.")
+    
     # Generate report
     report = generate_report(df)
+    
+    # Add blocked signals analysis
+    blocked_report = analyze_blocked_signals(blocked_df)
+    report += blocked_report
+    
+    # Add combined threshold analysis
+    combined_report = analyze_combined_thresholds(df, blocked_df)
+    report += combined_report
     
     # Add marginal trades analysis
     marginal_report = analyze_marginal_trades(df)

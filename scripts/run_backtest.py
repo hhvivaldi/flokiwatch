@@ -1087,6 +1087,9 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
         'blocked_details': [],
     }
 
+    # Blocked signals instrumentation (signals with actionable score but confidence < threshold)
+    blocked_signals = []
+
     # Find H1 candles in backtest range
     bt_mask = (df_h1['datetime'] >= BT_START) & (df_h1['datetime'] <= BT_END)
     bt_indices = df_h1[bt_mask].index.tolist()
@@ -1304,11 +1307,56 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
         if not is_actionable_signal(decision):
             continue
 
-        if confidence < config.BRAIN_MIN_CONFIDENCE:
-            continue
-
+        # Get direction early for blocked signal logging
         direction = get_trade_direction(decision)
         if direction is None:
+            continue
+
+        # ============================================================
+        # Capture blocked signals (actionable but confidence < threshold)
+        # ============================================================
+        if confidence < config.BRAIN_MIN_CONFIDENCE:
+            # Simulate what would have happened
+            atr_blocked = get_atr_value(h1_slice)
+            levels_blocked = calculate_sl_tp(current_price, direction, atr_blocked)
+            
+            # Create a temporary trade to simulate
+            blocked_trade = SimTrade(
+                ticket=0,
+                direction=direction,
+                entry_price=current_price,
+                entry_time=h1_time,
+                sl=levels_blocked.stop_loss,
+                tp=levels_blocked.take_profit_1,
+                atr=atr_blocked,
+                brain_score=final_score,
+                confidence=confidence,
+                scenario=brain_result.scenario,
+                scenario_desc=brain_result.scenario_description,
+                explanation_snippet="",
+            )
+            blocked_trade = simulate_trade(blocked_trade, df_m5)
+            
+            blocked_signals.append({
+                'time': h1_time,
+                'scenario': brain_result.scenario,
+                'score': final_score,
+                'confidence': confidence,
+                'direction': direction,
+                'entry_price': current_price,
+                'sl': levels_blocked.stop_loss,
+                'tp': levels_blocked.take_profit_1,
+                'close_price': blocked_trade.close_price,
+                'close_reason': blocked_trade.close_reason,
+                'profit_pips': blocked_trade.profit_pips,
+                'profit_usd': blocked_trade.profit_usd,
+                'max_favorable_pips': blocked_trade.max_favorable_pips,
+                'max_adverse_pips': blocked_trade.max_adverse_pips,
+                'would_have_won': blocked_trade.profit_pips > 0,
+                'tech_score': tech_data.get('score', 50),
+                'ml_score': ml_data.get('score', 50),
+                'momentum_score': momentum_data.get('score', 50),
+            })
             continue
 
         # ============================================================
@@ -1543,6 +1591,9 @@ def run_backtest(data: Dict[str, pd.DataFrame], disable_visual: bool = False, di
             print(f"   Early Exit triggered on {len(early_exits)} trades:")
             for t in early_exits:
                 print(f"     #{t.ticket} {t.direction} @ {t.entry_time.strftime('%m-%d %H:%M')} → {t.early_exit_reason} P&L={t.profit_pips:+.1f} pips")
+
+    # Store blocked signals for analysis
+    run_backtest._blocked_signals = blocked_signals
 
     return trades, pyramid_stats
 
@@ -2385,6 +2436,36 @@ def main():
                 })
             pd.DataFrame(rows).to_csv(csv_path, index=False)
             print(f"📄 Trades CSV saved: {csv_path}")
+
+        # Save blocked signals CSV
+        blocked_signals = getattr(run_backtest, '_blocked_signals', [])
+        if blocked_signals:
+            blocked_csv_path = os.path.join(ROOT_DIR, "data", f"backtest_blocked_signals_{timestamp}.csv")
+            pd.DataFrame(blocked_signals).to_csv(blocked_csv_path, index=False)
+            print(f"📄 Blocked signals CSV saved: {blocked_csv_path} ({len(blocked_signals)} signals)")
+            
+            # Print summary
+            blocked_df = pd.DataFrame(blocked_signals)
+            print(f"\n{'=' * 60}")
+            print(f"  BLOCKED SIGNALS ANALYSIS (confidence < {config.BRAIN_MIN_CONFIDENCE}%)")
+            print(f"{'=' * 60}")
+            print(f"  Total blocked: {len(blocked_signals)}")
+            wins = blocked_df['would_have_won'].sum()
+            wr = wins / len(blocked_df) * 100 if len(blocked_df) > 0 else 0
+            total_pnl = blocked_df['profit_usd'].sum()
+            print(f"  Would-have-won: {wins} ({wr:.1f}%)")
+            print(f"  Simulated P&L: ${total_pnl:+,.2f}")
+            
+            # By scenario
+            print(f"\n  By scenario:")
+            print(f"  {'Scenario':<30} {'Count':>5} {'WR%':>7} {'P&L':>12}")
+            print(f"  {'-' * 30} {'-' * 5} {'-' * 7} {'-' * 12}")
+            for scenario in blocked_df['scenario'].unique():
+                s_df = blocked_df[blocked_df['scenario'] == scenario]
+                s_wins = s_df['would_have_won'].sum()
+                s_wr = s_wins / len(s_df) * 100 if len(s_df) > 0 else 0
+                s_pnl = s_df['profit_usd'].sum()
+                print(f"  {scenario:<30} {len(s_df):>5} {s_wr:>6.1f}% ${s_pnl:>+10.2f}")
 
     finally:
         mt5.shutdown()
