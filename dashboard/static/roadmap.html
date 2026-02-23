@@ -234,7 +234,7 @@
           <span class="roadmap-badge roadmap-badge-completed">TESTED</span>
           <h2 class="about-card-title mb-0">Optimization Roadmap</h2>
         </div>
-        <p class="text-xs text-gray-500 mb-5">7 features rigorously tested via data analysis on 662 backtest trades (Aug 2024 &rarr; Feb 2026, 18 months). <strong class="text-gray-400">All seven confirmed the system is already well-optimized.</strong> Every filter tested removed more winners than losers.</p>
+        <p class="text-xs text-gray-500 mb-5">10 features rigorously tested via data analysis on 662 backtest trades (Aug 2024 &rarr; Feb 2026, 18 months). <strong class="text-gray-400">All ten confirmed the system is already well-optimized.</strong> Every filter tested removed more winners than losers.</p>
 
         <div class="space-y-4">
           <div class="roadmap-item roadmap-item-completed">
@@ -290,6 +290,30 @@
             <div>
               <div class="text-sm text-gray-200 font-semibold">Weight Optimization <span class="text-green-400 text-xs font-normal ml-1">CONFIRMED</span></div>
               <div class="text-xs text-gray-500 mt-0.5">96 five-pillar + 19 three-pillar combos tested via walk-forward (12M train / 6M test). Best combo improved test PF by only +0.04 (below +0.10 threshold). Current weights confirmed near-optimal. PF range: 1.70&ndash;2.13 (train), 2.13&ndash;2.55 (test) &mdash; narrow band confirms robustness.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Tech Direction Split <span class="text-red-400 text-xs font-normal ml-1">ABANDONED</span></div>
+              <div class="text-xs text-gray-500 mt-0.5">Attempted to split Tech pillar into Direction (EMAs/MACD) and Risk (RSI/BB). Backtest: PF 2.24 &rarr; 1.71 (drop of 0.54), WR 72.7% &rarr; 67.0%. RSI/BB penalties are a FEATURE &mdash; they prevent bad entries, not direction signals.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Confidence Threshold Analysis <span class="text-green-400 text-xs font-normal ml-1">CONFIRMED</span></div>
+              <div class="text-xs text-gray-500 mt-0.5">Tested 35%, 45%, 55%, 65% thresholds on 759 signals (662 executed + 97 blocked). 55% is optimal: lowering to 35% adds only $96 P&amp;L but drops PF 2.14 &rarr; 2.01. Blocked signals have PF 1.11 &mdash; correctly filtered.</div>
+            </div>
+          </div>
+
+          <div class="roadmap-item roadmap-item-completed">
+            <div class="roadmap-dot roadmap-dot-completed"></div>
+            <div>
+              <div class="text-sm text-gray-200 font-semibold">Scenario-Specific Thresholds <span class="text-red-400 text-xs font-normal ml-1">NOT NEEDED</span></div>
+              <div class="text-xs text-gray-500 mt-0.5">Analyzed blocked signals by scenario. No high-value scenario suppressed: momentum_forte_confirmado avg 95.5% conf (never affected). Blocked signals mostly zona_sr_forte/padrao with marginal PF 1.11.</div>
             </div>
           </div>
         </div>

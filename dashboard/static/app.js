@@ -661,7 +661,9 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const action = feed.gpt_validator.action || "CONFIRM";
     const text = feed.gpt_validator.reason || "No detail";
     const adj = feed.gpt_validator.adjustment;
-    const adjStr = (adj != null && adj !== 0) ? ` (${adj > 0 ? '+' : ''}${adj})` : "";
+    // Sign is determined by action: BOOST = +, REDUCE = -, CONFIRM/BLOCK = no adjustment shown
+    const sign = action === "BOOST" ? "+" : (action === "REDUCE" ? "-" : "+");
+    const adjStr = (adj != null && adj !== 0) ? ` (${sign}${adj})` : "";
     let bg = "bg-gray-800/50";
     let border = "border-gray-700/50";
     let textCls = "text-gray-300";
