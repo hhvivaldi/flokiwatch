@@ -661,15 +661,16 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const action = feed.gpt_validator.action || "CONFIRM";
     const text = feed.gpt_validator.reason || "No detail";
     const adj = feed.gpt_validator.adjustment;
-    // Sign is determined by action: BOOST = +, REDUCE = -, CONFIRM/BLOCK = no adjustment shown
+    // Sign is determined by action: BOOST = +, REDUCE = -
     const sign = action === "BOOST" ? "+" : (action === "REDUCE" ? "-" : "+");
     const adjStr = (adj != null && adj !== 0) ? ` (${sign}${adj})` : "";
     let bg = "bg-gray-800/50";
     let border = "border-gray-700/50";
     let textCls = "text-gray-300";
     
+    // BOOST = green, REDUCE = red, BLOCK = red, CONFIRM = gray
     if (action === "BOOST") { bg = "bg-green-900/20"; border = "border-green-700/50"; textCls = "text-green-400"; }
-    else if (action === "REDUCE") { bg = "bg-yellow-900/20"; border = "border-yellow-700/50"; textCls = "text-yellow-400"; }
+    else if (action === "REDUCE") { bg = "bg-red-900/20"; border = "border-red-700/50"; textCls = "text-red-400"; }
     else if (action === "BLOCK") { bg = "bg-red-900/20"; border = "border-red-700/50"; textCls = "text-red-400"; }
 
     gptContainer.innerHTML = `
