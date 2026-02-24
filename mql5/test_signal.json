@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "timestamp": "2026-02-24T15:30:00",
+  "signal_id": "20260224153000",
+  "signal": "HOLD",
+  "sl": 2890.50,
+  "tp": 2945.00,
+  "lot_size": 0.02,
+  "confidence": 72.5,
+  "magic": 234000,
+  "comment": "Brain-TEST-72",
+  "breakeven_trigger_pips": 100,
+  "trailing_trigger_pips": 150,
+  "trailing_distance_pips": 100,
+  "max_drawdown_pips": 1000
+}
