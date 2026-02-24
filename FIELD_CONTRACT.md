@@ -202,4 +202,134 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ---
 
-*Last updated: 2026-02-20*
+*Last updated: 2026-02-24*
+
+---
+
+## EA Bridge (Optional Execution Mode)
+
+### Overview
+
+The EA Bridge is an **optional** execution mode that separates the Python Brain (analysis) from MT5 execution. When enabled, Python writes signals to a JSON file, and the FlokiBridge EA reads and executes them with tick-by-tick position management.
+
+**Status:** `USE_EA_BRIDGE = False` (disabled until full integration testing)
+
+### Architecture
+
+```
+USE_EA_BRIDGE = True AND ea_status.json < 60s old:
+┌─────────────┐    brain_signal.json    ┌─────────────┐
+│ Python Brain│ ──────────────────────► │ FlokiBridge │
+│  (main.py)  │                         │    (EA)     │
+│             │ ◄────────────────────── │             │
+└─────────────┘    ea_status.json       └─────────────┘
+
+USE_EA_BRIDGE = False OR ea_status.json > 60s old:
+┌─────────────┐    MT5 API (direct)     ┌─────────────┐
+│ Python Brain│ ──────────────────────► │    MT5      │
+│  (main.py)  │ ◄────────────────────── │  Terminal   │
+└─────────────┘                         └─────────────┘
+```
+
+### Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `FlokiBridge.mq5` | `mql5/` | MT5 EA that executes signals |
+| `ea_bridge.py` | project root | Python JSON I/O module |
+| `brain_signal.json` | `MQL5\Files\` | Python → EA signals |
+| `ea_status.json` | `MQL5\Files\` | EA → Python status |
+
+### Config Options (`config.py`)
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `USE_EA_BRIDGE` | bool | `False` | Enable EA execution mode |
+| `EA_STALE_THRESHOLD_SECONDS` | int | `60` | Fallback to direct API if status older than this |
+| `BRAIN_SIGNAL_JSON_PATH` | string | `MQL5\Files\brain_signal.json` | Signal file path |
+| `EA_STATUS_JSON_PATH` | string | `MQL5\Files\ea_status.json` | Status file path |
+
+### `brain_signal.json` Schema (Python → EA)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | int | Schema version (1) |
+| `timestamp` | string (ISO) | Signal generation time |
+| `signal_id` | string | Unique ID (YYYYMMDDHHmmss) |
+| `signal` | `"BUY"` \| `"SELL"` \| `"HOLD"` \| `"CLOSE"` | Trade action |
+| `sl` | float | Stop loss price |
+| `tp` | float | Take profit price |
+| `lot_size` | float | Position size |
+| `confidence` | float | Brain confidence (0-100) |
+| `magic` | int | Magic number (234000) |
+| `comment` | string | Order comment |
+| `breakeven_trigger_pips` | float | Pips profit to move SL to entry |
+| `trailing_trigger_pips` | float | Pips profit to activate trailing |
+| `trailing_distance_pips` | float | Trailing distance behind price |
+| `max_drawdown_pips` | float | Emergency close threshold |
+
+### `ea_status.json` Schema (EA → Python)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | int | Schema version (1) |
+| `timestamp` | string | Status update time |
+| `last_signal_id` | string | Last processed signal ID |
+| `last_signal_result` | string | `"OK"` or error message |
+| `account.balance` | float | Account balance |
+| `account.equity` | float | Account equity |
+| `account.margin` | float | Used margin |
+| `account.free_margin` | float | Free margin |
+| `positions[]` | array | Open positions (see below) |
+| `closed_today[]` | array | Trades closed today |
+| `spread_pips` | float | Current spread in pips |
+| `last_error` | string \| null | Last error message |
+
+### `ea_status.json` Position Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `positions[].ticket` | int | Position ticket |
+| `positions[].direction` | `"BUY"` \| `"SELL"` | Direction |
+| `positions[].volume` | float | Lot size |
+| `positions[].open_price` | float | Entry price |
+| `positions[].current_price` | float | Current price |
+| `positions[].sl` | float | Current stop loss |
+| `positions[].tp` | float | Take profit |
+| `positions[].profit` | float | P&L in account currency |
+| `positions[].profit_pips` | float | P&L in pips |
+| `positions[].open_time` | string | Open time |
+| `positions[].phase` | `"OPEN"` \| `"BREAKEVEN"` \| `"TRAILING"` | Position phase |
+| `positions[].breakeven_hit` | bool | Breakeven triggered |
+| `positions[].trailing_active` | bool | Trailing active |
+| `positions[].max_profit_pips` | float | Max profit reached |
+
+### Dashboard Integration (PENDING)
+
+The following elements must be added to the dashboard before EA Bridge can be enabled:
+
+| Element ID | Data Source | Description |
+|------------|-------------|-------------|
+| `ea-bridge-status` | `ea_bridge.is_ea_online()` | Shows "EA: ONLINE" or "EA: OFFLINE (fallback)" |
+| `ea-spread` | `ea_status.spread_pips` | Real-time spread from EA |
+| `position-phase` | `positions[].phase` | OPEN / BREAKEVEN / TRAILING indicator |
+
+### Fallback Behavior
+
+When `USE_EA_BRIDGE = True` but EA is offline (status file > 60s old):
+1. Python logs: `"EA Bridge: OFFLINE — falling back to direct MT5 API"`
+2. Trade execution uses `executor.py` (direct MT5 API)
+3. Position monitoring uses `monitor.py` (30s intervals)
+4. Dashboard should show: `"EA: OFFLINE (fallback)"`
+
+### Testing Checklist (Before Enabling)
+
+- [ ] Python writes `brain_signal.json` correctly
+- [ ] EA reads signal and opens position
+- [ ] EA writes `ea_status.json` with position data
+- [ ] Python reads status and updates dashboard
+- [ ] Fallback works when EA is offline
+- [ ] Breakeven triggers at correct pip level
+- [ ] Trailing activates and follows price
+- [ ] No conflict with existing positions (same magic number)
+- [ ] Dashboard shows EA status and position phase
