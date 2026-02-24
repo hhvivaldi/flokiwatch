@@ -453,6 +453,22 @@ class PositionMonitor:
         self.trailing_sl.pop(ticket, None)
         self.original_sl_pips.pop(ticket, None)
     
+    def get_position_phase(self, ticket: int) -> str:
+        """
+        Get the current phase of a position.
+        
+        Returns:
+            "OPEN" - Position has not hit breakeven
+            "BREAKEVEN" - SL moved to entry, trailing not yet active
+            "TRAILING" - Trailing stop is active
+        """
+        if ticket in self.trailing_sl:
+            return "TRAILING"
+        elif ticket in self.breakeven_hit_tickets:
+            return "BREAKEVEN"
+        else:
+            return "OPEN"
+    
     def get_positions_summary(self) -> dict:
         """Return summary of open positions"""
         positions = get_positions()
@@ -476,7 +492,8 @@ class PositionMonitor:
                     'volume': p.volume,
                     'profit': p.profit,
                     'profit_pips': p.profit_pips,
-                    'open_time': p.open_time.isoformat()
+                    'open_time': p.open_time.isoformat(),
+                    'phase': self.get_position_phase(p.ticket)
                 }
                 for p in positions
             ]

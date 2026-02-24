@@ -104,6 +104,17 @@ function renderPositions(positions) {
   for (const p of positions) {
     const pnl = Number(p.profit);
     const pnlClass = pnl >= 0 ? "text-green-400" : "text-red-400";
+    
+    // Phase badge styling
+    const phase = p.phase || "OPEN";
+    let phaseBadge = "";
+    if (phase === "TRAILING") {
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">TRAILING</span>`;
+    } else if (phase === "BREAKEVEN") {
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BREAKEVEN</span>`;
+    } else {
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">OPEN</span>`;
+    }
 
     container.insertAdjacentHTML(
       "beforeend",
@@ -113,6 +124,7 @@ function renderPositions(positions) {
           <div class="text-xs font-mono font-medium text-gray-200">
             <span class="text-gray-500 mr-1">#</span>${p.ticket} 
             <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600/50 text-gray-300 bg-gray-800/50">${p.direction}</span> 
+            ${phaseBadge}
             <span class="ml-2 text-gray-400">${p.volume} lot</span>
           </div>
           <div class="text-xs font-mono font-bold ${pnlClass}">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)} p)</span></div>

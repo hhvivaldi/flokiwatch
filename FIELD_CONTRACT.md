@@ -148,6 +148,7 @@
 | `positions[].tp` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].profit` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].profit_pips` | float | `state_writer.py` | `renderPositions()` |
+| `positions[].phase` | `"OPEN"` \| `"BREAKEVEN"` \| `"TRAILING"` | `state_writer.py` via `monitor.get_position_phase()` | `renderPositions()` |
 
 ### `trade_history` Array
 

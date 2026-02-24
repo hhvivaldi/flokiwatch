@@ -107,6 +107,8 @@ def write_state(bot_instance: Any) -> None:
         positions = []
         try:
             if getattr(bot_instance, "executes_trades", False):
+                from monitor import monitor
+                open_positions = executor.get_open_positions()
                 positions = [
                     {
                         "ticket": p.ticket,
@@ -120,8 +122,9 @@ def write_state(bot_instance: Any) -> None:
                         "profit_pips": p.profit_pips,
                         "open_time": _safe_iso(p.open_time),
                         "comment": p.comment,
+                        "phase": monitor.get_position_phase(p.ticket),
                     }
-                    for p in executor.get_open_positions()
+                    for p in open_positions
                 ]
         except Exception as e:
             log.debug(f"state_writer: error getting positions: {e}")
