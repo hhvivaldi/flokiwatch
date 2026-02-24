@@ -223,11 +223,11 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 **Position Sizing:** 2% do saldo por trade. Volume = (saldo×2%) / (SL_pips × valor_pip). Min 0.01, max 1.0 lotes.
 
-**SL:** ATR × 2.0 (min 50, max 300 pips). **TP:** ATR × 3.0.
+**SL:** ATR × 2.0 (min 150, max 800 pips). **TP:** ATR × 3.0.
 
-**Breakeven:** Trigger = 70% da distância SL. Move SL para entrada.
+**Breakeven:** Dinâmico = 70% dos pips do SL original. Fallback: fixo 100 pips quando SL não está disponível; em **COOLING_DOWN** usa 50 pips fixos. Move SL para entrada.
 
-**Trailing:** Trigger = 70% da distância SL. Distância = 70% da distância SL atrás do máximo.
+**Trailing:** Trigger = 150 pips de lucro. Distância = 100 pips atrás do preço.
 
 **Limites:** Max time 48h, max drawdown 1000 pips (emergency safety net), max daily loss 5%.
 

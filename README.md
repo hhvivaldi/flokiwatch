@@ -156,6 +156,8 @@ cd dashboard
 python server.py
 ```
 
+Checklist: restart the dashboard server after any change to dashboard/server.py.
+
 Access at `http://localhost:5000`
 
 ## 📊 Decision System
