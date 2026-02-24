@@ -207,12 +207,12 @@ void ScanExistingPositions()
 //+------------------------------------------------------------------+
 void CheckSignalFile()
 {
-   // Check if file exists
-   if(!FileIsExist(SignalFile, FILE_COMMON))
+   // Check if file exists (terminal-specific MQL5\Files folder)
+   if(!FileIsExist(SignalFile))
       return;
    
    // Check file modification time
-   datetime fileTime = (datetime)FileGetInteger(SignalFile, FILE_MODIFY_DATE, FILE_COMMON);
+   datetime fileTime = (datetime)FileGetInteger(SignalFile, FILE_MODIFY_DATE);
    if(fileTime == g_lastFileCheck)
       return;
    
@@ -249,7 +249,7 @@ void CheckSignalFile()
 //+------------------------------------------------------------------+
 bool ReadSignalFile(SignalData &signal)
 {
-   int handle = FileOpen(SignalFile, FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   int handle = FileOpen(SignalFile, FILE_READ|FILE_TXT|FILE_ANSI);
    if(handle == INVALID_HANDLE)
    {
       g_lastError = "Cannot open signal file";
@@ -688,14 +688,12 @@ void UpdatePositionData()
 //+------------------------------------------------------------------+
 void WriteStatus()
 {
-   // Write to temp file first, then rename (atomic)
-   string tempFile = StatusFile + ".tmp";
-   
-   int handle = FileOpen(tempFile, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   // Write directly to status file (terminal-specific MQL5\Files folder)
+   int handle = FileOpen(StatusFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
    if(handle == INVALID_HANDLE)
    {
       if(EnableLogging)
-         Print("Cannot write status file");
+         Print("Cannot write status file: ", GetLastError());
       return;
    }
    
@@ -748,9 +746,8 @@ void WriteStatus()
    FileWriteString(handle, json);
    FileClose(handle);
    
-   // Rename temp to final (atomic on most systems)
-   FileDelete(StatusFile, FILE_COMMON);
-   FileMove(tempFile, 0, StatusFile, FILE_COMMON);
+   if(EnableLogging)
+      Print("Status written: ", g_positionCount, " positions");
 }
 
 //+------------------------------------------------------------------+
