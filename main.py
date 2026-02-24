@@ -974,36 +974,95 @@ class TradingBot:
             # Execute trade
             comment = f"Bot-{decision}-{final_score:.0f}"
             
-            if direction == "BUY":
-                order_result = execute_buy(
-                    lot_size=pos_size.lot_size,
-                    sl=levels.stop_loss,
-                    tp=levels.take_profit_1,
-                    comment=comment
-                )
+            # Determine trailing parameters (Volatility Guard may override)
+            sl_pips_orig = levels.sl_pips
+            if self._last_vol_status == "COOLING_DOWN":
+                be_trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
+                tr_trigger = config.COOLING_TRAILING_TRIGGER_PIPS
+                tr_distance = config.COOLING_TRAILING_DISTANCE_PIPS
             else:
-                order_result = execute_sell(
-                    lot_size=pos_size.lot_size,
-                    sl=levels.stop_loss,
-                    tp=levels.take_profit_1,
-                    comment=comment
-                )
+                be_trigger = sl_pips_orig * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
+                tr_trigger = sl_pips_orig * getattr(config, 'TRAILING_ATR_MULT', 0.7)
+                tr_distance = sl_pips_orig * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
             
-            if order_result.success:
-                log.success(f"Trade executed! Ticket: {order_result.ticket}")
-                self.daily_stats['trades'] += 1
-                record_trade_opened(direction)
-                record_trade_open(
-                    ticket=order_result.ticket,
-                    direction=direction,
-                    volume=pos_size.lot_size,
-                    open_price=entry_price,
+            # Check if EA bridge is enabled and EA is online
+            use_ea = False
+            if getattr(config, 'USE_EA_BRIDGE', False) and self.executes_trades:
+                try:
+                    from ea_bridge import is_ea_online, write_signal
+                    stale_threshold = getattr(config, 'EA_STALE_THRESHOLD_SECONDS', 60)
+                    if is_ea_online(stale_threshold):
+                        use_ea = True
+                        log.info(f"   🔗 EA Bridge: ONLINE — sending signal via JSON")
+                    else:
+                        log.warning(f"   ⚠️ EA Bridge: OFFLINE — falling back to direct MT5 API")
+                except Exception as e:
+                    log.warning(f"   ⚠️ EA Bridge error: {e} — falling back to direct MT5 API")
+            
+            if use_ea:
+                # EA Bridge: Write signal to JSON, EA handles execution
+                signal_ok = write_signal(
+                    signal=direction,
                     sl=levels.stop_loss,
                     tp=levels.take_profit_1,
-                    comment=comment,
+                    lot_size=pos_size.lot_size,
+                    confidence=confidence,
+                    breakeven_trigger_pips=be_trigger,
+                    trailing_trigger_pips=tr_trigger,
+                    trailing_distance_pips=tr_distance,
+                    max_drawdown_pips=config.MAX_POSITION_DRAWDOWN_PIPS,
+                    comment=comment
                 )
+                
+                if signal_ok:
+                    log.success(f"Signal sent to EA: {direction}")
+                    self.daily_stats['trades'] += 1
+                    record_trade_opened(direction)
+                    # Note: ticket will be recorded when EA confirms execution
+                    # For now, record with placeholder ticket (EA will update)
+                    record_trade_open(
+                        ticket=0,  # EA will assign real ticket
+                        direction=direction,
+                        volume=pos_size.lot_size,
+                        open_price=entry_price,
+                        sl=levels.stop_loss,
+                        tp=levels.take_profit_1,
+                        comment=comment,
+                    )
+                else:
+                    log.error(f"Failed to send signal to EA")
             else:
-                log.error(f"Failed to execute trade: {order_result.error_message}")
+                # Direct MT5 API execution (fallback or EA disabled)
+                if direction == "BUY":
+                    order_result = execute_buy(
+                        lot_size=pos_size.lot_size,
+                        sl=levels.stop_loss,
+                        tp=levels.take_profit_1,
+                        comment=comment
+                    )
+                else:
+                    order_result = execute_sell(
+                        lot_size=pos_size.lot_size,
+                        sl=levels.stop_loss,
+                        tp=levels.take_profit_1,
+                        comment=comment
+                    )
+                
+                if order_result.success:
+                    log.success(f"Trade executed! Ticket: {order_result.ticket}")
+                    self.daily_stats['trades'] += 1
+                    record_trade_opened(direction)
+                    record_trade_open(
+                        ticket=order_result.ticket,
+                        direction=direction,
+                        volume=pos_size.lot_size,
+                        open_price=entry_price,
+                        sl=levels.stop_loss,
+                        tp=levels.take_profit_1,
+                        comment=comment,
+                    )
+                else:
+                    log.error(f"Failed to execute trade: {order_result.error_message}")
         finally:
             # Persist state for dashboard (must never block the bot)
             write_state(self)

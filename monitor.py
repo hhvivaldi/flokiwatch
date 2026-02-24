@@ -75,23 +75,35 @@ class PositionMonitor:
                 log.info(f"   Monitor: #{pos.ticket} {pos.direction} @ {pos.open_price:.2f} | SL original={pos.sl:.2f} ({sl_dist:.0f} pips)")
                 log.info(f"   Monitor: #{pos.ticket} Triggers: BE={be_trig:.0f} pips, Trail={tr_trig:.0f} pips, Dist={tr_dist:.0f} pips")
         
+        # Check if EA bridge is handling position management
+        ea_handles_trailing = False
+        if getattr(config, 'USE_EA_BRIDGE', False):
+            try:
+                from ea_bridge import is_ea_online
+                stale_threshold = getattr(config, 'EA_STALE_THRESHOLD_SECONDS', 60)
+                ea_handles_trailing = is_ea_online(stale_threshold)
+            except Exception:
+                pass
+        
         for pos in positions:
-            # 1. Check breakeven (move SL to entry)
-            action = self._check_breakeven(pos)
-            if action:
-                actions.append(action)
+            # Skip breakeven/trailing if EA is handling it
+            if not ea_handles_trailing:
+                # 1. Check breakeven (move SL to entry)
+                action = self._check_breakeven(pos)
+                if action:
+                    actions.append(action)
+                
+                # 2. Check trailing stop
+                action = self._check_trailing_stop(pos)
+                if action:
+                    actions.append(action)
             
-            # 2. Check trailing stop
-            action = self._check_trailing_stop(pos)
-            if action:
-                actions.append(action)
-            
-            # 3. Check max time
+            # 3. Check max time (Python still handles this as safety net)
             action = self._check_max_time(pos)
             if action:
                 actions.append(action)
             
-            # 4. Check excessive drawdown
+            # 4. Check excessive drawdown (Python still handles as safety net)
             action = self._check_max_drawdown(pos)
             if action:
                 actions.append(action)
