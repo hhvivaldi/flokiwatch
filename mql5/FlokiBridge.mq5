@@ -758,7 +758,7 @@ void WriteStatus()
 //+------------------------------------------------------------------+
 string BuildPositionJson(int index)
 {
-   PositionData &pos = g_positions[index];
+   PositionData pos = g_positions[index];
    double pipSize = 0.1;
    
    double currentPrice = 0;
@@ -805,7 +805,7 @@ string BuildPositionJson(int index)
 //+------------------------------------------------------------------+
 string BuildClosedJson(int index)
 {
-   ClosedTrade &trade = g_closedToday[index];
+   ClosedTrade trade = g_closedToday[index];
    
    string json = "    {\n";
    json += "      \"ticket\": " + IntegerToString(trade.ticket) + ",\n";
