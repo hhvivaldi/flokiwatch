@@ -203,6 +203,27 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ---
 
+## Trade History (History Dashboard)
+
+### Outcome Classification
+
+Trade outcomes are classified in `dashboard/server.py` from `trades.profit`:
+
+- **Win**: `profit > 0`
+- **Loss**: `profit < 0`
+- **Breakeven**: `profit == 0` (exact zero only)
+
+Win Rate uses `wins / (wins + losses)` and excludes breakevens.
+
+### Live vs Backtest Population
+
+The Live column in the History comparison table is filtered to **current system trades** only:
+
+- `open_time >= 2026-02-16`
+- Label: “Trades #8-22 (current system only)”
+
+---
+
 *Last updated: 2026-02-24*
 
 ---

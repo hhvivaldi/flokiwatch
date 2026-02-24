@@ -142,7 +142,7 @@ class HistoryApp {
     }
 
     renderComparisonTable() {
-        const live = this.data.global_stats;
+        const live = this.data.live_stats || this.data.global_stats;
         const bt = this.backtestRef;
         const tbody = document.getElementById('comparison-table-body');
         

@@ -347,11 +347,11 @@ def history_data():
             # Formatting values safely
             profit = float(trade.get("profit") or 0.0)
             
-            if profit > 0.5:
+            if profit > 0:
                 outcome = "win"
                 global_wins += 1
                 global_gross_profit += profit
-            elif profit < -0.5:
+            elif profit < 0:
                 outcome = "loss"
                 global_losses += 1
                 global_gross_loss += abs(profit)
@@ -456,6 +456,45 @@ def history_data():
                 if dd > ms["max_drawdown"]:
                     ms["max_drawdown"] = dd
 
+        def _calc_stats(trade_rows):
+            total = len(trade_rows)
+            wins = sum(1 for t in trade_rows if t.get("outcome") == "win")
+            losses = sum(1 for t in trade_rows if t.get("outcome") == "loss")
+            breakevens = sum(1 for t in trade_rows if t.get("outcome") == "breakeven")
+            gross_profit = sum(float(t.get("profit") or 0.0) for t in trade_rows if t.get("outcome") == "win")
+            gross_loss = sum(abs(float(t.get("profit") or 0.0)) for t in trade_rows if t.get("outcome") == "loss")
+            total_profit = sum(float(t.get("profit") or 0.0) for t in trade_rows)
+            win_rate = (wins / (wins + losses)) * 100 if (wins + losses) > 0 else 0.0
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0)
+            avg_win = gross_profit / wins if wins > 0 else 0.0
+            avg_loss = gross_loss / losses if losses > 0 else 0.0
+            avg_duration = sum(t.get("duration_minutes", 0) for t in trade_rows) / total if total > 0 else 0.0
+            return {
+                "total_trades": total,
+                "wins": wins,
+                "losses": losses,
+                "breakevens": breakevens,
+                "win_rate": round(win_rate, 2),
+                "profit_factor": round(profit_factor, 2),
+                "total_profit": round(total_profit, 2),
+                "avg_win": round(avg_win, 2),
+                "avg_loss": round(avg_loss, 2),
+                "avg_duration_minutes": round(avg_duration, 0),
+            }
+
+        def _calc_max_drawdown(trade_rows):
+            peak = 0.0
+            equity = 0.0
+            max_dd = 0.0
+            for t in trade_rows:
+                equity += float(t.get("profit") or 0.0)
+                if equity > peak:
+                    peak = equity
+                drawdown = peak - equity
+                if drawdown > max_dd:
+                    max_dd = drawdown
+            return max_dd
+
         total_trades = len(trades)
         win_rate = (global_wins / (global_wins + global_losses)) * 100 if (global_wins + global_losses) > 0 else 0.0
         profit_factor = global_gross_profit / global_gross_loss if global_gross_loss > 0 else (global_gross_profit if global_gross_profit > 0 else 0)
@@ -492,8 +531,14 @@ def history_data():
             "worst_trade_profit": round(worst_trade["profit"], 2) if worst_trade else 0.0,
         }
 
+        cutoff_date = "2026-02-16"
+        live_trades = [t for t in trades if (t.get("open_time") or "") >= cutoff_date]
+        live_stats = _calc_stats(live_trades)
+        live_stats["max_drawdown"] = round(_calc_max_drawdown(live_trades), 2)
+
         return JSONResponse({
             "global_stats": global_stats,
+            "live_stats": live_stats,
             "monthly_stats": monthly_stats,
             "equity_curve": equity_curve,
             "trades": trades
