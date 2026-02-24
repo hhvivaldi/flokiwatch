@@ -33,6 +33,32 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
     os.replace(tmp_path, path)
 
 
+def _get_ea_bridge_status() -> Dict[str, Any]:
+    """Get EA Bridge status for dashboard display."""
+    try:
+        enabled = getattr(config, "USE_EA_BRIDGE", False)
+        if not enabled:
+            return {"enabled": False, "online": False, "spread_pips": None}
+        
+        from ea_bridge import is_ea_online, read_ea_status
+        stale_threshold = getattr(config, "EA_STALE_THRESHOLD_SECONDS", 60)
+        online = is_ea_online(stale_threshold)
+        
+        spread_pips = None
+        if online:
+            status = read_ea_status(stale_threshold)
+            if status:
+                spread_pips = status.spread_pips
+        
+        return {
+            "enabled": True,
+            "online": online,
+            "spread_pips": spread_pips,
+        }
+    except Exception:
+        return {"enabled": False, "online": False, "spread_pips": None}
+
+
 def write_state(bot_instance: Any) -> None:
     """Write the bot's operational state for dashboard consumption.
 
@@ -156,6 +182,7 @@ def write_state(bot_instance: Any) -> None:
             "last_analysis": last_analysis,
             "positions": positions,
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
+            "ea_bridge": _get_ea_bridge_status(),
         }
 
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)

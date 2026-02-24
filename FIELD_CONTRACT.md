@@ -167,7 +167,7 @@
 Any dashboard HTML redesign **must** preserve these element IDs or update `app.js` simultaneously:
 
 ### Header
-`status-dot`, `status-label`, `mode`, `last-update`, `market`
+`status-dot`, `status-label`, `mode`, `last-update`, `market`, `ea-bridge-status`, `ea-spread`
 
 ### Signal Core
 `goldcon`, `goldcon-decision`, `goldcon-score`, `goldcon-conf`, `goldcon-scenario`, `goldcon-blocked`, `signal-segments`
@@ -304,15 +304,24 @@ USE_EA_BRIDGE = False OR ea_status.json > 60s old:
 | `positions[].trailing_active` | bool | Trailing active |
 | `positions[].max_profit_pips` | float | Max profit reached |
 
-### Dashboard Integration (PENDING)
+### Dashboard Integration (IMPLEMENTED)
 
-The following elements must be added to the dashboard before EA Bridge can be enabled:
+The following elements have been added to the dashboard:
 
 | Element ID | Data Source | Description |
 |------------|-------------|-------------|
-| `ea-bridge-status` | `ea_bridge.is_ea_online()` | Shows "EA: ONLINE" or "EA: OFFLINE (fallback)" |
-| `ea-spread` | `ea_status.spread_pips` | Real-time spread from EA |
-| `position-phase` | `positions[].phase` | OPEN / BREAKEVEN / TRAILING indicator |
+| `ea-bridge-status` | `state.ea_bridge.enabled/online` | Shows "OFF", "ONLINE", or "FALLBACK" |
+| `ea-spread` | `state.ea_bridge.spread_pips` | Real-time spread from EA (e.g., "3.2p") |
+
+**Note:** `position-phase` (OPEN/BREAKEVEN/TRAILING) is deferred until EA Bridge is enabled for live trading.
+
+### `ea_bridge` Object in `bot_state.json`
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `ea_bridge.enabled` | bool | `state_writer.py` | `render()` → `#ea-bridge-status` |
+| `ea_bridge.online` | bool | `state_writer.py` | `render()` → `#ea-bridge-status` |
+| `ea_bridge.spread_pips` | float \| null | `state_writer.py` | `render()` → `#ea-spread` |
 
 ### Fallback Behavior
 

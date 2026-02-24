@@ -243,6 +243,33 @@ function render(state) {
     marketLabel.className = "text-gray-400";
   }
 
+  // EA Bridge status
+  const eaStatus = el("ea-bridge-status");
+  const eaSpread = el("ea-spread");
+  const eaBridge = state.ea_bridge || {};
+  
+  if (eaBridge.enabled === true) {
+    if (eaBridge.online === true) {
+      eaStatus.textContent = "ONLINE";
+      eaStatus.className = "text-green-400 font-medium";
+    } else {
+      eaStatus.textContent = "FALLBACK";
+      eaStatus.className = "text-amber-400 font-medium";
+    }
+  } else {
+    eaStatus.textContent = "OFF";
+    eaStatus.className = "text-gray-500";
+  }
+  
+  if (eaBridge.spread_pips != null) {
+    const spread = Number(eaBridge.spread_pips);
+    eaSpread.textContent = `${spread.toFixed(1)}p`;
+    eaSpread.className = spread > 5 ? "font-mono text-amber-400" : "font-mono text-gray-300";
+  } else {
+    eaSpread.textContent = "—";
+    eaSpread.className = "font-mono text-gray-500";
+  }
+
   const la = state.last_analysis || {};
   const hasRealAnalysis = la.decision != null && la.final_score != null;
   const marketClosed = state.market?.is_open === false;
