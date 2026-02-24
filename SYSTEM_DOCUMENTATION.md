@@ -287,6 +287,37 @@ Interface MT5: connect, disconnect, account info, prices, spread, execute trade,
 
 ---
 
+## 15. Live Performance Population Split (Pre-Commit vs Current)
+
+**Contexto:** As primeiras trades (tickets #1–7) foram executadas antes do primeiro commit (Feb 20, 2026).
+Esse sistema era **pre-commit**, com **4 pilares** (sem Calendário), pesos diferentes e loop de análise a cada **300s**.
+As trades #8–22 são do **sistema atual**, com **5 pilares**, `BRAIN_MIN_CONFIDENCE = 55.0` e **monitor a cada 10s**.
+Por isso, **as duas populações não são comparáveis** e devem ser analisadas separadamente.
+
+### População A — Trades #1–7 (Pre-Commit, 4 pilares)
+- **Sistema:** 4 pilares (Tech/ML/Momentum/News), **sem Calendário**
+- **Pesos:** Tech 35% / ML 25% / Momentum 20% / News 20%
+- **Loop:** 300s (monitor integrado no ciclo de análise)
+- **Confidence floor:** desconhecido (pre-commit)
+- **Métricas:** 2W / 5L (WR 28.6%)
+  - **Gross Profit:** $32.81
+  - **Gross Loss:** $54.10
+  - **Net P&L:** -$21.29
+  - **PF:** 0.607
+- **Nota:** Não comparar com o sistema atual.
+
+### População B — Trades #8–22 (Sistema Atual, 5 pilares)
+- **Sistema:** 5 pilares (inclui Calendário)
+- **Confidence floor:** `BRAIN_MIN_CONFIDENCE = 55.0`
+- **Monitor:** 10s com posições abertas
+- **Métricas:** 8W / 7L (WR 53.3%)
+  - **Gross Profit:** $197.73
+  - **Gross Loss:** $206.65
+  - **Net P&L:** -$8.92
+  - **PF:** 0.96
+
+**Atenção:** 15 trades (#8–22) **não constituem amostra estatística válida**. Não tirar conclusões de performance até ≥30 trades do sistema atual.
+
 ## 15. Alertas Discord
 
 Signal, Trade Opened/Closed, Breakeven, M5 Block, Market Open/Closed, Heartbeat (Full: cenário mudou ou score±8; Short: sem mudanças), Daily Summary, Errors.
