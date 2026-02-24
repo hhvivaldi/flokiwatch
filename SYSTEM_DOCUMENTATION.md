@@ -115,6 +115,8 @@ Score 0-100. Fontes: MQL5 Bridge JSON → FCS API → Hardcoded. Fases: NORMAL(5
 
 **Filtros:** Parabolic Exhaustion (RSI>80 + momentum>90 → conf ×0.70). Momentum-contra-ML (momentum<30 + abaixo EMAs → bloqueia BUY).
 
+**Pesos dinâmicos (após cenário):** `_adjust_weights()` sempre roda depois da seleção de cenário e pode ajustar pesos mesmo em `padrao`. Ex.: se `ml_confidence > 0.70` (estritamente maior, não `>=`), ML recebe +10% e os outros quatro pilares dividem igualmente -10% (−2.5% cada).
+
 ---
 
 ## 6. Cálculo de Confiança
@@ -303,7 +305,7 @@ Por isso, **as duas populações não são comparáveis** e devem ser analisadas
   - **Gross Profit:** $32.81
   - **Gross Loss:** $54.10
   - **Net P&L:** -$21.29
-  - **PF:** 0.607
+  - **PF:** 0.606
 - **Nota:** Não comparar com o sistema atual.
 
 ### População B — Trades #8–22 (Sistema Atual, 5 pilares)
@@ -330,6 +332,7 @@ Heartbeat: 60 min quando em HOLD sem posições.
 
 - **JSON** (`data/bot_state.json`): Estado atual para dashboard (sobrescrito cada ciclo)
 - **SQLite** (`data/history.db`): Histórico append-only (analyses, trades, account_snapshots)
+  - **Caveat JOIN (analyses ↔ trades):** apenas quando o gap de timestamp é < 5 min; gaps maiores não devem ser unidos.
 - Ambos try/except, nunca bloqueiam o bot. SQLite WAL mode.
 
 ---
@@ -445,6 +448,10 @@ XAUUSD/
 ---
 
 ## 23. Roadmap
+
+## Live Observations
+
+- Feb 24 (trades #21–#22): momentum extremes (85–95) overrode bearish ML/Technical signals and entered against the move; track if this pattern repeats.
 
 ### Completed
 
