@@ -32,7 +32,7 @@ main.py (Orquestrador)
   │     ├── volatility_guard.py (Proteção crashes)
   │     ├── gpt_confidence.py (GPT Validator)
   │     └── cycle_memory.py (Memória temporal)
-  ├── Monitor Cycle (30 sec) → monitor.py (Breakeven, Trailing)
+  ├── Monitor Cycle (10 sec) → monitor.py (Breakeven, Trailing)
   ├── Safety Checks → safety_checks.py
   ├── Execution → executor.py (MT5 API)
   └── Output
@@ -229,18 +229,18 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 **Trailing:** Trigger = 70% da distância SL. Distância = 70% da distância SL atrás do máximo.
 
-**Limites:** Max time 48h, max drawdown 300 pips, max daily loss 5%.
+**Limites:** Max time 48h, max drawdown 1000 pips (emergency safety net), max daily loss 5%.
 
 ---
 
 ## 12. Monitor de Posições
 
-**Ficheiro:** `monitor.py` — Executa cada 30s com posições abertas.
+**Ficheiro:** `monitor.py` — Executa cada 10s com posições abertas.
 
 1. **Breakeven:** Detecta trigger → move SL para entrada → alerta Discord
 2. **Trailing:** Após breakeven, SL segue preço (só melhora, nunca recua)
 3. **Max Time:** 48h + lucro <5 pips → fecha
-4. **Max Drawdown:** >300 pips → fecha imediatamente
+4. **Max Drawdown:** >1000 pips → fecha imediatamente (emergency safety net — SL should trigger first at ~300 pips max)
 5. **Broker Closure:** Detecta posições desaparecidas → consulta deal history (3-level) → classifica (trailing/tp/be/sl) → regista + alerta
 
 Volatility-aware: COOLING_DOWN usa BE 50 pips, trailing 80/50 pips.
@@ -371,7 +371,7 @@ OOS PF 1.62 > 1.5 target. Sistema validado, não overfitted.
 3. Calcular SL/TP (ATR) → position sizing → executar MT5
 4. Registar trade + alerta Discord
 
-**Monitor (30s):**
+**Monitor (10s):**
 1. Breakeven → Trailing → Max time → Max drawdown
 2. Detectar broker closures → deal history → classificar → registar
 

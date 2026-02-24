@@ -82,7 +82,7 @@ MAX_POSITION_HOURS = 24  # Close position after 24h if profit < 5 pips
 MAX_POSITION_MIN_PROFIT_PIPS = 5  # Minimum profit to keep position
 
 # Maximum drawdown per position
-MAX_POSITION_DRAWDOWN_PIPS = 1000  # Safety net: only closes if broker SL fails (real max SL ~800 pips)
+MAX_POSITION_DRAWDOWN_PIPS = 1000  # Emergency safety net: only triggers if broker SL fails (max SL ~300 pips)
 
 # Trailing Stop (2 phases) — fixed values as fallback
 BREAKEVEN_TRIGGER_PIPS = 100    # Phase 1: move SL to entry after +100 pips (fallback)
