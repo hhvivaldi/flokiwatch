@@ -181,9 +181,10 @@ class DiscordAlertRouter:
 
     def __init__(self, webhook_map: Optional[Dict[str, str]] = None, bot_name: Optional[str] = None):
         self.bot_name = bot_name or config.DISCORD_BOT_NAME
+        default_webhook = _get_config_value("DISCORD_WEBHOOK_URL")
         if webhook_map is None:
             webhook_map = {
-                channel: _get_config_value(env_key)
+                channel: _get_config_value(env_key) or default_webhook
                 for channel, env_key in WEBHOOK_ENV_KEYS.items()
             }
         self.clients = {
