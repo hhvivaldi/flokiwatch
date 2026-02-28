@@ -90,7 +90,7 @@ TRAILING_TRIGGER_PIPS = 150     # Phase 2: activate trailing after +150 pips (fa
 TRAILING_DISTANCE_PIPS = 100    # Trailing: SL stays 100 pips behind maximum (fallback)
 
 # Dynamic Trailing Stop (ATR-based — preferred)
-BREAKEVEN_ATR_MULT = 0.7        # Breakeven trigger = 0.7 × ATR
+BREAKEVEN_ATR_MULT = 0.5        # Breakeven trigger = 0.5 × SL distance (changed from 0.7 after backtest)
 TRAILING_ATR_MULT = 0.7         # Trailing trigger = 0.7 × SL distance (activate earlier)
 TRAILING_DISTANCE_ATR_MULT = 0.7  # Trailing distance = 0.7 × ATR
 

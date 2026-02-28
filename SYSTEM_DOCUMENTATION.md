@@ -227,7 +227,7 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 **SL:** ATR × 2.0 (min 150, max 800 pips). **TP:** ATR × 3.0.
 
-**Breakeven:** Dinâmico = 70% dos pips do SL original. Fallback: fixo 100 pips quando SL não está disponível; em **COOLING_DOWN** usa 50 pips fixos. Move SL para entrada.
+**Breakeven:** Dinâmico = 50% dos pips do SL original (changed from 70% after 6-month backtest: +5.7% WR, +0.44 PF). Fallback: fixo 100 pips quando SL não está disponível; em **COOLING_DOWN** usa 50 pips fixos. Move SL para entrada.
 
 **Trailing:** Trigger = 150 pips de lucro. Distância = 100 pips atrás do preço.
 
@@ -463,7 +463,7 @@ XAUUSD/
 | Smart Pyramid Rule | ✅ Done | Block 2nd pos unless existing ≥0.3% profit |
 | M5 Reversal Detection | ✅ Done | Strong blocks, moderate penalizes |
 | Visual Context Features | ✅ Done | 5 H1 patterns, ±8 cap |
-| Dynamic Trailing (ATR-based) | ✅ Done | BE=0.7×SL, Trail=0.7×SL |
+| Dynamic Trailing (ATR-based) | ✅ Done | BE=0.5×SL (optimized from 0.7), Trail=0.7×SL |
 | Backtest Engine (M5 precision) | ✅ Done | H1 signals + M5 SL/TP/trailing sim |
 | FlokiWatch Dashboard | ✅ Done | Real-time + INTEL FEED |
 | GPT Confidence Validator | ✅ Done | CONFIRM/BOOST/REDUCE ±15 |
