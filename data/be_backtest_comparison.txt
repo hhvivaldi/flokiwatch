@@ -1,0 +1,35 @@
+======================================================================
+BREAKEVEN TRIGGER LEVEL COMPARISON BACKTEST
+Generated: 2026-02-28 18:40:00
+Period: Aug 18, 2025 - Feb 16, 2026 (6 months)
+======================================================================
+
+Config                    Trades   WR       PF       P&L         
+----------------------------------------------------------------------
+Baseline (70% SL)         225      73.8%    2.40     $+2322.96    
+Test A (50% SL)           239      79.5%    2.84     $+2355.33    *** BEST ***
+Test B (100 pips)         247      79.4%    1.80     $+1029.84    
+Test C (150 pips)         235      74.9%    2.00     $+1479.63    
+----------------------------------------------------------------------
+
+ANALYSIS:
+  Test A (50% SL) is the WINNER:
+  - Highest WR: 79.5% (+5.7% vs baseline)
+  - Highest PF: 2.84 (+0.44 vs baseline)
+  - Highest P&L: $+2355.33 (+$32.37 vs baseline)
+  - More trades: 239 (+14 vs baseline)
+
+  Fixed thresholds (100/150 pips) UNDERPERFORM:
+  - Test B (100 pips): PF 1.80, P&L $+1029 (-$1293 vs baseline)
+  - Test C (150 pips): PF 2.00, P&L $+1479 (-$843 vs baseline)
+  - Too aggressive BE cuts winners short
+
+RECOMMENDATION:
+  Change BREAKEVEN_ATR_MULT from 0.70 to 0.50 in config.py
+  This triggers BE at 50% of SL distance instead of 70%
+
+CONFIGURATIONS:
+  Baseline: 70% of SL distance (current production)
+  Test A: 50% of SL distance
+  Test B: Fixed 100 pips
+  Test C: Fixed 150 pips

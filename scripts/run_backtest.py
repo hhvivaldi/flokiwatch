@@ -55,6 +55,10 @@ PIP_VALUE_001 = 0.10  # $0.10 per pip for 0.01 lot
 # Neutral pillars (news score overridable via CLI --news-score)
 BT_NEWS_SCORE = 50.0  # Default; changed by --news-score arg
 
+# Breakeven overrides (set via CLI --be-mult or --be-fixed)
+BT_BE_MULT = None   # If set, overrides config.BREAKEVEN_ATR_MULT
+BT_BE_FIXED = None  # If set, uses fixed pips instead of % of SL
+
 def _make_news_dict(score: float) -> dict:
     return {
         "score": score, "dxy": {"value": 104.0, "change_24h": 0.0, "trend": "stable"},
@@ -507,7 +511,15 @@ def simulate_trade(trade: SimTrade, df_m5: pd.DataFrame, debug_ticket: int = 0) 
     # Dynamic trailing based on actual SL distance (already capped by MIN/MAX_SL_PIPS)
     # This ensures trailing triggers are proportional to real risk, not raw ATR
     sl_pips = abs(trade.entry_price - trade.sl) / PIP_SIZE
-    be_trigger = sl_pips * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
+    
+    # BE trigger: use CLI override if set, otherwise config default
+    if BT_BE_FIXED is not None:
+        be_trigger = BT_BE_FIXED
+    elif BT_BE_MULT is not None:
+        be_trigger = sl_pips * BT_BE_MULT
+    else:
+        be_trigger = sl_pips * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
+    
     trail_trigger = sl_pips * getattr(config, 'TRAILING_ATR_MULT', 1.0)
     trail_distance = sl_pips * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
 
@@ -791,7 +803,7 @@ def simulate_trades_concurrent(trades_to_sim: List[SimTrade], df_m5: pd.DataFram
             'breakeven_hit': False,
             'max_favorable': 0.0,
             'max_adverse': 0.0,
-            'be_trigger': sl_pips * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7),
+            'be_trigger': BT_BE_FIXED if BT_BE_FIXED is not None else (sl_pips * BT_BE_MULT if BT_BE_MULT is not None else sl_pips * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)),
             'trail_trigger': sl_pips * getattr(config, 'TRAILING_ATR_MULT', 0.7),
             'trail_distance': sl_pips * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7),
             'closed': False,
@@ -2299,9 +2311,21 @@ def main():
                         help='Override models directory (e.g., models_v3_backup)')
     parser.add_argument('--weights', type=str, default=None,
                         help='Override BASE_WEIGHTS as JSON, e.g. {"technical":0.35,"ml":0.25,"momentum":0.20,"news":0.15,"calendar":0.05}')
+    parser.add_argument('--be-mult', type=float, default=None,
+                        help='Override BREAKEVEN_ATR_MULT (e.g., 0.5 for 50%% of SL)')
+    parser.add_argument('--be-fixed', type=float, default=None,
+                        help='Use fixed breakeven trigger in pips (overrides --be-mult)')
     args = parser.parse_args()
 
-    global NEUTRAL_NEWS, BT_NEWS_SCORE, BT_START, BT_END
+    global NEUTRAL_NEWS, BT_NEWS_SCORE, BT_START, BT_END, BT_BE_MULT, BT_BE_FIXED
+
+    # Override breakeven settings
+    BT_BE_MULT = args.be_mult
+    BT_BE_FIXED = args.be_fixed
+    if BT_BE_FIXED:
+        print(f"🎯 Breakeven: FIXED {BT_BE_FIXED:.0f} pips")
+    elif BT_BE_MULT:
+        print(f"🎯 Breakeven: {BT_BE_MULT*100:.0f}% of SL distance")
 
     # Override weights if provided
     if args.weights:
