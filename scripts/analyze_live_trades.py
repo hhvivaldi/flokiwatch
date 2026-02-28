@@ -1,5 +1,6 @@
 """
-Live Trade Diagnostic Report - Population B (trades #8-26)
+Live Trade Diagnostic Report - Population B
+Population B = trades with open_time >= 2026-02-16 (dashboard cutoff)
 Comprehensive analysis: per-trade metrics, MFE/MAE, pillar scores, aggregate stats.
 """
 
@@ -114,9 +115,9 @@ def main():
     
     conn = sqlite3.connect('data/history.db')
     
-    # Load trades (Population B = id 8-26)
+    # Load trades (Population B = open_time >= 2026-02-16, matching dashboard cutoff)
     trades_df = pd.read_sql_query(
-        "SELECT * FROM trades WHERE id >= 8 AND id <= 26 ORDER BY id", conn
+        "SELECT * FROM trades WHERE close_time IS NOT NULL AND open_time >= '2026-02-16' ORDER BY id", conn
     )
     
     # Load analyses
@@ -144,7 +145,7 @@ def main():
     # Build per-trade report
     report_lines = []
     report_lines.append("=" * 100)
-    report_lines.append("LIVE TRADE DIAGNOSTIC REPORT - Population B (Trades #8-26)")
+    report_lines.append("LIVE TRADE DIAGNOSTIC REPORT - Population B (open_time >= 2026-02-16)")
     report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report_lines.append("=" * 100)
     report_lines.append("")
@@ -217,9 +218,18 @@ def main():
             mfe, mae = (None, None)
         
         # Breakeven/Trailing activation inference
-        # Breakeven typically at +20 pips, trailing at +30 pips
-        be_activated = mfe is not None and mfe >= 20
-        trailing_activated = mfe is not None and mfe >= 30
+        # Breakeven trigger = 70% of SL distance (not fixed +20 pips)
+        # Trailing trigger = 100% of SL distance
+        if direction == "BUY":
+            sl_distance_pips = (open_price - sl) / PIP
+        else:
+            sl_distance_pips = (sl - open_price) / PIP
+        
+        be_threshold = sl_distance_pips * 0.70  # 70% of SL distance
+        trailing_threshold = sl_distance_pips * 1.0  # 100% of SL distance
+        
+        be_activated = mfe is not None and mfe >= be_threshold
+        trailing_activated = mfe is not None and mfe >= trailing_threshold
         
         # Find nearest analysis for pillar scores
         analysis = find_nearest_analysis(open_time_dt, analyses_df) if pd.notna(open_time_dt) else {}
@@ -257,6 +267,8 @@ def main():
             'session': session,
             'duration': duration,
             'duration_str': duration_str,
+            'sl_distance_pips': sl_distance_pips,
+            'be_threshold': be_threshold,
             'be_activated': be_activated,
             'trailing_activated': trailing_activated,
             'mfe': mfe,
@@ -277,7 +289,8 @@ def main():
         report_lines.append(f"Pillars:     Tech={tech_score} | ML={ml_score} | Mom={momentum_score} | News={news_score} | Cal={calendar_score}")
         report_lines.append(f"Brain Score: {final_score}")
         report_lines.append(f"Session:     {session}")
-        report_lines.append(f"Duration:    {duration_str}")
+        report_lines.append(f"Duration:    {duration_str}" + (" [DATA ISSUE: open=close time]" if duration and duration.total_seconds() == 0 else ""))
+        report_lines.append(f"SL Dist:     {sl_distance_pips:.1f} pips | BE Threshold: {be_threshold:.1f} pips (70% of SL)")
         report_lines.append(f"BE Active:   {'Yes' if be_activated else 'No'} | Trailing Active: {'Yes' if trailing_activated else 'No'}")
         report_lines.append(f"MFE:         {mfe} pips | MAE: {mae} pips")
     
@@ -344,9 +357,11 @@ def main():
     report_lines.append("")
     report_lines.append("5. BREAKEVEN ACTIVATION RATE")
     report_lines.append("-" * 50)
+    avg_be_threshold = records_df['be_threshold'].mean() if 'be_threshold' in records_df.columns else 0
     be_count = records_df['be_activated'].sum()
     be_rate = be_count / len(records_df) * 100 if len(records_df) > 0 else 0
-    report_lines.append(f"  Trades that reached BE level (+20 pips): {be_count}/{len(records_df)} ({be_rate:.0f}%)")
+    report_lines.append(f"  BE threshold = 70% of SL distance (avg: {avg_be_threshold:.1f} pips)")
+    report_lines.append(f"  Trades that reached BE level: {be_count}/{len(records_df)} ({be_rate:.0f}%)")
     
     # How many losses had BE activated but still lost?
     losses_with_be = records_df[(~records_df['is_win']) & (records_df['be_activated'])]

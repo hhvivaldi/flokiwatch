@@ -1,67 +1,54 @@
 ====================================================================================================
-LIVE TRADE DIAGNOSTIC REPORT - Population B (Trades #8-26)
-Generated: 2026-02-28 17:52:11
+LIVE TRADE DIAGNOSTIC REPORT - Population B (open_time >= 2026-02-16)
+Generated: 2026-02-28 18:00:53
 ====================================================================================================
 
 SUMMARY
 --------------------------------------------------
 Total trades:     19
-Wins:             11
-Losses:           8
-Win Rate:         57.9%
-Profit Factor:    1.22
-Total P&L:        $41.20
-Gross Profit:     $229.97
-Gross Loss:       $188.77
+Wins:             10
+Losses:           9
+Win Rate:         52.6%
+Profit Factor:    0.88
+Total P&L:        $-29.00
+Gross Profit:     $203.30
+Gross Loss:       $232.30
 
 ====================================================================================================
 PER-TRADE ANALYSIS
 ====================================================================================================
 
---- Trade #1477613454 (BUY) ---
-Open:        2026-02-13 18:40:18 | Close: 2026-02-13 18:40:18
-Entry:       5005.55 | Exit: 5005.11
-SL:          4984.95 | TP: 5031.62
-P&L:         $-0.44 (-4.4 pips)
+--- Trade #1480022288 (SELL) ---
+Open:        2026-02-16 07:10:33.010181 | Close: 2026-02-16 10:47:45
+Entry:       4989.79 | Exit: 5008.22
+SL:          5009.79 | TP: 4963.12
+P&L:         $-18.43 (-184.3 pips)
 Close:       SL hit
 Scenario:    padrao
-Confidence:  47.0
-Pillars:     Tech=55.0 | ML=37.879647838495735 | Mom=40.0 | News=55.1 | Cal=50.0
-Brain Score: 47.99
-Session:     NY
-Duration:    0 days 00:00:00
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
-
---- Trade #1477553632 (BUY) ---
-Open:        2026-02-13 18:53:51 | Close: 2026-02-13 18:53:51
-Entry:       5009.71 | Exit: 4989.49
-SL:          4989.71 | TP: 5036.38
-P&L:         $-20.22 (-202.2 pips)
-Close:       SL hit
-Scenario:    padrao
-Confidence:  47.0
-Pillars:     Tech=55.0 | ML=37.879647838495735 | Mom=40.0 | News=55.1 | Cal=50.0
-Brain Score: 47.99
-Session:     NY
-Duration:    0 days 00:00:00
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
-
---- Trade #1477879029 (BUY) ---
-Open:        2026-02-13 22:07:02 | Close: 2026-02-13 22:07:02
-Entry:       5014.52 | Exit: 5041.19
-SL:          4994.52 | TP: 5041.19
-P&L:         $+26.67 (+266.7 pips)
-Close:       TP hit
-Scenario:    padrao
-Confidence:  47.0
-Pillars:     Tech=55.0 | ML=37.879647838495735 | Mom=40.0 | News=55.1 | Cal=50.0
-Brain Score: 47.99
+Confidence:  66.0
+Pillars:     Tech=29.0 | ML=29.524390453555313 | Mom=25.0 | News=51.8 | Cal=50.0
+Brain Score: 34.25
 Session:     Asian
-Duration:    0 days 00:00:00
+Duration:    0 days 03:37:11
+SL Dist:     200.0 pips | BE Threshold: 140.0 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         65.0 pips | MAE: 235.9 pips
+
+--- Trade #1480098099 (SELL) ---
+Open:        2026-02-16 08:00:53.239012 | Close: 2026-02-16 11:03:46
+Entry:       4993.18 | Exit: 5013.54
+SL:          5013.18 | TP: 4966.51
+P&L:         $-20.36 (-203.6 pips)
+Close:       SL hit
+Scenario:    padrao
+Confidence:  61.0
+Pillars:     Tech=29.5 | ML=31.40093150370832 | Mom=25.0 | News=51.2 | Cal=50.0
+Brain Score: 34.94
+Session:     London
+Duration:    0 days 03:02:52
+SL Dist:     200.0 pips | BE Threshold: 140.0 pips (70% of SL)
+BE Active:   No | Trailing Active: No
+MFE:         82.7 pips | MAE: 223.2 pips
 
 --- Trade #1480536826 (SELL) ---
 Open:        2026-02-16 12:30:30.666032 | Close: 2026-02-16 20:30:26
@@ -75,8 +62,9 @@ Pillars:     Tech=32.0 | ML=26.56933208017302 | Mom=25.0 | News=52.4 | Cal=50.0
 Brain Score: 34.14
 Session:     London
 Duration:    0 days 07:59:55
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     322.9 pips | BE Threshold: 226.0 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         354.3 pips | MAE: 63.1 pips
 
 --- Trade #1482219960 (BUY) ---
 Open:        2026-02-17 07:37:19.363756 | Close: 2026-02-17 13:51:37
@@ -90,8 +78,9 @@ Pillars:     Tech=47.5 | ML=71.90461109829113 | Mom=85.0 | News=39.8 | Cal=50.0
 Brain Score: 65.46
 Session:     Asian
 Duration:    0 days 06:14:17
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     381.7 pips | BE Threshold: 267.2 pips (70% of SL)
+BE Active:   Yes | Trailing Active: No
+MFE:         337.6 pips | MAE: 316.1 pips
 
 --- Trade #1482456604 (BUY) ---
 Open:        2026-02-17 09:50:53.164632 | Close: 2026-02-17 16:57:32
@@ -105,8 +94,9 @@ Pillars:     Tech=45.0 | ML=70.58320879336786 | Mom=95.0 | News=47.5 | Cal=50.0
 Brain Score: 68.33
 Session:     London
 Duration:    0 days 07:06:38
+SL Dist:     385.0 pips | BE Threshold: 269.5 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         192.1 pips | MAE: 829.9 pips
 
 --- Trade #1483987096 (BUY) ---
 Open:        2026-02-17 19:37:51.705874 | Close: 2026-02-18 17:47:55
@@ -120,8 +110,9 @@ Pillars:     Tech=42.0 | ML=41.03566049262845 | Mom=95.0 | News=45.9 | Cal=50.0
 Brain Score: 65.94
 Session:     NY
 Duration:    0 days 22:10:03
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     508.9 pips | BE Threshold: 356.2 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         1215.6 pips | MAE: 333.5 pips
 
 --- Trade #1484684201 (BUY) ---
 Open:        2026-02-18 05:39:00.384333 | Close: 2026-02-18 22:27:48
@@ -135,8 +126,9 @@ Pillars:     Tech=50.0 | ML=38.8788906062031 | Mom=80.0 | News=45.0 | Cal=50.0
 Brain Score: 70.03
 Session:     Asian
 Duration:    0 days 16:48:47
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     396.5 pips | BE Threshold: 277.5 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         761.2 pips | MAE: 283.9 pips
 
 --- Trade #1484839296 (SELL) ---
 Open:        2026-02-18 08:00:25.874897 | Close: 2026-02-18 15:17:20
@@ -150,8 +142,9 @@ Pillars:     Tech=42.5 | ML=15.866697323668166 | Mom=45.0 | News=44.7 | Cal=50.0
 Brain Score: 34.44
 Session:     London
 Duration:    0 days 07:16:54
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     291.9 pips | BE Threshold: 204.3 pips (70% of SL)
+BE Active:   Yes | Trailing Active: No
+MFE:         246.8 pips | MAE: 278.7 pips
 
 --- Trade #1489160161 (SELL) ---
 Open:        2026-02-20 01:23:38.303786 | Close: 2026-02-20 09:11:38
@@ -165,8 +158,9 @@ Pillars:     Tech=42.0 | ML=22.095794582305892 | Mom=30.0 | News=50.4 | Cal=50.0
 Brain Score: 34.58
 Session:     Asian
 Duration:    0 days 07:47:59
+SL Dist:     295.4 pips | BE Threshold: 206.8 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         68.7 pips | MAE: 413.4 pips
 
 --- Trade #1489680586 (SELL) ---
 Open:        2026-02-20 08:22:30.403094 | Close: 2026-02-20 12:13:38
@@ -180,8 +174,9 @@ Pillars:     Tech=60.5 | ML=30.955540920482278 | Mom=25.0 | News=56.9 | Cal=50.0
 Brain Score: 33.83
 Session:     London
 Duration:    0 days 03:51:07
+SL Dist:     247.7 pips | BE Threshold: 173.4 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         107.3 pips | MAE: 266.5 pips
 
 --- Trade #1493912586 (BUY) ---
 Open:        2026-02-23 15:41:57.108833 | Close: 2026-02-23 20:36:26
@@ -195,8 +190,9 @@ Pillars:     Tech=42.5 | ML=67.556565653995 | Mom=70.0 | News=55.8 | Cal=50.0
 Brain Score: 65.27
 Session:     NY
 Duration:    0 days 04:54:28
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     310.3 pips | BE Threshold: 217.2 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         349.5 pips | MAE: 426.4 pips
 
 --- Trade #1494127587 (BUY) ---
 Open:        2026-02-23 16:44:20.195515 | Close: 2026-02-24 03:01:33
@@ -210,8 +206,9 @@ Pillars:     Tech=45.0 | ML=64.71712648805348 | Mom=80.0 | News=55.5 | Cal=50.0
 Brain Score: 65.23
 Session:     NY
 Duration:    0 days 10:17:12
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     322.3 pips | BE Threshold: 225.6 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         480.2 pips | MAE: 257.3 pips
 
 --- Trade #1494851248 (BUY) ---
 Open:        2026-02-24 00:12:14.658132 | Close: 2026-02-24 04:00:15
@@ -225,8 +222,9 @@ Pillars:     Tech=52.5 | ML=42.26435392298438 | Mom=85.0 | News=54.1 | Cal=50.0
 Brain Score: 65.74
 Session:     Asian
 Duration:    0 days 03:48:00
+SL Dist:     345.7 pips | BE Threshold: 242.0 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         36.3 pips | MAE: 1005.6 pips
 
 --- Trade #1495171143 (BUY) ---
 Open:        2026-02-24 02:51:42.703556 | Close: 2026-02-24 16:39:46
@@ -240,8 +238,9 @@ Pillars:     Tech=37.0 | ML=56.274215137526255 | Mom=100.0 | News=53.9 | Cal=50.
 Brain Score: 65.81
 Session:     Asian
 Duration:    0 days 13:48:03
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     421.1 pips | BE Threshold: 294.8 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         507.1 pips | MAE: 839.9 pips
 
 --- Trade #1496428643 (BUY) ---
 Open:        2026-02-24 15:41:02.724354 | Close: 2026-02-24 18:30:33
@@ -255,8 +254,9 @@ Pillars:     Tech=52.0 | ML=67.15431201583277 | Mom=100.0 | News=46.0 | Cal=50.0
 Brain Score: 72.46
 Session:     NY
 Duration:    0 days 02:49:30
+SL Dist:     414.7 pips | BE Threshold: 290.3 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         245.7 pips | MAE: 382.2 pips
 
 --- Trade #1497505752 (BUY) ---
 Open:        2026-02-25 02:18:22.588681 | Close: 2026-02-25 10:54:23
@@ -270,8 +270,9 @@ Pillars:     Tech=70.0 | ML=69.42841489527297 | Mom=65.0 | News=45.8 | Cal=50.0
 Brain Score: 65.44
 Session:     Asian
 Duration:    0 days 08:36:00
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     409.8 pips | BE Threshold: 286.9 pips (70% of SL)
+BE Active:   Yes | Trailing Active: No
+MFE:         296.7 pips | MAE: 432.6 pips
 
 --- Trade #1499005716 (BUY) ---
 Open:        2026-02-25 16:43:48.180296 | Close: 2026-02-25 22:08:20
@@ -285,8 +286,9 @@ Pillars:     Tech=80.0 | ML=34.55470976349221 | Mom=65.0 | News=52.3 | Cal=50.0
 Brain Score: 62.6
 Session:     NY
 Duration:    0 days 05:24:31
-BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+SL Dist:     301.0 pips | BE Threshold: 210.7 pips (70% of SL)
+BE Active:   Yes | Trailing Active: No
+MFE:         255.1 pips | MAE: 193.3 pips
 
 --- Trade #1501151189 (SELL) ---
 Open:        2026-02-26 14:35:53.762066 | Close: 2026-02-26 17:35:44
@@ -300,8 +302,25 @@ Pillars:     Tech=32.5 | ML=29.637852445829072 | Mom=35.0 | News=52.3 | Cal=15.0
 Brain Score: 34.61
 Session:     NY
 Duration:    0 days 02:59:50
+SL Dist:     286.6 pips | BE Threshold: 200.6 pips (70% of SL)
+BE Active:   Yes | Trailing Active: Yes
+MFE:         400.7 pips | MAE: 170.2 pips
+
+--- Trade #1503060327 (SELL) ---
+Open:        2026-02-27 09:38:07.616750 | Close: 2026-02-27 16:07:41
+Entry:       5180.44 | Exit: 5205.84
+SL:          5205.70 | TP: 5129.92
+P&L:         $-25.40 (-254.0 pips)
+Close:       SL hit
+Scenario:    zona_sr_forte
+Confidence:  58.0
+Pillars:     Tech=37.0 | ML=23.735473838332865 | Mom=25.0 | News=56.4 | Cal=50.0
+Brain Score: 33.66
+Session:     London
+Duration:    0 days 06:29:33
+SL Dist:     252.6 pips | BE Threshold: 176.8 pips (70% of SL)
 BE Active:   No | Trailing Active: No
-MFE:         None pips | MAE: None pips
+MFE:         117.2 pips | MAE: 601.8 pips
 
 ====================================================================================================
 AGGREGATE ANALYSIS
@@ -309,69 +328,59 @@ AGGREGATE ANALYSIS
 
 1. WINS VS LOSSES BY SCENARIO
 --------------------------------------------------
-  padrao: 3W / 3L | P&L: $+18.23
+  padrao: 2W / 3L | P&L: $-26.57
   momentum_forte_confirmado: 4W / 1L | P&L: $+6.62
   alinhamento_perfeito: 1W / 0L | P&L: $+101.81
   divergencia_tecnica: 1W / 0L | P&L: $+38.25
-  zona_sr_forte: 1W / 2L | P&L: $-53.29
+  zona_sr_forte: 1W / 3L | P&L: $-78.69
   breakout_confirmado: 0W / 1L | P&L: $-32.21
   sinais_conflitantes: 0W / 1L | P&L: $-42.56
   ml_vs_tech_conflito: 1W / 0L | P&L: $+4.35
 
 2. WINS VS LOSSES BY SESSION
 --------------------------------------------------
-  Asian: 3W / 4L (43% WR) | P&L: $-33.69
-  London: 2W / 2L (50% WR) | P&L: $-51.05
-  NY: 6W / 2L (75% WR) | P&L: $+125.94
+  Asian: 2W / 5L (29% WR) | P&L: $-78.79
+  London: 2W / 4L (33% WR) | P&L: $-96.81
+  NY: 6W / 0L (100% WR) | P&L: $+146.60
 
 3. WINS VS LOSSES BY CLOSE REASON
 --------------------------------------------------
-  SL hit: 9W / 8L | P&L: $-87.28
-  TP hit: 2W / 0L | P&L: $+128.48
+  SL hit: 9W / 9L | P&L: $-130.81
+  TP hit: 1W / 0L | P&L: $+101.81
 
 4. AVERAGE TIME IN TRADE
 --------------------------------------------------
-  Avg duration (wins):   0 days 07:54:08
-  Avg duration (losses): 0 days 05:37:13
+  Avg duration (wins):   0 days 08:41:33
+  Avg duration (losses): 0 days 06:27:29
 
 5. BREAKEVEN ACTIVATION RATE
 --------------------------------------------------
-  Trades that reached BE level (+20 pips): 0/19 (0%)
-  Losses that reached BE first: 0
+  BE threshold = 70% of SL distance (avg: 231.9 pips)
+  Trades that reached BE level: 11/19 (58%)
+  Losses that reached BE first: 2
 
 6. MAX FAVORABLE EXCURSION ON LOSSES (CRITICAL)
 --------------------------------------------------
-  No MFE data available for losses
-  
-  NOTE: M5 candle data ends 2026-01-23. Live trades started 2026-02-11.
-  To compute MFE/MAE, update data/XAUUSD_M5.csv with recent price data.
+  Avg MFE on losses: 163.7 pips
+  Max MFE on losses: 507.1 pips
+  Losses that went positive first: 9/9
+  Losses that went +30 pips before reversing: 9/9
+
+  Detail per losing trade:
+    #1480022288: MFE=65.0 pips, MAE=235.9 pips, P&L=$-18.43
+    #1480098099: MFE=82.7 pips, MAE=223.2 pips, P&L=$-20.36
+    #1482456604: MFE=192.1 pips, MAE=829.9 pips, P&L=$-38.58
+    #1489160161: MFE=68.7 pips, MAE=413.4 pips, P&L=$-29.57
+    #1489680586: MFE=107.3 pips, MAE=266.5 pips, P&L=$-24.94
+    #1494851248: MFE=36.3 pips, MAE=1005.6 pips, P&L=$-32.21
+    #1495171143: MFE=507.1 pips, MAE=839.9 pips, P&L=$-42.56
+    #1497505752: MFE=296.7 pips, MAE=432.6 pips, P&L=$-0.25
+    #1503060327: MFE=117.2 pips, MAE=601.8 pips, P&L=$-25.40
 
 ====================================================================================================
 DIAGNOSIS
 ====================================================================================================
 
-Based on available data:
-
->>> SESSION PROBLEM <<<
-- Asian session: 43% WR, -$33.69 (4 losses, 3 wins)
-- London session: 50% WR, -$51.05 (2 losses, 2 wins)
-- NY session: 75% WR, +$125.94 (6 wins, 2 losses)
-
-Asian and London sessions are net negative. Consider restricting trading to NY session only.
-
->>> SCENARIO PROBLEM <<<
-- zona_sr_forte: 1W / 2L, -$53.29 (losing scenario)
-- sinais_conflitantes: 0W / 1L, -$42.56 (losing scenario)
-- breakout_confirmado: 0W / 1L, -$32.21 (losing scenario)
-
-These 3 scenarios account for $127.06 in losses (4 trades).
-
->>> EXIT MANAGEMENT UNKNOWN <<<
-Cannot determine if losses went into profit first without MFE data.
-Update M5 data to diagnose breakeven/trailing effectiveness.
-
->>> CLOSE REASON ANALYSIS <<<
-17/19 trades closed via SL (including trailing SL).
-Only 2 trades hit TP. This suggests:
-- TP may be too far (rarely reached)
-- Trailing SL is doing the work (good if locking profit, bad if cutting winners short)
+>>> EXIT MANAGEMENT PROBLEM <<<
+Losing trades went into profit before reversing to SL.
+Breakeven/trailing may be too slow or not activating properly.
