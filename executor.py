@@ -157,7 +157,11 @@ class MT5Executor:
         lot_size: float,
         stop_loss: float,
         take_profit: float,
-        comment: str = ""
+        comment: str = "",
+        confidence: Optional[float] = None,
+        scenario: Optional[str] = None,
+        risk_amount: Optional[float] = None,
+        risk_percent: Optional[float] = None,
     ) -> OrderResult:
         """
         Execute a trade.
@@ -186,7 +190,11 @@ class MT5Executor:
                 entry_price=price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
-                is_dry_run=True
+                is_dry_run=True,
+                confidence=confidence,
+                scenario=scenario,
+                risk_amount=risk_amount,
+                risk_percent=risk_percent,
             )
             
             return OrderResult(
@@ -292,7 +300,11 @@ class MT5Executor:
             entry_price=result.price,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            is_dry_run=False
+            is_dry_run=False,
+            confidence=confidence,
+            scenario=scenario,
+            risk_amount=risk_amount,
+            risk_percent=risk_percent,
         )
         
         return OrderResult(
@@ -912,14 +924,52 @@ def get_account_balance() -> float:
     return info['balance'] if info else 0
 
 
-def execute_buy(lot_size: float, sl: float, tp: float, comment: str = "") -> OrderResult:
+def execute_buy(
+    lot_size: float,
+    sl: float,
+    tp: float,
+    comment: str = "",
+    confidence: Optional[float] = None,
+    scenario: Optional[str] = None,
+    risk_amount: Optional[float] = None,
+    risk_percent: Optional[float] = None,
+) -> OrderResult:
     """Execute buy order"""
-    return executor.execute_trade("BUY", lot_size, sl, tp, comment)
+    return executor.execute_trade(
+        "BUY",
+        lot_size,
+        sl,
+        tp,
+        comment,
+        confidence=confidence,
+        scenario=scenario,
+        risk_amount=risk_amount,
+        risk_percent=risk_percent,
+    )
 
 
-def execute_sell(lot_size: float, sl: float, tp: float, comment: str = "") -> OrderResult:
+def execute_sell(
+    lot_size: float,
+    sl: float,
+    tp: float,
+    comment: str = "",
+    confidence: Optional[float] = None,
+    scenario: Optional[str] = None,
+    risk_amount: Optional[float] = None,
+    risk_percent: Optional[float] = None,
+) -> OrderResult:
     """Execute sell order"""
-    return executor.execute_trade("SELL", lot_size, sl, tp, comment)
+    return executor.execute_trade(
+        "SELL",
+        lot_size,
+        sl,
+        tp,
+        comment,
+        confidence=confidence,
+        scenario=scenario,
+        risk_amount=risk_amount,
+        risk_percent=risk_percent,
+    )
 
 
 def get_positions() -> List[PositionInfo]:

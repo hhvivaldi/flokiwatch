@@ -23,9 +23,10 @@ from db_writer import init_db, record_analysis, record_trade_open, record_trade_
 from alerts import (
     alert_bot_started, alert_bot_stopped, alert_signal_detected,
     alert_safety_block, alert_error, alert_daily_summary, discord,
-    alert_heartbeat_full, alert_heartbeat_short,
+    alert_heartbeat_full,
     alert_market_closed, alert_market_open,
     alert_m5_reversal_block, alert_trade_resolved,
+    alert_brain_decision,
     alert_spread_delay, alert_spread_skip
 )
 from confluence import analyze_confluence
@@ -849,6 +850,15 @@ class TradingBot:
             
             if decision is None:
                 return
+
+            hold_forced = False
+            original_decision = None
+            hold_reason = None
+            last_analysis = self.last_analysis or {}
+            if isinstance(last_analysis, dict):
+                hold_forced = bool(last_analysis.get("hold_forced"))
+                original_decision = last_analysis.get("original_decision")
+                hold_reason = last_analysis.get("hold_reason")
             
             # Analysis log
             log.analysis(tech_score, news_score, ml_score, final_score)
@@ -857,16 +867,61 @@ class TradingBot:
             else:
                 log.decision(decision, confidence, final_score)
             
+            if config.USE_CENTRAL_BRAIN:
+                self._check_heartbeat()
+
             # Check if actionable signal
             if direction is None:
                 log.info(f"   Decision: {decision} - Waiting...")
-                # Heartbeat: sign of life on Discord when in HOLD
-                if config.USE_CENTRAL_BRAIN:
-                    self._check_heartbeat(decision, final_score, confidence, tech_score, news_score, ml_score, explanation)
+                if config.USE_CENTRAL_BRAIN and hold_forced:
+                    alert_brain_decision(
+                        decision=decision,
+                        final_score=final_score,
+                        confidence=confidence,
+                        scenario=last_analysis.get("scenario", ""),
+                        tech_score=last_analysis.get("tech_score", tech_score),
+                        ml_score=last_analysis.get("ml_score", ml_score),
+                        momentum_score=last_analysis.get("momentum_score", 50.0),
+                        news_score=last_analysis.get("news_score", news_score),
+                        calendar_score=last_analysis.get("calendar_score", 50.0),
+                        gpt_validation=last_analysis.get("gpt_validation"),
+                        volatility_status=last_analysis.get("volatility_status", "NORMAL"),
+                        mtf_trend=last_analysis.get("mtf_trend"),
+                        volume_gate=last_analysis.get("volume_gate"),
+                        hold_forced=True,
+                        original_decision=original_decision,
+                        hold_reason=hold_reason,
+                    )
                 return
             
             # Signal detected!
             log.info(f"   🔔 SIGNAL: {decision} ({direction})")
+
+            if config.USE_CENTRAL_BRAIN:
+                alert_brain_decision(
+                    decision=decision,
+                    final_score=final_score,
+                    confidence=confidence,
+                    scenario=last_analysis.get("scenario", ""),
+                    tech_score=last_analysis.get("tech_score", tech_score),
+                    ml_score=last_analysis.get("ml_score", ml_score),
+                    momentum_score=last_analysis.get("momentum_score", 50.0),
+                    news_score=last_analysis.get("news_score", news_score),
+                    calendar_score=last_analysis.get("calendar_score", 50.0),
+                    gpt_validation=last_analysis.get("gpt_validation"),
+                    volatility_status=last_analysis.get("volatility_status", "NORMAL"),
+                    mtf_trend=last_analysis.get("mtf_trend"),
+                    volume_gate=last_analysis.get("volume_gate"),
+                )
+
+            atr = get_atr_value(df)
+            prices = executor.get_current_price()
+            if prices:
+                entry_price = prices[1] if direction == "BUY" else prices[0]
+            else:
+                entry_price = df['close'].iloc[-1]
+
+            levels = calculate_sl_tp(entry_price, direction, atr)
             
             # Alert Discord
             alert_signal_detected(
@@ -876,7 +931,11 @@ class TradingBot:
                 news_score=news_score,
                 ml_score=ml_score,
                 confidence=confidence,
-                brain_summary=explanation
+                brain_summary=explanation,
+                current_price=entry_price,
+                stop_loss=levels.stop_loss,
+                take_profit=levels.take_profit_1,
+                scenario=last_analysis.get("scenario", None),
             )
             
             # Safety Checks
@@ -953,16 +1012,6 @@ class TradingBot:
                 log.warning("   ⚠️ Could not get spread — proceeding anyway")
             
             # Calculate risk
-            atr = get_atr_value(df)
-            
-            prices = executor.get_current_price()
-            if prices:
-                entry_price = prices[1] if direction == "BUY" else prices[0]
-            else:
-                entry_price = df['close'].iloc[-1]
-            
-            levels = calculate_sl_tp(entry_price, direction, atr)
-            
             sl_pips = levels.sl_pips
             pos_size = calculate_position_size(account_balance, config.RISK_PER_TRADE, sl_pips)
             
@@ -1033,19 +1082,32 @@ class TradingBot:
                     log.error(f"Failed to send signal to EA")
             else:
                 # Direct MT5 API execution (fallback or EA disabled)
+                trade_confidence = last_analysis.get("confidence", confidence)
+                trade_scenario = last_analysis.get("scenario", None)
+                trade_risk_amount = pos_size.risk_amount if pos_size else None
+                trade_risk_percent = config.RISK_PER_TRADE
+
                 if direction == "BUY":
                     order_result = execute_buy(
                         lot_size=pos_size.lot_size,
                         sl=levels.stop_loss,
                         tp=levels.take_profit_1,
-                        comment=comment
+                        comment=comment,
+                        confidence=trade_confidence,
+                        scenario=trade_scenario,
+                        risk_amount=trade_risk_amount,
+                        risk_percent=trade_risk_percent,
                     )
                 else:
                     order_result = execute_sell(
                         lot_size=pos_size.lot_size,
                         sl=levels.stop_loss,
                         tp=levels.take_profit_1,
-                        comment=comment
+                        comment=comment,
+                        confidence=trade_confidence,
+                        scenario=trade_scenario,
+                        risk_amount=trade_risk_amount,
+                        risk_percent=trade_risk_percent,
                     )
                 
                 if order_result.success:
@@ -1534,83 +1596,41 @@ class TradingBot:
             "",
         )
     
-    def _check_heartbeat(self, decision, final_score, confidence, tech_score, news_score, ml_score, explanation):
-        """
-        Check if a heartbeat should be sent to Discord.
-        Only sends if: in HOLD, no open positions, and minimum interval has passed.
-        Two modes: full (scenario changed) vs short (everything the same).
-        """
-        # Check for open positions
-        has_positions = False
-        if self.executes_trades:
-            try:
-                has_positions = len(get_positions()) > 0
-            except Exception:
-                pass
-        
-        if has_positions:
-            return
-        
-        # Check minimum interval
+    def _check_heartbeat(self) -> None:
+        """Send periodic status heartbeat to Discord (keep-alive)."""
         now = datetime.now()
         if self.last_heartbeat and (now - self.last_heartbeat) < timedelta(minutes=config.HEARTBEAT_INTERVAL_MINUTES):
             return
-        
-        # Decide mode: full vs short
-        scenario_changed = (
-            self.last_heartbeat_scenario is None or
-            self._last_scenario_description != self.last_heartbeat_scenario
+
+        open_positions = 0
+        if self.executes_trades:
+            try:
+                open_positions = len(get_positions())
+            except Exception:
+                open_positions = 0
+
+        last_analysis_time = "N/A"
+        try:
+            if self.last_analysis and self.last_analysis.get("timestamp"):
+                last_analysis_time = self.last_analysis["timestamp"]
+        except Exception:
+            pass
+
+        uptime = "N/A"
+        if self.session_start_time:
+            delta = now - self.session_start_time
+            hours, remainder = divmod(int(delta.total_seconds()), 3600)
+            minutes = remainder // 60
+            uptime = f"{hours}h {minutes}m"
+
+        alert_heartbeat_full(
+            bot_name=config.DISCORD_BOT_NAME,
+            uptime=uptime,
+            open_positions=open_positions,
+            last_analysis_time=last_analysis_time,
         )
-        score_changed = (
-            self.last_heartbeat_score is None or
-            abs(final_score - self.last_heartbeat_score) >= config.HEARTBEAT_SCORE_CHANGE_THRESHOLD
-        )
-        
-        if scenario_changed or score_changed:
-            # FULL Heartbeat
-            dominant = self._get_dominant_pillar(tech_score, news_score, ml_score)
-            vol_status_str = self._last_vol_status.get('status', 'NORMAL') if self._last_vol_status else 'NORMAL'
-            
-            # Calendar info
-            calendar_info = ""
-            if self._last_calendar_data:
-                closest = self._last_calendar_data.get('closest_event')
-                if closest:
-                    ev_name = closest.get('name', '?')
-                    phase = self._last_calendar_data.get('phase', 'normal')
-                    phase_desc = self._last_calendar_data.get('phase_description', '')
-                    calendar_info = f"{ev_name} ({phase_desc})" if phase != 'normal' else f"{ev_name} (no immediate impact)"
-            
-            # GPT Validator info
-            gpt_info = ""
-            if self._last_gpt_validation and self._last_gpt_validation.get("action"):
-                gpt = self._last_gpt_validation
-                gpt_info = f"{gpt['action']}"
-                if gpt["adjustment"] > 0:
-                    sign = "+" if gpt["action"] == "BOOST" else "-"
-                    gpt_info += f" ({sign}{gpt['adjustment']})"
-                gpt_info += f" — {gpt.get('reason', '')}"
-            
-            alert_heartbeat_full(
-                current_price=self._last_current_price or 0,
-                final_score=final_score,
-                confidence=confidence,
-                scenario=self._last_scenario_description or decision,
-                dominant_pillar=dominant,
-                volatility_status=vol_status_str,
-                calendar_info=calendar_info,
-                gpt_info=gpt_info
-            )
-            log.info(f"   💤 FULL Heartbeat sent to Discord")
-        else:
-            # SHORT Heartbeat
-            alert_heartbeat_short()
-            log.info(f"   🔄 Short heartbeat sent to Discord")
-        
-        # Update tracking
+        log.info("   � Heartbeat sent to Discord")
         self.last_heartbeat = now
-        self.last_heartbeat_scenario = self._last_scenario_description
-        self.last_heartbeat_score = final_score
     
     def _get_dominant_pillar(self, tech_score, news_score, ml_score):
         """Identify the pillar that contributes most to the HOLD decision (furthest from 50)."""

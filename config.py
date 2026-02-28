@@ -99,6 +99,17 @@ TRAILING_DISTANCE_ATR_MULT = 0.7  # Trailing distance = 0.7 × ATR
 # ============================================================================
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DISCORD_BOT_NAME = "XAU/USD Trading Bot"
+DISCORD_WEBHOOK_SIGNALS = os.environ.get("DISCORD_WEBHOOK_SIGNALS", "")
+DISCORD_WEBHOOK_DASHBOARD = os.environ.get("DISCORD_WEBHOOK_DASHBOARD", "")
+DISCORD_WEBHOOK_BRAIN = os.environ.get("DISCORD_WEBHOOK_BRAIN", "")
+DISCORD_WEBHOOK_TRADES = os.environ.get("DISCORD_WEBHOOK_TRADES", "")
+DISCORD_WEBHOOK_STATUS = os.environ.get("DISCORD_WEBHOOK_STATUS", "")
+DISCORD_WEBHOOK_DAILY = os.environ.get("DISCORD_WEBHOOK_DAILY", "")
+DISCORD_WEBHOOK_WEEKLY = os.environ.get("DISCORD_WEBHOOK_WEEKLY", "")
+DISCORD_WEBHOOK_MONTHLY = os.environ.get("DISCORD_WEBHOOK_MONTHLY", "")
+DISCORD_WEBHOOK_BACKTEST = os.environ.get("DISCORD_WEBHOOK_BACKTEST", "")
+DISCORD_WEBHOOK_ERRORS = os.environ.get("DISCORD_WEBHOOK_ERRORS", "")
+DISCORD_WEBHOOK_CHANGELOG = os.environ.get("DISCORD_WEBHOOK_CHANGELOG", "")
 
 # ============================================================================
 # SYMBOL AND TIMEFRAME

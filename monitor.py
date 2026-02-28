@@ -187,7 +187,14 @@ class PositionMonitor:
                 f"Profit: {pos.profit_pips:.0f} pips → SL moved to {breakeven_sl:.2f} (entry) | "
                 f"Original SL={sl_orig:.0f} pips (unchanged) | Trail trigger={tr_trig:.0f} pips, dist={tr_dist:.0f} pips"
             )
-            alert_breakeven(pos.ticket, pos.sl, breakeven_sl, pos.profit_pips)
+            alert_breakeven(
+                pos.ticket,
+                pos.sl,
+                breakeven_sl,
+                pos.profit_pips,
+                direction=pos.direction,
+                entry_price=pos.open_price,
+            )
             
             return {
                 'action': 'BREAKEVEN',
@@ -243,7 +250,14 @@ class PositionMonitor:
             self.trailing_sl[pos.ticket] = new_sl
             
             log.position_update(pos.ticket, "TRAILING_STOP", f"SL: {old_sl:.2f} → {new_sl:.2f}")
-            alert_trailing_stop(pos.ticket, old_sl, new_sl)
+            alert_trailing_stop(
+                pos.ticket,
+                old_sl,
+                new_sl,
+                direction=pos.direction,
+                entry_price=pos.open_price,
+                profit_pips=pos.profit_pips,
+            )
             
             return {
                 'action': 'TRAILING_STOP',
