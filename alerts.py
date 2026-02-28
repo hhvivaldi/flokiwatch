@@ -4,144 +4,229 @@ Sends notifications to Discord via Webhook
 """
 
 import requests
-import json
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
 import config
 from logger import log
 
 
+CHANNEL_SIGNALS = "signals"
+CHANNEL_DASHBOARD = "dashboard"
+CHANNEL_BRAIN = "brain"
+CHANNEL_TRADES = "trades"
+CHANNEL_STATUS = "status"
+CHANNEL_DAILY = "daily"
+CHANNEL_WEEKLY = "weekly"
+CHANNEL_MONTHLY = "monthly"
+CHANNEL_BACKTEST = "backtest"
+CHANNEL_ERRORS = "errors"
+CHANNEL_CHANGELOG = "changelog"
+
+WEBHOOK_ENV_KEYS = {
+    CHANNEL_SIGNALS: "DISCORD_WEBHOOK_SIGNALS",
+    CHANNEL_DASHBOARD: "DISCORD_WEBHOOK_DASHBOARD",
+    CHANNEL_BRAIN: "DISCORD_WEBHOOK_BRAIN",
+    CHANNEL_TRADES: "DISCORD_WEBHOOK_TRADES",
+    CHANNEL_STATUS: "DISCORD_WEBHOOK_STATUS",
+    CHANNEL_DAILY: "DISCORD_WEBHOOK_DAILY",
+    CHANNEL_WEEKLY: "DISCORD_WEBHOOK_WEEKLY",
+    CHANNEL_MONTHLY: "DISCORD_WEBHOOK_MONTHLY",
+    CHANNEL_BACKTEST: "DISCORD_WEBHOOK_BACKTEST",
+    CHANNEL_ERRORS: "DISCORD_WEBHOOK_ERRORS",
+    CHANNEL_CHANGELOG: "DISCORD_WEBHOOK_CHANGELOG",
+}
+
+ERROR_RATE_LIMIT_SECONDS = 60
+_error_last_sent: Dict[str, datetime] = {}
+
+
+def _get_config_value(name: str, default: str = "") -> str:
+    value = getattr(config, name, default)
+    return value or ""
+
+
+def _format_price(value: Optional[float]) -> str:
+    if value is None:
+        return "N/A"
+    return f"${value:,.2f}"
+
+
+def _format_pips(value: Optional[float]) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:+.1f} pips"
+
+
+def _extract_scenario(brain_summary: str) -> Optional[str]:
+    if not brain_summary:
+        return None
+    for line in brain_summary.splitlines():
+        if line.lower().startswith("scenario:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def _utc_timestamp() -> str:
+    return datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _rate_limited(key: str) -> bool:
+    now = datetime.utcnow()
+    last_sent = _error_last_sent.get(key)
+    if last_sent and (now - last_sent) < timedelta(seconds=ERROR_RATE_LIMIT_SECONDS):
+        return True
+    _error_last_sent[key] = now
+    return False
+
+
 class DiscordAlert:
-    """Discord alert manager"""
-    
-    def __init__(self, webhook_url: str = None):
-        self.webhook_url = webhook_url or config.DISCORD_WEBHOOK_URL
-        self.bot_name = config.DISCORD_BOT_NAME
+    """Discord alert manager (single webhook)."""
+
+    def __init__(self, webhook_url: str = None, bot_name: Optional[str] = None):
+        self.webhook_url = webhook_url or ""
+        self.bot_name = bot_name or config.DISCORD_BOT_NAME
         self.enabled = bool(self.webhook_url)
-    
+
+    def _post(self, payload: Dict) -> bool:
+        if not self.enabled:
+            log.debug("[DISCORD DISABLED] webhook not configured")
+            return False
+        try:
+            response = requests.post(
+                self.webhook_url,
+                json=payload,
+                timeout=10
+            )
+
+            if response.status_code in [200, 204]:
+                return True
+            log.warning(f"[DISCORD ERROR] Status: {response.status_code}")
+            return False
+        except Exception as e:
+            log.warning(f"[DISCORD ERROR] {e}")
+            return False
+
     def send(
         self,
         message: str,
         alert_type: str = "info",
         title: Optional[str] = None
     ) -> bool:
-        """
-        Send alert to Discord.
-        
-        Args:
-            message: Message text
-            alert_type: info, success, warning, error
-            title: Optional title
-        
-        Returns:
-            True if sent successfully
-        """
+        """Send alert to Discord (plain text)."""
         if not self.enabled:
             log.debug(f"[DISCORD DISABLED] {message}")
             return False
-        
-        # Emojis by type
+
         emojis = {
-            'info': 'ℹ️',
-            'success': '✅',
-            'warning': '⚠️',
-            'error': '❌',
-            'trade': '📈',
-            'profit': '💰',
-            'loss': '🔴',
-            'alert': '🔔'
+            "info": "ℹ️",
+            "success": "✅",
+            "warning": "⚠️",
+            "error": "❌",
+            "trade": "📈",
+            "profit": "💰",
+            "loss": "🔴",
+            "alert": "🔔",
         }
-        
-        emoji = emojis.get(alert_type, 'ℹ️')
-        
-        # Format message
+
+        emoji = emojis.get(alert_type, "ℹ️")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         if title:
             full_message = f"{emoji} **{title}**\n{message}\n`{timestamp}`"
         else:
             full_message = f"{emoji} {message}\n`{timestamp}`"
-        
-        # Payload
+
         payload = {
             "content": full_message,
-            "username": self.bot_name
+            "username": self.bot_name,
         }
-        
-        try:
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                timeout=10
-            )
-            
-            if response.status_code in [200, 204]:
-                return True
-            else:
-                log.warning(f"[DISCORD ERROR] Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            log.warning(f"[DISCORD ERROR] {e}")
-            return False
-    
+
+        return self._post(payload)
+
     def send_embed(
         self,
         title: str,
         description: str,
-        color: int = 0x00ff00,
-        fields: list = None
+        color: int = 0x00FF00,
+        fields: Optional[List[Dict]] = None,
+        footer_text: Optional[str] = None,
     ) -> bool:
-        """
-        Send formatted embed message.
-        
-        Args:
-            title: Embed title
-            description: Description
-            color: Color in hex (0x00ff00 = green)
-            fields: List of dicts with name, value, inline
-        
-        Returns:
-            True if sent successfully
-        """
+        """Send formatted embed message."""
         if not self.enabled:
             log.debug(f"[DISCORD DISABLED] {title}: {description}")
             return False
-        
+
         embed = {
             "title": title,
             "description": description,
             "color": color,
             "timestamp": datetime.utcnow().isoformat(),
-            "footer": {"text": self.bot_name}
+            "footer": {"text": footer_text or self.bot_name},
         }
-        
+
         if fields:
             embed["fields"] = fields
-        
+
         payload = {
             "username": self.bot_name,
-            "embeds": [embed]
+            "embeds": [embed],
         }
-        
-        try:
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                timeout=10
-            )
-            if response.status_code in [200, 204]:
-                return True
-            else:
-                log.warning(f"[DISCORD ERROR] Embed status: {response.status_code}")
-                return False
-        except Exception as e:
-            log.warning(f"[DISCORD ERROR] {e}")
+
+        return self._post(payload)
+
+
+class DiscordAlertRouter:
+    """Routes Discord alerts to channel-specific webhooks."""
+
+    def __init__(self, webhook_map: Optional[Dict[str, str]] = None, bot_name: Optional[str] = None):
+        self.bot_name = bot_name or config.DISCORD_BOT_NAME
+        if webhook_map is None:
+            webhook_map = {
+                channel: _get_config_value(env_key)
+                for channel, env_key in WEBHOOK_ENV_KEYS.items()
+            }
+        self.clients = {
+            channel: DiscordAlert(url, self.bot_name)
+            for channel, url in webhook_map.items()
+        }
+
+    def _client_for(self, channel: str) -> Optional[DiscordAlert]:
+        client = self.clients.get(channel)
+        if client and client.enabled:
+            return client
+        return None
+
+    def send(self, channel: str, message: str, alert_type: str = "info", title: Optional[str] = None) -> bool:
+        client = self._client_for(channel)
+        if not client:
+            log.debug(f"[DISCORD DISABLED] Channel={channel} | {message}")
             return False
+        return client.send(message, alert_type=alert_type, title=title)
+
+    def send_embed(
+        self,
+        channel: str,
+        title: str,
+        description: str,
+        color: int = 0x00FF00,
+        fields: Optional[List[Dict]] = None,
+        footer_text: Optional[str] = None,
+    ) -> bool:
+        client = self._client_for(channel)
+        if not client:
+            log.debug(f"[DISCORD DISABLED] Channel={channel} | {title}: {description}")
+            return False
+        return client.send_embed(title, description, color=color, fields=fields, footer_text=footer_text)
 
 
-# Global instance
-discord = DiscordAlert()
+_DEFAULT_WEBHOOK_URL = _get_config_value("DISCORD_WEBHOOK_URL")
+
+# Backward-compatible default webhook (legacy usage)
+discord = DiscordAlert(_DEFAULT_WEBHOOK_URL)
+
+# Multi-channel router
+discord_router = DiscordAlertRouter()
 
 
 # ============================================================================
@@ -150,27 +235,29 @@ discord = DiscordAlert()
 
 def alert_bot_started(mode: str = "LIVE"):
     """Alert: Bot started"""
-    discord.send_embed(
-        title="🤖 Bot Started",
-        description=f"XAU/USD Trading Bot is online and running.",
-        color=0x00ff00,  # Green
+    discord_router.send_embed(
+        CHANNEL_STATUS,
+        title=f"🤖 Bot Started — {mode} Mode",
+        description="XAU/USD Trading Bot is online and running.",
+        color=0x00ff00,
         fields=[
             {"name": "Mode", "value": mode, "inline": True},
             {"name": "Symbol", "value": config.SYMBOL, "inline": True},
-            {"name": "Timeframe", "value": config.TIMEFRAME, "inline": True}
-        ]
+            {"name": "Timeframe", "value": config.TIMEFRAME, "inline": True},
+        ],
     )
 
 
 def alert_bot_stopped(reason: str = "Manual"):
     """Alert: Bot stopped"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_STATUS,
         title="🛑 Bot Stopped",
-        description=f"Trading Bot has been shut down.",
-        color=0xff0000,  # Red
+        description="Trading Bot has been shut down.",
+        color=0xff0000,
         fields=[
-            {"name": "Reason", "value": reason, "inline": False}
-        ]
+            {"name": "Reason", "value": reason, "inline": False},
+        ],
     )
 
 
@@ -181,35 +268,151 @@ def alert_signal_detected(
     news_score: float,
     ml_score: float,
     confidence: str,
-    brain_summary: str = ""
+    brain_summary: str = "",
+    current_price: Optional[float] = None,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+    scenario: Optional[str] = None,
+    timestamp: Optional[str] = None,
 ):
     """Alert: Signal detected"""
-    # Color based on decision
     if "BUY" in decision:
-        color = 0x00ff00  # Green
+        color = 0x00ff00
         emoji = "🟢"
     elif "SELL" in decision:
-        color = 0xff0000  # Red
+        color = 0xff0000
         emoji = "🔴"
     else:
-        color = 0xffff00  # Yellow
+        color = 0xffff00
         emoji = "🟡"
-    
-    fields = [
-        {"name": "📊 Technical", "value": f"{tech_score:.1f}", "inline": True},
-        {"name": "📰 News", "value": f"{news_score:.1f}", "inline": True},
-        {"name": "🤖 ML", "value": f"{ml_score:.1f}", "inline": True}
-    ]
-    
-    # Add brain summary if available
-    if brain_summary:
-        fields.append({"name": "🧠 Central Brain", "value": brain_summary, "inline": False})
-    
-    discord.send_embed(
-        title=f"{emoji} Signal: {decision}",
-        description=f"Final Score: **{final_score:.1f}/100** | Confidence: **{confidence}**",
+
+    scenario_value = scenario or _extract_scenario(brain_summary) or "N/A"
+    timestamp = timestamp or _utc_timestamp()
+    description = (
+        f"Score: {final_score:.1f} | Confidence: {float(confidence):.0f}%\n"
+        f"Scenario: {scenario_value}\n"
+        f"Price: {_format_price(current_price)}\n"
+        f"SL: {_format_price(stop_loss)} | TP: {_format_price(take_profit)}\n"
+        f"Timestamp: {timestamp}"
+    )
+
+    discord_router.send_embed(
+        CHANNEL_SIGNALS,
+        title=f"{emoji} {decision} SIGNAL — {config.SYMBOL.replace('USD', '/USD')}",
+        description=description,
         color=color,
-        fields=fields
+    )
+
+
+def alert_brain_decision(
+    decision: str,
+    final_score: float,
+    confidence: float,
+    scenario: str,
+    tech_score: float,
+    ml_score: float,
+    momentum_score: float,
+    news_score: float,
+    calendar_score: float,
+    gpt_validation: Optional[Dict] = None,
+    volatility_status: str = "NORMAL",
+    mtf_trend: Optional[Dict] = None,
+    volume_gate: Optional[Dict] = None,
+    hold_forced: bool = False,
+    original_decision: Optional[str] = None,
+    hold_reason: Optional[str] = None,
+):
+    """Alert: Central brain decision details."""
+    if hold_forced:
+        title = f"⚠️ HOLD FORCED (Confidence {confidence:.0f}% < {config.BRAIN_MIN_CONFIDENCE}%)"
+        description = (
+            f"Original signal: {original_decision or decision} (Score {final_score:.1f})\n"
+            f"Scenario: {scenario}\n"
+            f"Reason: {hold_reason or 'Low confidence'}"
+        )
+        color = 0xf1c40f
+        discord_router.send_embed(
+            CHANNEL_BRAIN,
+            title=title,
+            description=description,
+            color=color,
+        )
+        return
+
+    title = f"🧠 BRAIN DECISION: {decision} (Score {final_score:.1f})"
+    description = f"Confidence: {confidence:.0f}% | Scenario: {scenario}"
+    fields = [
+        {
+            "name": "Pillars",
+            "value": (
+                f"Tech: {tech_score:.1f} | ML: {ml_score:.1f} | Mom: {momentum_score:.1f}\n"
+                f"News: {news_score:.1f} | Cal: {calendar_score:.1f}"
+            ),
+            "inline": False,
+        }
+    ]
+
+    if gpt_validation:
+        gpt_action = gpt_validation.get("action", "CONFIRM")
+        gpt_adjust = gpt_validation.get("adjustment", 0)
+        sign = "+" if gpt_adjust >= 0 else ""
+        gpt_text = f"{gpt_action} ({sign}{gpt_adjust})"
+        fields.append({"name": "GPT Validator", "value": gpt_text, "inline": True})
+
+    fields.append({"name": "Volatility", "value": volatility_status, "inline": True})
+
+    if mtf_trend:
+        alignment = mtf_trend.get("alignment", "UNKNOWN")
+        d1 = mtf_trend.get("d1", "?")
+        h4 = mtf_trend.get("h4", "?")
+        fields.append({
+            "name": "MTF Trend",
+            "value": f"{alignment} (D1 {d1}, H4 {h4})",
+            "inline": False,
+        })
+
+    if volume_gate:
+        status = volume_gate.get("status", "UNKNOWN")
+        ratio = volume_gate.get("ratio")
+        ratio_text = f" ({ratio:.1f}x avg)" if isinstance(ratio, (int, float)) else ""
+        fields.append({
+            "name": "Volume Gate",
+            "value": f"{status}{ratio_text}",
+            "inline": False,
+        })
+
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
+        title=title,
+        description=description,
+        color=0x3498db,
+        fields=fields,
+    )
+
+
+def alert_dashboard_snapshot(
+    status: str,
+    mode: str,
+    balance: float,
+    equity: float,
+    open_positions: str,
+    today_stats: str,
+    dashboard_url: str,
+):
+    """Alert: Dashboard snapshot."""
+    description = (
+        f"Status: {status} | Mode: {mode}\n"
+        f"Balance: {_format_price(balance)} | Equity: {_format_price(equity)}\n"
+        f"Open Positions: {open_positions}\n"
+        f"Today: {today_stats}\n"
+        f"🔗 {dashboard_url}"
+    )
+
+    discord_router.send_embed(
+        CHANNEL_DASHBOARD,
+        title="📊 FlokiWatch Dashboard",
+        description=description,
+        color=0x3498db,
     )
 
 
@@ -220,28 +423,44 @@ def alert_trade_executed(
     entry_price: float,
     stop_loss: float,
     take_profit: float,
-    is_dry_run: bool = False
+    is_dry_run: bool = False,
+    confidence: Optional[float] = None,
+    scenario: Optional[str] = None,
+    risk_amount: Optional[float] = None,
+    risk_percent: Optional[float] = None,
 ):
     """Alert: Trade executed"""
     prefix = "🧪 [TEST] " if is_dry_run else ""
     color = 0x00ff00 if direction == "BUY" else 0xff0000
-    
-    # Calculate pips
     pip_size = 0.1
     sl_pips = abs(entry_price - stop_loss) / pip_size
     tp_pips = abs(take_profit - entry_price) / pip_size
-    
-    discord.send_embed(
-        title=f"{prefix}✅ {direction} Order Executed",
-        description=f"Trade opened automatically by the bot.",
+
+    fields = [
+        {"name": "Entry", "value": _format_price(entry_price), "inline": True},
+        {"name": "Lot", "value": f"{lot_size}", "inline": True},
+        {"name": "SL", "value": f"{_format_price(stop_loss)} (-{sl_pips:.0f} pips)", "inline": True},
+        {"name": "TP", "value": f"{_format_price(take_profit)} (+{tp_pips:.0f} pips)", "inline": True},
+    ]
+
+    if risk_amount is not None or risk_percent is not None:
+        risk_text = _format_price(risk_amount)
+        if risk_percent is not None:
+            risk_text = f"{risk_text} ({risk_percent:.1f}%)"
+        fields.append({"name": "Risk", "value": risk_text, "inline": True})
+
+    if confidence is not None or scenario:
+        conf_text = f"{confidence:.0f}%" if confidence is not None else "N/A"
+        fields.append({"name": "Confidence", "value": conf_text, "inline": True})
+        if scenario:
+            fields.append({"name": "Scenario", "value": scenario, "inline": True})
+
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"{prefix}✅ TRADE OPENED — {direction} #{ticket}",
+        description="Trade opened automatically by the bot.",
         color=color,
-        fields=[
-            {"name": "Ticket", "value": str(ticket), "inline": True},
-            {"name": "Lot", "value": str(lot_size), "inline": True},
-            {"name": "Entry", "value": f"{entry_price:.2f}", "inline": True},
-            {"name": "Stop Loss", "value": f"{stop_loss:.2f} (-{sl_pips:.0f} pips)", "inline": True},
-            {"name": "Take Profit", "value": f"{take_profit:.2f} (+{tp_pips:.0f} pips)", "inline": True}
-        ]
+        fields=fields,
     )
 
 
@@ -252,44 +471,55 @@ def alert_trade_closed(
     profit_percent: float,
     reason: str,
     pending: bool = False,
-    outcome: str = None
+    outcome: str = None,
+    entry_price: Optional[float] = None,
+    exit_price: Optional[float] = None,
+    pips: Optional[float] = None,
+    duration: Optional[str] = None,
+    phase: Optional[str] = None,
 ):
     """Alert: Trade closed"""
     if pending and outcome:
-        # P&L not yet confirmed — show outcome only
         if outcome == "WIN":
             emoji = "💰"
             color = 0x00ff00
-            status = "WIN"
         elif outcome == "LOSS":
-            emoji = "🔴"
+            emoji = "❌"
             color = 0xff0000
-            status = "LOSS"
         else:
             emoji = "⚪"
             color = 0x95a5a6
-            status = "BE"
-        pnl_value = f"{status} — Awaiting confirmation"
+        pnl_value = f"{outcome} — Awaiting confirmation"
     else:
         if profit >= 0:
             emoji = "💰"
             color = 0x00ff00
-            status = "PROFIT"
         else:
-            emoji = "🔴"
+            emoji = "❌"
             color = 0xff0000
-            status = "LOSS"
-        pnl_value = f"${profit:+.2f} ({profit_percent:+.1f}%)"
-    
-    discord.send_embed(
-        title=f"{emoji} Trade Closed - {status}",
-        description=f"Ticket #{ticket} has been closed.",
+        pnl_value = f"{_format_price(profit)} ({profit_percent:+.1f}%)"
+
+    if pips is None and entry_price is not None and exit_price is not None:
+        pips = (exit_price - entry_price) / 0.1 if direction == "BUY" else (entry_price - exit_price) / 0.1
+
+    fields = [
+        {"name": "Entry", "value": _format_price(entry_price), "inline": True},
+        {"name": "Exit", "value": _format_price(exit_price), "inline": True},
+        {"name": "P&L", "value": f"{pnl_value} ({_format_pips(pips)})", "inline": True},
+        {"name": "Close reason", "value": reason, "inline": True},
+    ]
+
+    if duration:
+        fields.append({"name": "Duration", "value": duration, "inline": True})
+    if phase:
+        fields.append({"name": "Phase at close", "value": phase, "inline": True})
+
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"{emoji} TRADE CLOSED — {direction} #{ticket}",
+        description="Position has been closed.",
         color=color,
-        fields=[
-            {"name": "Direction", "value": direction, "inline": True},
-            {"name": "P&L", "value": pnl_value, "inline": True},
-            {"name": "Reason", "value": reason, "inline": True}
-        ]
+        fields=fields,
     )
 
 
@@ -299,18 +529,18 @@ def alert_trade_resolved(ticket: int, direction: str, profit: float, profit_perc
         emoji = "✅"
         color = 0x00ff00
     else:
-        emoji = "✅"
+        emoji = "❌"
         color = 0xff0000
-    
-    discord.send_embed(
-        title=f"{emoji} Trade Resolved",
-        description=f"Ticket #{ticket} — real P&L confirmed by MT5.",
+
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"{emoji} TRADE RESOLVED — {direction} #{ticket}",
+        description="Real P&L confirmed by MT5.",
         color=color,
         fields=[
-            {"name": "Direction", "value": direction, "inline": True},
-            {"name": "P&L", "value": f"${profit:+.2f} ({profit_percent:+.1f}%)", "inline": True},
-            {"name": "Reason", "value": reason, "inline": True}
-        ]
+            {"name": "P&L", "value": f"{_format_price(profit)} ({profit_percent:+.1f}%)", "inline": True},
+            {"name": "Reason", "value": reason, "inline": True},
+        ],
     )
 
 
@@ -318,65 +548,92 @@ def alert_breakeven(
     ticket: int,
     old_sl: float,
     new_sl: float,
-    profit_pips: float
+    profit_pips: float,
+    direction: Optional[str] = None,
+    entry_price: Optional[float] = None,
 ):
     """Alert: Breakeven activated"""
-    discord.send_embed(
-        title="🛡️ Breakeven Activated",
-        description=f"SL moved to entry — zero risk.",
+    direction_label = f"{direction} " if direction else ""
+    entry_value = entry_price if entry_price is not None else new_sl
+    description = (
+        f"SL moved to entry ({_format_price(entry_value)})\n"
+        f"Profit at trigger: {profit_pips:+.0f} pips"
+    )
+
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"🔒 BREAKEVEN — {direction_label}#{ticket}",
+        description=description,
         color=0x00bfff,
-        fields=[
-            {"name": "Ticket", "value": str(ticket), "inline": True},
-            {"name": "Current Profit", "value": f"+{profit_pips:.0f} pips", "inline": True},
-            {"name": "SL", "value": f"{old_sl:.2f} → {new_sl:.2f}", "inline": True}
-        ]
     )
 
 
 def alert_sl_hit(ticket: int, loss: float, loss_percent: float):
     """Alert: Stop Loss hit"""
-    discord.send_embed(
-        title="🔴 Stop Loss Hit",
-        description=f"Position closed automatically.",
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"❌ TRADE CLOSED — #{ticket}",
+        description="Stop Loss hit.",
         color=0xff0000,
         fields=[
-            {"name": "Ticket", "value": str(ticket), "inline": True},
-            {"name": "Loss", "value": f"${loss:.2f} ({loss_percent:.1f}%)", "inline": True}
-        ]
+            {"name": "Loss", "value": f"{_format_price(loss)} ({loss_percent:.1f}%)", "inline": True},
+        ],
     )
 
 
 def alert_safety_block(decision: str, score: float, reason: str):
     """Alert: Trade blocked by safety check"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
         title="⛔ Signal Blocked",
         description=f"Trade {decision} (Score: {score:.1f}) was blocked.",
         color=0xffff00,
         fields=[
-            {"name": "Reason", "value": reason, "inline": False}
-        ]
+            {"name": "Reason", "value": reason, "inline": False},
+        ],
     )
 
 
 def alert_m5_reversal_block(direction: str, move_pct: float, description: str):
     """Alert: Trade blocked by M5 reversal detection"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
         title="🔄 M5 Reversal — Entry Blocked",
         description=f"{direction} signal blocked: M5 price contradicts direction.",
         color=0xff6600,
         fields=[
             {"name": "M5 Move (30 min)", "value": f"{move_pct:+.2f}%", "inline": True},
             {"name": "Detail", "value": description, "inline": False},
-        ]
+        ],
     )
 
 
-def alert_error(error_type: str, message: str):
+def alert_error(error_type: str, message: str, impact: str = "", severity: str = "error"):
     """Alert: Critical error"""
-    discord.send_embed(
-        title=f"⚠️ ERROR: {error_type}",
-        description=message,
-        color=0xff0000
+    if _rate_limited(f"{severity}:{error_type}"):
+        return
+
+    if severity.lower() == "warning":
+        emoji = "⚠️"
+        color = 0xf1c40f
+    else:
+        emoji = "🚨"
+        color = 0xff0000
+
+    fields = [
+        {"name": "Type", "value": error_type, "inline": True},
+        {"name": "Message", "value": message, "inline": False},
+    ]
+    if impact:
+        fields.append({"name": "Impact", "value": impact, "inline": False})
+    fields.append({"name": "Timestamp", "value": _utc_timestamp(), "inline": False})
+
+    discord_router.send_embed(
+        CHANNEL_ERRORS,
+        title=f"{emoji} {'ERROR' if severity.lower() != 'warning' else 'WARNING'}",
+        description="Alert from trading bot.",
+        color=color,
+        fields=fields,
     )
 
 
@@ -387,16 +644,18 @@ def alert_daily_summary(
     pnl: float,
     pnl_percent: float,
     current_balance: float,
-    gpt_stats: dict = None
+    gpt_stats: dict = None,
+    best_trade: Optional[str] = None,
+    worst_trade: Optional[str] = None,
+    scenarios_triggered: Optional[Dict[str, int]] = None,
+    signals_blocked: Optional[int] = None,
 ):
     """Alert: Daily summary"""
     win_rate = (wins / trades_total * 100) if trades_total > 0 else 0
     
     if pnl >= 0:
-        color = 0x00ff00
         emoji = "📈"
     else:
-        color = 0xff0000
         emoji = "📉"
     
     fields = [
@@ -418,122 +677,223 @@ def alert_daily_summary(
         )
         fields.append({"name": "🤖 GPT Validator", "value": gpt_value, "inline": False})
     
-    discord.send_embed(
+    if best_trade:
+        fields.append({"name": "Best", "value": best_trade, "inline": False})
+    if worst_trade:
+        fields.append({"name": "Worst", "value": worst_trade, "inline": False})
+    if scenarios_triggered:
+        scenarios_text = ", ".join(
+            f"{name} ({count})" for name, count in scenarios_triggered.items()
+        )
+        fields.append({"name": "Scenarios triggered", "value": scenarios_text, "inline": False})
+    if signals_blocked is not None:
+        fields.append({"name": "Signals blocked", "value": str(signals_blocked), "inline": True})
+
+    discord_router.send_embed(
+        CHANNEL_DAILY,
         title=f"{emoji} Daily Summary",
         description=f"Trading bot performance over the last 24h.",
-        color=color,
-        fields=fields
+        color=0x3498db,
+        fields=fields,
+    )
+
+
+def alert_weekly_summary(
+    week_label: str,
+    trades_total: int,
+    wins: int,
+    losses: int,
+    breakevens: int,
+    pnl: float,
+    profit_factor: float,
+    best_day: str,
+    worst_day: str,
+    top_scenario: str,
+    worst_scenario: str,
+    live_stats: str,
+):
+    """Alert: Weekly summary."""
+    win_rate = (wins / trades_total * 100) if trades_total > 0 else 0
+    description = (
+        f"Trades: {trades_total} ({wins}W / {losses}L / {breakevens}BE)\n"
+        f"Win Rate: {win_rate:.1f}%\n"
+        f"P&L: {_format_price(pnl)}\n"
+        f"Profit Factor: {profit_factor:.2f}"
+    )
+    fields = [
+        {"name": "Best day", "value": best_day, "inline": True},
+        {"name": "Worst day", "value": worst_day, "inline": True},
+        {"name": "Top scenario", "value": top_scenario, "inline": False},
+        {"name": "Worst scenario", "value": worst_scenario, "inline": False},
+        {"name": "Live stats", "value": live_stats, "inline": False},
+    ]
+    discord_router.send_embed(
+        CHANNEL_WEEKLY,
+        title=f"📊 Weekly Summary — {week_label}",
+        description=description,
+        color=0x3498db,
+        fields=fields,
+    )
+
+
+def alert_monthly_summary(
+    month_label: str,
+    trades_total: int,
+    win_rate: float,
+    pnl: float,
+    profit_factor: float,
+    max_drawdown: float,
+    balance_start: float,
+    balance_end: float,
+    note: Optional[str] = None,
+):
+    """Alert: Monthly summary."""
+    description = (
+        f"Trades: {trades_total}\n"
+        f"Win Rate: {win_rate:.1f}%\n"
+        f"P&L: {_format_price(pnl)}\n"
+        f"Profit Factor: {profit_factor:.2f}\n"
+        f"Max Drawdown: {_format_price(max_drawdown)}\n"
+        f"Balance: {_format_price(balance_start)} → {_format_price(balance_end)}"
+    )
+    fields = []
+    if note:
+        fields.append({"name": "Note", "value": note, "inline": False})
+    discord_router.send_embed(
+        CHANNEL_MONTHLY,
+        title=f"🏆 Monthly Report — {month_label}",
+        description=description,
+        color=0x3498db,
+        fields=fields if fields else None,
     )
 
 
 def alert_pause_trading(reason: str, resume_time: str):
     """Alert: Trading paused"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_STATUS,
         title="🛑 Trading Paused",
-        description=f"Bot paused operations automatically.",
+        description="Bot paused operations automatically.",
         color=0xffff00,
         fields=[
             {"name": "Reason", "value": reason, "inline": False},
-            {"name": "Resumes at", "value": resume_time, "inline": False}
-        ]
+            {"name": "Resumes at", "value": resume_time, "inline": False},
+        ],
     )
 
 
-def alert_trailing_stop(ticket: int, old_sl: float, new_sl: float):
+def alert_trailing_stop(
+    ticket: int,
+    old_sl: float,
+    new_sl: float,
+    direction: Optional[str] = None,
+    entry_price: Optional[float] = None,
+    profit_pips: Optional[float] = None,
+):
     """Alert: Trailing stop activated"""
-    discord.send(
-        f"📊 **Trailing Stop Activated**\nTicket: {ticket}\nSL: {old_sl:.2f} → {new_sl:.2f}",
-        alert_type="info"
+    direction_label = f"{direction} " if direction else ""
+    sl_from_entry = None
+    if entry_price is not None and direction:
+        if direction == "BUY":
+            sl_from_entry = (new_sl - entry_price) / 0.1
+        else:
+            sl_from_entry = (entry_price - new_sl) / 0.1
+
+    description_lines = [f"New SL: {_format_price(new_sl)}"]
+    if sl_from_entry is not None:
+        description_lines[0] += f" ({sl_from_entry:+.1f} pips from entry)"
+    if profit_pips is not None:
+        description_lines.append(f"Current profit: {profit_pips:+.0f} pips")
+
+    discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"📐 TRAILING UPDATE — {direction_label}#{ticket}",
+        description="\n".join(description_lines),
+        color=0x3498db,
     )
 
 
 def alert_heartbeat_full(
-    current_price: float,
-    final_score: float,
-    confidence: float,
-    scenario: str,
-    dominant_pillar: str,
-    volatility_status: str,
-    calendar_info: str = "",
-    gpt_info: str = ""
+    bot_name: str,
+    uptime: str,
+    open_positions: int,
+    last_analysis_time: str,
 ):
-    """Alert: Full heartbeat (scenario changed or score shifted significantly)"""
+    """Alert: Status heartbeat (keep-alive)."""
     fields = [
-        {"name": "💰 Current Price", "value": f"{current_price:.2f}", "inline": True},
-        {"name": "📊 Score", "value": f"{final_score:.1f}/100", "inline": True},
-        {"name": "🎯 Confidence", "value": f"{confidence:.1f}%", "inline": True},
-        {"name": "🧠 Scenario", "value": scenario, "inline": False},
-        {"name": "📌 Dominant Pillar", "value": dominant_pillar, "inline": True},
-        {"name": "⚡ Volatility", "value": volatility_status, "inline": True},
+        {"name": "Bot", "value": bot_name, "inline": True},
+        {"name": "Uptime", "value": uptime, "inline": True},
+        {"name": "Open positions", "value": str(open_positions), "inline": True},
+        {"name": "Last analysis", "value": last_analysis_time, "inline": False},
     ]
-    
-    if calendar_info:
-        fields.append({"name": "📅 Calendar", "value": calendar_info, "inline": False})
-    
-    if gpt_info:
-        fields.append({"name": "🤖 GPT Validator", "value": gpt_info, "inline": False})
-    
-    discord.send_embed(
-        title="💤 Heartbeat — HOLD",
-        description="Bot active and analyzing. No conditions for trade.",
-        color=0x7289DA,
-        fields=fields
+    return discord_router.send_embed(
+        CHANNEL_STATUS,
+        title="💤 Bot Heartbeat",
+        description="Keep-alive ping from trading bot.",
+        color=0x3498db,
+        fields=fields,
     )
 
 
 def alert_market_closed(reason: str, next_open: str):
     """Alert: Market closed"""
-    discord.send_embed(
-        title="🌙 Market Closed",
+    discord_router.send_embed(
+        CHANNEL_STATUS,
+        title="Market Closed",
         description=reason,
-        color=0x95a5a6,  # Gray
+        color=0x95a5a6,
         fields=[
-            {"name": "Next open", "value": next_open, "inline": False}
-        ]
+            {"name": "Next open", "value": next_open, "inline": False},
+        ],
     )
 
 
 def alert_market_open():
     """Alert: Market opened"""
-    discord.send_embed(
-        title="☀️ Market Open",
+    discord_router.send_embed(
+        CHANNEL_STATUS,
+        title="🏪 Market Open",
         description="Gold market has reopened. Bot active and analyzing.",
-        color=0x2ecc71  # Green
+        color=0x2ecc71,
     )
 
 
 def alert_heartbeat_short():
     """Alert: Short heartbeat (no significant changes)"""
-    timestamp = datetime.now().strftime("%H:%M")
-    discord.send(
-        f"🔄 Analysis at {timestamp} — HOLD maintained, no significant changes.",
-        alert_type="info"
+    timestamp = _utc_timestamp()
+    return discord_router.send_embed(
+        CHANNEL_STATUS,
+        title="💤 Bot Heartbeat",
+        description=f"Keep-alive ping — {timestamp}",
+        color=0x3498db,
     )
 
 
 def alert_spread_delay(spread: float, max_spread: float, retry_count: int):
     """Alert: Trade delayed due to high spread (first occurrence only)"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
         title="⏳ Entry Delayed — High Spread",
-        description=f"Spread too high: **{spread:.1f} pips** (max: {max_spread:.1f})\nRetrying every 30s for up to 5 minutes...",
-        color=0xf39c12,  # Orange
+        description=f"Spread too high: **{spread:.1f} pips** (max: {max_spread:.1f})\nRetrying entry...",
+        color=0xf39c12,
         fields=[
             {"name": "Retry", "value": f"#{retry_count}", "inline": True},
-            {"name": "Max Retries", "value": "10", "inline": True}
-        ]
+            {"name": "Max Spread", "value": f"{max_spread:.1f} pips", "inline": True},
+        ],
     )
 
 
 def alert_spread_skip(direction: str, spread: float, final_score: float):
     """Alert: Trade skipped after spread timeout"""
-    discord.send_embed(
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
         title="⛔ Trade Skipped — Spread Timeout",
-        description=f"Spread did not normalize after 5 minutes.\n**{direction}** signal (score {final_score:.0f}) was not executed.",
-        color=0xe74c3c,  # Red
+        description=f"Spread did not normalize. {direction} signal (score {final_score:.0f}) was not executed.",
+        color=0xe74c3c,
         fields=[
             {"name": "Final Spread", "value": f"{spread:.1f} pips", "inline": True},
-            {"name": "Reason", "value": "Rollover / Low liquidity / News spike", "inline": True}
-        ]
+            {"name": "Reason", "value": "Rollover / Low liquidity / News spike", "inline": True},
+        ],
     )
 
 
