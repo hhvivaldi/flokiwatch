@@ -1519,8 +1519,9 @@ class TradingBot:
         
         record_analysis(self.last_analysis)
         
-        # AI Agent Shadow Mode: Call Agent when Brain signals BUY/SELL
-        if getattr(config, 'USE_AI_AGENT', False) and direction is not None:
+        # AI Agent Shadow Mode: Call Agent when Brain signals BUY/SELL or HOLD FORCED
+        # HOLD FORCED = Brain wanted to trade but confidence was too low
+        if getattr(config, 'USE_AI_AGENT', False) and (direction is not None or hold_forced):
             try:
                 self._call_agent_shadow_mode(
                     brain_result=brain_result,
@@ -1532,6 +1533,9 @@ class TradingBot:
                     current_price=current_price,
                     vol_status=vol_status,
                     df=df,
+                    hold_forced=hold_forced,
+                    original_decision=original_decision,
+                    hold_reason=hold_reason,
                 )
             except Exception as e:
                 log.warning(f"AI Agent error (non-blocking): {e}")
@@ -1640,10 +1644,16 @@ class TradingBot:
         current_price,
         vol_status,
         df,
+        hold_forced: bool = False,
+        original_decision: str = None,
+        hold_reason: str = None,
     ):
         """
         Call AI Agent in shadow mode.
         Agent decides but Brain executes. Both decisions logged for comparison.
+        
+        When hold_forced=True, the Brain wanted to trade but confidence was too low.
+        The Agent receives the original signal and can decide to AGREE_HOLD or OVERRIDE_OPEN.
         """
         import asyncio
         from ai_agent import get_agent, AgentDecision
@@ -1653,7 +1663,8 @@ class TradingBot:
         if not agent.is_enabled():
             return
         
-        log.info("   🤖 Calling AI Agent (shadow mode)...")
+        trigger_type = "HOLD_FORCED" if hold_forced else "SIGNAL"
+        log.info(f"   🤖 Calling AI Agent (shadow mode, trigger={trigger_type})...")
         
         # Build session context
         session_context = {
@@ -1665,6 +1676,11 @@ class TradingBot:
             "today_pnl": self.daily_stats.get("pnl", 0),
             "last_5_results": [],  # Could be populated from closed_trades_today
             "consecutive_losses": 0,
+            "hold_forced": {
+                "is_forced": hold_forced,
+                "original_decision": original_decision,
+                "reason": hold_reason,
+            } if hold_forced else None,
         }
         
         # Get candle data
@@ -1776,15 +1792,28 @@ class TradingBot:
         agent_decision = agent_result.decision
         agent_confidence = agent_result.confidence
         
-        # Determine agreement
-        brain_dir = "BUY" if "BUY" in brain_result.decision else ("SELL" if "SELL" in brain_result.decision else "HOLD")
-        agent_dir = "BUY" if "BUY" in agent_decision else ("SELL" if "SELL" in agent_decision else "HOLD")
-        
-        # REJECT/WAIT = disagreement with BUY/SELL
-        if agent_decision in ("REJECT", "WAIT"):
-            agreement = False
+        # Determine agreement based on trigger type
+        if hold_forced:
+            # HOLD FORCED: Brain blocked a trade due to low confidence
+            # Agent agrees if it also wants to hold, disagrees if it wants to override
+            if agent_decision in ("AGREE_HOLD", "WAIT", "HOLD", "REJECT"):
+                agreement = True  # Agent agrees with blocking the trade
+            elif agent_decision in ("OVERRIDE_OPEN", "BUY", "SELL", "STRONG_BUY", "STRONG_SELL"):
+                agreement = False  # Agent wants to open despite Brain's block
+            else:
+                agreement = True  # Default to agreement for unknown responses
+            brain_display = f"HOLD_FORCED ({original_decision})"
         else:
-            agreement = (brain_dir == agent_dir)
+            # Normal signal: Brain wants to trade
+            brain_dir = "BUY" if "BUY" in brain_result.decision else ("SELL" if "SELL" in brain_result.decision else "HOLD")
+            agent_dir = "BUY" if "BUY" in agent_decision else ("SELL" if "SELL" in agent_decision else "HOLD")
+            
+            # REJECT/WAIT = disagreement with BUY/SELL
+            if agent_decision in ("REJECT", "WAIT"):
+                agreement = False
+            else:
+                agreement = (brain_dir == agent_dir)
+            brain_display = brain_result.decision
         
         agreement_str = "✅ AGREE" if agreement else "❌ DISAGREE"
         log.info(f"   🤖 Agent: {agent_decision} (conf={agent_confidence}) | {agreement_str}")
@@ -1797,9 +1826,9 @@ class TradingBot:
         executed = "BRAIN"
         mode = agent.get_mode()
         
-        # Record to SQLite
+        # Record to SQLite (use brain_display for HOLD_FORCED visibility)
         record_agent_decision(
-            brain_decision=brain_result.decision,
+            brain_decision=brain_display,
             brain_score=brain_result.final_score,
             brain_confidence=brain_result.confidence,
             agent_result=agent_result.to_dict(),
@@ -1808,7 +1837,7 @@ class TradingBot:
         
         # Send Discord alert
         alert_agent_decision(
-            brain_decision=brain_result.decision,
+            brain_decision=brain_display,
             brain_score=brain_result.final_score,
             brain_confidence=brain_result.confidence,
             agent_decision=agent_decision,
@@ -1834,6 +1863,8 @@ class TradingBot:
                 "agreement": agreement,
                 "executed": executed,
                 "latency_ms": agent_result.latency_ms,
+                "trigger_type": "HOLD_FORCED" if hold_forced else "SIGNAL",
+                "original_decision": original_decision if hold_forced else None,
             }
     
     def _check_heartbeat(self) -> None:
