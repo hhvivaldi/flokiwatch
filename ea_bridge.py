@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 
+import MetaTrader5 as mt5
 import config
 from logger import log
 
@@ -93,7 +94,19 @@ def write_signal(
         True if successful
     """
     try:
-        now = datetime.now()
+        # Use MT5 server time to avoid timezone mismatch with EA
+        # The EA compares signal timestamp against TimeCurrent() which is server time
+        server_time = None
+        try:
+            if mt5.initialize():
+                tick = mt5.symbol_info_tick(config.SYMBOL)
+                if tick and tick.time:
+                    server_time = datetime.fromtimestamp(tick.time)
+        except Exception:
+            pass
+        
+        # Fallback to local time if MT5 not available
+        now = server_time if server_time else datetime.now()
         signal_id = now.strftime("%Y%m%d%H%M%S")
         
         payload = {
