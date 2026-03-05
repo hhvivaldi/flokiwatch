@@ -13,6 +13,16 @@ from logger import log
 logger = log
 
 
+def _safe_round(value, decimals: int = 2):
+    """Safely round a value, handling strings and None."""
+    if value is None:
+        return 0
+    try:
+        return round(float(value), decimals)
+    except (ValueError, TypeError):
+        return 0
+
+
 def build_data_package(
     brain_result: Any,
     tech_data: Dict,
@@ -89,9 +99,9 @@ def _format_current_price(price_data: Dict) -> Dict:
         return {"bid": 0, "ask": 0, "spread": 0}
     
     return {
-        "bid": round(price_data.get("bid", 0), 2),
-        "ask": round(price_data.get("ask", 0), 2),
-        "spread": round(price_data.get("spread", 0), 1),
+        "bid": _safe_round(price_data.get("bid", 0), 2),
+        "ask": _safe_round(price_data.get("ask", 0), 2),
+        "spread": _safe_round(price_data.get("spread", 0), 1),
     }
 
 
@@ -110,11 +120,11 @@ def _format_candles(candles: List[Dict], limit: int = 20) -> List[Dict]:
     for c in recent:
         formatted.append({
             "time": c.get("time", ""),
-            "o": round(c.get("open", 0), 2),
-            "h": round(c.get("high", 0), 2),
-            "l": round(c.get("low", 0), 2),
-            "c": round(c.get("close", 0), 2),
-            "v": int(c.get("tick_volume", c.get("volume", 0))),
+            "o": _safe_round(c.get("open", 0), 2),
+            "h": _safe_round(c.get("high", 0), 2),
+            "l": _safe_round(c.get("low", 0), 2),
+            "c": _safe_round(c.get("close", 0), 2),
+            "v": int(c.get("tick_volume", c.get("volume", 0)) or 0),
         })
     
     return formatted
@@ -127,14 +137,14 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
     # RSI
     rsi = tech_data.get("rsi", {})
     indicators["rsi"] = {
-        "value": round(rsi.get("value", 50), 1),
+        "value": _safe_round(rsi.get("value", 50), 1),
         "level": rsi.get("level", "neutral"),
     }
     
     # MACD
     macd = tech_data.get("macd", {})
     indicators["macd"] = {
-        "histogram": round(macd.get("histogram", 0), 3),
+        "histogram": _safe_round(macd.get("histogram", 0), 3),
         "signal": macd.get("signal", "neutral"),
         "trend": macd.get("trend", "neutral"),
     }
@@ -142,9 +152,9 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
     # EMAs
     ema = tech_data.get("ema", {})
     indicators["emas"] = {
-        "ema9": round(ema.get("ema9", 0), 2),
-        "ema21": round(ema.get("ema21", 0), 2),
-        "ema50": round(ema.get("ema50", 0), 2),
+        "ema9": _safe_round(ema.get("ema9", 0), 2),
+        "ema21": _safe_round(ema.get("ema21", 0), 2),
+        "ema50": _safe_round(ema.get("ema50", 0), 2),
         "above_ema20": ema.get("above_ema20", False),
         "above_ema50": ema.get("above_ema50", False),
     }
@@ -152,33 +162,33 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
     # Bollinger Bands
     bb = tech_data.get("bollinger", {})
     indicators["bollinger"] = {
-        "upper": round(bb.get("upper", 0), 2),
-        "middle": round(bb.get("middle", 0), 2),
-        "lower": round(bb.get("lower", 0), 2),
-        "position": round(bb.get("position", 0.5), 2),  # 0-1 where price is in band
+        "upper": _safe_round(bb.get("upper", 0), 2),
+        "middle": _safe_round(bb.get("middle", 0), 2),
+        "lower": _safe_round(bb.get("lower", 0), 2),
+        "position": _safe_round(bb.get("position", 0.5), 2),  # 0-1 where price is in band
         "squeeze": bb.get("squeeze", False),
     }
     
     # ATR
     atr = momentum_data.get("atr", {})
     indicators["atr"] = {
-        "value": round(atr.get("atr_value", 0), 2),
+        "value": _safe_round(atr.get("atr_value", 0), 2),
         "trend": atr.get("atr_trend", "stable"),
     }
     
     # ADX
     adx = momentum_data.get("adx", {})
     indicators["adx"] = {
-        "value": round(adx.get("adx_value", 0), 1),
-        "plus_di": round(adx.get("plus_di", 0), 1),
-        "minus_di": round(adx.get("minus_di", 0), 1),
+        "value": _safe_round(adx.get("adx_value", 0), 1),
+        "plus_di": _safe_round(adx.get("plus_di", 0), 1),
+        "minus_di": _safe_round(adx.get("minus_di", 0), 1),
         "classification": adx.get("adx_classification", "weak"),
     }
     
     # Volume
     volume = momentum_data.get("volume", {})
     indicators["volume"] = {
-        "ratio": round(volume.get("volume_ratio", 1.0), 2),
+        "ratio": _safe_round(volume.get("volume_ratio", 1.0), 2),
         "classification": volume.get("volume_classification", "normal"),
     }
     
@@ -213,23 +223,23 @@ def _format_brain_result(brain_result: Any) -> Dict:
         # Extract Volume Gate data
         volume_gate = getattr(brain_result, "volume_gate", None) or {}
         volume_gate_formatted = {
-            "volume_ratio": round(volume_gate.get("volume_ratio", 1.0), 2),
+            "volume_ratio": _safe_round(volume_gate.get("volume_ratio", 1.0), 2),
             "status": volume_gate.get("status", "normal"),
         }
         
         return {
             "decision": brain_result.decision,
-            "score": round(brain_result.final_score, 1),
-            "confidence": round(brain_result.confidence, 1),
+            "score": _safe_round(brain_result.final_score, 1),
+            "confidence": _safe_round(brain_result.confidence, 1),
             "confidence_level": brain_result.confidence_level,
             "scenario": brain_result.scenario,
             "scenario_description": brain_result.scenario_description,
             "pillar_scores": {
-                "technical": round(brain_result.adjusted_scores.get("technical", 50), 1),
-                "ml": round(brain_result.adjusted_scores.get("ml", 50), 1),
-                "momentum": round(brain_result.adjusted_scores.get("momentum", 50), 1),
-                "news": round(brain_result.adjusted_scores.get("news", 50), 1),
-                "calendar": round(brain_result.adjusted_scores.get("calendar", 50), 1),
+                "technical": _safe_round(brain_result.adjusted_scores.get("technical", 50), 1),
+                "ml": _safe_round(brain_result.adjusted_scores.get("ml", 50), 1),
+                "momentum": _safe_round(brain_result.adjusted_scores.get("momentum", 50), 1),
+                "news": _safe_round(brain_result.adjusted_scores.get("news", 50), 1),
+                "calendar": _safe_round(brain_result.adjusted_scores.get("calendar", 50), 1),
             },
             "weights_used": brain_result.adjusted_weights,
             "confirmations": brain_result.confirmations[:5],  # Limit to 5
@@ -243,8 +253,8 @@ def _format_brain_result(brain_result: Any) -> Dict:
         volume_gate = brain_result.get("volume_gate", {}) or {}
         return {
             "decision": brain_result.get("decision", "HOLD"),
-            "score": round(brain_result.get("final_score", 50), 1),
-            "confidence": round(brain_result.get("confidence", 50), 1),
+            "score": _safe_round(brain_result.get("final_score", 50), 1),
+            "confidence": _safe_round(brain_result.get("confidence", 50), 1),
             "scenario": brain_result.get("scenario", "unknown"),
             "pillar_scores": brain_result.get("adjusted_scores", {}),
             "confirmations": brain_result.get("confirmations", [])[:5],
@@ -255,7 +265,7 @@ def _format_brain_result(brain_result: Any) -> Dict:
                 "alignment": mtf_trend.get("alignment", "n/a"),
             },
             "volume_gate": {
-                "volume_ratio": round(volume_gate.get("volume_ratio", 1.0), 2),
+                "volume_ratio": _safe_round(volume_gate.get("volume_ratio", 1.0), 2),
                 "status": volume_gate.get("status", "normal"),
             },
         }
@@ -273,15 +283,15 @@ def _format_ml_data(ml_data: Dict) -> Dict:
     
     return {
         "prediction": ml_data.get("prediction", "neutral"),
-        "confidence": round(ml_data.get("max_confidence", 0.5), 2),
+        "confidence": _safe_round(ml_data.get("max_confidence", 0.5), 2),
         "pattern": ml_data.get("pattern", "undefined"),
         "h1": {
-            "bullish_prob": round(ml_data.get("h1_bullish_prob", 0.5), 2),
-            "confidence": round(ml_data.get("h1_confidence", 0.5), 2),
+            "bullish_prob": _safe_round(ml_data.get("h1_bullish_prob", 0.5), 2),
+            "confidence": _safe_round(ml_data.get("h1_confidence", 0.5), 2),
         },
         "h4": {
-            "bullish_prob": round(ml_data.get("h4_bullish_prob", 0.5), 2),
-            "confidence": round(ml_data.get("h4_confidence", 0.5), 2),
+            "bullish_prob": _safe_round(ml_data.get("h4_bullish_prob", 0.5), 2),
+            "confidence": _safe_round(ml_data.get("h4_confidence", 0.5), 2),
         },
         "ensemble_agreement": ml_data.get("ensemble_agreement", 0),
     }
@@ -301,22 +311,22 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
     # DXY
     dxy = news_data.get("dxy", {})
     macro["dxy"] = {
-        "value": round(dxy.get("value", 0), 2),
-        "change_24h": round(dxy.get("change_24h", 0), 2),
+        "value": _safe_round(dxy.get("value", 0), 2),
+        "change_24h": _safe_round(dxy.get("change_24h", 0), 2),
         "trend": dxy.get("trend", "stable"),
     }
     
     # VIX
     vix = news_data.get("vix", {})
     macro["vix"] = {
-        "value": round(vix.get("value", 0), 1),
+        "value": _safe_round(vix.get("value", 0), 1),
         "level": vix.get("level", "normal"),
     }
     
     # Yields
     yields = news_data.get("yields", {})
     macro["yields_10y"] = {
-        "value": round(yields.get("value", 0), 2),
+        "value": _safe_round(yields.get("value", 0), 2),
         "trend": yields.get("trend", "stable"),
     }
     
@@ -324,7 +334,7 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
     macro["calendar"] = {
         "phase": calendar_data.get("phase", "normal"),
         "bias": calendar_data.get("bias", "NEUTRAL"),
-        "score": round(calendar_data.get("score", 50), 1),
+        "score": _safe_round(calendar_data.get("score", 50), 1),
         "next_event": calendar_data.get("next_event_name", ""),
         "next_event_in": calendar_data.get("next_event_minutes", 0),
     }
@@ -332,7 +342,7 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
     # Sentiment
     sentiment = news_data.get("sentiment", {})
     macro["sentiment"] = {
-        "normalized": round(sentiment.get("normalized", 0), 2),
+        "normalized": _safe_round(sentiment.get("normalized", 0), 2),
         "label": sentiment.get("label", "neutral"),
     }
     
@@ -349,13 +359,13 @@ def _format_positions(positions: List[Dict]) -> List[Dict]:
         formatted.append({
             "ticket": pos.get("ticket", 0),
             "direction": pos.get("type", "unknown"),
-            "entry_price": round(pos.get("price_open", 0), 2),
-            "current_price": round(pos.get("price_current", 0), 2),
-            "profit_pips": round(pos.get("profit_pips", 0), 1),
-            "profit_usd": round(pos.get("profit", 0), 2),
-            "sl": round(pos.get("sl", 0), 2),
-            "tp": round(pos.get("tp", 0), 2),
-            "duration_hours": round(pos.get("duration_hours", 0), 1),
+            "entry_price": _safe_round(pos.get("price_open", 0), 2),
+            "current_price": _safe_round(pos.get("price_current", 0), 2),
+            "profit_pips": _safe_round(pos.get("profit_pips", 0), 1),
+            "profit_usd": _safe_round(pos.get("profit", 0), 2),
+            "sl": _safe_round(pos.get("sl", 0), 2),
+            "tp": _safe_round(pos.get("tp", 0), 2),
+            "duration_hours": _safe_round(pos.get("duration_hours", 0), 1),
             "phase": pos.get("phase", "active"),  # active, breakeven, trailing
         })
     
@@ -379,7 +389,7 @@ def _format_session_context(session_context: Dict) -> Dict:
         "today_trades": session_context.get("today_trades", 0),
         "today_wins": session_context.get("today_wins", 0),
         "today_losses": session_context.get("today_losses", 0),
-        "today_pnl": round(session_context.get("today_pnl", 0), 2),
+        "today_pnl": _safe_round(session_context.get("today_pnl", 0), 2),
         "last_5_results": session_context.get("last_5_results", []),
         "consecutive_losses": session_context.get("consecutive_losses", 0),
     }
@@ -395,7 +405,7 @@ def _format_volatility(volatility_status: Dict) -> Dict:
     
     return {
         "status": volatility_status.get("status", "NORMAL"),
-        "m5_move_pct": round(volatility_status.get("extreme_percent", 0), 2),
+        "m5_move_pct": _safe_round(volatility_status.get("extreme_percent", 0), 2),
         "cooling_until": volatility_status.get("cooling_until", ""),
     }
 
@@ -442,12 +452,12 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
         dist_pips = abs(midpoint - current_price) / PIP_SIZE
         
         formatted = {
-            "price": round(midpoint, 2),
+            "price": _safe_round(midpoint, 2),
             "zone_type": zone_type,
             "touches": touches,
             "timeframe": timeframe,
             "strength": strength,
-            "dist_pips": round(dist_pips, 0),
+            "dist_pips": _safe_round(dist_pips, 0),
             "position": "above" if midpoint > current_price else "below",
             "confluence": confluence if confluence else [],
         }
