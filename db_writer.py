@@ -80,6 +80,30 @@ def init_db() -> None:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                brain_decision TEXT,
+                brain_score REAL,
+                brain_confidence REAL,
+                agent_decision TEXT,
+                agent_confidence INTEGER,
+                agent_reasoning TEXT,
+                agent_key_factors TEXT,
+                agent_concerns TEXT,
+                agreement INTEGER,
+                executed TEXT,
+                outcome TEXT,
+                prompt_version TEXT,
+                prompt_hash TEXT,
+                model TEXT,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                latency_ms INTEGER
+            )
+        """)
+
         conn.commit()
         conn.close()
         log.info("SQLite history DB initialized: " + os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db")))
@@ -188,6 +212,75 @@ def record_trade_close(
         conn.close()
     except Exception as e:
         log.debug(f"db_writer: failed to record trade close: {e}")
+
+
+def record_agent_decision(
+    brain_decision: str,
+    brain_score: float,
+    brain_confidence: float,
+    agent_result: Dict[str, Any],
+    executed: str,
+    outcome: str = "PENDING",
+) -> None:
+    """
+    Record an AI Agent decision for shadow mode comparison.
+    
+    Args:
+        brain_decision: Brain's decision (BUY/SELL/HOLD)
+        brain_score: Brain's final score
+        brain_confidence: Brain's confidence
+        agent_result: AgentResult.to_dict() output
+        executed: Which decision was executed (brain/agent)
+        outcome: Trade outcome (PENDING/WIN/LOSS/BE) - filled post-hoc
+    """
+    try:
+        import json
+        
+        agent_decision = agent_result.get("decision", "DEFER_TO_BRAIN")
+        
+        # Determine agreement
+        brain_dir = "BUY" if "BUY" in brain_decision else ("SELL" if "SELL" in brain_decision else "HOLD")
+        agent_dir = "BUY" if "BUY" in agent_decision else ("SELL" if "SELL" in agent_decision else "HOLD")
+        agreement = 1 if brain_dir == agent_dir else 0
+        
+        # Handle REJECT/WAIT as disagreement with BUY/SELL
+        if agent_decision in ("REJECT", "WAIT") and brain_dir in ("BUY", "SELL"):
+            agreement = 0
+        
+        conn = _get_connection()
+        conn.execute(
+            """INSERT INTO agent_decisions
+               (timestamp, brain_decision, brain_score, brain_confidence,
+                agent_decision, agent_confidence, agent_reasoning,
+                agent_key_factors, agent_concerns, agreement, executed, outcome,
+                prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                agent_result.get("timestamp", datetime.now().isoformat()),
+                brain_decision,
+                brain_score,
+                brain_confidence,
+                agent_decision,
+                agent_result.get("confidence", 0),
+                agent_result.get("reasoning", ""),
+                json.dumps(agent_result.get("key_factors", [])),
+                json.dumps(agent_result.get("concerns", [])),
+                agreement,
+                executed,
+                outcome,
+                agent_result.get("prompt_version", ""),
+                agent_result.get("prompt_hash", ""),
+                agent_result.get("model", ""),
+                agent_result.get("input_tokens", 0),
+                agent_result.get("output_tokens", 0),
+                agent_result.get("latency_ms", 0),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        log.info(f"Agent decision recorded: {agent_decision} (agreement={agreement})")
+    except Exception as e:
+        log.debug(f"db_writer: failed to record agent decision: {e}")
 
 
 def record_account_snapshot(account_info: Optional[Dict[str, Any]]) -> None:

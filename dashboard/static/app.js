@@ -441,6 +441,7 @@ function render(state) {
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
+  renderAgentCard(la.agent_decision);
 }
 
 /* ================================================================
@@ -815,6 +816,107 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     if (volRatioEl) { volRatioEl.className = statusColor; volRatioEl.textContent = volRatio != null ? `${volRatio.toFixed(1)}x avg` : "—"; }
     if (volStatusEl) { volStatusEl.className = statusColor; volStatusEl.textContent = statusLabel; }
     if (volAdjEl) { volAdjEl.className = adjColor; volAdjEl.textContent = adjText; }
+  }
+}
+
+/* ================================================================
+   AI AGENT CARD
+   ================================================================ */
+
+function renderAgentCard(agentDecision) {
+  const card = el("agent-card");
+  if (!card) return;
+
+  if (!agentDecision || !agentDecision.decision) {
+    card.classList.add("hidden");
+    return;
+  }
+
+  card.classList.remove("hidden");
+
+  const decision = agentDecision.decision || "—";
+  const confidence = agentDecision.confidence;
+  const reasoning = agentDecision.reasoning || "—";
+  const keyFactors = agentDecision.key_factors || [];
+  const concerns = agentDecision.concerns || [];
+  const agreement = agentDecision.agreement;
+  const executed = agentDecision.executed || "—";
+  const latencyMs = agentDecision.latency_ms;
+
+  // Decision styling
+  const decisionEl = el("agent-decision");
+  if (decisionEl) {
+    decisionEl.textContent = decision;
+    if (decision.includes("BUY")) {
+      decisionEl.className = "text-2xl font-bold text-green-400";
+    } else if (decision.includes("SELL")) {
+      decisionEl.className = "text-2xl font-bold text-red-400";
+    } else if (decision === "REJECT") {
+      decisionEl.className = "text-2xl font-bold text-red-500";
+    } else if (decision === "WAIT") {
+      decisionEl.className = "text-2xl font-bold text-yellow-400";
+    } else {
+      decisionEl.className = "text-2xl font-bold text-gray-400";
+    }
+  }
+
+  // Confidence
+  const confEl = el("agent-confidence");
+  if (confEl) {
+    confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+  }
+
+  // Agreement
+  const agreeEl = el("agent-agreement");
+  if (agreeEl) {
+    if (agreement === true) {
+      agreeEl.textContent = "✅ AGREE";
+      agreeEl.className = "text-sm font-semibold text-green-400";
+    } else if (agreement === false) {
+      agreeEl.textContent = "❌ DISAGREE";
+      agreeEl.className = "text-sm font-semibold text-red-400";
+    } else {
+      agreeEl.textContent = "—";
+      agreeEl.className = "text-sm font-semibold text-gray-500";
+    }
+  }
+
+  // Executed
+  const execEl = el("agent-executed");
+  if (execEl) {
+    execEl.textContent = executed;
+  }
+
+  // Latency
+  const latEl = el("agent-latency");
+  if (latEl) {
+    latEl.textContent = latencyMs != null ? latencyMs : "—";
+  }
+
+  // Reasoning
+  const reasonEl = el("agent-reasoning");
+  if (reasonEl) {
+    reasonEl.textContent = reasoning;
+  }
+
+  // Key factors
+  const factorsEl = el("agent-factors");
+  if (factorsEl) {
+    if (keyFactors.length > 0) {
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${f}</li>`).join("");
+    } else {
+      factorsEl.innerHTML = `<li class="text-gray-600">—</li>`;
+    }
+  }
+
+  // Concerns
+  const concernsEl = el("agent-concerns");
+  if (concernsEl) {
+    if (concerns.length > 0) {
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
+    } else {
+      concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
+    }
   }
 }
 

@@ -135,6 +135,19 @@
 | `volume_gate.status` | `"normal"` \| `"low"` \| `"very_low"` | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 | `volume_gate.confidence_adjustment` | float | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 
+### `last_analysis.agent_decision` Object (AI Agent - Shadow Mode)
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `agent_decision.decision` | `"OPEN_BUY"` \| `"OPEN_SELL"` \| `"REJECT"` \| `"WAIT"` \| `"DEFER_TO_BRAIN"` | `main.py` | `renderAgentCard()` → `#agent-decision` |
+| `agent_decision.confidence` | int (0-100) | `main.py` | `renderAgentCard()` → `#agent-confidence` |
+| `agent_decision.reasoning` | string | `main.py` | `renderAgentCard()` → `#agent-reasoning` |
+| `agent_decision.key_factors` | array of strings | `main.py` | `renderAgentCard()` → `#agent-factors` |
+| `agent_decision.concerns` | array of strings | `main.py` | `renderAgentCard()` → `#agent-concerns` |
+| `agent_decision.agreement` | bool | `main.py` | `renderAgentCard()` → `#agent-agreement` |
+| `agent_decision.executed` | `"BRAIN"` \| `"AGENT"` | `main.py` | `renderAgentCard()` → `#agent-executed` |
+| `agent_decision.latency_ms` | int | `main.py` | `renderAgentCard()` → `#agent-latency` |
+
 ### `positions` Array
 
 | Field | Type | Writer | Reader (app.js) |
@@ -184,6 +197,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### OSINT Feed
 `intel-feed-section`, `intel-method`, `intel-cache-age`, `intel-headlines`, `intel-macro`, `intel-calendar`, `intel-sr`, `intel-sr-zones`, `intel-gpt`, `intel-tags`, `intel-bottom`, `intel-cached-badge`, `intel-mtf`, `intel-volume`, `intel-patterns`
+
+### AI Agent Card
+`agent-card`, `agent-decision`, `agent-confidence`, `agent-reasoning`, `agent-factors`, `agent-concerns`, `agent-agreement`, `agent-executed`, `agent-latency`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`

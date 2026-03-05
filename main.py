@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 from logger import log
 from state_writer import write_state, add_closed_trade
-from db_writer import init_db, record_analysis, record_trade_open, record_trade_close
+from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision
 from alerts import (
     alert_bot_started, alert_bot_stopped, alert_signal_detected,
     alert_safety_block, alert_error, alert_daily_summary, discord,
@@ -27,7 +27,8 @@ from alerts import (
     alert_market_closed, alert_market_open,
     alert_m5_reversal_block, alert_trade_resolved,
     alert_brain_decision,
-    alert_spread_delay, alert_spread_skip
+    alert_spread_delay, alert_spread_skip,
+    alert_agent_decision
 )
 from confluence import analyze_confluence
 from confluence import is_actionable_signal as confluence_is_actionable
@@ -628,6 +629,20 @@ class TradingBot:
         log.info(f"Central Brain: {'ON' if config.USE_CENTRAL_BRAIN else 'OFF (confluence)'}")
         log.info(f"GPT Headlines: {'ON (' + config.GPT_MODEL + ')' if getattr(config, 'USE_GPT_HEADLINES', False) else 'OFF (keywords)'}")
         log.info(f"Min confidence: {config.BRAIN_MIN_CONFIDENCE}%")
+        
+        # Initialize AI Agent (if enabled)
+        if getattr(config, 'USE_AI_AGENT', False):
+            try:
+                from ai_agent import initialize_agent, get_agent
+                if initialize_agent():
+                    agent = get_agent()
+                    log.info(f"AI Agent: ON (mode={agent.get_mode()}, model={config.AI_AGENT_MODEL})")
+                else:
+                    log.info("AI Agent: OFF (initialization failed)")
+            except Exception as e:
+                log.warning(f"AI Agent: OFF (error: {e})")
+        else:
+            log.info("AI Agent: OFF")
         log.info(f"Risk/trade: {config.RISK_PER_TRADE}% | Max daily loss: {config.MAX_DAILY_LOSS}%")
         log.info(f"SL: {config.MIN_SL_PIPS}-{config.MAX_SL_PIPS} pips | Breakeven: {config.BREAKEVEN_TRIGGER_PIPS} pips | Trailing: {config.TRAILING_TRIGGER_PIPS}/{config.TRAILING_DISTANCE_PIPS} pips")
         
@@ -1503,6 +1518,23 @@ class TradingBot:
         
         record_analysis(self.last_analysis)
         
+        # AI Agent Shadow Mode: Call Agent when Brain signals BUY/SELL
+        if getattr(config, 'USE_AI_AGENT', False) and direction is not None:
+            try:
+                self._call_agent_shadow_mode(
+                    brain_result=brain_result,
+                    tech_data=tech_data,
+                    ml_data=ml_data,
+                    momentum_data=momentum_data,
+                    news_data=news_data,
+                    calendar_data=calendar_data,
+                    current_price=current_price,
+                    vol_status=vol_status,
+                    df=df,
+                )
+            except Exception as e:
+                log.warning(f"AI Agent error (non-blocking): {e}")
+        
         return (
             brain_result.decision,
             brain_result.final_score,
@@ -1595,6 +1627,193 @@ class TradingBot:
             ml_score,
             "",
         )
+    
+    def _call_agent_shadow_mode(
+        self,
+        brain_result,
+        tech_data,
+        ml_data,
+        momentum_data,
+        news_data,
+        calendar_data,
+        current_price,
+        vol_status,
+        df,
+    ):
+        """
+        Call AI Agent in shadow mode.
+        Agent decides but Brain executes. Both decisions logged for comparison.
+        """
+        import asyncio
+        from ai_agent import get_agent, AgentDecision
+        from agent_data_builder import build_data_package, get_session_name
+        
+        agent = get_agent()
+        if not agent.is_enabled():
+            return
+        
+        log.info("   🤖 Calling AI Agent (shadow mode)...")
+        
+        # Build session context
+        session_context = {
+            "session_name": get_session_name(datetime.utcnow().hour),
+            "hour_utc": datetime.utcnow().hour,
+            "today_trades": self.daily_stats.get("trades", 0),
+            "today_wins": self.daily_stats.get("wins", 0),
+            "today_losses": self.daily_stats.get("losses", 0),
+            "today_pnl": self.daily_stats.get("pnl", 0),
+            "last_5_results": [],  # Could be populated from closed_trades_today
+            "consecutive_losses": 0,
+        }
+        
+        # Get candle data
+        h1_candles = []
+        m5_candles = []
+        try:
+            # H1 candles from df
+            for i in range(max(0, len(df) - 20), len(df)):
+                row = df.iloc[i]
+                h1_candles.append({
+                    "time": str(row.get("datetime", "")),
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "tick_volume": int(row.get("tick_volume", 0)),
+                })
+            
+            # M5 candles
+            import MetaTrader5 as mt5
+            m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
+            if m5_rates is not None:
+                for r in m5_rates:
+                    m5_candles.append({
+                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "tick_volume": int(r["tick_volume"]),
+                    })
+        except Exception as e:
+            log.debug(f"Error getting candle data for Agent: {e}")
+        
+        # Get current price data
+        price_data = {"bid": current_price, "ask": current_price, "spread": 0}
+        try:
+            tick = executor.get_current_price()
+            if tick:
+                price_data = {"bid": tick[0], "ask": tick[1], "spread": (tick[1] - tick[0]) / 0.1}
+        except Exception:
+            pass
+        
+        # Get open positions
+        positions = []
+        try:
+            if self.executes_trades:
+                pos_list = executor.get_open_positions()
+                for p in pos_list[:3]:
+                    positions.append({
+                        "ticket": p.ticket,
+                        "type": "BUY" if p.type == 0 else "SELL",
+                        "price_open": p.price_open,
+                        "price_current": p.price_current,
+                        "profit": p.profit,
+                        "sl": p.sl,
+                        "tp": p.tp,
+                    })
+        except Exception:
+            pass
+        
+        # Build data package
+        data_package = build_data_package(
+            brain_result=brain_result,
+            tech_data=tech_data,
+            ml_data=ml_data,
+            momentum_data=momentum_data,
+            news_data=news_data,
+            calendar_data=calendar_data,
+            h1_candles=h1_candles,
+            m5_candles=m5_candles,
+            current_price=price_data,
+            positions=positions,
+            session_context=session_context,
+            volatility_status=vol_status or {},
+        )
+        
+        # Call Agent (async)
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            agent_result = loop.run_until_complete(agent.decide(data_package))
+            loop.close()
+        except Exception as e:
+            log.warning(f"Agent call failed: {e}")
+            return
+        
+        # Log result
+        agent_decision = agent_result.decision
+        agent_confidence = agent_result.confidence
+        
+        # Determine agreement
+        brain_dir = "BUY" if "BUY" in brain_result.decision else ("SELL" if "SELL" in brain_result.decision else "HOLD")
+        agent_dir = "BUY" if "BUY" in agent_decision else ("SELL" if "SELL" in agent_decision else "HOLD")
+        
+        # REJECT/WAIT = disagreement with BUY/SELL
+        if agent_decision in ("REJECT", "WAIT"):
+            agreement = False
+        else:
+            agreement = (brain_dir == agent_dir)
+        
+        agreement_str = "✅ AGREE" if agreement else "❌ DISAGREE"
+        log.info(f"   🤖 Agent: {agent_decision} (conf={agent_confidence}) | {agreement_str}")
+        if agent_result.reasoning:
+            # Truncate for log
+            reasoning_short = agent_result.reasoning[:150] + "..." if len(agent_result.reasoning) > 150 else agent_result.reasoning
+            log.info(f"   🤖 Reasoning: {reasoning_short}")
+        
+        # In shadow mode, Brain executes
+        executed = "BRAIN"
+        mode = agent.get_mode()
+        
+        # Record to SQLite
+        record_agent_decision(
+            brain_decision=brain_result.decision,
+            brain_score=brain_result.final_score,
+            brain_confidence=brain_result.confidence,
+            agent_result=agent_result.to_dict(),
+            executed=executed,
+        )
+        
+        # Send Discord alert
+        alert_agent_decision(
+            brain_decision=brain_result.decision,
+            brain_score=brain_result.final_score,
+            brain_confidence=brain_result.confidence,
+            agent_decision=agent_decision,
+            agent_confidence=agent_confidence,
+            agent_reasoning=agent_result.reasoning,
+            agent_key_factors=agent_result.key_factors,
+            agent_concerns=agent_result.concerns,
+            agreement=agreement,
+            executed=executed,
+            mode=mode,
+            latency_ms=agent_result.latency_ms,
+            tokens_used=agent_result.input_tokens + agent_result.output_tokens,
+        )
+        
+        # Store in last_analysis for dashboard
+        if self.last_analysis:
+            self.last_analysis["agent_decision"] = {
+                "decision": agent_decision,
+                "confidence": agent_confidence,
+                "reasoning": agent_result.reasoning,
+                "key_factors": agent_result.key_factors,
+                "concerns": agent_result.concerns,
+                "agreement": agreement,
+                "executed": executed,
+                "latency_ms": agent_result.latency_ms,
+            }
     
     def _check_heartbeat(self) -> None:
         """Send periodic status heartbeat to Discord (keep-alive)."""

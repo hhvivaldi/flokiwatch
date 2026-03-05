@@ -898,6 +898,93 @@ def alert_spread_skip(direction: str, spread: float, final_score: float):
     )
 
 
+def alert_agent_decision(
+    brain_decision: str,
+    brain_score: float,
+    brain_confidence: float,
+    agent_decision: str,
+    agent_confidence: int,
+    agent_reasoning: str,
+    agent_key_factors: List[str],
+    agent_concerns: List[str],
+    agreement: bool,
+    executed: str,
+    mode: str = "shadow",
+    latency_ms: int = 0,
+    tokens_used: int = 0,
+):
+    """Alert: AI Agent decision (shadow mode comparison)"""
+    # Determine colors and emojis
+    if agent_decision in ("OPEN_BUY", "OPEN_SELL"):
+        agent_emoji = "✅"
+        agent_color = 0x00ff00 if "BUY" in agent_decision else 0xff0000
+    elif agent_decision == "REJECT":
+        agent_emoji = "❌"
+        agent_color = 0xe74c3c
+    elif agent_decision == "WAIT":
+        agent_emoji = "⏳"
+        agent_color = 0xf39c12
+    else:  # DEFER_TO_BRAIN
+        agent_emoji = "🔄"
+        agent_color = 0x95a5a6
+
+    agreement_emoji = "✅" if agreement else "❌"
+    mode_label = mode.upper()
+
+    # Build description
+    description = (
+        f"**Brain:** {brain_decision} (score {brain_score:.1f}, conf {brain_confidence:.0f}%)\n"
+        f"**Agent:** {agent_emoji} {agent_decision} (conf {agent_confidence}%)\n\n"
+        f"**Agreement:** {agreement_emoji} {'YES' if agreement else 'NO'}\n"
+        f"**Executed:** {executed} ({mode_label} mode)"
+    )
+
+    # Build fields
+    fields = []
+
+    # Reasoning (truncate if too long)
+    reasoning_display = agent_reasoning[:400] + "..." if len(agent_reasoning) > 400 else agent_reasoning
+    if reasoning_display:
+        fields.append({
+            "name": "Agent Reasoning",
+            "value": reasoning_display,
+            "inline": False,
+        })
+
+    # Key factors
+    if agent_key_factors:
+        factors_text = "\n".join(f"• {f}" for f in agent_key_factors[:4])
+        fields.append({
+            "name": "Key Factors",
+            "value": factors_text,
+            "inline": False,
+        })
+
+    # Concerns
+    if agent_concerns:
+        concerns_text = "\n".join(f"• {c}" for c in agent_concerns[:3])
+        fields.append({
+            "name": "Concerns",
+            "value": concerns_text,
+            "inline": False,
+        })
+
+    # Performance stats
+    fields.append({
+        "name": "Performance",
+        "value": f"Latency: {latency_ms}ms | Tokens: {tokens_used}",
+        "inline": True,
+    })
+
+    discord_router.send_embed(
+        CHANNEL_BRAIN,
+        title=f"🤖 AGENT DECISION — {_utc_timestamp()}",
+        description=description,
+        color=agent_color,
+        fields=fields,
+    )
+
+
 # ============================================================================
 # TEST
 # ============================================================================
