@@ -12,10 +12,10 @@ from datetime import datetime
 from typing import Dict, Optional, List, Any
 from enum import Enum
 
-from logger import get_logger
+from logger import log
 from agent_prompts import get_system_prompt, get_prompt_hash, get_prompt_version
 
-logger = get_logger(__name__)
+logger = log
 
 
 class AgentDecision(Enum):
