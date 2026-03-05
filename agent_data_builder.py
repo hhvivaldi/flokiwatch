@@ -8,9 +8,9 @@ news/macro data, positions, and session context.
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
-from logger import get_logger
+from logger import log
 
-logger = get_logger(__name__)
+logger = log
 
 
 def build_data_package(
