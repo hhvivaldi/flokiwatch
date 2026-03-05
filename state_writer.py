@@ -44,11 +44,11 @@ def _get_ea_bridge_status() -> Dict[str, Any]:
         stale_threshold = getattr(config, "EA_STALE_THRESHOLD_SECONDS", 60)
         online = is_ea_online(stale_threshold)
         
+        # Always try to read spread, even if stale (spread from minutes ago is still useful)
         spread_pips = None
-        if online:
-            status = read_ea_status(stale_threshold)
-            if status:
-                spread_pips = status.spread_pips
+        status = read_ea_status(stale_threshold)
+        if status:
+            spread_pips = status.spread_pips
         
         return {
             "enabled": True,
