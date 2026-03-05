@@ -26,6 +26,9 @@ def build_data_package(
     positions: List[Dict],
     session_context: Dict,
     volatility_status: Dict,
+    sr_zones: Optional[List] = None,
+    candlestick_patterns: Optional[Dict] = None,
+    sr_proximity: Optional[Dict] = None,
 ) -> Dict:
     """
     Build the complete data package for the AI Agent.
@@ -43,11 +46,19 @@ def build_data_package(
         positions: Open positions list
         session_context: Session info and recent performance
         volatility_status: Volatility guard status
+        sr_zones: List of SRZone objects (4-8 nearest zones)
+        candlestick_patterns: Dict from detect_candlestick_patterns()
+        sr_proximity: Dict with near_strong_zone and distance info
         
     Returns:
         Complete data package dict for Agent
     """
     try:
+        # Get current price value for S/R zone formatting
+        price_val = 0
+        if current_price:
+            price_val = current_price.get("bid", current_price.get("ask", 0))
+        
         package = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "current_price": _format_current_price(current_price),
@@ -60,6 +71,9 @@ def build_data_package(
             "positions": _format_positions(positions),
             "session": _format_session_context(session_context),
             "volatility": _format_volatility(volatility_status),
+            "sr_zones": _format_sr_zones(sr_zones or [], price_val),
+            "candlestick_patterns": _format_candlestick_patterns(candlestick_patterns),
+            "sr_proximity": _format_sr_proximity(sr_proximity),
         }
         
         return package
@@ -182,10 +196,27 @@ def _format_brain_result(brain_result: Any) -> Dict:
             "pillar_scores": {},
             "confirmations": [],
             "alerts": [],
+            "mtf_trend": {"d1_direction": None, "h4_direction": None, "alignment": "n/a"},
+            "volume_gate": {"volume_ratio": 1.0, "status": "normal"},
         }
     
     # Handle both BrainResult object and dict
     if hasattr(brain_result, "decision"):
+        # Extract MTF trend data
+        mtf_trend = getattr(brain_result, "mtf_trend", None) or {}
+        mtf_trend_formatted = {
+            "d1_direction": mtf_trend.get("d1_direction"),
+            "h4_direction": mtf_trend.get("h4_direction"),
+            "alignment": mtf_trend.get("alignment", "n/a"),
+        }
+        
+        # Extract Volume Gate data
+        volume_gate = getattr(brain_result, "volume_gate", None) or {}
+        volume_gate_formatted = {
+            "volume_ratio": round(volume_gate.get("volume_ratio", 1.0), 2),
+            "status": volume_gate.get("status", "normal"),
+        }
+        
         return {
             "decision": brain_result.decision,
             "score": round(brain_result.final_score, 1),
@@ -203,9 +234,13 @@ def _format_brain_result(brain_result: Any) -> Dict:
             "weights_used": brain_result.adjusted_weights,
             "confirmations": brain_result.confirmations[:5],  # Limit to 5
             "alerts": brain_result.alerts[:5],  # Limit to 5
+            "mtf_trend": mtf_trend_formatted,
+            "volume_gate": volume_gate_formatted,
         }
     else:
         # Dict format
+        mtf_trend = brain_result.get("mtf_trend", {}) or {}
+        volume_gate = brain_result.get("volume_gate", {}) or {}
         return {
             "decision": brain_result.get("decision", "HOLD"),
             "score": round(brain_result.get("final_score", 50), 1),
@@ -214,6 +249,15 @@ def _format_brain_result(brain_result: Any) -> Dict:
             "pillar_scores": brain_result.get("adjusted_scores", {}),
             "confirmations": brain_result.get("confirmations", [])[:5],
             "alerts": brain_result.get("alerts", [])[:5],
+            "mtf_trend": {
+                "d1_direction": mtf_trend.get("d1_direction"),
+                "h4_direction": mtf_trend.get("h4_direction"),
+                "alignment": mtf_trend.get("alignment", "n/a"),
+            },
+            "volume_gate": {
+                "volume_ratio": round(volume_gate.get("volume_ratio", 1.0), 2),
+                "status": volume_gate.get("status", "normal"),
+            },
         }
 
 
@@ -353,6 +397,154 @@ def _format_volatility(volatility_status: Dict) -> Dict:
         "status": volatility_status.get("status", "NORMAL"),
         "m5_move_pct": round(volatility_status.get("extreme_percent", 0), 2),
         "cooling_until": volatility_status.get("cooling_until", ""),
+    }
+
+
+def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -> List[Dict]:
+    """
+    Format S/R zones for the Agent.
+    Returns 4 zones above and 4 zones below current price (nearest first).
+    
+    Args:
+        sr_zones: List of SRZone objects from support_resistance.py
+        current_price: Current price for distance calculation
+        max_zones: Maximum total zones to return (default 8)
+    
+    Returns:
+        List of formatted zone dicts
+    """
+    if not sr_zones or not current_price:
+        return []
+    
+    PIP_SIZE = 0.1
+    
+    # Split into above and below current price
+    above = []
+    below = []
+    
+    for zone in sr_zones:
+        # Handle both SRZone objects and dicts
+        if hasattr(zone, "midpoint"):
+            midpoint = zone.midpoint
+            zone_type = zone.zone_type
+            touches = zone.touches
+            timeframe = zone.timeframe
+            strength = zone.strength
+            confluence = getattr(zone, "confluence", [])
+        else:
+            midpoint = zone.get("midpoint", zone.get("price", 0))
+            zone_type = zone.get("zone_type", "UNKNOWN")
+            touches = zone.get("touches", 0)
+            timeframe = zone.get("timeframe", "H1")
+            strength = zone.get("strength", "weak")
+            confluence = zone.get("confluence", [])
+        
+        dist_pips = abs(midpoint - current_price) / PIP_SIZE
+        
+        formatted = {
+            "price": round(midpoint, 2),
+            "zone_type": zone_type,
+            "touches": touches,
+            "timeframe": timeframe,
+            "strength": strength,
+            "dist_pips": round(dist_pips, 0),
+            "position": "above" if midpoint > current_price else "below",
+            "confluence": confluence if confluence else [],
+        }
+        
+        if midpoint > current_price:
+            above.append(formatted)
+        else:
+            below.append(formatted)
+    
+    # Sort: above by distance ascending (nearest first), below by distance ascending
+    above.sort(key=lambda z: z["dist_pips"])
+    below.sort(key=lambda z: z["dist_pips"])
+    
+    # Take 4 nearest from each side
+    half = max_zones // 2
+    result = above[:half] + below[:half]
+    
+    return result
+
+
+def _format_candlestick_patterns(patterns_data: Dict) -> Dict:
+    """
+    Format candlestick patterns for the Agent.
+    
+    Args:
+        patterns_data: Dict from detect_candlestick_patterns()
+    
+    Returns:
+        Formatted dict with primary pattern and all detected patterns
+    """
+    if not patterns_data:
+        return {
+            "primary_pattern": None,
+            "patterns": [],
+            "sr_multiplier": 1.0,
+            "sr_context": None,
+        }
+    
+    primary = patterns_data.get("primary_pattern")
+    primary_formatted = None
+    if primary:
+        primary_formatted = {
+            "name": primary.get("name", ""),
+            "direction": primary.get("direction", ""),
+            "base_score": primary.get("base_score", 0),
+            "sr_multiplier": primary.get("sr_multiplier", 1.0),
+            "final_score": primary.get("final_score", 0),
+        }
+    
+    # Format all patterns (limit to 3)
+    all_patterns = []
+    for p in patterns_data.get("patterns", [])[:3]:
+        all_patterns.append({
+            "name": p.get("name", ""),
+            "direction": p.get("direction", ""),
+            "score": p.get("final_score", 0),
+        })
+    
+    return {
+        "primary_pattern": primary_formatted,
+        "patterns": all_patterns,
+        "sr_multiplier": patterns_data.get("sr_multiplier", 1.0),
+        "sr_context": patterns_data.get("sr_context"),
+    }
+
+
+def _format_sr_proximity(sr_proximity_data: Dict) -> Dict:
+    """
+    Format S/R proximity data for the Agent.
+    
+    Args:
+        sr_proximity_data: Dict with near_strong_zone and distance info
+    
+    Returns:
+        Formatted dict
+    """
+    if not sr_proximity_data:
+        return {
+            "near_strong_zone": False,
+            "nearest_zone_dist_pips": None,
+            "nearest_zone_info": None,
+        }
+    
+    zone_info = sr_proximity_data.get("near_zone_info")
+    zone_info_formatted = None
+    if zone_info:
+        zone_info_formatted = {
+            "price": zone_info.get("price"),
+            "zone_type": zone_info.get("zone_type"),
+            "touches": zone_info.get("touches"),
+            "timeframe": zone_info.get("timeframe"),
+        }
+    
+    return {
+        "near_strong_zone": sr_proximity_data.get("near_strong_zone", False),
+        "nearest_zone_dist_pips": sr_proximity_data.get("dist_to_nearest_pips"),
+        "nearest_zone_info": zone_info_formatted,
     }
 
 

@@ -1325,6 +1325,7 @@ class TradingBot:
                     "near_strong_zone": near_zone,
                     "near_zone_info": zone_info_dict,
                 }
+                self._last_sr_brain_data = sr_brain_data
                 self._last_sr_zones = sr_zones
                 zone_count = len(sr_zones)
                 strong_count = sum(1 for z in sr_zones if z.touches >= 3)
@@ -1726,6 +1727,23 @@ class TradingBot:
             pass
         
         # Build data package
+        # Get S/R zones and candlestick patterns from instance state
+        sr_zones_for_agent = getattr(self, '_last_sr_zones', []) or []
+        candlestick_patterns_for_agent = getattr(self, '_last_candlestick_patterns', None)
+        
+        # Build S/R proximity data
+        sr_proximity_data = None
+        try:
+            sr_brain_data = getattr(self, '_last_sr_brain_data', None)
+            if sr_brain_data:
+                sr_proximity_data = {
+                    "near_strong_zone": sr_brain_data.get("near_strong_zone", False),
+                    "near_zone_info": sr_brain_data.get("near_zone_info"),
+                    "dist_to_nearest_pips": sr_brain_data.get("dist_to_nearest_pips"),
+                }
+        except Exception:
+            pass
+        
         data_package = build_data_package(
             brain_result=brain_result,
             tech_data=tech_data,
@@ -1739,6 +1757,9 @@ class TradingBot:
             positions=positions,
             session_context=session_context,
             volatility_status=vol_status or {},
+            sr_zones=sr_zones_for_agent,
+            candlestick_patterns=candlestick_patterns_for_agent,
+            sr_proximity=sr_proximity_data,
         )
         
         # Call Agent (async)
