@@ -98,7 +98,7 @@ def write_signal(
         
         payload = {
             "version": 1,
-            "timestamp": now.isoformat(),
+            "timestamp": now.strftime("%Y.%m.%d %H:%M:%S"),
             "signal_id": signal_id,
             "signal": signal.upper(),
             "sl": round(sl, 2),
