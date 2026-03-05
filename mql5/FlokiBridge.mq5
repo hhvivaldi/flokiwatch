@@ -310,6 +310,18 @@ void ProcessSignal(SignalData &signal)
       CloseAllPositions("Signal");
    }
    // HOLD = do nothing
+   
+   // Write status immediately after processing to capture any errors
+   WriteStatus();
+   
+   // Log the result
+   if(EnableLogging)
+   {
+      if(g_lastError == "")
+         Print("Signal processed successfully: ", signal.signalId);
+      else
+         Print("Signal processing FAILED: ", signal.signalId, " | Error: ", g_lastError);
+   }
 }
 
 //+------------------------------------------------------------------+
