@@ -341,3 +341,11 @@ EA_STALE_THRESHOLD_SECONDS = 60           # If ea_status.json older than this, f
 BRAIN_SIGNAL_JSON_PATH = os.environ.get("BRAIN_SIGNAL_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\brain_signal.json")
 EA_STATUS_JSON_PATH = os.environ.get("EA_STATUS_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\ea_status.json")
 
+# ============================================================================
+# AI AGENT (Claude-based decision maker)
+# ============================================================================
+USE_AI_AGENT = False                      # True = enable AI Agent, False = Brain-only mode
+AI_AGENT_MODE = "shadow"                  # shadow = Agent decides but Brain executes | gate = Agent controls entry | full = Agent controls all
+AI_AGENT_MODEL = "claude-sonnet-4-20250514"  # Claude model to use
+AI_AGENT_TIMEOUT = 30                     # Timeout in seconds for API calls
+
