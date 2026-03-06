@@ -162,6 +162,8 @@
 | `positions[].profit` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].profit_pips` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].phase` | `"OPEN"` \| `"BREAKEVEN"` \| `"TRAILING"` | `state_writer.py` via `monitor.get_position_phase()` | `renderPositions()` |
+| `positions[].be_trigger_pips` | float \| null | `state_writer.py` via `monitor.get_be_info()` | `renderPositions()` → Protection column |
+| `positions[].be_remaining_pips` | float \| null | `state_writer.py` via `monitor.get_be_info()` | `renderPositions()` → Protection column |
 
 ### `trade_history` Array
 
@@ -173,6 +175,7 @@
 | `trade_history[].close_time` | string (ISO) | `state_writer.py` | `renderTrades()`, `renderPositions()` |
 | `trade_history[].close_type` | string | `state_writer.py` | `renderPositions()` |
 | `trade_history[].reason` | string | `state_writer.py` | `renderPositions()` |
+| `trade_history[].breakeven_activated` | bool | `state_writer.py` | `renderTrades()` |
 
 ---
 
@@ -240,7 +243,7 @@ The Live column in the History comparison table is filtered to **current system 
 
 ---
 
-*Last updated: 2026-02-24*
+*Last updated: 2026-03-06*
 
 ---
 

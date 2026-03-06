@@ -24,6 +24,8 @@ class PositionMonitor:
     def __init__(self):
         # Track positions that already hit breakeven
         self.breakeven_hit_tickets = set()
+        # Track whether BE was ever activated for each ticket (persists until closure)
+        self.breakeven_activated_tickets = {}
         # Track last trailing SL
         self.trailing_sl = {}
         # Track known positions (ticket → PositionInfo)
@@ -176,6 +178,7 @@ class PositionMonitor:
         
         if result.success:
             self.breakeven_hit_tickets.add(pos.ticket)
+            self.breakeven_activated_tickets[pos.ticket] = True
             self.trailing_sl[pos.ticket] = breakeven_sl
             
             # Confirm that trailing triggers did NOT change after breakeven
@@ -427,6 +430,7 @@ class PositionMonitor:
                     'outcome': outcome,
                     'orig_tp': pos.tp,
                     'orig_sl': pos.sl,
+                    'breakeven_activated': self.breakeven_activated_tickets.get(ticket, False),
                 })
             else:
                 # No details — notify anyway
@@ -454,6 +458,7 @@ class PositionMonitor:
                     'close_time': None,
                     'close_type': 'sl',  # conservative default
                     'direction': pos.direction,
+                    'breakeven_activated': self.breakeven_activated_tickets.get(ticket, False),
                 })
             
             # Clean up tracking
@@ -464,6 +469,7 @@ class PositionMonitor:
     def _cleanup_position(self, ticket: int):
         """Clean up tracking for closed position"""
         self.breakeven_hit_tickets.discard(ticket)
+        self.breakeven_activated_tickets.pop(ticket, None)
         self.trailing_sl.pop(ticket, None)
         self.original_sl_pips.pop(ticket, None)
     
@@ -482,6 +488,44 @@ class PositionMonitor:
             return "BREAKEVEN"
         else:
             return "OPEN"
+    
+    def get_be_info(self, ticket: int) -> dict:
+        """
+        Get breakeven info for a position (for dashboard display).
+        
+        Returns:
+            dict with be_trigger_pips, be_remaining_pips, be_activated
+        """
+        pos = self.known_positions.get(ticket)
+        if not pos:
+            return {"be_trigger_pips": None, "be_remaining_pips": None, "be_activated": False}
+        
+        be_activated = ticket in self.breakeven_hit_tickets
+        
+        if be_activated:
+            return {
+                "be_trigger_pips": 0,
+                "be_remaining_pips": 0,
+                "be_activated": True
+            }
+        
+        # Calculate trigger
+        if self.volatility_status == "COOLING_DOWN":
+            trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
+        else:
+            sl_pips = self._get_original_sl_pips(pos)
+            if sl_pips > 0:
+                trigger = sl_pips * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
+            else:
+                trigger = config.BREAKEVEN_TRIGGER_PIPS
+        
+        remaining = max(0, trigger - pos.profit_pips)
+        
+        return {
+            "be_trigger_pips": round(trigger, 1),
+            "be_remaining_pips": round(remaining, 1),
+            "be_activated": False
+        }
     
     def get_positions_summary(self) -> dict:
         """Return summary of open positions"""

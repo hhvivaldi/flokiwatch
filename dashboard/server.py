@@ -331,6 +331,7 @@ def history_data():
         global_wins = 0
         global_losses = 0
         global_breakevens = 0
+        global_be_activations = 0
         
         best_trade = None
         worst_trade = None
@@ -409,6 +410,14 @@ def history_data():
             trade["duration_minutes"] = duration_minutes
             trade["outcome"] = outcome
             
+            # Breakeven activation tracking
+            be_activated = trade.get("breakeven_activated")
+            if be_activated == 1 or be_activated is True:
+                global_be_activations += 1
+                trade["breakeven_activated"] = True
+            else:
+                trade["breakeven_activated"] = False if be_activated == 0 else None
+            
             trades.append(trade)
             
             # Monthly grouping
@@ -469,6 +478,9 @@ def history_data():
             avg_win = gross_profit / wins if wins > 0 else 0.0
             avg_loss = gross_loss / losses if losses > 0 else 0.0
             avg_duration = sum(t.get("duration_minutes", 0) for t in trade_rows) / total if total > 0 else 0.0
+            be_count = sum(1 for t in trade_rows if t.get("breakeven_activated") is True)
+            be_known = sum(1 for t in trade_rows if t.get("breakeven_activated") is not None)
+            be_rate = (be_count / be_known * 100) if be_known > 0 else 0.0
             return {
                 "total_trades": total,
                 "wins": wins,
@@ -480,6 +492,8 @@ def history_data():
                 "avg_win": round(avg_win, 2),
                 "avg_loss": round(avg_loss, 2),
                 "avg_duration_minutes": round(avg_duration, 0),
+                "be_activation_count": be_count,
+                "be_activation_rate": round(be_rate, 1),
             }
 
         def _calc_max_drawdown(trade_rows):
@@ -515,6 +529,10 @@ def history_data():
         # Reverse trades to have newest first for the UI table
         trades.reverse()
 
+        # BE activation rate (only count trades with known BE status)
+        trades_with_be_data = sum(1 for t in trades if t.get("breakeven_activated") is not None)
+        be_activation_rate = (global_be_activations / trades_with_be_data * 100) if trades_with_be_data > 0 else 0.0
+
         global_stats = {
             "total_trades": total_trades,
             "wins": global_wins,
@@ -529,6 +547,8 @@ def history_data():
             "avg_duration_minutes": round(avg_duration, 0),
             "best_trade_profit": round(best_trade["profit"], 2) if best_trade else 0.0,
             "worst_trade_profit": round(worst_trade["profit"], 2) if worst_trade else 0.0,
+            "be_activation_count": global_be_activations,
+            "be_activation_rate": round(be_activation_rate, 1),
         }
 
         cutoff_date = "2026-02-16"

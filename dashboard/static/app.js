@@ -111,9 +111,17 @@ function renderPositions(positions) {
     if (phase === "TRAILING") {
       phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">TRAILING</span>`;
     } else if (phase === "BREAKEVEN") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BREAKEVEN</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BE ACTIVE</span>`;
     } else {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">OPEN</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">OPEN</span>`;
+    }
+
+    // BE distance indicator
+    let beIndicator = "";
+    if (phase === "OPEN" && p.be_remaining_pips != null) {
+      beIndicator = `<span class="text-[10px] text-gray-500 font-mono">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
+    } else if (phase === "BREAKEVEN" || phase === "TRAILING") {
+      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">BE ✓</span>`;
     }
 
     container.insertAdjacentHTML(
@@ -129,11 +137,12 @@ function renderPositions(positions) {
           </div>
           <div class="text-xs font-mono font-bold ${pnlClass}">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)} p)</span></div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] font-mono font-medium text-gray-500 uppercase tracking-widest bg-black/20 rounded-lg p-2 border border-white/5">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono font-medium text-gray-500 uppercase tracking-widest bg-black/20 rounded-lg p-2 border border-white/5">
           <div><span class="block mb-0.5">Entry</span><span class="text-gray-200">${fmtNum(p.open_price, 2)}</span></div>
           <div><span class="block mb-0.5">SL</span><span class="text-gray-200">${fmtNum(p.sl, 2)}</span></div>
           <div><span class="block mb-0.5">TP</span><span class="text-gray-200">${fmtNum(p.tp, 2)}</span></div>
           <div><span class="block mb-0.5">Now</span><span class="text-gray-200">${fmtNum(p.current_price, 2)}</span></div>
+          <div><span class="block mb-0.5">Protection</span>${beIndicator}</div>
         </div>
       </div>
       `

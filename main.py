@@ -2383,6 +2383,7 @@ class TradingBot:
                     profit=profit if not is_pending else None,
                     close_reason=close_reason,
                     close_time=action.get("close_time"),
+                    breakeven_activated=action.get("breakeven_activated", False),
                 )
                 
                 # Record for safety checks (cooldown applies even for pending)

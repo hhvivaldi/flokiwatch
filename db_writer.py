@@ -64,9 +64,17 @@ def init_db() -> None:
                 close_reason TEXT,
                 open_time TEXT,
                 close_time TEXT,
-                comment TEXT
+                comment TEXT,
+                breakeven_activated INTEGER
             )
         """)
+
+        # Migration: add breakeven_activated column if missing
+        try:
+            cursor.execute("ALTER TABLE trades ADD COLUMN breakeven_activated INTEGER")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS account_snapshots (
@@ -192,19 +200,22 @@ def record_trade_close(
     profit: Optional[float],
     close_reason: str,
     close_time: Optional[str] = None,
+    breakeven_activated: Optional[bool] = None,
 ) -> None:
     """Update trade with close data."""
     try:
         conn = _get_connection()
+        be_int = 1 if breakeven_activated else (0 if breakeven_activated is False else None)
         conn.execute(
             """UPDATE trades
-               SET close_price = ?, profit = ?, close_reason = ?, close_time = ?
+               SET close_price = ?, profit = ?, close_reason = ?, close_time = ?, breakeven_activated = ?
                WHERE ticket = ?""",
             (
                 close_price,
                 profit,
                 close_reason,
                 close_time or datetime.now().isoformat(),
+                be_int,
                 ticket,
             ),
         )

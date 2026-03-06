@@ -92,12 +92,17 @@ class HistoryApp {
         const stats = this.data.global_stats;
         const grid = document.getElementById('global-stats-grid');
         
+        // BE activation rate display
+        const beCount = stats.be_activation_count || 0;
+        const beRate = stats.be_activation_rate || 0;
+        const beDisplay = beCount > 0 ? `${beCount} (${beRate}%)` : '—';
+
         const cards = [
             { label: 'Total Trades', value: stats.total_trades, icon: '📊' },
             { label: 'Win Rate', value: `${stats.win_rate}%`, icon: '🎯', color: stats.win_rate >= 50 ? 'text-green-400' : 'text-red-400' },
             { label: 'Profit Factor', value: stats.profit_factor, icon: '⚖️', color: stats.profit_factor >= 1.5 ? 'text-green-400' : 'text-amber-400' },
             { label: 'Total P&L', value: `$${stats.total_profit.toFixed(2)}`, icon: '💰', color: stats.total_profit >= 0 ? 'text-green-400' : 'text-red-400' },
-            { label: 'Avg Win / Loss', value: `$${stats.avg_win.toFixed(2)} / $${stats.avg_loss.toFixed(2)}`, icon: '↕️' },
+            { label: 'BE Activation', value: beDisplay, icon: '🛡️', color: beRate >= 50 ? 'text-green-400' : 'text-amber-400' },
             { label: 'Best Trade', value: `$${stats.best_trade_profit.toFixed(2)}`, icon: '🏆', color: 'text-green-400' },
             { label: 'Worst Trade', value: `$${stats.worst_trade_profit.toFixed(2)}`, icon: '💔', color: 'text-red-400' },
             { label: 'Max Drawdown', value: `$${stats.max_drawdown.toFixed(2)}`, icon: '📉', color: 'text-red-400' },
@@ -320,6 +325,16 @@ class HistoryApp {
         return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
     }
 
+    renderBeBadge(beActivated) {
+        if (beActivated === true) {
+            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold text-green-400 bg-green-400/10 border border-green-400/20">✓</span>`;
+        } else if (beActivated === false) {
+            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-500 bg-gray-500/10 border border-gray-500/20">—</span>`;
+        } else {
+            return `<span class="text-[10px] text-gray-600">?</span>`;
+        }
+    }
+
     scenarioLabel(trade) {
         const key = trade?.scenario;
         const map = {
@@ -516,7 +531,7 @@ class HistoryApp {
                 <td class="p-3 text-right text-gray-300 font-mono text-xs">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
                 <td class="p-3 text-right font-medium ${pnlClass}">$${pnl.toFixed(2)}</td>
                 <td class="p-3 text-right text-gray-400">${t.pips ? t.pips.toFixed(1) : '--'}</td>
-                <td class="p-3 text-right text-gray-400">${t.duration_minutes || '--'}</td>
+                <td class="p-3 text-center">${this.renderBeBadge(t.breakeven_activated)}</td>
                 <td class="p-3 text-right text-cyan-400">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
                 <td class="p-3 text-gray-400 text-xs">${this.scenarioLabel(t)}</td>
                 <td class="p-3">${reasonBadge}${reportBtn}</td>
