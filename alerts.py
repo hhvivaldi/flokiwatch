@@ -284,14 +284,16 @@ def check_ea_bridge_status_and_alert() -> None:
         
         # Transition: ONLINE -> OFFLINE (FALLBACK)
         if _ea_bridge_last_online and not currently_online and not _ea_bridge_alert_sent:
-            # Get last activity timestamp from ea_status.json
+            # Get last activity timestamp and file age from ea_status.json
             status = read_ea_status(stale_threshold)
             last_activity = "Unknown"
             offline_duration = "Unknown"
+            file_age_seconds = "Unknown"
             
             if status and status.timestamp:
                 last_activity = status.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
                 delta = datetime.utcnow() - status.timestamp
+                file_age_seconds = f"{int(delta.total_seconds())}s"
                 minutes = int(delta.total_seconds() / 60)
                 if minutes < 60:
                     offline_duration = f"{minutes} minutes"
@@ -311,12 +313,13 @@ def check_ea_bridge_status_and_alert() -> None:
                 color=0xff9900,  # Orange/amber
                 fields=[
                     {"name": "Last EA Activity", "value": last_activity, "inline": True},
-                    {"name": "Offline Duration", "value": offline_duration, "inline": True},
+                    {"name": "File Age", "value": file_age_seconds, "inline": True},
+                    {"name": "Stale Threshold", "value": f"{stale_threshold}s", "inline": True},
                     {"name": "Execution Channel", "value": "Python Fallback (MT5 API)", "inline": False},
                     {"name": "Action Required", "value": "Re-attach FlokiBridge EA to XAUUSD chart in MT5", "inline": False},
                 ],
             )
-            log.warning(f"[EA BRIDGE] Transitioned to FALLBACK. Last activity: {last_activity}")
+            log.warning(f"[EA BRIDGE] Transitioned to FALLBACK. Last activity: {last_activity}, file age: {file_age_seconds}")
             _ea_bridge_alert_sent = True
         
         # Transition: OFFLINE -> ONLINE (recovered)

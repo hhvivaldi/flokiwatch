@@ -337,7 +337,7 @@ MACD_DIVERGENCE_ADJUSTMENT = 15          # Score adjustment for MACD divergence 
 # EA BRIDGE (Python ↔ MT5 EA Communication)
 # ============================================================================
 USE_EA_BRIDGE = True                      # True = EA handles breakeven/trailing, False = Python handles (enabled after Phase 1 testing passed)
-EA_STALE_THRESHOLD_SECONDS = 60           # If ea_status.json older than this, fall back to direct API
+EA_STALE_THRESHOLD_SECONDS = 120          # If ea_status.json older than this, fall back to direct API (120s tolerates recompile gaps)
 BRAIN_SIGNAL_JSON_PATH = os.environ.get("BRAIN_SIGNAL_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\brain_signal.json")
 EA_STATUS_JSON_PATH = os.environ.get("EA_STATUS_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\ea_status.json")
 
