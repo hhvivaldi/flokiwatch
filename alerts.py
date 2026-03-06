@@ -364,8 +364,8 @@ def alert_brain_decision(
 
     if mtf_trend:
         alignment = mtf_trend.get("alignment", "UNKNOWN")
-        d1 = mtf_trend.get("d1", "?")
-        h4 = mtf_trend.get("h4", "?")
+        d1 = mtf_trend.get("d1_direction", "?")
+        h4 = mtf_trend.get("h4_direction", "?")
         fields.append({
             "name": "MTF Trend",
             "value": f"{alignment} (D1 {d1}, H4 {h4})",
