@@ -7,7 +7,7 @@ Never throws exceptions outward — same pattern as state_writer.
 import os
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import config
 from logger import log
