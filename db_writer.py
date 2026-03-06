@@ -277,6 +277,154 @@ def record_agent_decision(
         log.debug(f"db_writer: failed to record agent decision: {e}")
 
 
+def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Query last N agent decisions for Agent memory.
+    
+    Returns list of dicts with: timestamp, trigger, decision, reasoning_summary
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT timestamp, brain_decision, agent_decision, agent_reasoning
+               FROM agent_decisions
+               ORDER BY id DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            timestamp_str, brain_decision, agent_decision, reasoning = row
+            # Determine trigger type from brain_decision
+            if brain_decision and "HOLD_FORCED" in brain_decision:
+                trigger = "HOLD_FORCED"
+            else:
+                trigger = "SIGNAL"
+            
+            # Truncate reasoning to 100 chars
+            reasoning_summary = ""
+            if reasoning:
+                reasoning_summary = reasoning[:100] + "..." if len(reasoning) > 100 else reasoning
+            
+            results.append({
+                "timestamp": timestamp_str,
+                "trigger": trigger,
+                "decision": agent_decision or "UNKNOWN",
+                "reasoning_summary": reasoning_summary,
+            })
+        
+        return results
+    except Exception as e:
+        log.debug(f"db_writer: failed to get recent agent decisions: {e}")
+        return []
+
+
+def get_trade_feedback(limit: int = 5) -> Dict[str, Any]:
+    """
+    Get recent trades with Agent decision accuracy.
+    
+    Joins trades with agent_decisions by timestamp proximity (±5 min).
+    Returns last N trades with agent decision info and accuracy stats.
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        
+        # Get recent closed trades
+        cursor.execute(
+            """SELECT ticket, direction, profit, close_reason, open_time
+               FROM trades
+               WHERE close_time IS NOT NULL
+               ORDER BY id DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        trades = cursor.fetchall()
+        
+        last_trades = []
+        correct_rejects = 0
+        incorrect_rejects = 0
+        correct_opens = 0
+        incorrect_opens = 0
+        
+        for trade in trades:
+            ticket, direction, profit, close_reason, open_time = trade
+            pnl = profit or 0
+            trade_won = pnl > 0
+            
+            # Find matching agent decision (within 5 minutes of trade open)
+            agent_decision = None
+            agent_was_right = None
+            
+            if open_time:
+                cursor.execute(
+                    """SELECT agent_decision FROM agent_decisions
+                       WHERE datetime(timestamp) BETWEEN datetime(?, '-5 minutes') AND datetime(?, '+5 minutes')
+                       ORDER BY ABS(julianday(timestamp) - julianday(?))
+                       LIMIT 1""",
+                    (open_time, open_time, open_time)
+                )
+                match = cursor.fetchone()
+                if match:
+                    agent_decision = match[0]
+                    
+                    # Determine if agent was right
+                    if agent_decision in ("REJECT", "WAIT"):
+                        # Agent rejected - right if trade lost
+                        agent_was_right = not trade_won
+                        if agent_was_right:
+                            correct_rejects += 1
+                        else:
+                            incorrect_rejects += 1
+                    elif agent_decision in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL", "AGREE"):
+                        # Agent approved - right if trade won
+                        agent_was_right = trade_won
+                        if agent_was_right:
+                            correct_opens += 1
+                        else:
+                            incorrect_opens += 1
+            
+            last_trades.append({
+                "ticket": ticket,
+                "direction": direction,
+                "pnl": round(pnl, 2),
+                "close_reason": close_reason,
+                "agent_decision": agent_decision,
+                "agent_was_right": agent_was_right,
+            })
+        
+        conn.close()
+        
+        total_decisions = correct_rejects + incorrect_rejects + correct_opens + incorrect_opens
+        
+        return {
+            "last_trades": last_trades,
+            "agent_accuracy": {
+                "total_decisions": total_decisions,
+                "correct_rejects": correct_rejects,
+                "incorrect_rejects": incorrect_rejects,
+                "correct_opens": correct_opens,
+                "incorrect_opens": incorrect_opens,
+            }
+        }
+    except Exception as e:
+        log.debug(f"db_writer: failed to get trade feedback: {e}")
+        return {
+            "last_trades": [],
+            "agent_accuracy": {
+                "total_decisions": 0,
+                "correct_rejects": 0,
+                "incorrect_rejects": 0,
+                "correct_opens": 0,
+                "incorrect_opens": 0,
+            }
+        }
+
+
 def record_account_snapshot(account_info: Optional[Dict[str, Any]]) -> None:
     """Record account state snapshot."""
     try:

@@ -39,6 +39,13 @@ def build_data_package(
     sr_zones: Optional[List] = None,
     candlestick_patterns: Optional[Dict] = None,
     sr_proximity: Optional[Dict] = None,
+    d1_candles: Optional[List[Dict]] = None,
+    h4_candles: Optional[List[Dict]] = None,
+    agent_memory: Optional[List[Dict]] = None,
+    trade_feedback: Optional[Dict] = None,
+    delta_context: Optional[Dict] = None,
+    portfolio: Optional[Dict] = None,
+    regime_context: Optional[Dict] = None,
 ) -> Dict:
     """
     Build the complete data package for the AI Agent.
@@ -59,6 +66,13 @@ def build_data_package(
         sr_zones: List of SRZone objects (4-8 nearest zones)
         candlestick_patterns: Dict from detect_candlestick_patterns()
         sr_proximity: Dict with near_strong_zone and distance info
+        d1_candles: Last 5-10 D1 candles (weekly context)
+        h4_candles: Last 10-15 H4 candles (2-3 day structure)
+        agent_memory: Last 3-5 Agent decisions for self-reference
+        trade_feedback: Recent trade results with Agent accuracy
+        delta_context: What changed since last cycle
+        portfolio: Daily P&L, W/L, drawdown, risk budget
+        regime_context: Trending/ranging, ADX/ATR analysis
         
     Returns:
         Complete data package dict for Agent
@@ -74,6 +88,8 @@ def build_data_package(
             "current_price": _format_current_price(current_price),
             "h1_candles": _format_candles(h1_candles, limit=20),
             "m5_candles": _format_candles(m5_candles, limit=10),
+            "d1_candles": _format_candles(d1_candles or [], limit=10),
+            "h4_candles": _format_candles(h4_candles or [], limit=15),
             "indicators": _format_indicators(tech_data, momentum_data),
             "brain_analysis": _format_brain_result(brain_result),
             "ml_predictions": _format_ml_data(ml_data),
@@ -84,6 +100,11 @@ def build_data_package(
             "sr_zones": _format_sr_zones(sr_zones or [], price_val),
             "candlestick_patterns": _format_candlestick_patterns(candlestick_patterns),
             "sr_proximity": _format_sr_proximity(sr_proximity),
+            "agent_memory": _format_agent_memory(agent_memory or []),
+            "trade_feedback": _format_trade_feedback(trade_feedback),
+            "delta_context": _format_delta_context(delta_context),
+            "portfolio": _format_portfolio(portfolio),
+            "regime_context": _format_regime_context(regime_context),
         }
         
         return package
@@ -555,6 +576,138 @@ def _format_sr_proximity(sr_proximity_data: Dict) -> Dict:
         "near_strong_zone": sr_proximity_data.get("near_strong_zone", False),
         "nearest_zone_dist_pips": sr_proximity_data.get("dist_to_nearest_pips"),
         "nearest_zone_info": zone_info_formatted,
+    }
+
+
+def _format_agent_memory(recent_decisions: List[Dict]) -> Dict:
+    """
+    Format Agent memory (recent decisions) for self-reference.
+    Converts timestamps to relative time.
+    """
+    if not recent_decisions:
+        return {"recent_decisions": []}
+    
+    now = datetime.now(timezone.utc)
+    formatted = []
+    
+    for decision in recent_decisions[:5]:  # Max 5
+        timestamp_str = decision.get("timestamp", "")
+        relative_time = "unknown"
+        
+        # Convert timestamp to relative time
+        if timestamp_str:
+            try:
+                # Parse ISO timestamp
+                if "T" in timestamp_str:
+                    dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                else:
+                    dt = datetime.fromisoformat(timestamp_str)
+                
+                # Make timezone-aware if needed
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                
+                delta = now - dt
+                minutes = int(delta.total_seconds() / 60)
+                
+                if minutes < 1:
+                    relative_time = "just now"
+                elif minutes < 60:
+                    relative_time = f"{minutes} min ago"
+                elif minutes < 1440:
+                    hours = minutes // 60
+                    relative_time = f"{hours} hr ago"
+                else:
+                    days = minutes // 1440
+                    relative_time = f"{days} day ago"
+            except Exception:
+                relative_time = "unknown"
+        
+        formatted.append({
+            "time": relative_time,
+            "trigger": decision.get("trigger", "SIGNAL"),
+            "decision": decision.get("decision", "UNKNOWN"),
+            "reasoning_summary": decision.get("reasoning_summary", ""),
+        })
+    
+    return {"recent_decisions": formatted}
+
+
+def _format_trade_feedback(feedback_data: Optional[Dict]) -> Dict:
+    """Format trade feedback with Agent accuracy stats."""
+    if not feedback_data:
+        return {
+            "last_trades": [],
+            "agent_accuracy": {
+                "total_decisions": 0,
+                "correct_rejects": 0,
+                "incorrect_rejects": 0,
+                "correct_opens": 0,
+                "incorrect_opens": 0,
+            }
+        }
+    
+    return {
+        "last_trades": feedback_data.get("last_trades", [])[:5],
+        "agent_accuracy": feedback_data.get("agent_accuracy", {}),
+    }
+
+
+def _format_delta_context(delta_data: Optional[Dict]) -> Dict:
+    """Format delta context (what changed since last cycle)."""
+    if not delta_data:
+        return {
+            "price_change_pips": 0,
+            "rsi_change": 0,
+            "volume_change_pct": 0,
+            "significant_events": [],
+        }
+    
+    return {
+        "price_change_pips": _safe_round(delta_data.get("price_change_pips", 0), 1),
+        "rsi_change": _safe_round(delta_data.get("rsi_change", 0), 1),
+        "volume_change_pct": _safe_round(delta_data.get("volume_change_pct", 0), 1),
+        "significant_events": delta_data.get("significant_events", [])[:5],
+    }
+
+
+def _format_portfolio(portfolio_data: Optional[Dict]) -> Dict:
+    """Format portfolio awareness data."""
+    if not portfolio_data:
+        return {
+            "daily_pnl": 0,
+            "daily_wins": 0,
+            "daily_losses": 0,
+            "win_rate_today": 0,
+            "drawdown_pct": 0,
+            "risk_budget_remaining_pct": 100,
+        }
+    
+    return {
+        "daily_pnl": _safe_round(portfolio_data.get("daily_pnl", 0), 2),
+        "daily_wins": portfolio_data.get("daily_wins", 0),
+        "daily_losses": portfolio_data.get("daily_losses", 0),
+        "win_rate_today": _safe_round(portfolio_data.get("win_rate_today", 0), 1),
+        "drawdown_pct": _safe_round(portfolio_data.get("drawdown_pct", 0), 2),
+        "risk_budget_remaining_pct": _safe_round(portfolio_data.get("risk_budget_remaining_pct", 100), 1),
+    }
+
+
+def _format_regime_context(regime_data: Optional[Dict]) -> Dict:
+    """Format regime context (trending/ranging, ADX/ATR analysis)."""
+    if not regime_data:
+        return {
+            "regime": "unknown",
+            "adx_hours_above_25": 0,
+            "atr_vs_weekly_avg": 1.0,
+            "trend_strength": "unknown",
+        }
+    
+    return {
+        "regime": regime_data.get("regime", "unknown"),
+        "adx_hours_above_25": regime_data.get("adx_hours_above_25", 0),
+        "atr_vs_weekly_avg": _safe_round(regime_data.get("atr_vs_weekly_avg", 1.0), 2),
+        "trend_strength": regime_data.get("trend_strength", "unknown"),
     }
 
 

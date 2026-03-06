@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 from logger import log
 from state_writer import write_state, add_closed_trade
-from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision
+from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision, get_recent_agent_decisions, get_trade_feedback
 from alerts import (
     alert_bot_started, alert_bot_stopped, alert_signal_detected,
     alert_safety_block, alert_error, alert_daily_summary, discord,
@@ -1686,7 +1686,11 @@ class TradingBot:
         # Get candle data
         h1_candles = []
         m5_candles = []
+        d1_candles = []
+        h4_candles = []
         try:
+            import MetaTrader5 as mt5
+            
             # H1 candles from df
             for i in range(max(0, len(df) - 20), len(df)):
                 row = df.iloc[i]
@@ -1700,11 +1704,36 @@ class TradingBot:
                 })
             
             # M5 candles
-            import MetaTrader5 as mt5
             m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
             if m5_rates is not None:
                 for r in m5_rates:
                     m5_candles.append({
+                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "tick_volume": int(r["tick_volume"]),
+                    })
+            
+            # D1 candles (weekly context)
+            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+            if d1_rates is not None:
+                for r in d1_rates:
+                    d1_candles.append({
+                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "tick_volume": int(r["tick_volume"]),
+                    })
+            
+            # H4 candles (2-3 day structure)
+            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 15)
+            if h4_rates is not None:
+                for r in h4_rates:
+                    h4_candles.append({
                         "time": datetime.fromtimestamp(r["time"]).isoformat(),
                         "open": float(r["open"]),
                         "high": float(r["high"]),
@@ -1760,6 +1789,155 @@ class TradingBot:
         except Exception:
             pass
         
+        # ================================================================
+        # NEW DATA: Agent Memory (last 3-5 decisions)
+        # ================================================================
+        agent_memory = []
+        try:
+            agent_memory = get_recent_agent_decisions(5)
+        except Exception as e:
+            log.debug(f"Error getting agent memory: {e}")
+        
+        # ================================================================
+        # NEW DATA: Trade Feedback (recent trades with Agent accuracy)
+        # ================================================================
+        trade_feedback = None
+        try:
+            trade_feedback = get_trade_feedback(5)
+        except Exception as e:
+            log.debug(f"Error getting trade feedback: {e}")
+        
+        # ================================================================
+        # NEW DATA: Delta Context (what changed since last cycle)
+        # ================================================================
+        delta_context = None
+        try:
+            prev = getattr(self, '_prev_agent_cycle_data', None)
+            current_rsi = tech_data.get("rsi", {}).get("value", 50)
+            current_volume_ratio = momentum_data.get("volume", {}).get("volume_ratio", 1.0)
+            
+            if prev:
+                price_change_pips = (current_price - prev.get("price", current_price)) / 0.1
+                rsi_change = current_rsi - prev.get("rsi", current_rsi)
+                prev_vol = prev.get("volume_ratio", 1.0) or 1.0
+                volume_change_pct = ((current_volume_ratio - prev_vol) / prev_vol) * 100 if prev_vol else 0
+                
+                # Detect significant events
+                significant_events = []
+                if abs(price_change_pips) > 50:
+                    direction = "up" if price_change_pips > 0 else "down"
+                    significant_events.append(f"Price moved {abs(price_change_pips):.0f} pips {direction}")
+                if abs(rsi_change) > 10:
+                    direction = "rose" if rsi_change > 0 else "fell"
+                    significant_events.append(f"RSI {direction} {abs(rsi_change):.1f} points")
+                if abs(volume_change_pct) > 50:
+                    direction = "spiked" if volume_change_pct > 0 else "dropped"
+                    significant_events.append(f"Volume {direction} {abs(volume_change_pct):.0f}%")
+                
+                delta_context = {
+                    "price_change_pips": price_change_pips,
+                    "rsi_change": rsi_change,
+                    "volume_change_pct": volume_change_pct,
+                    "significant_events": significant_events,
+                }
+            
+            # Store current cycle data for next comparison
+            self._prev_agent_cycle_data = {
+                "price": current_price,
+                "rsi": current_rsi,
+                "volume_ratio": current_volume_ratio,
+            }
+        except Exception as e:
+            log.debug(f"Error building delta context: {e}")
+        
+        # ================================================================
+        # NEW DATA: Portfolio Awareness
+        # ================================================================
+        portfolio_data = None
+        try:
+            daily_pnl = self.daily_stats.get("pnl", 0)
+            daily_wins = self.daily_stats.get("wins", 0)
+            daily_losses = self.daily_stats.get("losses", 0)
+            total_trades = daily_wins + daily_losses
+            win_rate = (daily_wins / total_trades * 100) if total_trades > 0 else 0
+            
+            # Calculate drawdown (simple: from daily high)
+            account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
+            drawdown_pct = 0
+            if daily_pnl < 0 and account_balance > 0:
+                drawdown_pct = abs(daily_pnl) / account_balance * 100
+            
+            # Risk budget: assume 2% daily max risk, calculate remaining
+            max_daily_risk = account_balance * 0.02
+            used_risk = abs(min(daily_pnl, 0))  # Only count losses
+            risk_remaining = max(0, max_daily_risk - used_risk)
+            risk_budget_remaining_pct = (risk_remaining / max_daily_risk * 100) if max_daily_risk > 0 else 100
+            
+            portfolio_data = {
+                "daily_pnl": daily_pnl,
+                "daily_wins": daily_wins,
+                "daily_losses": daily_losses,
+                "win_rate_today": win_rate,
+                "drawdown_pct": drawdown_pct,
+                "risk_budget_remaining_pct": risk_budget_remaining_pct,
+            }
+        except Exception as e:
+            log.debug(f"Error building portfolio data: {e}")
+        
+        # ================================================================
+        # NEW DATA: Regime Context (trending/ranging, ADX/ATR analysis)
+        # ================================================================
+        regime_context = None
+        try:
+            adx_value = momentum_data.get("adx", {}).get("adx_value", 0)
+            atr_value = momentum_data.get("atr", {}).get("atr_value", 0)
+            
+            # Determine regime
+            if adx_value >= 25:
+                regime = "trending"
+                if adx_value >= 40:
+                    trend_strength = "strong"
+                else:
+                    trend_strength = "moderate"
+            else:
+                regime = "ranging"
+                trend_strength = "weak"
+            
+            # Count hours ADX above 25 (from H1 data if available)
+            adx_hours_above_25 = 0
+            try:
+                # Use stored ADX history if available
+                adx_history = getattr(self, '_adx_history', [])
+                adx_history.append(adx_value)
+                adx_history = adx_history[-24:]  # Keep last 24 hours
+                self._adx_history = adx_history
+                adx_hours_above_25 = sum(1 for v in adx_history if v >= 25)
+            except Exception:
+                pass
+            
+            # ATR vs weekly average (estimate from current ATR)
+            atr_vs_weekly = 1.0
+            try:
+                atr_history = getattr(self, '_atr_history', [])
+                atr_history.append(atr_value)
+                atr_history = atr_history[-120:]  # ~5 days of hourly data
+                self._atr_history = atr_history
+                if len(atr_history) > 20:
+                    weekly_avg = sum(atr_history) / len(atr_history)
+                    if weekly_avg > 0:
+                        atr_vs_weekly = atr_value / weekly_avg
+            except Exception:
+                pass
+            
+            regime_context = {
+                "regime": regime,
+                "adx_hours_above_25": adx_hours_above_25,
+                "atr_vs_weekly_avg": atr_vs_weekly,
+                "trend_strength": trend_strength,
+            }
+        except Exception as e:
+            log.debug(f"Error building regime context: {e}")
+        
         data_package = build_data_package(
             brain_result=brain_result,
             tech_data=tech_data,
@@ -1776,6 +1954,13 @@ class TradingBot:
             sr_zones=sr_zones_for_agent,
             candlestick_patterns=candlestick_patterns_for_agent,
             sr_proximity=sr_proximity_data,
+            d1_candles=d1_candles,
+            h4_candles=h4_candles,
+            agent_memory=agent_memory,
+            trade_feedback=trade_feedback,
+            delta_context=delta_context,
+            portfolio=portfolio_data,
+            regime_context=regime_context,
         )
         
         # Call Agent (async)
