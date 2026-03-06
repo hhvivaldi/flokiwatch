@@ -28,7 +28,8 @@ from alerts import (
     alert_m5_reversal_block, alert_trade_resolved,
     alert_brain_decision,
     alert_spread_delay, alert_spread_skip,
-    alert_agent_decision
+    alert_agent_decision,
+    check_ea_bridge_status_and_alert
 )
 from confluence import analyze_confluence
 from confluence import is_actionable_signal as confluence_is_actionable
@@ -1141,6 +1142,8 @@ class TradingBot:
                 else:
                     log.error(f"Failed to execute trade: {order_result.error_message}")
         finally:
+            # Check EA Bridge status and alert if offline (must never block the bot)
+            check_ea_bridge_status_and_alert()
             # Persist state for dashboard (must never block the bot)
             write_state(self)
     

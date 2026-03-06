@@ -40,6 +40,10 @@ WEBHOOK_ENV_KEYS = {
 ERROR_RATE_LIMIT_SECONDS = 60
 _error_last_sent: Dict[str, datetime] = {}
 
+# EA Bridge state tracking for offline alerts
+_ea_bridge_last_online: bool = True  # Assume online at start
+_ea_bridge_alert_sent: bool = False  # Prevent duplicate alerts
+
 
 def _get_config_value(name: str, default: str = "") -> str:
     value = getattr(config, name, default)
@@ -260,6 +264,79 @@ def alert_bot_stopped(reason: str = "Manual"):
             {"name": "Reason", "value": reason, "inline": False},
         ],
     )
+
+
+def check_ea_bridge_status_and_alert() -> None:
+    """
+    Check EA Bridge status and send alert if it transitions from ONLINE to FALLBACK.
+    Should be called periodically (e.g., every analysis cycle).
+    """
+    global _ea_bridge_last_online, _ea_bridge_alert_sent
+    
+    try:
+        if not getattr(config, 'USE_EA_BRIDGE', False):
+            return  # EA Bridge not enabled, nothing to check
+        
+        from ea_bridge import is_ea_online, read_ea_status
+        stale_threshold = getattr(config, 'EA_STALE_THRESHOLD_SECONDS', 60)
+        
+        currently_online = is_ea_online(stale_threshold)
+        
+        # Transition: ONLINE -> OFFLINE (FALLBACK)
+        if _ea_bridge_last_online and not currently_online and not _ea_bridge_alert_sent:
+            # Get last activity timestamp from ea_status.json
+            status = read_ea_status(stale_threshold)
+            last_activity = "Unknown"
+            offline_duration = "Unknown"
+            
+            if status and status.timestamp:
+                last_activity = status.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
+                delta = datetime.utcnow() - status.timestamp
+                minutes = int(delta.total_seconds() / 60)
+                if minutes < 60:
+                    offline_duration = f"{minutes} minutes"
+                else:
+                    hours = minutes // 60
+                    mins = minutes % 60
+                    offline_duration = f"{hours}h {mins}m"
+            
+            # Send alert
+            discord_router.send_embed(
+                CHANNEL_STATUS,
+                title="⚠️ EA Bridge OFFLINE — Fallback Active",
+                description=(
+                    "FlokiBridge EA has stopped responding. "
+                    "Trade execution is now using Python fallback (direct MT5 API)."
+                ),
+                color=0xff9900,  # Orange/amber
+                fields=[
+                    {"name": "Last EA Activity", "value": last_activity, "inline": True},
+                    {"name": "Offline Duration", "value": offline_duration, "inline": True},
+                    {"name": "Execution Channel", "value": "Python Fallback (MT5 API)", "inline": False},
+                    {"name": "Action Required", "value": "Re-attach FlokiBridge EA to XAUUSD chart in MT5", "inline": False},
+                ],
+            )
+            log.warning(f"[EA BRIDGE] Transitioned to FALLBACK. Last activity: {last_activity}")
+            _ea_bridge_alert_sent = True
+        
+        # Transition: OFFLINE -> ONLINE (recovered)
+        elif not _ea_bridge_last_online and currently_online:
+            discord_router.send_embed(
+                CHANNEL_STATUS,
+                title="✅ EA Bridge ONLINE — Recovered",
+                description="FlokiBridge EA is responding again. Trade execution restored to EA mode.",
+                color=0x00ff00,
+                fields=[
+                    {"name": "Execution Channel", "value": "EA Bridge (FlokiBridge)", "inline": False},
+                ],
+            )
+            log.info("[EA BRIDGE] Recovered — now ONLINE")
+            _ea_bridge_alert_sent = False
+        
+        _ea_bridge_last_online = currently_online
+        
+    except Exception as e:
+        log.debug(f"[EA BRIDGE] Status check error: {e}")
 
 
 def alert_signal_detected(
