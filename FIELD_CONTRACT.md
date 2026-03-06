@@ -324,6 +324,10 @@ USE_EA_BRIDGE = False OR ea_status.json > 60s old:
 | `positions[]` | array | Open positions (see below) |
 | `closed_today[]` | array | Trades closed today |
 | `spread_pips` | float | Current spread in pips |
+| `heartbeat_count` | int | Increments every OnTimer() call (diagnostic) |
+| `last_heartbeat_time` | string | Timestamp of last OnTimer() execution |
+| `consecutive_write_failures` | int | Count of consecutive file write failures |
+| `last_write_error` | string \| null | Last write error message (diagnostic) |
 | `last_error` | string \| null | Last error message |
 
 ### `ea_status.json` Position Fields

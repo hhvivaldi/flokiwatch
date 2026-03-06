@@ -25,6 +25,12 @@ string g_lastSignalId = "";                           // Last processed signal I
 datetime g_lastFileCheck = 0;                         // Last file modification time
 bool g_statusDirty = true;                            // Flag to write status
 
+// Diagnostic tracking for failure analysis
+long g_heartbeatCount = 0;                            // Increments every OnTimer() call
+datetime g_lastHeartbeatTime = 0;                     // Last successful OnTimer() execution
+int g_consecutiveWriteFailures = 0;                   // Consecutive status file write failures
+string g_lastWriteError = "";                         // Last write error message
+
 // Position tracking
 struct PositionData
 {
@@ -99,12 +105,26 @@ int OnInit()
    g_positionCount = 0;
    g_closedCount = 0;
    
+   // Initialize diagnostic counters
+   g_heartbeatCount = 0;
+   g_lastHeartbeatTime = TimeCurrent();
+   g_consecutiveWriteFailures = 0;
+   g_lastWriteError = "";
+   
    // Scan existing positions
    ScanExistingPositions();
    
-   if(EnableLogging)
-      Print("FlokiBridge initialized. Magic: ", MagicNumber, 
-            " | Positions: ", g_positionCount);
+   // Startup diagnostic log
+   Print("=== FlokiBridge STARTUP ===");
+   Print("  Version: 1.01");
+   Print("  Magic: ", MagicNumber);
+   Print("  Symbol: ", _Symbol);
+   Print("  Timer interval: ", StatusUpdateMs, "ms");
+   Print("  Signal file: ", SignalFile);
+   Print("  Status file: ", StatusFile);
+   Print("  Positions found: ", g_positionCount);
+   Print("  Logging enabled: ", EnableLogging);
+   Print("===========================");
    
    // Write initial status
    g_statusDirty = true;
@@ -128,15 +148,43 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // Increment heartbeat counter FIRST (proves OnTimer fired)
+   g_heartbeatCount++;
+   g_lastHeartbeatTime = TimeCurrent();
+   
+   // Wrap all logic in error handling
+   bool timerSuccess = false;
+   
    // Update position data
    UpdatePositionData();
    
-   // Write status if dirty or periodically
-   if(g_statusDirty)
+   // Write status if dirty or periodically (always write to keep heartbeat fresh)
+   bool writeOk = WriteStatus();
+   
+   if(writeOk)
    {
-      WriteStatus();
+      g_consecutiveWriteFailures = 0;
+      g_lastWriteError = "";
       g_statusDirty = false;
+      timerSuccess = true;
    }
+   else
+   {
+      g_consecutiveWriteFailures++;
+      
+      // Log warning if failures are accumulating
+      if(g_consecutiveWriteFailures == 5)
+         Print("WARNING: 5 consecutive status write failures. Last error: ", g_lastWriteError);
+      else if(g_consecutiveWriteFailures == 20)
+         Print("CRITICAL: 20 consecutive status write failures. EA may appear offline to Python.");
+      else if(g_consecutiveWriteFailures % 100 == 0)
+         Print("ALERT: ", g_consecutiveWriteFailures, " consecutive write failures. Error: ", g_lastWriteError);
+   }
+   
+   // Periodic heartbeat log (every 60 seconds = ~60 timer calls at 1000ms)
+   if(EnableLogging && g_heartbeatCount % 60 == 0)
+      Print("Heartbeat #", g_heartbeatCount, " | Positions: ", g_positionCount, 
+            " | Write failures: ", g_consecutiveWriteFailures);
 }
 
 //+------------------------------------------------------------------+
@@ -698,15 +746,17 @@ void UpdatePositionData()
 //+------------------------------------------------------------------+
 //| Write status JSON file                                            |
 //+------------------------------------------------------------------+
-void WriteStatus()
+bool WriteStatus()
 {
    // Write directly to status file (terminal-specific MQL5\Files folder)
    int handle = FileOpen(StatusFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
    if(handle == INVALID_HANDLE)
    {
-      if(EnableLogging)
-         Print("Cannot write status file: ", GetLastError());
-      return;
+      int err = GetLastError();
+      g_lastWriteError = "FileOpen failed: " + IntegerToString(err);
+      if(EnableLogging && g_consecutiveWriteFailures < 5)
+         Print("Cannot write status file: ", err);
+      return false;
    }
    
    // Build JSON
@@ -747,6 +797,15 @@ void WriteStatus()
                     SymbolInfoDouble(_Symbol, SYMBOL_BID)) / 0.1;
    json += "  \"spread_pips\": " + DoubleToString(spread, 1) + ",\n";
    
+   // Diagnostic fields for failure analysis
+   json += "  \"heartbeat_count\": " + IntegerToString(g_heartbeatCount) + ",\n";
+   json += "  \"last_heartbeat_time\": \"" + TimeToString(g_lastHeartbeatTime, TIME_DATE|TIME_SECONDS) + "\",\n";
+   json += "  \"consecutive_write_failures\": " + IntegerToString(g_consecutiveWriteFailures) + ",\n";
+   if(g_lastWriteError == "")
+      json += "  \"last_write_error\": null,\n";
+   else
+      json += "  \"last_write_error\": \"" + g_lastWriteError + "\",\n";
+   
    // Last error
    if(g_lastError == "")
       json += "  \"last_error\": null\n";
@@ -755,11 +814,16 @@ void WriteStatus()
    
    json += "}\n";
    
-   FileWriteString(handle, json);
+   uint bytesWritten = FileWriteString(handle, json);
    FileClose(handle);
    
-   if(EnableLogging)
-      Print("Status written: ", g_positionCount, " positions");
+   if(bytesWritten == 0)
+   {
+      g_lastWriteError = "FileWriteString returned 0 bytes";
+      return false;
+   }
+   
+   return true;
 }
 
 //+------------------------------------------------------------------+
