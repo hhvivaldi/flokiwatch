@@ -1076,6 +1076,8 @@ def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
     Returns:
         "bullish", "bearish", or None if data unavailable
     """
+    from logger import log
+    
     try:
         import MetaTrader5 as mt5
         import config as _cfg
@@ -1086,6 +1088,7 @@ def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
         }
         tf = tf_map.get(timeframe)
         if tf is None:
+            log.warning(f"[MTF] Invalid timeframe: {timeframe}")
             return None
         
         ema_period = getattr(_cfg, 'MTF_EMA_PERIOD', 50)
@@ -1093,7 +1096,11 @@ def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
         bars_needed = ema_period + 10
         
         rates = mt5.copy_rates_from_pos("XAUUSD", tf, 0, bars_needed)
-        if rates is None or len(rates) < ema_period:
+        if rates is None:
+            log.warning(f"[MTF] {timeframe} data fetch returned None - MT5 connection issue?")
+            return None
+        if len(rates) < ema_period:
+            log.warning(f"[MTF] {timeframe} insufficient bars: got {len(rates)}, need {ema_period}")
             return None
         
         # Calculate EMA50
@@ -1105,13 +1112,17 @@ def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
         current_ema = float(df['ema'].iloc[-1])
         
         if current_price > current_ema:
-            return "bullish"
+            direction = "bullish"
         elif current_price < current_ema:
-            return "bearish"
+            direction = "bearish"
         else:
-            return None
+            direction = None
+        
+        log.debug(f"[MTF] {timeframe}: price={current_price:.2f}, EMA{ema_period}={current_ema:.2f} -> {direction}")
+        return direction
             
-    except Exception:
+    except Exception as e:
+        log.error(f"[MTF] {timeframe} trend detection failed: {e}")
         return None
 
 
