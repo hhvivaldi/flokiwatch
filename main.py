@@ -1833,6 +1833,7 @@ class TradingBot:
             brain_confidence=brain_result.confidence,
             agent_result=agent_result.to_dict(),
             executed=executed,
+            agreement=agreement,
         )
         
         # Send Discord alert

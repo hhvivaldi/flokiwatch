@@ -220,32 +220,26 @@ def record_agent_decision(
     brain_confidence: float,
     agent_result: Dict[str, Any],
     executed: str,
+    agreement: bool,
     outcome: str = "PENDING",
 ) -> None:
     """
     Record an AI Agent decision for shadow mode comparison.
     
     Args:
-        brain_decision: Brain's decision (BUY/SELL/HOLD)
+        brain_decision: Brain's decision (BUY/SELL/HOLD or HOLD_FORCED)
         brain_score: Brain's final score
         brain_confidence: Brain's confidence
         agent_result: AgentResult.to_dict() output
         executed: Which decision was executed (brain/agent)
+        agreement: Whether Agent agrees with Brain (pre-calculated by caller)
         outcome: Trade outcome (PENDING/WIN/LOSS/BE) - filled post-hoc
     """
     try:
         import json
         
         agent_decision = agent_result.get("decision", "DEFER_TO_BRAIN")
-        
-        # Determine agreement
-        brain_dir = "BUY" if "BUY" in brain_decision else ("SELL" if "SELL" in brain_decision else "HOLD")
-        agent_dir = "BUY" if "BUY" in agent_decision else ("SELL" if "SELL" in agent_decision else "HOLD")
-        agreement = 1 if brain_dir == agent_dir else 0
-        
-        # Handle REJECT/WAIT as disagreement with BUY/SELL
-        if agent_decision in ("REJECT", "WAIT") and brain_dir in ("BUY", "SELL"):
-            agreement = 0
+        agreement_int = 1 if agreement else 0
         
         conn = _get_connection()
         conn.execute(
@@ -265,7 +259,7 @@ def record_agent_decision(
                 agent_result.get("reasoning", ""),
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
-                agreement,
+                agreement_int,
                 executed,
                 outcome,
                 agent_result.get("prompt_version", ""),
