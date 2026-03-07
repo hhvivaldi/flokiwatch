@@ -33,6 +33,15 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
     os.replace(tmp_path, path)
 
 
+def _get_agent_memory() -> Optional[Dict[str, Any]]:
+    """Get Agent memory for dashboard display."""
+    try:
+        from agent_memory import get_memory_for_dashboard
+        return get_memory_for_dashboard()
+    except Exception:
+        return None
+
+
 def _get_ea_bridge_status() -> Dict[str, Any]:
     """Get EA Bridge status for dashboard display."""
     try:
@@ -188,6 +197,7 @@ def write_state(bot_instance: Any) -> None:
             "positions": positions,
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
             "ea_bridge": _get_ea_bridge_status(),
+            "agent_memory": _get_agent_memory(),
         }
 
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
