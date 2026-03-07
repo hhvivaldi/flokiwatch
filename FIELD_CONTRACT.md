@@ -148,6 +148,27 @@
 | `agent_decision.executed` | `"BRAIN"` \| `"AGENT"` | `main.py` | `renderAgentCard()` → `#agent-executed` |
 | `agent_decision.latency_ms` | int | `main.py` | `renderAgentCard()` → `#agent-latency` |
 
+### `agent_memory` Object (AI Agent Memory - v1.3)
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `agent_memory` | object \| null | `state_writer.py` via `agent_memory.get_memory_for_dashboard()` | `renderAgentMemory()` |
+| `agent_memory.timestamp` | string (ISO) | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-timestamp` |
+| `agent_memory.brain_signal` | string | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-brain-signal` |
+| `agent_memory.brain_score` | float | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-brain-score` |
+| `agent_memory.market_view.direction` | `"BUY"` \| `"SELL"` \| `"HOLD"` | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-view-direction` |
+| `agent_memory.market_view.description` | string | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-view-description` |
+| `agent_memory.conditions` | array of objects | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-conditions` |
+| `agent_memory.conditions[].description` | string | `agent_memory.py` | condition text |
+| `agent_memory.conditions[].met` | bool | `agent_memory.py` | condition status (✅/❌) |
+| `agent_memory.conditions[].current_value` | float \| null | `agent_memory.py` | current indicator value |
+| `agent_memory.invalidation.timeframe` | string | `agent_memory.py` | `renderAgentMemory()` → `#agent-memory-expiry` |
+| `agent_memory.invalidation.candles_total` | int | `agent_memory.py` | total candles for invalidation |
+| `agent_memory.invalidation.candles_remaining` | int | `agent_memory.py` | candles remaining |
+| `agent_memory.invalidation.expires_at` | string (ISO) | `agent_memory.py` | expiration timestamp |
+| `agent_memory.status` | `"active"` \| `"conditions_met"` \| `"invalidated"` | `agent_memory.py` | memory status |
+| `agent_memory.all_conditions_met` | bool | `agent_memory.py` | whether all conditions are met |
+
 ### `positions` Array
 
 | Field | Type | Writer | Reader (app.js) |
@@ -203,6 +224,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### AI Agent Card
 `agent-card`, `agent-decision`, `agent-confidence`, `agent-reasoning`, `agent-factors`, `agent-concerns`, `agent-agreement`, `agent-executed`, `agent-latency`
+
+### AI Agent Memory (v1.3)
+`agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
