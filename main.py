@@ -645,7 +645,7 @@ class TradingBot:
         else:
             log.info("AI Agent: OFF")
         log.info(f"Risk/trade: {config.RISK_PER_TRADE}% | Max daily loss: {config.MAX_DAILY_LOSS}%")
-        log.info(f"SL: {config.MIN_SL_PIPS}-{config.MAX_SL_PIPS} pips | Breakeven: {config.BREAKEVEN_TRIGGER_PIPS} pips | Trailing: {config.TRAILING_TRIGGER_PIPS}/{config.TRAILING_DISTANCE_PIPS} pips")
+        log.info(f"SL: {config.MIN_SL_PIPS}-{config.MAX_SL_PIPS} pips | Breakeven: {int(config.BREAKEVEN_ATR_MULT * 100)}% of SL (dynamic) | Trailing: {int(config.TRAILING_ATR_MULT * 100)}% of SL")
         
         # Connect MT5
         if self.executes_trades:
