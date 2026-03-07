@@ -44,10 +44,13 @@ class AgentResult:
     latency_ms: int = 0
     error: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
+    market_view: Optional[Dict] = None
+    conditions_to_approve: Optional[List[str]] = None
+    invalidation: Optional[str] = None
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for logging/storage"""
-        return {
+        result = {
             "decision": self.decision,
             "confidence": self.confidence,
             "reasoning": self.reasoning,
@@ -62,6 +65,13 @@ class AgentResult:
             "error": self.error,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.market_view:
+            result["market_view"] = self.market_view
+        if self.conditions_to_approve:
+            result["conditions_to_approve"] = self.conditions_to_approve
+        if self.invalidation:
+            result["invalidation"] = self.invalidation
+        return result
 
 
 class AIAgent:
@@ -239,10 +249,57 @@ class AIAgent:
         brain_score = brain.get("score", 50)
         brain_confidence = brain.get("confidence", 50)
         
+        # Build memory context section if present
+        memory_section = ""
+        memory_context = data_package.get("agent_memory_context")
+        if memory_context and memory_context.get("has_previous_reject"):
+            all_met = memory_context.get("all_conditions_met", False)
+            conditions_str = "\n".join(memory_context.get("conditions_status", []))
+            time_remaining = memory_context.get("invalidation", {}).get("time_remaining", "unknown")
+            
+            if all_met:
+                memory_section = f"""
+
+## ⚠️ PREVIOUS REJECT CONTEXT — ALL CONDITIONS NOW MET
+
+In your previous cycle, you REJECTED a {memory_context.get('brain_signal_rejected')} signal.
+
+Your market view was: **{memory_context.get('your_market_view', {}).get('direction', 'N/A')}**
+"{memory_context.get('your_market_view', {}).get('description', 'N/A')}"
+
+Your conditions to approve:
+{conditions_str}
+
+**All conditions from your previous REJECT are now met.**
+
+Time remaining before invalidation: {time_remaining}
+
+You should either:
+1. APPROVE the trade (OPEN_BUY or OPEN_SELL) if the setup is now valid
+2. Explain clearly why you are still rejecting despite conditions being met
+"""
+            else:
+                memory_section = f"""
+
+## PREVIOUS REJECT CONTEXT
+
+In your previous cycle, you REJECTED a {memory_context.get('brain_signal_rejected')} signal.
+
+Your market view was: **{memory_context.get('your_market_view', {}).get('direction', 'N/A')}**
+"{memory_context.get('your_market_view', {}).get('description', 'N/A')}"
+
+Your conditions to approve:
+{conditions_str}
+
+Time remaining before invalidation: {time_remaining}
+
+Maintain consistency with your previous analysis unless market conditions have materially changed.
+"""
+        
         message = f"""## CURRENT MARKET DATA
 
 The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)
-
+{memory_section}
 Review the complete context below and make your decision.
 
 ```json
@@ -282,6 +339,11 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 logger.warning(f"Invalid decision '{decision}', defaulting to WAIT")
                 decision = "WAIT"
             
+            # Parse v1.3 REJECT fields if present
+            market_view = parsed.get("market_view")
+            conditions_to_approve = parsed.get("conditions_to_approve")
+            invalidation = parsed.get("invalidation")
+            
             return AgentResult(
                 decision=decision,
                 confidence=int(parsed.get("confidence", 50)),
@@ -295,6 +357,9 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 input_tokens=response.get("input_tokens", 0),
                 output_tokens=response.get("output_tokens", 0),
                 latency_ms=latency_ms,
+                market_view=market_view,
+                conditions_to_approve=conditions_to_approve,
+                invalidation=invalidation,
             )
             
         except json.JSONDecodeError as e:
@@ -356,6 +421,7 @@ def initialize_agent() -> bool:
 async def agent_decide(data_package: Dict) -> AgentResult:
     """
     Convenience function to get Agent decision.
+    Handles memory injection and saving.
     
     Args:
         data_package: Complete market context
@@ -364,7 +430,38 @@ async def agent_decide(data_package: Dict) -> AgentResult:
         AgentResult with decision
     """
     agent = get_agent()
-    return await agent.decide(data_package)
+    
+    # Inject memory context into data package (v1.3)
+    try:
+        from agent_memory import get_memory_context_for_agent
+        memory_context = get_memory_context_for_agent()
+        if memory_context:
+            data_package["agent_memory_context"] = memory_context
+            logger.debug(f"Injected memory context: all_conditions_met={memory_context.get('all_conditions_met')}")
+    except Exception as e:
+        logger.warning(f"Failed to inject memory context: {e}")
+    
+    # Get Agent decision
+    result = await agent.decide(data_package)
+    
+    # Save REJECT to memory (v1.3)
+    if result.decision == "REJECT" and result.market_view and result.conditions_to_approve:
+        try:
+            from agent_memory import save_reject
+            brain = data_package.get("brain_analysis", {})
+            save_reject(
+                brain_signal=brain.get("decision", "UNKNOWN"),
+                brain_score=brain.get("score", 50),
+                market_view_direction=result.market_view.get("direction", "HOLD"),
+                market_view_description=result.market_view.get("description", ""),
+                conditions=result.conditions_to_approve,
+                invalidation_str=result.invalidation or "3 H1 candles",
+            )
+            logger.info(f"Saved REJECT to memory: view={result.market_view.get('direction')}, {len(result.conditions_to_approve)} conditions")
+        except Exception as e:
+            logger.warning(f"Failed to save REJECT to memory: {e}")
+    
+    return result
 
 
 # =============================================================================
