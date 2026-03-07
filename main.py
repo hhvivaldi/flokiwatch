@@ -1134,7 +1134,7 @@ class TradingBot:
                         ticket=order_result.ticket,
                         direction=direction,
                         volume=pos_size.lot_size,
-                        open_price=entry_price,
+                        open_price=order_result.price,
                         sl=levels.stop_loss,
                         tp=levels.take_profit_1,
                         comment=comment,
