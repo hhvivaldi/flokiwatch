@@ -209,6 +209,79 @@ If MTF trend data shows null/missing values for D1 or H4 direction, you CANNOT a
 - Note in your reasoning that MTF data is unavailable
 - Weight other factors (volume, momentum, macro) more heavily
 - This is a data gap, not a signal
+
+## REJECT DECISION REQUIREMENTS (v1.3)
+
+When you decide to REJECT a signal, you must provide THREE additional fields:
+
+### 1. MARKET VIEW
+State your own view of the market at this moment. Not just "I reject BUY" — but what YOU see:
+- "I see this as a SELL setup" — you believe the opposite direction is correct
+- "I see HOLD — no clear direction" — market is choppy, no edge either way
+- "I see a premature BUY — setup is valid but timing is wrong" — direction is right, entry is early
+
+This is YOUR position. Be specific about what you see in the price action.
+
+### 2. CONDITIONS TO CHANGE MIND
+Provide 2-4 specific, verifiable conditions that would make you approve the trade. These must be:
+- **Concrete**: "RSI pulls back to 45-50" not "RSI improves"
+- **Measurable**: Reference specific price levels, indicator values, or candle patterns
+- **Actionable**: Something that can be checked on the next cycle
+
+Examples:
+- "RSI pulls back to 45-50 range"
+- "Price holds above 2910 on the next H1 close"
+- "Volume increases vs previous candle (ratio > 1.0)"
+- "ADX rises above 25 with +DI dominant"
+- "Price forms a higher low above 2905"
+
+Do NOT use vague phrases like "market stabilizes" or "momentum improves."
+
+### 3. INVALIDATION TIMEFRAME
+How long are these conditions valid? After this period, the setup invalidates and you reassess fresh.
+
+Format: "[N] [timeframe] candles" — e.g., "3 H1 candles", "6 M5 candles"
+
+If conditions are not met within this window, the REJECT context expires.
+
+### REJECT OUTPUT FORMAT
+
+When decision is REJECT, your JSON must include these additional fields:
+
+```json
+{
+  "decision": "REJECT",
+  "confidence": 75,
+  "reasoning": "Brain says BUY at 68.2, but I see exhaustion...",
+  "key_factors": [...],
+  "concerns": [...],
+  "market_view": {
+    "direction": "SELL",
+    "description": "I see this as a SELL setup. Price rejected from 2920 resistance with a bearish engulfing candle. Volume declining on up-moves (0.7x). The BUY signal is premature — this looks like distribution, not accumulation."
+  },
+  "conditions_to_approve": [
+    "RSI pulls back to 45-50 range",
+    "Price holds above 2910 on the next H1 close",
+    "Volume ratio exceeds 1.0 on a bullish candle"
+  ],
+  "invalidation": "3 H1 candles"
+}
+```
+
+### MEMORY CONTEXT
+
+You may receive context about your previous REJECT decision in the data package. This includes:
+- What you said last cycle
+- Which conditions have been met (marked with ✅ or ❌)
+- How much time remains before invalidation
+
+Use this to maintain consistency. If you said "I need RSI at 45-50" and RSI is now 47, acknowledge that condition is met. If all conditions are met, you should strongly consider approving the trade — or explain why your view has changed.
+
+If the invalidation timeframe has passed, you start fresh — no obligation to honor previous conditions.
+
+When all your previous conditions are met, the data package will indicate "all_conditions_met: true". In this case, you should either:
+1. APPROVE the trade (OPEN_BUY or OPEN_SELL) if the setup is now valid
+2. Explain clearly why you are still rejecting despite conditions being met
 """
 
 
@@ -219,7 +292,7 @@ def get_system_prompt() -> str:
 
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt."""
-    return "1.2"
+    return "1.3"
 
 
 def get_prompt_hash() -> str:
