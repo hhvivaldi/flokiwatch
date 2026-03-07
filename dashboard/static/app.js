@@ -451,6 +451,7 @@ function render(state) {
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
   renderAgentCard(la.agent_decision);
+  renderAgentMemory(state.agent_memory);
 }
 
 /* ================================================================
@@ -925,6 +926,102 @@ function renderAgentCard(agentDecision) {
       concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
     } else {
       concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
+    }
+  }
+}
+
+/* ================================================================
+   AI AGENT MEMORY (v1.3)
+   ================================================================ */
+
+function renderAgentMemory(agentMemory) {
+  const section = el("agent-memory-section");
+  if (!section) return;
+
+  if (!agentMemory || !agentMemory.timestamp) {
+    section.classList.add("hidden");
+    return;
+  }
+
+  section.classList.remove("hidden");
+
+  // Timestamp - how long ago
+  const timestampEl = el("agent-memory-timestamp");
+  if (timestampEl) {
+    try {
+      const rejectTime = new Date(agentMemory.timestamp);
+      const now = new Date();
+      const diffMs = now - rejectTime;
+      const diffMin = Math.floor(diffMs / 60000);
+      timestampEl.textContent = diffMin < 60 ? `${diffMin} min ago` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m ago`;
+    } catch (e) {
+      timestampEl.textContent = "—";
+    }
+  }
+
+  // Brain signal that was rejected
+  const brainSignalEl = el("agent-memory-brain-signal");
+  if (brainSignalEl) {
+    brainSignalEl.textContent = `${agentMemory.brain_signal || "—"} @ ${fmtNum(agentMemory.brain_score, 1)}`;
+  }
+
+  // Market view direction
+  const viewDirEl = el("agent-memory-view-direction");
+  if (viewDirEl) {
+    const dir = agentMemory.market_view?.direction || "—";
+    viewDirEl.textContent = dir;
+    if (dir === "BUY") {
+      viewDirEl.className = "text-lg font-bold text-green-400";
+    } else if (dir === "SELL") {
+      viewDirEl.className = "text-lg font-bold text-red-400";
+    } else {
+      viewDirEl.className = "text-lg font-bold text-yellow-400";
+    }
+  }
+
+  // Market view description
+  const viewDescEl = el("agent-memory-view-description");
+  if (viewDescEl) {
+    viewDescEl.textContent = agentMemory.market_view?.description || "—";
+  }
+
+  // Conditions
+  const conditionsEl = el("agent-memory-conditions");
+  if (conditionsEl) {
+    const conditions = agentMemory.conditions || [];
+    if (conditions.length === 0) {
+      conditionsEl.innerHTML = `<li class="text-gray-500">No conditions set</li>`;
+    } else {
+      conditionsEl.innerHTML = conditions.map(c => {
+        const icon = c.met ? "✅" : "❌";
+        const currentVal = c.current_value != null ? ` (now: ${fmtNum(c.current_value, 1)})` : "";
+        const textClass = c.met ? "text-green-400" : "text-gray-300";
+        return `<li class="${textClass}">${icon} ${c.description}${currentVal}</li>`;
+      }).join("");
+    }
+  }
+
+  // Expiry
+  const expiryEl = el("agent-memory-expiry");
+  if (expiryEl) {
+    const inv = agentMemory.invalidation;
+    if (inv) {
+      expiryEl.textContent = `${inv.candles_remaining} ${inv.timeframe} candles remaining`;
+    } else {
+      expiryEl.textContent = "—";
+    }
+  }
+
+  // Status badge
+  const statusEl = el("agent-memory-status");
+  if (statusEl) {
+    const allMet = agentMemory.all_conditions_met;
+    if (allMet) {
+      statusEl.textContent = "ALL CONDITIONS MET";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse";
+    } else {
+      statusEl.textContent = "ACTIVE";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
     }
   }
 }
