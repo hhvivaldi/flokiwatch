@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "FlokiWatch"
 #property link      ""
-#property version   "1.00"
+#property version   "1.02"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -28,8 +28,10 @@ bool g_statusDirty = true;                            // Flag to write status
 // Diagnostic tracking for failure analysis
 long g_heartbeatCount = 0;                            // Increments every OnTimer() call
 datetime g_lastHeartbeatTime = 0;                     // Last successful OnTimer() execution
+datetime g_lastStatusWriteTime = 0;                   // Last successful status file write (for OnTick backup)
 int g_consecutiveWriteFailures = 0;                   // Consecutive status file write failures
 string g_lastWriteError = "";                         // Last write error message
+bool g_timerStarted = false;                          // Whether EventSetMillisecondTimer succeeded
 
 // Position tracking
 struct PositionData
@@ -96,8 +98,8 @@ string g_lastError = "";
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   // Set timer for status updates
-   EventSetMillisecondTimer(StatusUpdateMs);
+   // Set timer for status updates (check return value)
+   g_timerStarted = EventSetMillisecondTimer(StatusUpdateMs);
    
    // Initialize arrays
    ArrayResize(g_positions, 0);
@@ -108,6 +110,7 @@ int OnInit()
    // Initialize diagnostic counters
    g_heartbeatCount = 0;
    g_lastHeartbeatTime = TimeCurrent();
+   g_lastStatusWriteTime = TimeCurrent();
    g_consecutiveWriteFailures = 0;
    g_lastWriteError = "";
    
@@ -116,15 +119,19 @@ int OnInit()
    
    // Startup diagnostic log
    Print("=== FlokiBridge STARTUP ===");
-   Print("  Version: 1.01");
+   Print("  Version: 1.02");
    Print("  Magic: ", MagicNumber);
    Print("  Symbol: ", _Symbol);
    Print("  Timer interval: ", StatusUpdateMs, "ms");
+   Print("  Timer started: ", g_timerStarted ? "YES" : "NO (OnTick backup active)");
    Print("  Signal file: ", SignalFile);
    Print("  Status file: ", StatusFile);
    Print("  Positions found: ", g_positionCount);
    Print("  Logging enabled: ", EnableLogging);
    Print("===========================");
+   
+   if(!g_timerStarted)
+      Print("WARNING: Timer failed to start! OnTick() will handle heartbeats.");
    
    // Write initial status
    g_statusDirty = true;
@@ -166,6 +173,7 @@ void OnTimer()
       g_consecutiveWriteFailures = 0;
       g_lastWriteError = "";
       g_statusDirty = false;
+      g_lastStatusWriteTime = TimeCurrent();
       timerSuccess = true;
    }
    else
@@ -197,6 +205,27 @@ void OnTick()
    
    // Manage open positions (breakeven, trailing, drawdown)
    ManagePositions();
+   
+   // Backup heartbeat: if OnTimer() isn't firing, write status from OnTick()
+   // This handles cases where EventSetMillisecondTimer() failed or Algo Trading is disabled
+   if(TimeCurrent() - g_lastStatusWriteTime > 30)
+   {
+      UpdatePositionData();
+      bool writeOk = WriteStatus();
+      if(writeOk)
+      {
+         g_lastStatusWriteTime = TimeCurrent();
+         g_consecutiveWriteFailures = 0;
+         
+         // Log that backup heartbeat is active (only once per minute to avoid spam)
+         static datetime lastBackupLog = 0;
+         if(TimeCurrent() - lastBackupLog > 60)
+         {
+            Print("OnTick backup heartbeat active (OnTimer not firing)");
+            lastBackupLog = TimeCurrent();
+         }
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
