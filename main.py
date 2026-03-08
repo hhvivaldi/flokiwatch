@@ -669,6 +669,14 @@ class TradingBot:
             if not mt5.initialize():
                 log.warning("MT5 not available for data. Using simulated data.")
         
+        # Clear stale signal file (prevents 4-day-old signals from reaching EA on restart)
+        if getattr(config, 'USE_EA_BRIDGE', False):
+            try:
+                from ea_bridge import clear_stale_signal
+                clear_stale_signal(max_age_hours=4.0)
+            except Exception as e:
+                log.debug(f"Stale signal cleanup skipped: {e}")
+        
         # Reconcile saved state with MT5 (fix trades that closed during downtime)
         self._reconcile_with_mt5()
         

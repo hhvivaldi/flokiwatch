@@ -63,6 +63,51 @@ def get_status_file_path() -> str:
                    os.path.join(os.path.dirname(config.SR_ZONES_JSON_PATH), 'ea_status.json'))
 
 
+def clear_stale_signal(max_age_hours: float = 4.0) -> bool:
+    """
+    Clear brain_signal.json if it contains a stale signal.
+    
+    Should be called on Python startup to prevent old signals from reaching the EA.
+    The EA already rejects signals >10 minutes old, but this prevents unnecessary
+    file reads and log noise.
+    
+    Args:
+        max_age_hours: Maximum age of signal before deletion (default 4 hours)
+    
+    Returns:
+        True if file was deleted, False otherwise
+    """
+    try:
+        file_path = get_signal_file_path()
+        
+        if not os.path.exists(file_path):
+            return False
+        
+        # Check file modification time first (quick check)
+        file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+        age_hours = (datetime.now() - file_mtime).total_seconds() / 3600
+        
+        if age_hours <= max_age_hours:
+            return False  # File is fresh enough
+        
+        # File is old - read and log the stale signal ID before deleting
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            signal_id = data.get('signal_id', 'unknown')
+            signal_type = data.get('signal', 'unknown')
+            log.info(f"EA Bridge: Clearing stale signal file (age: {age_hours:.1f}h) - ID: {signal_id}, Type: {signal_type}")
+        except Exception:
+            log.info(f"EA Bridge: Clearing stale signal file (age: {age_hours:.1f}h) - could not read contents")
+        
+        os.remove(file_path)
+        return True
+        
+    except Exception as e:
+        log.warning(f"EA Bridge: Failed to clear stale signal - {e}")
+        return False
+
+
 def write_signal(
     signal: str,
     sl: float,
