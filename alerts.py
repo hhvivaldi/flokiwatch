@@ -3,6 +3,7 @@ ALERTS - Discord Alert System
 Sends notifications to Discord via Webhook
 """
 
+import os
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -291,8 +292,16 @@ def check_ea_bridge_status_and_alert() -> None:
             file_age_seconds = "Unknown"
             
             if status and status.timestamp:
-                last_activity = status.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
-                delta = datetime.utcnow() - status.timestamp
+                last_activity = status.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                # Use file modification time for age calculation (avoids timezone mismatch)
+                # EA writes broker server time, Python uses local time — comparing them gives wrong results
+                from ea_bridge import get_status_file_path
+                try:
+                    file_path = get_status_file_path()
+                    file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    delta = datetime.now() - file_mtime
+                except Exception:
+                    delta = datetime.now() - status.timestamp  # Fallback to old method
                 file_age_seconds = f"{int(delta.total_seconds())}s"
                 minutes = int(delta.total_seconds() / 60)
                 if minutes < 60:
