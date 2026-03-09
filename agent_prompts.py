@@ -304,6 +304,34 @@ If the invalidation timeframe has passed, you start fresh — no obligation to h
 When all your previous conditions are met, the data package will indicate "all_conditions_met: true". In this case, you should either:
 1. APPROVE the trade (OPEN_BUY or OPEN_SELL) if the setup is now valid
 2. Explain clearly why you are still rejecting despite conditions being met
+
+## CRITICAL OUTPUT FORMAT REMINDER
+
+**If your decision is REJECT, you MUST include all three additional fields: market_view, conditions_to_approve, and invalidation. Omitting these fields is a format violation.**
+
+Complete REJECT output structure (copy this exactly):
+
+```json
+{
+  "decision": "REJECT",
+  "confidence": 75,
+  "reasoning": "Your detailed reasoning here...",
+  "key_factors": ["factor 1", "factor 2", "factor 3"],
+  "concerns": ["concern 1", "concern 2"],
+  "market_view": {
+    "direction": "SELL or BUY or HOLD",
+    "description": "Your specific view of what you see in the market right now."
+  },
+  "conditions_to_approve": [
+    "Specific measurable condition 1",
+    "Specific measurable condition 2",
+    "Specific measurable condition 3"
+  ],
+  "invalidation": "3 H1 candles"
+}
+```
+
+For non-REJECT decisions (OPEN_BUY, OPEN_SELL, WAIT, DEFER_TO_BRAIN), use the standard 5-field format without market_view, conditions_to_approve, or invalidation.
 """
 
 
