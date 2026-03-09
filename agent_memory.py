@@ -573,6 +573,11 @@ def get_memory_for_dashboard() -> Optional[Dict]:
             remaining_minutes = 0
             candles_remaining = 0
         
+        # Determine status - EXPIRED if candles_remaining is 0
+        display_status = ar.status
+        if candles_remaining <= 0:
+            display_status = "EXPIRED"
+        
         return {
             "timestamp": ar.timestamp,
             "brain_signal": ar.brain_signal,
@@ -595,7 +600,7 @@ def get_memory_for_dashboard() -> Optional[Dict]:
                 "candles_remaining": candles_remaining,
                 "expires_at": ar.invalidation.expires_at,
             },
-            "status": ar.status,
+            "status": display_status,
             "all_conditions_met": all(c.met for c in ar.conditions_to_approve),
         }
         
