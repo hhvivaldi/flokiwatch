@@ -451,6 +451,7 @@ function render(state) {
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
   renderAgentCard(la.agent_decision);
+  renderProactiveAnalysis(la.proactive_analysis);
   renderAgentMemory(state.agent_memory);
 }
 
@@ -927,6 +928,101 @@ function renderAgentCard(agentDecision) {
     } else {
       concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
     }
+  }
+}
+
+/* ================================================================
+   PROACTIVE ANALYSIS (H1 Snapshot)
+   ================================================================ */
+
+function renderProactiveAnalysis(proactive) {
+  const section = el("proactive-section");
+  if (!section) return;
+
+  if (!proactive || !proactive.decision) {
+    section.classList.add("hidden");
+    return;
+  }
+
+  section.classList.remove("hidden");
+
+  const h1Close = proactive.h1_close_time || "—";
+  const decision = proactive.decision || "—";
+  const confidence = proactive.confidence;
+  const reasoning = proactive.reasoning || "—";
+  const keyFactors = proactive.key_factors || [];
+  const concerns = proactive.concerns || [];
+  const latencyMs = proactive.latency_ms;
+  const tokensUsed = proactive.tokens_used;
+
+  const h1El = el("proactive-h1-close");
+  if (h1El) {
+    try {
+      const d = new Date(h1Close);
+      if (!Number.isNaN(d.getTime())) {
+        const hh = String(d.getUTCHours()).padStart(2, "0");
+        const mm = String(d.getUTCMinutes()).padStart(2, "0");
+        h1El.textContent = `${hh}:${mm} UTC`;
+      } else {
+        h1El.textContent = h1Close;
+      }
+    } catch (e) {
+      h1El.textContent = h1Close;
+    }
+  }
+
+  const decisionEl = el("proactive-decision");
+  if (decisionEl) {
+    decisionEl.textContent = decision;
+    if (decision.includes("BUY")) {
+      decisionEl.className = "text-2xl font-bold text-green-400";
+    } else if (decision.includes("SELL")) {
+      decisionEl.className = "text-2xl font-bold text-red-400";
+    } else if (decision === "REJECT") {
+      decisionEl.className = "text-2xl font-bold text-red-500";
+    } else if (decision === "WAIT") {
+      decisionEl.className = "text-2xl font-bold text-yellow-400";
+    } else {
+      decisionEl.className = "text-2xl font-bold text-gray-400";
+    }
+  }
+
+  const confEl = el("proactive-confidence");
+  if (confEl) {
+    confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+  }
+
+  const reasonEl = el("proactive-reasoning");
+  if (reasonEl) {
+    reasonEl.textContent = reasoning;
+  }
+
+  const factorsEl = el("proactive-factors");
+  if (factorsEl) {
+    if (keyFactors.length > 0) {
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${f}</li>`).join("");
+    } else {
+      factorsEl.innerHTML = `<li class="text-gray-600">—</li>`;
+    }
+  }
+
+  const concernsEl = el("proactive-concerns");
+  if (concernsEl) {
+    if (concerns.length > 0) {
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
+    } else {
+      concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
+    }
+  }
+
+  const latEl = el("proactive-latency");
+  if (latEl) {
+    latEl.textContent = latencyMs != null ? latencyMs : "—";
+  }
+
+  const tokEl = el("proactive-tokens");
+  if (tokEl) {
+    tokEl.textContent = tokensUsed != null ? `${tokensUsed}` : "—";
   }
 }
 
