@@ -540,7 +540,7 @@ function updateProactiveCountdown(state) {
     const mm = min % 60;
     countdownEl.textContent = `${hr}h ${mm}m`;
   } else if (min >= 1) {
-    countdownEl.textContent = `${min} min`;
+    countdownEl.textContent = `${min} min ${sec} sec`;
   } else {
     countdownEl.textContent = `${sec}s`;
   }
