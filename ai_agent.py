@@ -150,7 +150,7 @@ class AIAgent:
             self.enabled = False
             return False
 
-    async def decide(self, data_package: Dict) -> AgentResult:
+    async def decide(self, data_package: Dict, trigger_type: str = "SIGNAL") -> AgentResult:
         """
         Make a trading decision based on the data package.
         
@@ -167,7 +167,7 @@ class AIAgent:
         
         try:
             # Build the user message with the data package
-            user_message = self._build_user_message(data_package)
+            user_message = self._build_user_message(data_package, trigger_type=trigger_type)
             
             # Call Claude API with timeout
             response = await asyncio.wait_for(
@@ -230,7 +230,7 @@ class AIAgent:
             "model": response.model,
         }
 
-    def _build_user_message(self, data_package: Dict) -> str:
+    def _build_user_message(self, data_package: Dict, trigger_type: str = "SIGNAL") -> str:
         """
         Build the user message from the data package.
         
@@ -296,9 +296,15 @@ Time remaining before invalidation: {time_remaining}
 Maintain consistency with your previous analysis unless market conditions have materially changed.
 """
         
+        header_line = ""
+        if trigger_type == "PROACTIVE_H1":
+            header_line = "This is a proactive hourly market snapshot. No Brain signal triggered this analysis."
+        else:
+            header_line = f"The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)"
+
         message = f"""## CURRENT MARKET DATA
 
-The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)
+{header_line}
 {memory_section}
 Review the complete context below and make your decision.
 
@@ -418,7 +424,11 @@ def initialize_agent() -> bool:
     return agent.initialize()
 
 
-async def agent_decide(data_package: Dict) -> AgentResult:
+async def agent_decide(
+    data_package: Dict,
+    trigger_type: str = "SIGNAL",
+    allow_memory_write: bool = True,
+) -> AgentResult:
     """
     Convenience function to get Agent decision.
     Handles memory injection and saving.
@@ -432,20 +442,21 @@ async def agent_decide(data_package: Dict) -> AgentResult:
     agent = get_agent()
     
     # Inject memory context into data package (v1.3)
-    try:
-        from agent_memory import get_memory_context_for_agent
-        memory_context = get_memory_context_for_agent()
-        if memory_context:
-            data_package["agent_memory_context"] = memory_context
-            logger.debug(f"Injected memory context: all_conditions_met={memory_context.get('all_conditions_met')}")
-    except Exception as e:
-        logger.warning(f"Failed to inject memory context: {e}")
+    if trigger_type != "PROACTIVE_H1":
+        try:
+            from agent_memory import get_memory_context_for_agent
+            memory_context = get_memory_context_for_agent()
+            if memory_context:
+                data_package["agent_memory_context"] = memory_context
+                logger.debug(f"Injected memory context: all_conditions_met={memory_context.get('all_conditions_met')}")
+        except Exception as e:
+            logger.warning(f"Failed to inject memory context: {e}")
     
     # Get Agent decision
-    result = await agent.decide(data_package)
+    result = await agent.decide(data_package, trigger_type=trigger_type)
     
     # Save REJECT to memory (v1.3)
-    if result.decision == "REJECT":
+    if allow_memory_write and result.decision == "REJECT":
         if result.market_view and result.conditions_to_approve:
             try:
                 from agent_memory import save_reject
