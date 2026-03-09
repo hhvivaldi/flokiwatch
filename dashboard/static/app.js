@@ -2,6 +2,9 @@ let lastTimestamp = null;
 let lastMetaAgeSeconds = null;
 let lastBotStatus = null;
 
+let lastStateForProactiveCountdown = null;
+let proactiveCountdownIntervalId = null;
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -453,6 +456,73 @@ function render(state) {
   renderAgentCard(la.agent_decision);
   renderProactiveAnalysis(la.proactive_analysis);
   renderAgentMemory(state.agent_memory);
+
+  lastStateForProactiveCountdown = state;
+  ensureProactiveCountdownRunning();
+}
+
+function ensureProactiveCountdownRunning() {
+  if (proactiveCountdownIntervalId != null) return;
+  proactiveCountdownIntervalId = setInterval(() => {
+    try {
+      updateProactiveCountdown(lastStateForProactiveCountdown);
+    } catch (e) {
+      // silent
+    }
+  }, 1000);
+}
+
+function updateProactiveCountdown(state) {
+  const h1CloseEl = el("proactive-h1-close");
+  if (!h1CloseEl) return;
+  if (!state) return;
+
+  const marketOpen = !!state.market?.is_open;
+  if (!marketOpen) {
+    h1CloseEl.textContent = "Pending...";
+    return;
+  }
+
+  const proactive = state.last_analysis?.proactive_analysis;
+  const lastCloseStr = proactive?.h1_close_time;
+  const now = new Date();
+
+  let nextClose = null;
+
+  if (lastCloseStr) {
+    const lastClose = new Date(lastCloseStr);
+    if (!Number.isNaN(lastClose.getTime())) {
+      nextClose = new Date(lastClose.getTime() + 60 * 60 * 1000);
+    }
+  }
+
+  if (!nextClose) {
+    nextClose = new Date(now);
+    nextClose.setMinutes(0, 0, 0);
+    nextClose = new Date(nextClose.getTime() + 60 * 60 * 1000);
+  }
+
+  let msLeft = nextClose.getTime() - now.getTime();
+  if (!Number.isFinite(msLeft)) {
+    h1CloseEl.textContent = "—";
+    return;
+  }
+
+  if (msLeft < 0) msLeft = 0;
+
+  const totalSec = Math.floor(msLeft / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+
+  if (min >= 60) {
+    const hr = Math.floor(min / 60);
+    const mm = min % 60;
+    h1CloseEl.textContent = `Next snapshot in: ${hr}h ${mm}m`;
+  } else if (min >= 1) {
+    h1CloseEl.textContent = `Next snapshot in: ${min} min`;
+  } else {
+    h1CloseEl.textContent = `Next snapshot in: ${sec}s`;
+  }
 }
 
 /* ================================================================
