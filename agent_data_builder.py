@@ -206,10 +206,10 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "classification": adx.get("adx_classification", "weak"),
     }
     
-    # Volume
+    # Volume (tick volume - XAU/USD has no real volume data)
     volume = momentum_data.get("volume", {})
     indicators["volume"] = {
-        "ratio": _safe_round(volume.get("volume_ratio", 1.0), 2),
+        "tick_volume_ratio": _safe_round(volume.get("volume_ratio", 1.0), 2),
         "classification": volume.get("volume_classification", "normal"),
     }
     
