@@ -9,7 +9,7 @@ import time
 import signal
 import json
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import traceback
 
@@ -871,6 +871,27 @@ class TradingBot:
             else:
                 decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                     self._confluence_analysis(df)
+
+            # ================================================================
+            # PROACTIVE AI AGENT (H1 snapshot) — shadow mode, diagnostic only
+            # Runs once per closed H1 candle when market is open.
+            # ================================================================
+            if getattr(config, 'USE_AI_AGENT', False):
+                try:
+                    market_open, _, _ = is_market_open()
+                    if market_open:
+                        last_closed_h1_iso = self._get_last_closed_h1_time_iso()
+                        if last_closed_h1_iso:
+                            prev_iso = getattr(self, '_last_proactive_h1_close_time', None)
+                            if prev_iso != last_closed_h1_iso:
+                                self._call_agent_proactive_h1_snapshot(
+                                    h1_close_time_iso=last_closed_h1_iso,
+                                    agent_data=agent_data,
+                                    df=df,
+                                )
+                                self._last_proactive_h1_close_time = last_closed_h1_iso
+                except Exception as e:
+                    log.warning(f"PROACTIVE_H1 | error (non-blocking): {e}")
             
             if decision is None:
                 return
@@ -1194,6 +1215,234 @@ class TradingBot:
             check_ea_bridge_status_and_alert()
             # Persist state for dashboard (must never block the bot)
             write_state(self)
+
+    def _get_last_closed_h1_time_iso(self) -> str:
+        """Return ISO timestamp of the last CLOSED H1 candle, or empty string if unavailable."""
+        try:
+            import MetaTrader5 as mt5
+            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 1, 1)
+            if rates is None or len(rates) == 0:
+                return ""
+            t = int(rates[0]["time"])
+            return datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
+        except Exception:
+            return ""
+
+    def _call_agent_proactive_h1_snapshot(self, h1_close_time_iso: str, agent_data: dict, df):
+        """Call the AI Agent proactively once per H1 candle close (diagnostic only)."""
+        import asyncio
+        from ai_agent import get_agent
+        from agent_data_builder import get_session_name
+        from db_writer import record_agent_proactive_analysis
+        from ai_agent import agent_decide
+        from agent_data_builder import build_data_package
+
+        agent = get_agent()
+        if not agent.is_enabled():
+            return
+
+        if not agent_data or not isinstance(agent_data, dict):
+            return
+
+        log.info(f"PROACTIVE_H1 | Calling AI Agent (shadow snapshot) | H1 close: {h1_close_time_iso}")
+
+        try:
+            # Reuse the same full payload used by reactive calls
+            brain_result = agent_data.get("brain_result")
+            tech_data = agent_data.get("tech_data")
+            ml_data = agent_data.get("ml_data")
+            momentum_data = agent_data.get("momentum_data")
+            news_data = agent_data.get("news_data")
+            calendar_data = agent_data.get("calendar_data")
+            current_price = agent_data.get("current_price")
+            vol_status = agent_data.get("vol_status")
+
+            session_context = {
+                "session_name": get_session_name(datetime.utcnow().hour),
+                "hour_utc": datetime.utcnow().hour,
+                "today_trades": self.daily_stats.get("trades", 0),
+                "today_wins": self.daily_stats.get("wins", 0),
+                "today_losses": self.daily_stats.get("losses", 0),
+                "today_pnl": self.daily_stats.get("pnl", 0),
+                "last_5_results": [],
+                "consecutive_losses": 0,
+                "hold_forced": None,
+            }
+
+            h1_candles = []
+            for i in range(max(0, len(df) - 20), len(df)):
+                row = df.iloc[i]
+                h1_candles.append({
+                    "time": str(row.get("datetime", "")),
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "tick_volume": int(row.get("tick_volume", 0)),
+                })
+
+            m5_candles = []
+            d1_candles = []
+            h4_candles = []
+            try:
+                import MetaTrader5 as mt5
+                m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
+                if m5_rates is not None:
+                    for r in m5_rates:
+                        m5_candles.append({
+                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
+                            "open": float(r["open"]),
+                            "high": float(r["high"]),
+                            "low": float(r["low"]),
+                            "close": float(r["close"]),
+                            "tick_volume": int(r["tick_volume"]),
+                        })
+                d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+                if d1_rates is not None:
+                    for r in d1_rates:
+                        d1_candles.append({
+                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
+                            "open": float(r["open"]),
+                            "high": float(r["high"]),
+                            "low": float(r["low"]),
+                            "close": float(r["close"]),
+                            "tick_volume": int(r["tick_volume"]),
+                        })
+                h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 15)
+                if h4_rates is not None:
+                    for r in h4_rates:
+                        h4_candles.append({
+                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
+                            "open": float(r["open"]),
+                            "high": float(r["high"]),
+                            "low": float(r["low"]),
+                            "close": float(r["close"]),
+                            "tick_volume": int(r["tick_volume"]),
+                        })
+            except Exception:
+                pass
+
+            price_data = {"bid": current_price, "ask": current_price, "spread": 0}
+            try:
+                tick = executor.get_current_price()
+                if tick:
+                    price_data = {"bid": tick[0], "ask": tick[1], "spread": (tick[1] - tick[0]) / 0.1}
+            except Exception:
+                pass
+
+            positions = []
+            try:
+                if self.executes_trades:
+                    pos_list = executor.get_open_positions()
+                    for p in pos_list[:3]:
+                        positions.append({
+                            "ticket": p.ticket,
+                            "type": "BUY" if p.type == 0 else "SELL",
+                            "price_open": p.price_open,
+                            "price_current": p.price_current,
+                            "profit": p.profit,
+                            "sl": p.sl,
+                            "tp": p.tp,
+                        })
+            except Exception:
+                pass
+
+            sr_zones_for_agent = getattr(self, '_last_sr_zones', []) or []
+            candlestick_patterns_for_agent = getattr(self, '_last_candlestick_patterns', None)
+
+            sr_proximity_data = None
+            try:
+                sr_brain_data = getattr(self, '_last_sr_brain_data', None)
+                if sr_brain_data:
+                    sr_proximity_data = {
+                        "near_strong_zone": sr_brain_data.get("near_strong_zone", False),
+                        "near_zone_info": sr_brain_data.get("near_zone_info"),
+                        "dist_to_nearest_pips": sr_brain_data.get("dist_to_nearest_pips"),
+                    }
+            except Exception:
+                pass
+
+            agent_memory = []
+            trade_feedback = None
+            delta_context = None
+            portfolio_data = None
+            regime_context = None
+
+            data_package = build_data_package(
+                brain_result=brain_result,
+                tech_data=tech_data,
+                ml_data=ml_data,
+                momentum_data=momentum_data,
+                news_data=news_data,
+                calendar_data=calendar_data,
+                h1_candles=h1_candles,
+                m5_candles=m5_candles,
+                current_price=price_data,
+                positions=positions,
+                session_context=session_context,
+                volatility_status=vol_status or {},
+                sr_zones=sr_zones_for_agent,
+                candlestick_patterns=candlestick_patterns_for_agent,
+                sr_proximity=sr_proximity_data,
+                d1_candles=d1_candles,
+                h4_candles=h4_candles,
+                agent_memory=agent_memory,
+                trade_feedback=trade_feedback,
+                delta_context=delta_context,
+                portfolio=portfolio_data,
+                regime_context=regime_context,
+            )
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            agent_result = loop.run_until_complete(
+                agent_decide(
+                    data_package,
+                    trigger_type="PROACTIVE_H1",
+                    allow_memory_write=False,
+                )
+            )
+            loop.close()
+        except Exception as e:
+            log.warning(f"PROACTIVE_H1 | Agent call failed (non-blocking): {e}")
+            return
+
+        try:
+            # Persist to SQLite
+            record_agent_proactive_analysis(h1_close_time_iso, agent_result.to_dict())
+        except Exception as e:
+            log.debug(f"PROACTIVE_H1 | DB write error (ignored): {e}")
+
+        try:
+            # Store for dashboard
+            if self.last_analysis and isinstance(self.last_analysis, dict):
+                self.last_analysis["proactive_analysis"] = {
+                    "trigger": "PROACTIVE_H1",
+                    "h1_close_time": h1_close_time_iso,
+                    "timestamp": agent_result.timestamp.isoformat() if agent_result.timestamp else datetime.utcnow().isoformat(),
+                    "model": agent_result.model,
+                    "prompt_version": agent_result.prompt_version,
+                    "prompt_hash": agent_result.prompt_hash,
+                    "decision": agent_result.decision,
+                    "confidence": agent_result.confidence,
+                    "reasoning": agent_result.reasoning,
+                    "key_factors": agent_result.key_factors,
+                    "concerns": agent_result.concerns,
+                    "latency_ms": agent_result.latency_ms,
+                    "input_tokens": agent_result.input_tokens,
+                    "output_tokens": agent_result.output_tokens,
+                    "tokens_used": (agent_result.input_tokens or 0) + (agent_result.output_tokens or 0),
+                }
+        except Exception as e:
+            log.debug(f"PROACTIVE_H1 | state update error (ignored): {e}")
+
+        try:
+            log.info(
+                f"PROACTIVE_H1 | Agent decision: {agent_result.decision} | "
+                f"conf={agent_result.confidence} | H1 close: {h1_close_time_iso}"
+            )
+        except Exception:
+            pass
     
     def _brain_analysis(self, df):
         """
