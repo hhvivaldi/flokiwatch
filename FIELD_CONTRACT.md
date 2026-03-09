@@ -148,6 +148,21 @@
 | `agent_decision.executed` | `"BRAIN"` \| `"AGENT"` | `main.py` | `renderAgentCard()` → `#agent-executed` |
 | `agent_decision.latency_ms` | int | `main.py` | `renderAgentCard()` → `#agent-latency` |
 
+### `last_analysis.proactive_analysis` Object (AI Agent - Proactive H1 Snapshot)
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `proactive_analysis.trigger` | string | `main.py` | `renderProactiveAnalysis()` |
+| `proactive_analysis.h1_close_time` | string (ISO) | `main.py` | `renderProactiveAnalysis()` → `#proactive-h1-close` |
+| `proactive_analysis.timestamp` | string (ISO) | `main.py` | not directly used |
+| `proactive_analysis.decision` | string | `main.py` | `renderProactiveAnalysis()` → `#proactive-decision` |
+| `proactive_analysis.confidence` | int (0-100) | `main.py` | `renderProactiveAnalysis()` → `#proactive-confidence` |
+| `proactive_analysis.reasoning` | string | `main.py` | `renderProactiveAnalysis()` → `#proactive-reasoning` |
+| `proactive_analysis.key_factors` | array of strings | `main.py` | `renderProactiveAnalysis()` → `#proactive-factors` |
+| `proactive_analysis.concerns` | array of strings | `main.py` | `renderProactiveAnalysis()` → `#proactive-concerns` |
+| `proactive_analysis.latency_ms` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-latency` |
+| `proactive_analysis.tokens_used` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-tokens` |
+
 ### `agent_memory` Object (AI Agent Memory - v1.3)
 
 | Field | Type | Writer | Reader (app.js) |
@@ -227,6 +242,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### AI Agent Memory (v1.3)
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
+
+### Proactive Analysis (H1 Snapshot)
+`proactive-section`, `proactive-h1-close`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
