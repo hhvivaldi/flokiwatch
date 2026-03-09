@@ -2,6 +2,11 @@ let lastTimestamp = null;
 let lastMetaAgeSeconds = null;
 let lastBotStatus = null;
 
+let proactiveCountdownIntervalId = null;
+let lastStateForProactiveCountdown = null;
+
+let lastGoodProactiveAnalysis = null;
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -453,6 +458,92 @@ function render(state) {
   renderAgentCard(la.agent_decision);
   renderProactiveAnalysis(la.proactive_analysis);
   renderAgentMemory(state.agent_memory);
+
+  lastStateForProactiveCountdown = state;
+  ensureProactiveCountdownRunning();
+}
+
+function ensureProactiveCountdownRunning() {
+  if (proactiveCountdownIntervalId != null) return;
+  proactiveCountdownIntervalId = setInterval(() => {
+    try {
+      updateProactiveCountdown(lastStateForProactiveCountdown);
+    } catch (e) {
+      // silent
+    }
+  }, 1000);
+}
+
+function _getOrCreateProactiveCountdownSpan(h1CloseEl) {
+  if (!h1CloseEl) return null;
+  let span = h1CloseEl.querySelector("span[data-proactive-countdown='1']");
+  if (span) return span;
+
+  span = document.createElement("span");
+  span.setAttribute("data-proactive-countdown", "1");
+  span.className = "text-gray-300";
+  span.textContent = "—";
+
+  const wrapper = document.createElement("span");
+  wrapper.className = "text-gray-500";
+  wrapper.textContent = " | Next snapshot in: ";
+  wrapper.appendChild(span);
+
+  h1CloseEl.appendChild(wrapper);
+  return span;
+}
+
+function updateProactiveCountdown(state) {
+  const h1CloseContainer = el("proactive-h1-close");
+  if (!h1CloseContainer) return;
+  if (!state) return;
+
+  // Only show countdown when the proactive section is visible
+  const proactiveSection = el("proactive-section");
+  if (proactiveSection && proactiveSection.classList.contains("hidden")) return;
+
+  const countdownEl = _getOrCreateProactiveCountdownSpan(h1CloseContainer);
+  if (!countdownEl) return;
+
+  const marketOpen = !!state.market?.is_open;
+  if (!marketOpen) {
+    countdownEl.textContent = "Pending...";
+    return;
+  }
+
+  const now = new Date();
+
+  // Compute next H1 close strictly in UTC (next top-of-hour UTC)
+  const nextClose = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    now.getUTCHours() + 1,
+    0,
+    0,
+    0,
+  ));
+
+  let msLeft = nextClose.getTime() - now.getTime();
+  if (!Number.isFinite(msLeft)) {
+    countdownEl.textContent = "—";
+    return;
+  }
+  if (msLeft < 0) msLeft = 0;
+
+  const totalSec = Math.floor(msLeft / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+
+  if (min >= 60) {
+    const hr = Math.floor(min / 60);
+    const mm = min % 60;
+    countdownEl.textContent = `${hr}h ${mm}m`;
+  } else if (min >= 1) {
+    countdownEl.textContent = `${min} min`;
+  } else {
+    countdownEl.textContent = `${sec}s`;
+  }
 }
 
 /* ================================================================
@@ -939,21 +1030,27 @@ function renderProactiveAnalysis(proactive) {
   const section = el("proactive-section");
   if (!section) return;
 
-  if (!proactive || !proactive.decision) {
+  const hasValid = !!(proactive && proactive.decision);
+  if (hasValid) {
+    lastGoodProactiveAnalysis = proactive;
+  }
+
+  const toRender = hasValid ? proactive : lastGoodProactiveAnalysis;
+  if (!toRender || !toRender.decision) {
     section.classList.add("hidden");
     return;
   }
 
   section.classList.remove("hidden");
 
-  const h1Close = proactive.h1_close_time || "—";
-  const decision = proactive.decision || "—";
-  const confidence = proactive.confidence;
-  const reasoning = proactive.reasoning || "—";
-  const keyFactors = proactive.key_factors || [];
-  const concerns = proactive.concerns || [];
-  const latencyMs = proactive.latency_ms;
-  const tokensUsed = proactive.tokens_used;
+  const h1Close = toRender.h1_close_time || "—";
+  const decision = toRender.decision || "—";
+  const confidence = toRender.confidence;
+  const reasoning = toRender.reasoning || "—";
+  const keyFactors = toRender.key_factors || [];
+  const concerns = toRender.concerns || [];
+  const latencyMs = toRender.latency_ms;
+  const tokensUsed = toRender.tokens_used;
 
   const h1El = el("proactive-h1-close");
   if (h1El) {
