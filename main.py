@@ -1790,6 +1790,10 @@ class TradingBot:
                 news_data, calendar_data, brain_result, get_hybrid_score_cached
             )
 
+            prev_last_analysis = self.last_analysis if isinstance(self.last_analysis, dict) else {}
+            preserved_proactive = prev_last_analysis.get("proactive_analysis")
+            preserved_agent = prev_last_analysis.get("agent_decision")
+
             self.last_analysis = {
                 "timestamp": datetime.now().isoformat(),
                 "decision": "HOLD" if hold_forced else brain_result.decision,
@@ -1814,6 +1818,12 @@ class TradingBot:
                 "mtf_trend": brain_result.mtf_trend,
                 "volume_gate": brain_result.volume_gate,
             }
+
+            # Preserve nested fields that are not recalculated every analysis cycle
+            if preserved_proactive and "proactive_analysis" not in self.last_analysis:
+                self.last_analysis["proactive_analysis"] = preserved_proactive
+            if preserved_agent and "agent_decision" not in self.last_analysis:
+                self.last_analysis["agent_decision"] = preserved_agent
         except Exception:
             pass
         
@@ -1896,6 +1906,10 @@ class TradingBot:
         except Exception:
             current_price = 0.0
         try:
+            prev_last_analysis = self.last_analysis if isinstance(self.last_analysis, dict) else {}
+            preserved_proactive = prev_last_analysis.get("proactive_analysis")
+            preserved_agent = prev_last_analysis.get("agent_decision")
+
             self.last_analysis = {
                 "timestamp": datetime.now().isoformat(),
                 "decision": result.decision,
@@ -1914,6 +1928,12 @@ class TradingBot:
                 "volatility_description": "",
                 "gpt_validation": None,
             }
+
+            # Preserve nested fields that are not recalculated every analysis cycle
+            if preserved_proactive and "proactive_analysis" not in self.last_analysis:
+                self.last_analysis["proactive_analysis"] = preserved_proactive
+            if preserved_agent and "agent_decision" not in self.last_analysis:
+                self.last_analysis["agent_decision"] = preserved_agent
         except Exception:
             pass
         
