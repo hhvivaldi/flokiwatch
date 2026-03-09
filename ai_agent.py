@@ -445,21 +445,24 @@ async def agent_decide(data_package: Dict) -> AgentResult:
     result = await agent.decide(data_package)
     
     # Save REJECT to memory (v1.3)
-    if result.decision == "REJECT" and result.market_view and result.conditions_to_approve:
-        try:
-            from agent_memory import save_reject
-            brain = data_package.get("brain_analysis", {})
-            save_reject(
-                brain_signal=brain.get("decision", "UNKNOWN"),
-                brain_score=brain.get("score", 50),
-                market_view_direction=result.market_view.get("direction", "HOLD"),
-                market_view_description=result.market_view.get("description", ""),
-                conditions=result.conditions_to_approve,
-                invalidation_str=result.invalidation or "3 H1 candles",
-            )
-            logger.info(f"Saved REJECT to memory: view={result.market_view.get('direction')}, {len(result.conditions_to_approve)} conditions")
-        except Exception as e:
-            logger.warning(f"Failed to save REJECT to memory: {e}")
+    if result.decision == "REJECT":
+        if result.market_view and result.conditions_to_approve:
+            try:
+                from agent_memory import save_reject
+                brain = data_package.get("brain_analysis", {})
+                save_reject(
+                    brain_signal=brain.get("decision", "UNKNOWN"),
+                    brain_score=brain.get("score", 50),
+                    market_view_direction=result.market_view.get("direction", "HOLD"),
+                    market_view_description=result.market_view.get("description", ""),
+                    conditions=result.conditions_to_approve,
+                    invalidation_str=result.invalidation or "3 H1 candles",
+                )
+                logger.info(f"Saved REJECT to memory: view={result.market_view.get('direction')}, {len(result.conditions_to_approve)} conditions")
+            except Exception as e:
+                logger.warning(f"Failed to save REJECT to memory: {e}")
+        else:
+            logger.warning(f"REJECT not saved to memory — missing required v1.3 fields (market_view={result.market_view is not None}, conditions_to_approve={result.conditions_to_approve is not None})")
     
     return result
 
