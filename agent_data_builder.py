@@ -240,6 +240,7 @@ def _format_brain_result(brain_result: Any) -> Dict:
             "h4_direction": mtf_trend.get("h4_direction"),
             "alignment": mtf_trend.get("alignment", "n/a"),
         }
+        logger.debug(f"[Agent Data] MTF trend: d1={mtf_trend_formatted['d1_direction']}, h4={mtf_trend_formatted['h4_direction']}, alignment={mtf_trend_formatted['alignment']}")
         
         # Extract Volume Gate data
         volume_gate = getattr(brain_result, "volume_gate", None) or {}
