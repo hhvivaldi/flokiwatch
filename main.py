@@ -859,17 +859,17 @@ class TradingBot:
             # ================================================================
             if config.USE_CENTRAL_BRAIN:
                 try:
-                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                         self._brain_analysis(df)
                 except Exception as e:
                     log.error(f"⚠️ Brain failed! Error: {e}")
                     log.error(traceback.format_exc())
                     log.warning("Using confluence as fallback...")
                     alert_error("Brain Degraded", f"Brain failed: {e}. Using confluence as fallback.")
-                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                    decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                         self._confluence_analysis(df)
             else:
-                decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation = \
+                decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                     self._confluence_analysis(df)
             
             if decision is None:
@@ -916,6 +916,25 @@ class TradingBot:
                         original_decision=original_decision,
                         hold_reason=hold_reason,
                     )
+                    # AI Agent for HOLD_FORCED: Agent can evaluate if Brain was right to block
+                    if getattr(config, 'USE_AI_AGENT', False) and agent_data is not None:
+                        try:
+                            self._call_agent_shadow_mode(
+                                brain_result=agent_data["brain_result"],
+                                tech_data=agent_data["tech_data"],
+                                ml_data=agent_data["ml_data"],
+                                momentum_data=agent_data["momentum_data"],
+                                news_data=agent_data["news_data"],
+                                calendar_data=agent_data["calendar_data"],
+                                current_price=agent_data["current_price"],
+                                vol_status=agent_data["vol_status"],
+                                df=agent_data["df"],
+                                hold_forced=agent_data["hold_forced"],
+                                original_decision=agent_data["original_decision"],
+                                hold_reason=agent_data["hold_reason"],
+                            )
+                        except Exception as e:
+                            log.warning(f"AI Agent error (non-blocking): {e}")
                 return
             
             # Signal detected!
@@ -1003,6 +1022,27 @@ class TradingBot:
                             return
             except Exception as e:
                 log.warning(f"M5 reversal check error (ignored): {e}")
+            
+            # AI Agent Shadow Mode: Call Agent AFTER safety checks pass
+            # This ensures Agent is not called when safety blocks the trade
+            if getattr(config, 'USE_AI_AGENT', False) and agent_data is not None:
+                try:
+                    self._call_agent_shadow_mode(
+                        brain_result=agent_data["brain_result"],
+                        tech_data=agent_data["tech_data"],
+                        ml_data=agent_data["ml_data"],
+                        momentum_data=agent_data["momentum_data"],
+                        news_data=agent_data["news_data"],
+                        calendar_data=agent_data["calendar_data"],
+                        current_price=agent_data["current_price"],
+                        vol_status=agent_data["vol_status"],
+                        df=agent_data["df"],
+                        hold_forced=agent_data["hold_forced"],
+                        original_decision=agent_data["original_decision"],
+                        hold_reason=agent_data["hold_reason"],
+                    )
+                except Exception as e:
+                    log.warning(f"AI Agent error (non-blocking): {e}")
             
             # Spread Check with Retry Loop
             spread = executor.get_spread()
@@ -1530,26 +1570,22 @@ class TradingBot:
         
         record_analysis(self.last_analysis)
         
-        # AI Agent Shadow Mode: Call Agent when Brain signals BUY/SELL or HOLD FORCED
-        # HOLD FORCED = Brain wanted to trade but confidence was too low
-        if getattr(config, 'USE_AI_AGENT', False) and (direction is not None or hold_forced):
-            try:
-                self._call_agent_shadow_mode(
-                    brain_result=brain_result,
-                    tech_data=tech_data,
-                    ml_data=ml_data,
-                    momentum_data=momentum_data,
-                    news_data=news_data,
-                    calendar_data=calendar_data,
-                    current_price=current_price,
-                    vol_status=vol_status,
-                    df=df,
-                    hold_forced=hold_forced,
-                    original_decision=original_decision,
-                    hold_reason=hold_reason,
-                )
-            except Exception as e:
-                log.warning(f"AI Agent error (non-blocking): {e}")
+        # Return decision tuple + agent_data dict for deferred Agent call
+        # Agent call moved to _analysis_cycle() AFTER safety checks pass
+        agent_data = {
+            "brain_result": brain_result,
+            "tech_data": tech_data,
+            "ml_data": ml_data,
+            "momentum_data": momentum_data,
+            "news_data": news_data,
+            "calendar_data": calendar_data,
+            "current_price": current_price,
+            "vol_status": vol_status,
+            "df": df,
+            "hold_forced": hold_forced,
+            "original_decision": original_decision,
+            "hold_reason": hold_reason,
+        }
         
         return (
             brain_result.decision,
@@ -1560,6 +1596,7 @@ class TradingBot:
             news_data['score'],
             ml_data['score'],
             brain_summary,
+            agent_data,
         )
     
     def _confluence_analysis(self, df):
@@ -1633,6 +1670,7 @@ class TradingBot:
         
         record_analysis(self.last_analysis)
         
+        # Confluence mode doesn't use Agent, return None for agent_data
         return (
             result.decision,
             result.final_score,
@@ -1642,6 +1680,7 @@ class TradingBot:
             news_score,
             ml_score,
             "",
+            None,  # agent_data - not used in confluence mode
         )
     
     def _call_agent_shadow_mode(
