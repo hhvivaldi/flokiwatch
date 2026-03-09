@@ -75,7 +75,18 @@ class PositionMonitor:
                 tr_trig = sl_dist * getattr(config, 'TRAILING_ATR_MULT', 0.7)
                 tr_dist = sl_dist * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
                 log.info(f"   Monitor: #{pos.ticket} {pos.direction} @ {pos.open_price:.2f} | SL original={pos.sl:.2f} ({sl_dist:.0f} pips)")
-                log.info(f"   Monitor: #{pos.ticket} Triggers: BE={be_trig:.0f} pips, Trail={tr_trig:.0f} pips, Dist={tr_dist:.0f} pips")
+                log.info(f"   Monitor: #{pos.ticket} Triggers: BE={be_trig:.0f} pips, Trail={tr_trig:.0f} pips, Dist={tr_dist:.0f} pips)")
+                
+                # Update DB with actual MT5 fill price (EA Bridge path records ticket=0 initially)
+                try:
+                    from db_writer import update_trade_open_price
+                    update_trade_open_price(
+                        new_ticket=pos.ticket,
+                        direction=pos.direction,
+                        actual_open_price=pos.open_price,
+                    )
+                except Exception:
+                    pass
         
         # Check if EA bridge is handling position management
         ea_handles_trailing = False

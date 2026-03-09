@@ -194,6 +194,42 @@ def record_trade_open(
         log.debug(f"db_writer: failed to record trade open: {e}")
 
 
+def update_trade_open_price(
+    new_ticket: int,
+    direction: str,
+    actual_open_price: float,
+) -> None:
+    """
+    Update pending trade record (ticket=0) with actual MT5 fill price and ticket.
+    Called after EA confirms execution.
+    
+    Matches on direction and recent open_time to handle edge case of
+    multiple pending trades in different directions.
+    """
+    try:
+        conn = _get_connection()
+        # Use subquery to find the most recent pending trade for this direction
+        cursor = conn.execute(
+            """UPDATE trades 
+               SET ticket = ?, open_price = ?
+               WHERE id = (
+                   SELECT id FROM trades 
+                   WHERE ticket = 0 
+                     AND direction = ?
+                     AND open_time > datetime('now', '-10 minutes')
+                   ORDER BY open_time DESC
+                   LIMIT 1
+               )""",
+            (new_ticket, actual_open_price, direction),
+        )
+        if cursor.rowcount > 0:
+            log.debug(f"db_writer: updated pending trade → ticket={new_ticket}, open_price={actual_open_price}")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to update trade open price: {e}")
+
+
 def record_trade_close(
     ticket: int,
     close_price: Optional[float],
