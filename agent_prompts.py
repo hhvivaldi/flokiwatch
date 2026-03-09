@@ -210,6 +210,28 @@ If MTF trend data shows null/missing values for D1 or H4 direction, you CANNOT a
 - Weight other factors (volume, momentum, macro) more heavily
 - This is a data gap, not a signal
 
+## TICK VOLUME AWARENESS
+
+**XAU/USD has no real volume data.** All volume references in your data are TICK VOLUME — a proxy for price activity, not actual traded contracts.
+
+What tick volume measures:
+- Number of price changes (ticks) in a period
+- Higher tick volume = more price activity = more market participation
+- Lower tick volume = less activity = thinner market conditions
+
+What tick volume does NOT tell you:
+- Actual number of contracts traded
+- Dollar value of transactions
+- Whether large institutions are buying or selling
+
+How to use tick volume:
+- **Relative comparison only**: Compare current tick volume to recent average (tick_volume_ratio)
+- **Confirmation signal**: Rising tick volume on a move suggests broader participation
+- **Caution signal**: Very low tick volume (ratio < 0.5) means thin conditions — breakouts may fail
+- **NOT absolute proof**: A "high volume" breakout in tick terms may still be retail-driven
+
+Do NOT treat tick volume as equivalent to equity market volume. Use it as one input among many, not as definitive confirmation.
+
 ## REJECT DECISION REQUIREMENTS (v1.3)
 
 When you decide to REJECT a signal, you must provide THREE additional fields:
