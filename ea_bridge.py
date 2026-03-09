@@ -191,88 +191,104 @@ def write_signal(
         return False
 
 
-def read_ea_status(stale_threshold_seconds: int = 60) -> Optional[EAStatus]:
+def read_ea_status(stale_threshold_seconds: int = 60, max_retries: int = 3, retry_delay_ms: int = 50) -> Optional[EAStatus]:
     """
     Read ea_status.json from EA.
     
+    Includes retry logic to handle Windows file locking when EA is mid-write.
+    
     Args:
         stale_threshold_seconds: If file is older than this, mark as stale
+        max_retries: Number of retry attempts if file is locked
+        retry_delay_ms: Milliseconds to wait between retries
     
     Returns:
         EAStatus object, or None if file doesn't exist or can't be read
     """
-    try:
-        file_path = get_status_file_path()
-        
-        if not os.path.exists(file_path):
+    import time
+    
+    file_path = get_status_file_path()
+    
+    for attempt in range(max_retries):
+        try:
+            if not os.path.exists(file_path):
+                return None
+            
+            # Check file age
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+            age_seconds = (datetime.now() - file_mtime).total_seconds()
+            is_stale = age_seconds > stale_threshold_seconds
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Parse positions
+            positions = []
+            for pos_data in data.get('positions', []):
+                try:
+                    open_time_str = pos_data.get('open_time', '')
+                    # Handle MT5 format: "2026.02.24 15:30:00"
+                    if '.' in open_time_str and ' ' in open_time_str:
+                        open_time = datetime.strptime(open_time_str, "%Y.%m.%d %H:%M:%S")
+                    else:
+                        open_time = datetime.fromisoformat(open_time_str) if open_time_str else datetime.now()
+                    
+                    positions.append(EAPosition(
+                        ticket=int(pos_data.get('ticket', 0)),
+                        direction=pos_data.get('direction', ''),
+                        volume=float(pos_data.get('volume', 0)),
+                        open_price=float(pos_data.get('open_price', 0)),
+                        current_price=float(pos_data.get('current_price', 0)),
+                        sl=float(pos_data.get('sl', 0)),
+                        tp=float(pos_data.get('tp', 0)),
+                        profit=float(pos_data.get('profit', 0)),
+                        profit_pips=float(pos_data.get('profit_pips', 0)),
+                        open_time=open_time,
+                        phase=pos_data.get('phase', 'OPEN'),
+                        breakeven_hit=pos_data.get('breakeven_hit', False),
+                        trailing_active=pos_data.get('trailing_active', False),
+                        max_profit_pips=float(pos_data.get('max_profit_pips', 0))
+                    ))
+                except Exception as e:
+                    log.warning(f"EA Bridge: Failed to parse position - {e}")
+            
+            # Parse timestamp
+            ts_str = data.get('timestamp', '')
+            if '.' in ts_str and ' ' in ts_str:
+                timestamp = datetime.strptime(ts_str, "%Y.%m.%d %H:%M:%S")
+            else:
+                timestamp = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
+            
+            account = data.get('account', {})
+            
+            return EAStatus(
+                version=data.get('version', 1),
+                timestamp=timestamp,
+                last_signal_id=data.get('last_signal_id', ''),
+                last_signal_result=data.get('last_signal_result', ''),
+                balance=float(account.get('balance', 0)),
+                equity=float(account.get('equity', 0)),
+                margin=float(account.get('margin', 0)),
+                free_margin=float(account.get('free_margin', 0)),
+                positions=positions,
+                closed_today=data.get('closed_today', []),
+                spread_pips=float(data.get('spread_pips', 0)),
+                last_error=data.get('last_error'),
+                is_stale=is_stale
+            )
+            
+        except PermissionError:
+            # EA is writing — wait and retry
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay_ms / 1000)
+                continue
+            log.warning(f"EA Bridge: Failed to read status after {max_retries} attempts - file locked")
             return None
-        
-        # Check file age
-        file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-        age_seconds = (datetime.now() - file_mtime).total_seconds()
-        is_stale = age_seconds > stale_threshold_seconds
-        
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Parse positions
-        positions = []
-        for pos_data in data.get('positions', []):
-            try:
-                open_time_str = pos_data.get('open_time', '')
-                # Handle MT5 format: "2026.02.24 15:30:00"
-                if '.' in open_time_str and ' ' in open_time_str:
-                    open_time = datetime.strptime(open_time_str, "%Y.%m.%d %H:%M:%S")
-                else:
-                    open_time = datetime.fromisoformat(open_time_str) if open_time_str else datetime.now()
-                
-                positions.append(EAPosition(
-                    ticket=int(pos_data.get('ticket', 0)),
-                    direction=pos_data.get('direction', ''),
-                    volume=float(pos_data.get('volume', 0)),
-                    open_price=float(pos_data.get('open_price', 0)),
-                    current_price=float(pos_data.get('current_price', 0)),
-                    sl=float(pos_data.get('sl', 0)),
-                    tp=float(pos_data.get('tp', 0)),
-                    profit=float(pos_data.get('profit', 0)),
-                    profit_pips=float(pos_data.get('profit_pips', 0)),
-                    open_time=open_time,
-                    phase=pos_data.get('phase', 'OPEN'),
-                    breakeven_hit=pos_data.get('breakeven_hit', False),
-                    trailing_active=pos_data.get('trailing_active', False),
-                    max_profit_pips=float(pos_data.get('max_profit_pips', 0))
-                ))
-            except Exception as e:
-                log.warning(f"EA Bridge: Failed to parse position - {e}")
-        
-        # Parse timestamp
-        ts_str = data.get('timestamp', '')
-        if '.' in ts_str and ' ' in ts_str:
-            timestamp = datetime.strptime(ts_str, "%Y.%m.%d %H:%M:%S")
-        else:
-            timestamp = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
-        
-        account = data.get('account', {})
-        
-        return EAStatus(
-            version=data.get('version', 1),
-            timestamp=timestamp,
-            last_signal_id=data.get('last_signal_id', ''),
-            last_signal_result=data.get('last_signal_result', ''),
-            balance=float(account.get('balance', 0)),
-            equity=float(account.get('equity', 0)),
-            margin=float(account.get('margin', 0)),
-            free_margin=float(account.get('free_margin', 0)),
-            positions=positions,
-            closed_today=data.get('closed_today', []),
-            spread_pips=float(data.get('spread_pips', 0)),
-            last_error=data.get('last_error'),
-            is_stale=is_stale
-        )
-        
-    except Exception as e:
-        log.warning(f"EA Bridge: Failed to read status - {e}")
-        return None
+        except Exception as e:
+            log.warning(f"EA Bridge: Failed to read status - {e}")
+            return None
+    
+    return None
 
 
 def is_ea_online(stale_threshold_seconds: int = 60) -> bool:
