@@ -2013,11 +2013,12 @@ class TradingBot:
             regime_context=regime_context,
         )
         
-        # Call Agent (async)
+        # Call Agent (async) - use agent_decide() wrapper for memory injection/saving
+        from ai_agent import agent_decide
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            agent_result = loop.run_until_complete(agent.decide(data_package))
+            agent_result = loop.run_until_complete(agent_decide(data_package))
             loop.close()
         except Exception as e:
             log.warning(f"Agent call failed: {e}")
