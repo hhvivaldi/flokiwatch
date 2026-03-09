@@ -112,6 +112,25 @@ def init_db() -> None:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_proactive_analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                h1_close_time TEXT,
+                agent_decision TEXT,
+                agent_confidence INTEGER,
+                agent_reasoning TEXT,
+                agent_key_factors TEXT,
+                agent_concerns TEXT,
+                prompt_version TEXT,
+                prompt_hash TEXT,
+                model TEXT,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                latency_ms INTEGER
+            )
+        """)
+
         conn.commit()
         conn.close()
         log.info("SQLite history DB initialized: " + os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db")))
@@ -322,6 +341,44 @@ def record_agent_decision(
         log.info(f"Agent decision recorded: {agent_decision} (agreement={agreement})")
     except Exception as e:
         log.debug(f"db_writer: failed to record agent decision: {e}")
+
+
+def record_agent_proactive_analysis(
+    h1_close_time: str,
+    agent_result: Dict[str, Any],
+) -> None:
+    """Record a proactive hourly Agent analysis (diagnostic only)."""
+    try:
+        import json
+
+        conn = _get_connection()
+        conn.execute(
+            """INSERT INTO agent_proactive_analyses
+               (timestamp, h1_close_time,
+                agent_decision, agent_confidence, agent_reasoning,
+                agent_key_factors, agent_concerns,
+                prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                agent_result.get("timestamp", datetime.now().isoformat()),
+                h1_close_time,
+                agent_result.get("decision", "DEFER_TO_BRAIN"),
+                agent_result.get("confidence", 0),
+                agent_result.get("reasoning", ""),
+                json.dumps(agent_result.get("key_factors", [])),
+                json.dumps(agent_result.get("concerns", [])),
+                agent_result.get("prompt_version", ""),
+                agent_result.get("prompt_hash", ""),
+                agent_result.get("model", ""),
+                agent_result.get("input_tokens", 0),
+                agent_result.get("output_tokens", 0),
+                agent_result.get("latency_ms", 0),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to record proactive analysis: {e}")
 
 
 def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
