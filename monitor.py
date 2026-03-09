@@ -37,6 +37,8 @@ class PositionMonitor:
         self._initialized = False
         # Volatility Guard status (updated by main.py each cycle)
         self.volatility_status = "NORMAL"
+        # Track last known SL per ticket (for EA-side change detection)
+        self.last_known_sl = {}
     
     def set_volatility_status(self, status: str):
         """Update volatility status (EXTREME, COOLING_DOWN, NORMAL)"""
@@ -120,6 +122,32 @@ class PositionMonitor:
             action = self._check_max_drawdown(pos)
             if action:
                 actions.append(action)
+        
+        # Detect EA-side SL changes (trailing stop moved by EA, not Python)
+        for pos in positions:
+            ticket = pos.ticket
+            current_sl = pos.sl
+            
+            if ticket in self.last_known_sl:
+                last_sl = self.last_known_sl[ticket]
+                # SL changed since last cycle?
+                if abs(current_sl - last_sl) > 0.01:  # >0.01 to avoid float noise
+                    # Check if Python made this change (trailing_sl would match)
+                    python_sl = self.trailing_sl.get(ticket)
+                    if python_sl is None or abs(current_sl - python_sl) > 0.01:
+                        # EA-side change detected — send alert
+                        log.info(f"   Monitor: EA trailing detected #{ticket} SL: {last_sl:.2f} → {current_sl:.2f}")
+                        alert_trailing_stop(
+                            ticket,
+                            last_sl,
+                            current_sl,
+                            direction=pos.direction,
+                            entry_price=pos.open_price,
+                            profit_pips=pos.profit_pips,
+                        )
+            
+            # Update last known SL for next cycle
+            self.last_known_sl[ticket] = current_sl
         
         # Status log per position (visibility every 30s cycle)
         for pos in positions:
