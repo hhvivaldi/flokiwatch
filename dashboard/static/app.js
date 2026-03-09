@@ -485,6 +485,7 @@ function _getOrCreateProactiveCountdownSpan(h1CloseEl) {
   span.textContent = "—";
 
   const wrapper = document.createElement("span");
+  wrapper.setAttribute("data-proactive-countdown-wrapper", "1");
   wrapper.className = "text-gray-500";
   wrapper.textContent = " | Next snapshot in: ";
   wrapper.appendChild(span);
@@ -493,14 +494,29 @@ function _getOrCreateProactiveCountdownSpan(h1CloseEl) {
   return span;
 }
 
+function _setProactiveH1CloseTextPreserveCountdown(h1CloseEl, text) {
+  if (!h1CloseEl) return;
+  const countdownWrapper = h1CloseEl.querySelector("span[data-proactive-countdown-wrapper='1']");
+  if (countdownWrapper) {
+    // Replace only the leading text node (H1 close label value) and preserve the countdown wrapper.
+    const prefix = document.createTextNode(text);
+    while (h1CloseEl.firstChild && h1CloseEl.firstChild !== countdownWrapper) {
+      h1CloseEl.removeChild(h1CloseEl.firstChild);
+    }
+    if (h1CloseEl.firstChild !== prefix) {
+      h1CloseEl.insertBefore(prefix, countdownWrapper);
+    }
+    return;
+  }
+
+  // Fallback: set plain text if wrapper doesn't exist yet
+  h1CloseEl.textContent = text;
+}
+
 function updateProactiveCountdown(state) {
   const h1CloseContainer = el("proactive-h1-close");
   if (!h1CloseContainer) return;
   if (!state) return;
-
-  // Only show countdown when the proactive section is visible
-  const proactiveSection = el("proactive-section");
-  if (proactiveSection && proactiveSection.classList.contains("hidden")) return;
 
   const countdownEl = _getOrCreateProactiveCountdownSpan(h1CloseContainer);
   if (!countdownEl) return;
@@ -1037,7 +1053,8 @@ function renderProactiveAnalysis(proactive) {
 
   const toRender = hasValid ? proactive : lastGoodProactiveAnalysis;
   if (!toRender || !toRender.decision) {
-    section.classList.add("hidden");
+    // Only hide if we've never had a valid snapshot yet. If we have cache, keep visible.
+    if (!lastGoodProactiveAnalysis) section.classList.add("hidden");
     return;
   }
 
@@ -1059,12 +1076,12 @@ function renderProactiveAnalysis(proactive) {
       if (!Number.isNaN(d.getTime())) {
         const hh = String(d.getUTCHours()).padStart(2, "0");
         const mm = String(d.getUTCMinutes()).padStart(2, "0");
-        h1El.textContent = `${hh}:${mm} UTC`;
+        _setProactiveH1CloseTextPreserveCountdown(h1El, `${hh}:${mm} UTC`);
       } else {
-        h1El.textContent = h1Close;
+        _setProactiveH1CloseTextPreserveCountdown(h1El, h1Close);
       }
     } catch (e) {
-      h1El.textContent = h1Close;
+      _setProactiveH1CloseTextPreserveCountdown(h1El, h1Close);
     }
   }
 
