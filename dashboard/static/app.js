@@ -1012,13 +1012,18 @@ function renderAgentMemory(agentMemory) {
     }
   }
 
-  // Status badge
+  // Status badge - read from JSON, handle ACTIVE, EXPIRED, conditions_met
   const statusEl = el("agent-memory-status");
   if (statusEl) {
+    const status = (agentMemory.status || "ACTIVE").toUpperCase();
     const allMet = agentMemory.all_conditions_met;
-    if (allMet) {
+    
+    if (allMet || status === "CONDITIONS_MET") {
       statusEl.textContent = "ALL CONDITIONS MET";
       statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse";
+    } else if (status === "EXPIRED") {
+      statusEl.textContent = "EXPIRED";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30";
     } else {
       statusEl.textContent = "ACTIVE";
       statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
