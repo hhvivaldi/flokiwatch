@@ -58,6 +58,7 @@ class AgentResult:
             "key_factors": self.key_factors,
             "concerns": self.concerns,
             "trade_plan": self.trade_plan,
+            "raw_response": self.raw_response,
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
             "model": self.model,
