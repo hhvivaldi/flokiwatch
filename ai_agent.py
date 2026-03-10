@@ -22,6 +22,9 @@ class AgentDecision(Enum):
     """Possible Agent decisions"""
     OPEN_BUY = "OPEN_BUY"
     OPEN_SELL = "OPEN_SELL"
+    HOLD_TRADE = "HOLD_TRADE"
+    ADJUST_TRADE = "ADJUST_TRADE"
+    CLOSE_TRADE = "CLOSE_TRADE"
     REJECT = "REJECT"
     WAIT = "WAIT"
     DEFER_TO_BRAIN = "DEFER_TO_BRAIN"  # Fallback when Agent fails
@@ -48,6 +51,8 @@ class AgentResult:
     market_view: Optional[Dict] = None
     conditions_to_approve: Optional[List[str]] = None
     invalidation: Optional[str] = None
+    adjustment: Optional[Dict] = None
+    close_reason: Optional[str] = None
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for logging/storage"""
@@ -74,6 +79,10 @@ class AgentResult:
             result["conditions_to_approve"] = self.conditions_to_approve
         if self.invalidation:
             result["invalidation"] = self.invalidation
+        if self.adjustment:
+            result["adjustment"] = self.adjustment
+        if self.close_reason:
+            result["close_reason"] = self.close_reason
         return result
 
 
@@ -378,6 +387,10 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
             # Parse v1.4 trade plan fields if present
             trade_plan = parsed.get("trade_plan")
             
+            # Parse adjustment and close_reason
+            adjustment = parsed.get("adjustment")
+            close_reason = parsed.get("close_reason")
+            
             return AgentResult(
                 decision=decision,
                 confidence=int(parsed.get("confidence", 50)),
@@ -395,6 +408,8 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 market_view=market_view,
                 conditions_to_approve=conditions_to_approve,
                 invalidation=invalidation,
+                adjustment=adjustment,
+                close_reason=close_reason,
             )
             
         except json.JSONDecodeError as e:

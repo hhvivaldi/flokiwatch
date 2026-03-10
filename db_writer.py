@@ -256,7 +256,11 @@ def init_db() -> None:
                 model TEXT,
                 input_tokens INTEGER,
                 output_tokens INTEGER,
-                latency_ms INTEGER
+                latency_ms INTEGER,
+                adjustment_new_sl REAL,
+                adjustment_new_tp REAL,
+                adjustment_reason TEXT,
+                close_reason TEXT
             )
         """)
 
@@ -273,6 +277,10 @@ def init_db() -> None:
             ("tp_risk_reward_ratio", "REAL"),
             ("tp_timing", "TEXT"),
             ("tp_moment_assessment", "TEXT"),
+            ("adjustment_new_sl", "REAL"),
+            ("adjustment_new_tp", "REAL"),
+            ("adjustment_reason", "TEXT"),
+            ("close_reason", "TEXT"),
         ]
 
         for col_name, col_type in agent_proactive_columns_to_add:
@@ -594,6 +602,7 @@ def record_agent_proactive_analysis(
         import json
 
         tp = agent_result.get("trade_plan") or {}
+        adj = agent_result.get("adjustment") or {}
 
         conn = _get_connection()
         conn.execute(
@@ -605,14 +614,16 @@ def record_agent_proactive_analysis(
                 tp_stop_loss, tp_stop_loss_rationale,
                 tp_take_profit, tp_take_profit_rationale,
                 tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
-                prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
+                prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms,
+                adjustment_new_sl, adjustment_new_tp, adjustment_reason, close_reason)
                VALUES (?, ?, ?, ?, ?, ?, ?,
                        ?,
                        ?, ?, ?,
                        ?, ?,
                        ?, ?,
                        ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?)""",
+                       ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
                 h1_close_time,
@@ -638,6 +649,10 @@ def record_agent_proactive_analysis(
                 agent_result.get("input_tokens", 0),
                 agent_result.get("output_tokens", 0),
                 agent_result.get("latency_ms", 0),
+                adj.get("new_sl"),
+                adj.get("new_tp"),
+                adj.get("reason"),
+                agent_result.get("close_reason"),
             ),
         )
         conn.commit()

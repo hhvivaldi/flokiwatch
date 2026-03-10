@@ -1046,13 +1046,13 @@ function renderProactiveAnalysis(proactive) {
   const decisionEl = el("proactive-decision");
   if (decisionEl) {
     decisionEl.textContent = decision;
-    if (decision.includes("BUY")) {
+    if (decision.includes("BUY") || decision === "HOLD_TRADE") {
       decisionEl.className = "text-2xl font-bold text-green-400";
-    } else if (decision.includes("SELL")) {
+    } else if (decision.includes("SELL") || decision === "CLOSE_TRADE") {
       decisionEl.className = "text-2xl font-bold text-red-400";
     } else if (decision === "REJECT") {
       decisionEl.className = "text-2xl font-bold text-red-500";
-    } else if (decision === "WAIT") {
+    } else if (decision === "WAIT" || decision === "ADJUST_TRADE") {
       decisionEl.className = "text-2xl font-bold text-yellow-400";
     } else {
       decisionEl.className = "text-2xl font-bold text-gray-400";
