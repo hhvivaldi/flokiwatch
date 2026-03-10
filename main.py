@@ -1272,13 +1272,18 @@ class TradingBot:
             h1_candles = []
             for i in range(max(0, len(df) - 20), len(df)):
                 row = df.iloc[i]
+                tv = 0
+                try:
+                    tv = int(row.get("tick_volume", row.get("volume", 0)) or 0)
+                except Exception:
+                    tv = 0
                 h1_candles.append({
                     "time": str(row.get("datetime", "")),
                     "open": float(row["open"]),
                     "high": float(row["high"]),
                     "low": float(row["low"]),
                     "close": float(row["close"]),
-                    "tick_volume": int(row.get("tick_volume", 0)),
+                    "tick_volume": tv,
                 })
 
             m5_candles = []
