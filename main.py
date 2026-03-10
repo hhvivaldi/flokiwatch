@@ -2396,6 +2396,22 @@ class TradingBot:
             portfolio=portfolio_data,
             regime_context=regime_context,
         )
+
+        try:
+            d1_first = d1_candles[0].get("time") if d1_candles else None
+            d1_last = d1_candles[-1].get("time") if d1_candles else None
+            h4_first = h4_candles[0].get("time") if h4_candles else None
+            h4_last = h4_candles[-1].get("time") if h4_candles else None
+
+            ns = data_package.get("nearest_support")
+            nr = data_package.get("nearest_resistance")
+            log.info(
+                f"   🤖 Agent package: h4_count={len(data_package.get('h4_candles', []))} | "
+                f"nearest_support={ns} | nearest_resistance={nr} | "
+                f"d1_time={d1_first}->{d1_last} | h4_time={h4_first}->{h4_last}"
+            )
+        except Exception as e:
+            log.debug(f"Agent package monitoring log failed (non-blocking): {e}")
         
         # Call Agent (async) - use agent_decide() wrapper for memory injection/saving
         from ai_agent import agent_decide
