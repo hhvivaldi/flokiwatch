@@ -106,6 +106,90 @@ def _compute_fibonacci_from_h1(h1_candles: List[Dict]) -> Optional[Dict[str, Any
     }
 
 
+def _compute_swing_points_h1(h1_candles: List[Dict], n: int = 3, max_points: int = 5) -> Dict[str, Any]:
+    highs: List[Dict[str, Any]] = []
+    lows: List[Dict[str, Any]] = []
+
+    if not h1_candles or len(h1_candles) < (2 * n + 1):
+        return {
+            "swing_highs": [],
+            "swing_lows": [],
+            "structure": "insufficient data for swing analysis",
+        }
+
+    start = n
+    end = len(h1_candles) - n
+    for i in range(start, end):
+        c = h1_candles[i]
+        try:
+            hi = float(c.get("h"))
+            lo = float(c.get("l"))
+        except Exception:
+            continue
+
+        prev = h1_candles[i - n:i]
+        nxt = h1_candles[i + 1:i + 1 + n]
+        try:
+            prev_highs = [float(x.get("h")) for x in prev]
+            next_highs = [float(x.get("h")) for x in nxt]
+            prev_lows = [float(x.get("l")) for x in prev]
+            next_lows = [float(x.get("l")) for x in nxt]
+        except Exception:
+            continue
+
+        if prev_highs and next_highs and hi > max(prev_highs) and hi > max(next_highs):
+            highs.append({"price": _format_price_2dp(hi), "time": c.get("time", "")})
+
+        if prev_lows and next_lows and lo < min(prev_lows) and lo < min(next_lows):
+            lows.append({"price": _format_price_2dp(lo), "time": c.get("time", "")})
+
+    highs_newest = list(reversed(highs))[:max_points]
+    lows_newest = list(reversed(lows))[:max_points]
+
+    structure = "insufficient data for swing analysis"
+    try:
+        has_2h = len(highs_newest) >= 2
+        has_2l = len(lows_newest) >= 2
+
+        if has_2h and has_2l:
+            h0 = float(highs_newest[0]["price"])
+            h1p = float(highs_newest[1]["price"])
+            l0 = float(lows_newest[0]["price"])
+            l1p = float(lows_newest[1]["price"])
+            if h0 > h1p and l0 > l1p:
+                structure = "higher highs and higher lows — uptrend"
+            elif h0 < h1p and l0 < l1p:
+                structure = "lower highs and lower lows — downtrend"
+            else:
+                structure = "mixed — no clear trend"
+        elif has_2h and not has_2l:
+            h0 = float(highs_newest[0]["price"])
+            h1p = float(highs_newest[1]["price"])
+            if h0 > h1p:
+                structure = "higher highs — bullish momentum"
+            elif h0 < h1p:
+                structure = "lower highs — weakening momentum"
+            else:
+                structure = "mixed — no clear trend"
+        elif not has_2h and has_2l:
+            l0 = float(lows_newest[0]["price"])
+            l1p = float(lows_newest[1]["price"])
+            if l0 > l1p:
+                structure = "higher lows — buyers defending"
+            elif l0 < l1p:
+                structure = "lower lows — bearish pressure"
+            else:
+                structure = "mixed — no clear trend"
+    except Exception:
+        structure = "insufficient data for swing analysis"
+
+    return {
+        "swing_highs": highs_newest,
+        "swing_lows": lows_newest,
+        "structure": structure,
+    }
+
+
 def format_proactive_xml(data_package: Dict) -> str:
     """Convert a proactive data package dict into the XML-tagged snapshot format."""
     dp = data_package or {}
@@ -119,6 +203,7 @@ def format_proactive_xml(data_package: Dict) -> str:
     m5 = dp.get("m5_candles", []) or []
 
     fib = _compute_fibonacci_from_h1(h1)
+    swings = _compute_swing_points_h1(h1, n=3, max_points=5)
 
     mtf = dp.get("mtf_trend", {}) or {}
     patterns = dp.get("candlestick_patterns", {}) or {}
@@ -180,7 +265,7 @@ def format_proactive_xml(data_package: Dict) -> str:
     lines.append("--- SECTION 1: PRICE STRUCTURE (Read this FIRST) ---")
     lines.append("")
     lines.append("<price_structure>")
-    lines.append("  <h1_candles count=\"20\" description=\"Last 20 hourly candles, newest last\">")
+    lines.append("  <h1_candles count=\"50\" description=\"Last 50 hourly candles, newest last\">")
     rows = _csv_candle_rows(h1)
     if rows:
         for r in rows.splitlines():
@@ -221,6 +306,20 @@ def format_proactive_xml(data_package: Dict) -> str:
             )
         lines.append("  </fibonacci>")
         lines.append("")
+
+    try:
+        sh = swings.get("swing_highs") or []
+        sl = swings.get("swing_lows") or []
+        sh_text = ", ".join([f"{x.get('price')} ({x.get('time')})" for x in sh if isinstance(x, dict)])
+        sl_text = ", ".join([f"{x.get('price')} ({x.get('time')})" for x in sl if isinstance(x, dict)])
+        lines.append("  <swing_points>")
+        lines.append(f"    <swing_highs>{_xml_escape(sh_text)}</swing_highs>")
+        lines.append(f"    <swing_lows>{_xml_escape(sl_text)}</swing_lows>")
+        lines.append(f"    <structure>{_xml_escape(swings.get('structure'))}</structure>")
+        lines.append("  </swing_points>")
+        lines.append("")
+    except Exception:
+        pass
 
     lines.append(
         f"  <mtf_trend d1=\"{_xml_attr(mtf.get('d1_direction'))}\" h4=\"{_xml_attr(mtf.get('h4_direction'))}\"/>")
@@ -515,7 +614,7 @@ def build_data_package(
         package = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "current_price": _format_current_price(current_price),
-            "h1_candles": _format_candles(h1_candles, limit=20),
+            "h1_candles": _format_candles(h1_candles, limit=50),
             "m5_candles": _format_candles(m5_candles, limit=10),
             "d1_candles": _format_candles(d1_candles or [], limit=10),
             "h4_candles": _format_candles(h4_candles or [], limit=20),
