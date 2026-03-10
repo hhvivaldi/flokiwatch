@@ -13,6 +13,360 @@ from logger import log
 logger = log
 
 
+def _xml_escape(text: Any) -> str:
+    """Escape text content for safe inclusion in XML."""
+    if text is None:
+        return ""
+    s = str(text)
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _xml_attr(value: Any) -> str:
+    """Format an attribute value (escaped) as string."""
+    if value is None:
+        return ""
+    return _xml_escape(value)
+
+
+def _csv_candle_rows(candles: List[Dict]) -> str:
+    """Render candles as compact CSV-style rows: time, o, h, l, c, v."""
+    if not candles:
+        return ""
+    lines: List[str] = []
+    for c in candles:
+        t = c.get("time", "")
+        o = c.get("o", 0)
+        h = c.get("h", 0)
+        l = c.get("l", 0)
+        cl = c.get("c", 0)
+        v = c.get("v", 0)
+        lines.append(f"{t}, {o}, {h}, {l}, {cl}, {v}")
+    return "\n".join(lines)
+
+
+def format_proactive_xml(data_package: Dict) -> str:
+    """Convert a proactive data package dict into the XML-tagged snapshot format."""
+    dp = data_package or {}
+
+    ts = dp.get("timestamp", "")
+    cp = dp.get("current_price", {}) or {}
+
+    h1 = dp.get("h1_candles", []) or []
+    h4 = dp.get("h4_candles", []) or []
+    d1 = dp.get("d1_candles", []) or []
+    m5 = dp.get("m5_candles", []) or []
+
+    mtf = dp.get("mtf_trend", {}) or {}
+    patterns = dp.get("candlestick_patterns", {}) or {}
+    macro = dp.get("macro", {}) or {}
+    indicators = dp.get("indicators", {}) or {}
+    ml = dp.get("ml_predictions", {}) or {}
+
+    sr_zones = dp.get("sr_zones", []) or []
+    nearest_support = dp.get("nearest_support") or {}
+    nearest_resistance = dp.get("nearest_resistance") or {}
+    sr_prox = dp.get("sr_proximity", {}) or {}
+
+    vol = dp.get("volatility", {}) or {}
+    session = dp.get("session", {}) or {}
+    positions = dp.get("positions", []) or []
+    trade_feedback = dp.get("trade_feedback", {}) or {}
+
+    primary = patterns.get("primary_pattern")
+    all_patterns_list = patterns.get("patterns", []) or []
+    all_patterns_str = ", ".join([p.get("name", "") for p in all_patterns_list if isinstance(p, dict) and p.get("name")])
+
+    headlines = macro.get("headlines", []) or []
+
+    rsi = indicators.get("rsi", {}) or {}
+    macd = indicators.get("macd", {}) or {}
+    emas = indicators.get("emas", {}) or {}
+    bb = indicators.get("bollinger", {}) or {}
+    atr = indicators.get("atr", {}) or {}
+    adx = indicators.get("adx", {}) or {}
+    volume = indicators.get("volume", {}) or {}
+
+    dxy = macro.get("dxy", {}) or {}
+    vix = macro.get("vix", {}) or {}
+    yields_10y = macro.get("yields_10y", {}) or {}
+    calendar = macro.get("calendar", {}) or {}
+    sentiment = macro.get("sentiment", {}) or {}
+
+    ml_pred = ml.get("prediction")
+    ml_conf = ml.get("confidence")
+    ml_pattern = ml.get("pattern")
+    ml_h1 = ml.get("h1", {}) or {}
+    ml_h4 = ml.get("h4", {}) or {}
+    ml_agreement = ml.get("ensemble_agreement")
+
+    cooling_until = vol.get("cooling_until")
+    cooling_until_attr = "null" if cooling_until in (None, "", "None") else str(cooling_until)
+
+    lines: List[str] = []
+
+    lines.append("## INDEPENDENT H1 MARKET SNAPSHOT")
+    lines.append("Analyze the raw market data below. Read structure first, then macro, then indicators. What would YOU trade right now?")
+    lines.append("")
+    lines.append(f"<snapshot_time>{_xml_escape(ts)}</snapshot_time>")
+    lines.append("")
+    lines.append(
+        f"<current_price bid=\"{_xml_attr(cp.get('bid'))}\" ask=\"{_xml_attr(cp.get('ask'))}\" spread=\"{_xml_attr(cp.get('spread'))}\"/>")
+    lines.append("")
+
+    lines.append("--- SECTION 1: PRICE STRUCTURE (Read this FIRST) ---")
+    lines.append("")
+    lines.append("<price_structure>")
+    lines.append("  <h1_candles count=\"20\" description=\"Last 20 hourly candles, newest last\">")
+    rows = _csv_candle_rows(h1)
+    if rows:
+        for r in rows.splitlines():
+            lines.append(f"    {r}")
+    lines.append("  </h1_candles>")
+    lines.append("")
+    lines.append("  <h4_candles count=\"20\" description=\"Last 20 four-hour candles, newest last\">")
+    rows = _csv_candle_rows(h4)
+    if rows:
+        for r in rows.splitlines():
+            lines.append(f"    {r}")
+    lines.append("  </h4_candles>")
+    lines.append("")
+    lines.append("  <d1_candles count=\"10\" description=\"Last 10 daily candles, newest last\">")
+    rows = _csv_candle_rows(d1)
+    if rows:
+        for r in rows.splitlines():
+            lines.append(f"    {r}")
+    lines.append("  </d1_candles>")
+    lines.append("")
+    lines.append("  <m5_candles count=\"10\" description=\"Last 10 five-minute candles for micro-structure\">")
+    rows = _csv_candle_rows(m5)
+    if rows:
+        for r in rows.splitlines():
+            lines.append(f"    {r}")
+    lines.append("  </m5_candles>")
+    lines.append("")
+
+    lines.append(
+        f"  <mtf_trend d1=\"{_xml_attr(mtf.get('d1_direction'))}\" h4=\"{_xml_attr(mtf.get('h4_direction'))}\"/>")
+    lines.append("")
+
+    lines.append("  <candlestick_pattern>")
+    if isinstance(primary, dict) and primary:
+        lines.append(
+            "    <primary "
+            f"name=\"{_xml_attr(primary.get('name'))}\" "
+            f"direction=\"{_xml_attr(primary.get('direction'))}\" "
+            f"score=\"{_xml_attr(primary.get('final_score'))}\" "
+            f"sr_multiplier=\"{_xml_attr(primary.get('sr_multiplier'))}\"/>"
+        )
+    else:
+        lines.append("    <primary name=\"\" direction=\"\" score=\"0\" sr_multiplier=\"1.00\"/>")
+    lines.append(f"    <all_patterns>{_xml_escape(all_patterns_str)}</all_patterns>")
+    lines.append(f"    <sr_context>{_xml_escape(patterns.get('sr_context'))}</sr_context>")
+    lines.append("  </candlestick_pattern>")
+    lines.append("")
+
+    lines.append("  <support_resistance>")
+    lines.append(
+        f"    <nearest_support level=\"{_xml_attr(nearest_support.get('level'))}\" distance_pips=\"{_xml_attr(nearest_support.get('distance_pips'))}\"/>"
+    )
+    lines.append(
+        f"    <nearest_resistance level=\"{_xml_attr(nearest_resistance.get('level'))}\" distance_pips=\"{_xml_attr(nearest_resistance.get('distance_pips'))}\"/>"
+    )
+
+    nearest_info = sr_prox.get("nearest_zone_info") or {}
+    nearest_info_str = ""
+    if isinstance(nearest_info, dict) and nearest_info.get("price"):
+        tz = nearest_info.get("timeframe")
+        nearest_info_str = f"{nearest_info.get('zone_type')} at {nearest_info.get('price')}" + (f" ({tz})" if tz else "")
+    elif sr_prox.get("nearest_zone_info"):
+        nearest_info_str = str(sr_prox.get("nearest_zone_info"))
+
+    lines.append(
+        "    <proximity "
+        f"near_strong_zone=\"{_xml_attr(sr_prox.get('near_strong_zone', False)).lower() if isinstance(sr_prox.get('near_strong_zone', False), bool) else _xml_attr(sr_prox.get('near_strong_zone'))}\" "
+        f"nearest_dist_pips=\"{_xml_attr(sr_prox.get('nearest_zone_dist_pips'))}\" "
+        f"nearest_info=\"{_xml_attr(nearest_info_str)}\"/>"
+    )
+
+    lines.append(f"    <zones count=\"{_xml_attr(len(sr_zones))}\">")
+    for z in sr_zones:
+        if not isinstance(z, dict):
+            continue
+        confluence_val = z.get("confluence")
+        confluence_str = "false"
+        if isinstance(confluence_val, list):
+            confluence_str = "true" if len(confluence_val) > 0 else "false"
+        elif isinstance(confluence_val, bool):
+            confluence_str = "true" if confluence_val else "false"
+        lines.append(
+            "      <zone "
+            f"price=\"{_xml_attr(z.get('price'))}\" "
+            f"type=\"{_xml_attr(z.get('zone_type'))}\" "
+            f"touches=\"{_xml_attr(z.get('touches'))}\" "
+            f"timeframe=\"{_xml_attr(z.get('timeframe'))}\" "
+            f"strength=\"{_xml_attr(z.get('strength'))}\" "
+            f"dist_pips=\"{_xml_attr(z.get('dist_pips'))}\" "
+            f"position=\"{_xml_attr(z.get('position'))}\" "
+            f"confluence=\"{_xml_attr(confluence_str)}\"/>"
+        )
+    lines.append("    </zones>")
+    lines.append("  </support_resistance>")
+    lines.append("</price_structure>")
+    lines.append("")
+
+    lines.append("--- SECTION 2: MACRO CONTEXT (Read this SECOND) ---")
+    lines.append("")
+    lines.append("<macro_context>")
+    lines.append(
+        "  <dxy "
+        f"value=\"{_xml_attr(dxy.get('value'))}\" "
+        f"change_pct=\"{_xml_attr(dxy.get('change_24h'))}\" "
+        f"trend=\"{_xml_attr(dxy.get('trend'))}\" "
+        f"impact=\"{_xml_attr('bullish for gold' if str(dxy.get('trend', '')).lower() in ('falling','down') else '')}\"/>"
+    )
+    lines.append(
+        f"  <vix value=\"{_xml_attr(vix.get('value'))}\" change_pct=\"{_xml_attr(vix.get('change_pct'))}\"/>"
+    )
+    lines.append(
+        f"  <yields_10y value=\"{_xml_attr(yields_10y.get('value'))}\" change_pct=\"{_xml_attr(yields_10y.get('change_pct'))}\"/>"
+    )
+
+    lines.append(
+        "  <calendar "
+        f"phase=\"{_xml_attr(calendar.get('phase'))}\" "
+        f"bias=\"{_xml_attr(calendar.get('bias'))}\" "
+        f"source=\"{_xml_attr(calendar.get('source', 'mt5_bridge'))}\"/>"
+    )
+    lines.append(f"  <sentiment overall=\"{_xml_attr(sentiment.get('overall', sentiment.get('label')))}\"/>")
+
+    lines.append(f"  <headlines count=\"{_xml_attr(min(len(headlines), 20))}\">")
+    for h in headlines[:20]:
+        if isinstance(h, dict):
+            h_time = h.get("time") or h.get("timestamp") or ""
+            h_text = h.get("text") or h.get("headline") or ""
+            h_score = h.get("score")
+        else:
+            h_time = ""
+            h_text = str(h)
+            h_score = ""
+        lines.append(
+            f"    <headline time=\"{_xml_attr(h_time)}\" text=\"{_xml_attr(h_text)}\" score=\"{_xml_attr(h_score)}\"/>"
+        )
+    lines.append("  </headlines>")
+    lines.append("</macro_context>")
+    lines.append("")
+
+    lines.append("--- SECTION 3: TECHNICAL INDICATORS (Read this THIRD — adjust confidence, don't decide direction) ---")
+    lines.append("")
+
+    lines.append("<indicators>")
+    lines.append(
+        f"  <rsi value=\"{_xml_attr(rsi.get('value'))}\" condition=\"{_xml_attr(rsi.get('level', rsi.get('condition')))}\"/>"
+    )
+    lines.append(
+        "  <macd "
+        f"value=\"{_xml_attr(macd.get('value'))}\" "
+        f"signal=\"{_xml_attr(macd.get('signal'))}\" "
+        f"histogram=\"{_xml_attr(macd.get('histogram'))}\" "
+        f"trend=\"{_xml_attr(macd.get('trend'))}\"/>"
+    )
+    lines.append(
+        "  <emas "
+        f"ema9=\"{_xml_attr(emas.get('ema9'))}\" "
+        f"ema21=\"{_xml_attr(emas.get('ema21'))}\" "
+        f"ema50=\"{_xml_attr(emas.get('ema50'))}\" "
+        f"price_vs_ema50_pct=\"{_xml_attr(emas.get('price_vs_ema50_pct'))}\"/>"
+    )
+    lines.append(
+        "  <bollinger "
+        f"upper=\"{_xml_attr(bb.get('upper'))}\" "
+        f"middle=\"{_xml_attr(bb.get('middle'))}\" "
+        f"lower=\"{_xml_attr(bb.get('lower'))}\" "
+        f"position=\"{_xml_attr(bb.get('position'))}\"/>"
+    )
+    lines.append(
+        f"  <atr value=\"{_xml_attr(atr.get('value'))}\" description=\"Average True Range H1\"/>"
+    )
+    lines.append(
+        "  <adx "
+        f"value=\"{_xml_attr(adx.get('value'))}\" "
+        f"plus_di=\"{_xml_attr(adx.get('plus_di'))}\" "
+        f"minus_di=\"{_xml_attr(adx.get('minus_di'))}\" "
+        f"trend_strength=\"{_xml_attr(adx.get('trend_strength', adx.get('classification')))}\"/>"
+    )
+    lines.append(
+        "  <volume "
+        f"ratio=\"{_xml_attr(volume.get('ratio', volume.get('tick_volume_ratio')))}\" "
+        f"classification=\"{_xml_attr(volume.get('classification'))}\"/>"
+    )
+    lines.append("</indicators>")
+    lines.append("")
+
+    lines.append("<ml_predictions>")
+    lines.append(
+        f"  <prediction direction=\"{_xml_attr(ml_pred)}\" confidence=\"{_xml_attr(str(ml_conf) + '%' if isinstance(ml_conf, (int, float)) else ml_conf)}\"/>"
+    )
+    lines.append(f"  <h1_probability>{_xml_escape(ml_h1.get('bullish_prob'))}</h1_probability>")
+    lines.append(f"  <h4_probability>{_xml_escape(ml_h4.get('bullish_prob'))}</h4_probability>")
+    lines.append(f"  <ensemble_agreement>{_xml_escape(ml_agreement)}</ensemble_agreement>")
+    lines.append(f"  <pattern>{_xml_escape(ml_pattern)}</pattern>")
+    lines.append("</ml_predictions>")
+    lines.append("")
+
+    lines.append("--- SECTION 4: TRADING CONTEXT ---")
+    lines.append("")
+
+    lines.append(
+        "<volatility "
+        f"status=\"{_xml_attr(vol.get('status'))}\" "
+        f"m5_move_pct=\"{_xml_attr(vol.get('m5_move_pct'))}\" "
+        f"cooling_until=\"{_xml_attr(cooling_until_attr)}\"/>"
+    )
+    lines.append("")
+
+    lines.append(f"<session name=\"{_xml_attr(session.get('name'))}\" hour_utc=\"{_xml_attr(session.get('hour_utc'))}\">")
+    lines.append(
+        "  <today "
+        f"trades=\"{_xml_attr(session.get('today_trades'))}\" "
+        f"wins=\"{_xml_attr(session.get('today_wins'))}\" "
+        f"losses=\"{_xml_attr(session.get('today_losses'))}\" "
+        f"pnl=\"{_xml_attr(session.get('today_pnl'))}\"/>"
+    )
+    lines.append(f"  <last_5_results>{_xml_escape(', '.join([str(x) for x in (session.get('last_5_results') or [])]))}</last_5_results>")
+    lines.append(f"  <consecutive_losses>{_xml_escape(session.get('consecutive_losses'))}</consecutive_losses>")
+    lines.append("</session>")
+    lines.append("")
+
+    lines.append(f"<open_positions count=\"{_xml_attr(len(positions))}\"/>")
+    lines.append("")
+
+    lines.append("<trade_feedback>")
+    lines.append("  <last_trades>")
+    for t in (trade_feedback.get("last_trades") or [])[:5]:
+        lines.append(f"    <trade>{_xml_escape(t)}</trade>")
+    lines.append("  </last_trades>")
+    lines.append("  <agent_accuracy>")
+    acc = trade_feedback.get("agent_accuracy") or {}
+    if isinstance(acc, dict):
+        for k, v in acc.items():
+            lines.append(f"    <{_xml_escape(k)}>{_xml_escape(v)}</{_xml_escape(k)}>")
+    lines.append("  </agent_accuracy>")
+    lines.append("</trade_feedback>")
+    lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("Based on this data: What does the price structure tell you? What is your decision? Respond with valid JSON (OPEN_BUY, OPEN_SELL, or WAIT only).")
+
+    return "\n".join(lines)
+
+
 def _safe_round(value, decimals: int = 2):
     """Safely round a value, handling strings and None."""
     if value is None:

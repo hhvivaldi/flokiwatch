@@ -243,7 +243,15 @@ class AIAgent:
         Returns:
             Formatted user message string
         """
-        # Format the data package as readable JSON
+        proactive_xml = None
+        if trigger_type == "PROACTIVE_H1":
+            try:
+                from agent_data_builder import format_proactive_xml
+                proactive_xml = format_proactive_xml(data_package)
+            except Exception as e:
+                logger.warning(f"Failed to format proactive XML, falling back to JSON: {e}")
+
+        # Format the data package as readable JSON (default / fallback)
         formatted_data = json.dumps(data_package, indent=2, default=str)
         
         # Get Brain's signal for context
@@ -305,7 +313,10 @@ Maintain consistency with your previous analysis unless market conditions have m
         else:
             header_line = f"The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)"
 
-        message = f"""## CURRENT MARKET DATA
+        if trigger_type == "PROACTIVE_H1" and proactive_xml:
+            message = proactive_xml
+        else:
+            message = f"""## CURRENT MARKET DATA
 
 {header_line}
 {memory_section}
