@@ -190,6 +190,88 @@ def _compute_swing_points_h1(h1_candles: List[Dict], n: int = 3, max_points: int
     }
 
 
+def _format_pct_signed(value: float) -> str:
+    try:
+        v = float(value)
+    except Exception:
+        return ""
+    sign = "+" if v >= 0 else ""
+    return f"{sign}{v:.2f}"
+
+
+def _pct_change(current_price: float, reference_price: float) -> Optional[float]:
+    try:
+        cp = float(current_price)
+        rp = float(reference_price)
+        if rp == 0:
+            return None
+        return (cp - rp) / rp * 100.0
+    except Exception:
+        return None
+
+
+def _parse_candle_dt(value: Any):
+    try:
+        if value is None:
+            return None
+        s = str(value)
+        if not s:
+            return None
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _find_day_open_price(h1_candles: List[Dict], current_dt: datetime) -> Optional[float]:
+    if not h1_candles or not current_dt:
+        return None
+
+    day = current_dt.date()
+    for c in h1_candles:
+        dt = _parse_candle_dt(c.get("time"))
+        if not dt:
+            continue
+        if dt.date() == day and dt.hour == 0:
+            try:
+                return float(c.get("o"))
+            except Exception:
+                return None
+    return None
+
+
+def _session_start_hour(session_name: str) -> Optional[int]:
+    if not session_name:
+        return None
+    name = str(session_name).lower()
+    if name == "asian":
+        return 0
+    if name == "london":
+        return 8
+    if name == "ny":
+        return 13
+    return None
+
+
+def _find_session_open_price(h1_candles: List[Dict], current_dt: datetime, session_name: str) -> Optional[float]:
+    if not h1_candles or not current_dt:
+        return None
+    start_hour = _session_start_hour(session_name)
+    if start_hour is None:
+        return None
+
+    day = current_dt.date()
+    for c in h1_candles:
+        dt = _parse_candle_dt(c.get("time"))
+        if not dt:
+            continue
+        if dt.date() == day and dt.hour == start_hour:
+            try:
+                return float(c.get("o"))
+            except Exception:
+                return None
+    return None
+
+
 def format_proactive_xml(data_package: Dict) -> str:
     """Convert a proactive data package dict into the XML-tagged snapshot format."""
     dp = data_package or {}
@@ -204,6 +286,50 @@ def format_proactive_xml(data_package: Dict) -> str:
 
     fib = _compute_fibonacci_from_h1(h1)
     swings = _compute_swing_points_h1(h1, n=3, max_points=5)
+
+    current_bid = None
+    try:
+        current_bid = float(cp.get("bid"))
+    except Exception:
+        current_bid = None
+
+    current_dt = _parse_candle_dt(ts)
+    if current_dt and current_dt.tzinfo is None:
+        try:
+            current_dt = current_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
+
+    price_changes: List[Dict[str, Any]] = []
+    if current_bid is not None:
+        if len(h1) >= 2:
+            ref_1h = h1[-2].get("c")
+            pct = _pct_change(current_bid, ref_1h)
+            if pct is not None:
+                price_changes.append({"period": "1h", "pct": _format_pct_signed(pct)})
+        if len(h1) >= 5:
+            ref_4h = h1[-5].get("c")
+            pct = _pct_change(current_bid, ref_4h)
+            if pct is not None:
+                price_changes.append({"period": "4h", "pct": _format_pct_signed(pct)})
+        if len(h1) >= 9:
+            ref_8h = h1[-9].get("c")
+            pct = _pct_change(current_bid, ref_8h)
+            if pct is not None:
+                price_changes.append({"period": "8h", "pct": _format_pct_signed(pct)})
+
+        day_open = _find_day_open_price(h1, current_dt) if current_dt else None
+        if day_open is not None:
+            pct = _pct_change(current_bid, day_open)
+            if pct is not None:
+                price_changes.append({"period": "day", "pct": _format_pct_signed(pct)})
+
+        sess_name = (dp.get("session") or {}).get("name")
+        sess_open = _find_session_open_price(h1, current_dt, sess_name) if current_dt else None
+        if sess_open is not None:
+            pct = _pct_change(current_bid, sess_open)
+            if pct is not None:
+                price_changes.append({"period": "session", "pct": _format_pct_signed(pct), "session": sess_name})
 
     mtf = dp.get("mtf_trend", {}) or {}
     patterns = dp.get("candlestick_patterns", {}) or {}
@@ -320,6 +446,26 @@ def format_proactive_xml(data_package: Dict) -> str:
         lines.append("")
     except Exception:
         pass
+
+    if price_changes:
+        lines.append("  <price_changes>")
+        for ch in price_changes:
+            if not isinstance(ch, dict):
+                continue
+            period = ch.get("period")
+            pct = ch.get("pct")
+            if not period or pct is None:
+                continue
+            if period == "session":
+                lines.append(
+                    f"    <change period=\"session\" pct=\"{_xml_attr(pct)}\" session=\"{_xml_attr(ch.get('session'))}\"/>"
+                )
+            else:
+                lines.append(
+                    f"    <change period=\"{_xml_attr(period)}\" pct=\"{_xml_attr(pct)}\"/>"
+                )
+        lines.append("  </price_changes>")
+        lines.append("")
 
     lines.append(
         f"  <mtf_trend d1=\"{_xml_attr(mtf.get('d1_direction'))}\" h4=\"{_xml_attr(mtf.get('h4_direction'))}\"/>")
