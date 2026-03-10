@@ -120,6 +120,82 @@ def build_data_package(
         return _minimal_package(brain_result, current_price)
 
 
+def build_proactive_data_package(
+    brain_result: Any,
+    tech_data: Dict,
+    ml_data: Dict,
+    momentum_data: Dict,
+    news_data: Dict,
+    calendar_data: Dict,
+    h1_candles: List[Dict],
+    m5_candles: List[Dict],
+    current_price: Dict,
+    positions: List[Dict],
+    session_context: Dict,
+    volatility_status: Dict,
+    sr_zones: Optional[List] = None,
+    candlestick_patterns: Optional[Dict] = None,
+    sr_proximity: Optional[Dict] = None,
+    d1_candles: Optional[List[Dict]] = None,
+    h4_candles: Optional[List[Dict]] = None,
+    trade_feedback: Optional[Dict] = None,
+) -> Dict:
+    """Build an independent data package for proactive Agent snapshots.
+
+    Excludes Brain opinion/scoring and agent_memory_context; includes only raw market context.
+    """
+    try:
+        price_val = 0
+        if current_price:
+            price_val = current_price.get("bid", current_price.get("ask", 0))
+
+        formatted_sr_zones = _format_sr_zones(sr_zones or [], price_val)
+        nearest_support = _compute_nearest_sr(formatted_sr_zones, side="below")
+        nearest_resistance = _compute_nearest_sr(formatted_sr_zones, side="above")
+
+        mtf_trend = None
+        try:
+            if brain_result is not None and hasattr(brain_result, "mtf_trend"):
+                mtf = getattr(brain_result, "mtf_trend", None) or {}
+                mtf_trend = {
+                    "d1_direction": mtf.get("d1_direction"),
+                    "h4_direction": mtf.get("h4_direction"),
+                }
+        except Exception:
+            mtf_trend = None
+
+        package = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "current_price": _format_current_price(current_price),
+            "h1_candles": _format_candles(h1_candles, limit=20),
+            "m5_candles": _format_candles(m5_candles, limit=10),
+            "d1_candles": _format_candles(d1_candles or [], limit=10),
+            "h4_candles": _format_candles(h4_candles or [], limit=20),
+            "indicators": _format_indicators(tech_data, momentum_data),
+            "ml_predictions": _format_ml_data(ml_data),
+            "macro": _format_macro_data(news_data, calendar_data),
+            "positions": _format_positions(positions),
+            "session": _format_session_context(session_context),
+            "volatility": _format_volatility(volatility_status),
+            "sr_zones": formatted_sr_zones,
+            "nearest_support": nearest_support,
+            "nearest_resistance": nearest_resistance,
+            "candlestick_patterns": _format_candlestick_patterns(candlestick_patterns),
+            "sr_proximity": _format_sr_proximity(sr_proximity),
+            "trade_feedback": _format_trade_feedback(trade_feedback),
+            "mtf_trend": mtf_trend,
+        }
+
+        return package
+    except Exception as e:
+        logger.error(f"Error building proactive data package: {e}")
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "current_price": _format_current_price(current_price),
+            "error": "Partial proactive package - some components failed to load",
+        }
+
+
 def _format_current_price(price_data: Dict) -> Dict:
     """Format current price data"""
     if not price_data:

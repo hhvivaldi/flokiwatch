@@ -1235,7 +1235,7 @@ class TradingBot:
         from agent_data_builder import get_session_name
         from db_writer import record_agent_proactive_analysis
         from ai_agent import agent_decide
-        from agent_data_builder import build_data_package
+        from agent_data_builder import build_proactive_data_package
 
         agent = get_agent()
         if not agent.is_enabled():
@@ -1244,7 +1244,7 @@ class TradingBot:
         if not agent_data or not isinstance(agent_data, dict):
             return
 
-        log.info(f"PROACTIVE_H1 | Calling AI Agent (shadow snapshot) | H1 close: {h1_close_time_iso}")
+        log.info(f"PROACTIVE_H1 | Calling AI Agent (independent snapshot) | H1 close: {h1_close_time_iso}")
 
         try:
             # Reuse the same full payload used by reactive calls
@@ -1375,7 +1375,7 @@ class TradingBot:
             portfolio_data = None
             regime_context = None
 
-            data_package = build_data_package(
+            data_package = build_proactive_data_package(
                 brain_result=brain_result,
                 tech_data=tech_data,
                 ml_data=ml_data,
@@ -1393,11 +1393,7 @@ class TradingBot:
                 sr_proximity=sr_proximity_data,
                 d1_candles=d1_candles,
                 h4_candles=h4_candles,
-                agent_memory=agent_memory,
                 trade_feedback=trade_feedback,
-                delta_context=delta_context,
-                portfolio=portfolio_data,
-                regime_context=regime_context,
             )
 
             loop = asyncio.new_event_loop()
@@ -1410,6 +1406,10 @@ class TradingBot:
                 )
             )
             loop.close()
+
+            if agent_result.decision in ("REJECT", "DEFER_TO_BRAIN"):
+                log.info(f"PROACTIVE_H1 | Coerced invalid decision '{agent_result.decision}' -> WAIT")
+                agent_result.decision = "WAIT"
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent call failed (non-blocking): {e}")
             return

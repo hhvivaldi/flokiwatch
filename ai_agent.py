@@ -301,7 +301,7 @@ Maintain consistency with your previous analysis unless market conditions have m
         
         header_line = ""
         if trigger_type == "PROACTIVE_H1":
-            header_line = "This is a proactive hourly market snapshot. No Brain signal triggered this analysis."
+            header_line = "This is your independent H1 market snapshot. Analyze the raw market data below and provide YOUR trading view. What does the price structure tell you? What would YOU trade right now? Respond with OPEN_BUY, OPEN_SELL, or WAIT only."
         else:
             header_line = f"The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)"
 
