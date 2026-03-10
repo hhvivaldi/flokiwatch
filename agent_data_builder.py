@@ -82,6 +82,10 @@ def build_data_package(
         price_val = 0
         if current_price:
             price_val = current_price.get("bid", current_price.get("ask", 0))
+
+        formatted_sr_zones = _format_sr_zones(sr_zones or [], price_val)
+        nearest_support = _compute_nearest_sr(formatted_sr_zones, side="below")
+        nearest_resistance = _compute_nearest_sr(formatted_sr_zones, side="above")
         
         package = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -97,7 +101,9 @@ def build_data_package(
             "positions": _format_positions(positions),
             "session": _format_session_context(session_context),
             "volatility": _format_volatility(volatility_status),
-            "sr_zones": _format_sr_zones(sr_zones or [], price_val),
+            "sr_zones": formatted_sr_zones,
+            "nearest_support": nearest_support,
+            "nearest_resistance": nearest_resistance,
             "candlestick_patterns": _format_candlestick_patterns(candlestick_patterns),
             "sr_proximity": _format_sr_proximity(sr_proximity),
             "agent_memory": _format_agent_memory(agent_memory or []),
@@ -448,7 +454,7 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
     if not sr_zones or not current_price:
         return []
     
-    PIP_SIZE = 0.1
+    PIP_SIZE = 0.01
     
     # Split into above and below current price
     above = []
@@ -498,6 +504,26 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
     result = above[:half] + below[:half]
     
     return result
+
+
+def _compute_nearest_sr(formatted_sr_zones: List[Dict], side: str) -> Optional[Dict]:
+    """Compute nearest support/resistance from formatted zones."""
+    if not formatted_sr_zones:
+        return None
+
+    nearest = None
+    for z in formatted_sr_zones:
+        if z.get("position") != side:
+            continue
+        if z.get("price") is None or z.get("dist_pips") is None:
+            continue
+        if nearest is None or float(z.get("dist_pips", 1e9)) < float(nearest.get("distance_pips", 1e9)):
+            nearest = {
+                "level": z.get("price"),
+                "distance_pips": z.get("dist_pips"),
+            }
+
+    return nearest
 
 
 def _format_candlestick_patterns(patterns_data: Dict) -> Dict:
