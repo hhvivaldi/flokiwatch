@@ -33,15 +33,6 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
     os.replace(tmp_path, path)
 
 
-def _get_agent_memory() -> Optional[Dict[str, Any]]:
-    """Get Agent memory for dashboard display."""
-    try:
-        from agent_memory import get_memory_for_dashboard
-        return get_memory_for_dashboard()
-    except Exception:
-        return None
-
-
 def _get_ea_bridge_status() -> Dict[str, Any]:
     """Get EA Bridge status for dashboard display."""
     try:
@@ -105,6 +96,10 @@ def write_state(bot_instance: Any) -> None:
         pnl_percent = (pnl / balance_for_pct * 100) if balance_for_pct else 0.0
 
         last_analysis = getattr(bot_instance, "last_analysis", None) or {}
+        if isinstance(last_analysis, dict):
+            # Ensure dashboard never shows stale reactive Agent output
+            last_analysis = dict(last_analysis)
+            last_analysis.pop("agent_decision", None)
 
         # last_known_price: persistent in bot_instance, never cleared.
         last_known_price = getattr(bot_instance, "last_known_price", None)
@@ -197,8 +192,11 @@ def write_state(bot_instance: Any) -> None:
             "positions": positions,
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
             "ea_bridge": _get_ea_bridge_status(),
-            "agent_memory": _get_agent_memory(),
+            "agent_memory": None,
         }
+
+        # Force null even if older state formats injected data elsewhere
+        state["agent_memory"] = None
 
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 

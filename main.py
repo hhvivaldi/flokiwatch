@@ -937,25 +937,6 @@ class TradingBot:
                         original_decision=original_decision,
                         hold_reason=hold_reason,
                     )
-                    # AI Agent for HOLD_FORCED: Agent can evaluate if Brain was right to block
-                    if getattr(config, 'USE_AI_AGENT', False) and agent_data is not None:
-                        try:
-                            self._call_agent_shadow_mode(
-                                brain_result=agent_data["brain_result"],
-                                tech_data=agent_data["tech_data"],
-                                ml_data=agent_data["ml_data"],
-                                momentum_data=agent_data["momentum_data"],
-                                news_data=agent_data["news_data"],
-                                calendar_data=agent_data["calendar_data"],
-                                current_price=agent_data["current_price"],
-                                vol_status=agent_data["vol_status"],
-                                df=agent_data["df"],
-                                hold_forced=agent_data["hold_forced"],
-                                original_decision=agent_data["original_decision"],
-                                hold_reason=agent_data["hold_reason"],
-                            )
-                        except Exception as e:
-                            log.warning(f"AI Agent error (non-blocking): {e}")
                 return
             
             # Signal detected!
@@ -1046,24 +1027,7 @@ class TradingBot:
             
             # AI Agent Shadow Mode: Call Agent AFTER safety checks pass
             # This ensures Agent is not called when safety blocks the trade
-            if getattr(config, 'USE_AI_AGENT', False) and agent_data is not None:
-                try:
-                    self._call_agent_shadow_mode(
-                        brain_result=agent_data["brain_result"],
-                        tech_data=agent_data["tech_data"],
-                        ml_data=agent_data["ml_data"],
-                        momentum_data=agent_data["momentum_data"],
-                        news_data=agent_data["news_data"],
-                        calendar_data=agent_data["calendar_data"],
-                        current_price=agent_data["current_price"],
-                        vol_status=agent_data["vol_status"],
-                        df=agent_data["df"],
-                        hold_forced=agent_data["hold_forced"],
-                        original_decision=agent_data["original_decision"],
-                        hold_reason=agent_data["hold_reason"],
-                    )
-                except Exception as e:
-                    log.warning(f"AI Agent error (non-blocking): {e}")
+            pass
             
             # Spread Check with Retry Loop
             spread = executor.get_spread()
@@ -1919,7 +1883,6 @@ class TradingBot:
 
             prev_last_analysis = self.last_analysis if isinstance(self.last_analysis, dict) else {}
             preserved_proactive = prev_last_analysis.get("proactive_analysis")
-            preserved_agent = prev_last_analysis.get("agent_decision")
 
             self.last_analysis = {
                 "timestamp": datetime.now().isoformat(),
@@ -1953,8 +1916,6 @@ class TradingBot:
             # Preserve nested fields that are not recalculated every analysis cycle
             if preserved_proactive and "proactive_analysis" not in self.last_analysis:
                 self.last_analysis["proactive_analysis"] = preserved_proactive
-            if preserved_agent and "agent_decision" not in self.last_analysis:
-                self.last_analysis["agent_decision"] = preserved_agent
         except Exception as e:
             log.warning(f"Rich data enrichment failed: {e}")
 
@@ -2063,8 +2024,6 @@ class TradingBot:
             # Preserve nested fields that are not recalculated every analysis cycle
             if preserved_proactive and "proactive_analysis" not in self.last_analysis:
                 self.last_analysis["proactive_analysis"] = preserved_proactive
-            if preserved_agent and "agent_decision" not in self.last_analysis:
-                self.last_analysis["agent_decision"] = preserved_agent
         except Exception:
             pass
         
