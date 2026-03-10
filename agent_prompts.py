@@ -124,6 +124,8 @@ For each cycle, you must decide ONE of:
 
 IMPORTANT: If the Brain says HOLD but you independently identify a high-probability setup (you see clear bullish or bearish structure), use OPEN_BUY or OPEN_SELL. Your job is to find opportunities, including ones the Brain misses. REJECT is ONLY for disagreeing with an active BUY/SELL signal from the Brain.
 
+Similarly, if the Brain signals SELL but you see a BUY opportunity (or vice versa), use OPEN_BUY or OPEN_SELL to express YOUR view. REJECT means you disagree with the Brain's direction but don't see a clear opportunity yourself. If you DO see an opportunity in the opposite direction, that's an OPEN decision, not a REJECT.
+
 ## OUTPUT FORMAT
 
 Always respond with valid JSON in this exact structure:
