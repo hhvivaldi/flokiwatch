@@ -651,6 +651,20 @@ def format_proactive_xml(data_package: Dict) -> str:
         f"ema50=\"{_xml_attr(emas.get('ema50'))}\" "
         f"price_vs_ema50_pct=\"{_xml_attr(emas.get('price_vs_ema50_pct'))}\"/>"
     )
+    try:
+        ema200_val = emas.get("ema200")
+        cp_bid = cp.get("bid")
+        pct_vs = ""
+        if ema200_val not in (None, "") and cp_bid not in (None, ""):
+            pct = _pct_change(float(cp_bid), float(ema200_val))
+            if pct is not None:
+                pct_vs = _format_pct_signed(pct) + "%"
+        if ema200_val not in (None, ""):
+            lines.append(
+                f"  <ema200 value=\"{_xml_attr(_format_price_2dp(ema200_val))}\" price_vs_ema200_pct=\"{_xml_attr(pct_vs)}\"/>"
+            )
+    except Exception:
+        pass
     lines.append(
         "  <bollinger "
         f"upper=\"{_xml_attr(bb.get('upper'))}\" "
@@ -861,6 +875,7 @@ def build_proactive_data_package(
     d1_candles: Optional[List[Dict]] = None,
     h4_candles: Optional[List[Dict]] = None,
     trade_feedback: Optional[Dict] = None,
+    ema200: Optional[float] = None,
 ) -> Dict:
     """Build an independent data package for proactive Agent snapshots.
 
@@ -889,7 +904,7 @@ def build_proactive_data_package(
         package = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "current_price": _format_current_price(current_price),
-            "h1_candles": _format_candles(h1_candles, limit=20),
+            "h1_candles": _format_candles(h1_candles, limit=50),
             "m5_candles": _format_candles(m5_candles, limit=10),
             "d1_candles": _format_candles(d1_candles or [], limit=10),
             "h4_candles": _format_candles(h4_candles or [], limit=20),
@@ -907,6 +922,13 @@ def build_proactive_data_package(
             "trade_feedback": _format_trade_feedback(trade_feedback),
             "mtf_trend": mtf_trend,
         }
+
+        if ema200 is not None:
+            try:
+                package["indicators"].setdefault("emas", {})
+                package["indicators"]["emas"]["ema200"] = _safe_round(ema200, 2)
+            except Exception:
+                pass
 
         return package
     except Exception as e:

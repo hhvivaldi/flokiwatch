@@ -1289,8 +1289,18 @@ class TradingBot:
             m5_candles = []
             d1_candles = []
             h4_candles = []
+            ema200 = None
             try:
                 import MetaTrader5 as mt5
+                try:
+                    import pandas as pd
+                    h1_rates_ema = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, 1000)
+                    if h1_rates_ema is not None and len(h1_rates_ema) >= 200:
+                        df_ema = pd.DataFrame(h1_rates_ema)
+                        ema_series = df_ema["close"].ewm(span=200, adjust=False).mean()
+                        ema200 = float(ema_series.iloc[-1])
+                except Exception:
+                    ema200 = None
                 m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
                 if m5_rates is not None:
                     for r in m5_rates:
@@ -1392,6 +1402,7 @@ class TradingBot:
                 d1_candles=d1_candles,
                 h4_candles=h4_candles,
                 trade_feedback=trade_feedback,
+                ema200=ema200,
             )
 
             loop = asyncio.new_event_loop()
