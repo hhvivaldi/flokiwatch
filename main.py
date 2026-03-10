@@ -1257,13 +1257,6 @@ class TradingBot:
             current_price = agent_data.get("current_price")
             vol_status = agent_data.get("vol_status")
 
-            try:
-                brain_decision = getattr(brain_result, "decision", None) if brain_result is not None else None
-                brain_score = getattr(brain_result, "final_score", None) if brain_result is not None else None
-                log.info(f"PROACTIVE_H1 | Brain decision: {brain_decision} | score={brain_score}")
-            except Exception:
-                pass
-
             session_context = {
                 "session_name": get_session_name(datetime.utcnow().hour),
                 "hour_utc": datetime.utcnow().hour,
@@ -1315,7 +1308,7 @@ class TradingBot:
                             "close": float(r["close"]),
                             "tick_volume": int(r["tick_volume"]),
                         })
-                h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 15)
+                h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
                 if h4_rates is not None:
                     for r in h4_rates:
                         h4_candles.append({
@@ -1447,15 +1440,6 @@ class TradingBot:
             log.info(
                 f"PROACTIVE_H1 | Agent decision: {agent_result.decision} | "
                 f"conf={agent_result.confidence} | H1 close: {h1_close_time_iso}"
-            )
-        except Exception:
-            pass
-
-        try:
-            brain_decision = getattr(brain_result, "decision", None) if brain_result is not None else None
-            brain_score = getattr(brain_result, "final_score", None) if brain_result is not None else None
-            log.info(
-                f"PROACTIVE_H1 | Context: brain_decision={brain_decision} | brain_score={brain_score} | agent_decision={agent_result.decision}"
             )
         except Exception:
             pass
