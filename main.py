@@ -1411,7 +1411,7 @@ class TradingBot:
             # Persist to SQLite
             record_agent_proactive_analysis(h1_close_time_iso, agent_result.to_dict())
         except Exception as e:
-            log.debug(f"PROACTIVE_H1 | DB write error (ignored): {e}")
+            log.warning(f"PROACTIVE_H1 | DB write error (ignored): {e}")
 
         try:
             # Store for dashboard

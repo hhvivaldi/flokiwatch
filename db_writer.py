@@ -282,7 +282,8 @@ def init_db() -> None:
 
         conn.commit()
         conn.close()
-        log.info("SQLite history DB initialized: " + os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db")))
+        db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        log.warning("SQLite history DB initialized: " + db_abs_path)
     except Exception as e:
         log.debug(f"db_writer: failed to initialize DB: {e}")
 
@@ -608,7 +609,7 @@ def record_agent_proactive_analysis(
                        ?, ?,
                        ?, ?,
                        ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?)""",
+                       ?, ?, ?, ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
                 h1_close_time,
@@ -638,7 +639,7 @@ def record_agent_proactive_analysis(
         conn.commit()
         conn.close()
     except Exception as e:
-        log.debug(f"db_writer: failed to record proactive analysis: {e}")
+        log.warning(f"db_writer: failed to record proactive analysis: {e}")
 
 
 def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
