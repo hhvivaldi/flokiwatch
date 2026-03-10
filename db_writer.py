@@ -240,6 +240,16 @@ def init_db() -> None:
                 agent_reasoning TEXT,
                 agent_key_factors TEXT,
                 agent_concerns TEXT,
+                tp_entry_strategy TEXT,
+                tp_entry_price REAL,
+                tp_entry_rationale TEXT,
+                tp_stop_loss REAL,
+                tp_stop_loss_rationale TEXT,
+                tp_take_profit REAL,
+                tp_take_profit_rationale TEXT,
+                tp_risk_reward_ratio REAL,
+                tp_timing TEXT,
+                tp_moment_assessment TEXT,
                 prompt_version TEXT,
                 prompt_hash TEXT,
                 model TEXT,
@@ -248,6 +258,27 @@ def init_db() -> None:
                 latency_ms INTEGER
             )
         """)
+
+        # Migration: add agent_proactive_analyses columns if missing (safe no-op if they already exist)
+        agent_proactive_columns_to_add = [
+            ("tp_entry_strategy", "TEXT"),
+            ("tp_entry_price", "REAL"),
+            ("tp_entry_rationale", "TEXT"),
+            ("tp_stop_loss", "REAL"),
+            ("tp_stop_loss_rationale", "TEXT"),
+            ("tp_take_profit", "REAL"),
+            ("tp_take_profit_rationale", "TEXT"),
+            ("tp_risk_reward_ratio", "REAL"),
+            ("tp_timing", "TEXT"),
+            ("tp_moment_assessment", "TEXT"),
+        ]
+
+        for col_name, col_type in agent_proactive_columns_to_add:
+            try:
+                cursor.execute(f"ALTER TABLE agent_proactive_analyses ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
         conn.commit()
         conn.close()
@@ -559,14 +590,25 @@ def record_agent_proactive_analysis(
     try:
         import json
 
+        tp = agent_result.get("trade_plan") or {}
+
         conn = _get_connection()
         conn.execute(
             """INSERT INTO agent_proactive_analyses
                (timestamp, h1_close_time,
                 agent_decision, agent_confidence, agent_reasoning,
                 agent_key_factors, agent_concerns,
+                tp_entry_strategy, tp_entry_price, tp_entry_rationale,
+                tp_stop_loss, tp_stop_loss_rationale,
+                tp_take_profit, tp_take_profit_rationale,
+                tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?,
+                       ?, ?,
+                       ?, ?,
+                       ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
                 h1_close_time,
@@ -575,6 +617,16 @@ def record_agent_proactive_analysis(
                 agent_result.get("reasoning", ""),
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
+                tp.get("entry_strategy"),
+                tp.get("entry_price"),
+                tp.get("entry_rationale"),
+                tp.get("stop_loss"),
+                tp.get("stop_loss_rationale"),
+                tp.get("take_profit"),
+                tp.get("take_profit_rationale"),
+                tp.get("risk_reward_ratio"),
+                tp.get("timing"),
+                tp.get("moment_assessment"),
                 agent_result.get("prompt_version", ""),
                 agent_result.get("prompt_hash", ""),
                 agent_result.get("model", ""),
