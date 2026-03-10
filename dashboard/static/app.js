@@ -474,52 +474,10 @@ function ensureProactiveCountdownRunning() {
   }, 1000);
 }
 
-function _getOrCreateProactiveCountdownSpan(h1CloseEl) {
-  if (!h1CloseEl) return null;
-  let span = h1CloseEl.querySelector("span[data-proactive-countdown='1']");
-  if (span) return span;
-
-  span = document.createElement("span");
-  span.setAttribute("data-proactive-countdown", "1");
-  span.className = "text-gray-300";
-  span.textContent = "—";
-
-  const wrapper = document.createElement("span");
-  wrapper.setAttribute("data-proactive-countdown-wrapper", "1");
-  wrapper.className = "text-gray-500";
-  wrapper.textContent = " | Next snapshot in: ";
-  wrapper.appendChild(span);
-
-  h1CloseEl.appendChild(wrapper);
-  return span;
-}
-
-function _setProactiveH1CloseTextPreserveCountdown(h1CloseEl, text) {
-  if (!h1CloseEl) return;
-  const countdownWrapper = h1CloseEl.querySelector("span[data-proactive-countdown-wrapper='1']");
-  if (countdownWrapper) {
-    // Replace only the leading text node (H1 close label value) and preserve the countdown wrapper.
-    const prefix = document.createTextNode(text);
-    while (h1CloseEl.firstChild && h1CloseEl.firstChild !== countdownWrapper) {
-      h1CloseEl.removeChild(h1CloseEl.firstChild);
-    }
-    if (h1CloseEl.firstChild !== prefix) {
-      h1CloseEl.insertBefore(prefix, countdownWrapper);
-    }
-    return;
-  }
-
-  // Fallback: set plain text if wrapper doesn't exist yet
-  h1CloseEl.textContent = text;
-}
-
 function updateProactiveCountdown(state) {
-  const h1CloseContainer = el("proactive-h1-close");
-  if (!h1CloseContainer) return;
-  if (!state) return;
-
-  const countdownEl = _getOrCreateProactiveCountdownSpan(h1CloseContainer);
+  const countdownEl = el("proactive-countdown");
   if (!countdownEl) return;
+  if (!state) return;
 
   const marketOpen = !!state.market?.is_open;
   if (!marketOpen) {
@@ -1076,12 +1034,12 @@ function renderProactiveAnalysis(proactive) {
       if (!Number.isNaN(d.getTime())) {
         const hh = String(d.getUTCHours()).padStart(2, "0");
         const mm = String(d.getUTCMinutes()).padStart(2, "0");
-        _setProactiveH1CloseTextPreserveCountdown(h1El, `${hh}:${mm} UTC`);
+        h1El.textContent = `${hh}:${mm} UTC`;
       } else {
-        _setProactiveH1CloseTextPreserveCountdown(h1El, h1Close);
+        h1El.textContent = h1Close;
       }
     } catch (e) {
-      _setProactiveH1CloseTextPreserveCountdown(h1El, h1Close);
+      h1El.textContent = h1Close;
     }
   }
 

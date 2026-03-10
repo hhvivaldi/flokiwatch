@@ -244,7 +244,7 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
 
 ### Proactive Analysis (H1 Snapshot)
-`proactive-section`, `proactive-h1-close`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
+`proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
