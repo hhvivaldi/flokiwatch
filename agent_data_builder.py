@@ -50,6 +50,62 @@ def _csv_candle_rows(candles: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_price_2dp(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except Exception:
+        return ""
+
+
+def _compute_fibonacci_from_h1(h1_candles: List[Dict]) -> Optional[Dict[str, Any]]:
+    if not h1_candles or len(h1_candles) < 2:
+        return None
+
+    swing_high = None
+    swing_low = None
+    idx_high = -1
+    idx_low = -1
+
+    for i, c in enumerate(h1_candles):
+        try:
+            hi = float(c.get("h"))
+            lo = float(c.get("l"))
+        except Exception:
+            continue
+
+        if swing_high is None or hi > swing_high:
+            swing_high = hi
+            idx_high = i
+        if swing_low is None or lo < swing_low:
+            swing_low = lo
+            idx_low = i
+
+    if swing_high is None or swing_low is None:
+        return None
+    if swing_high <= swing_low:
+        return None
+
+    direction = "up" if idx_low < idx_high else "down"
+    rng = swing_high - swing_low
+
+    levels_pct = [23.6, 38.2, 50.0, 61.8, 78.6]
+    levels: List[Dict[str, Any]] = []
+    for pct in levels_pct:
+        r = pct / 100.0
+        if direction == "up":
+            price = swing_high - rng * r
+        else:
+            price = swing_low + rng * r
+        levels.append({"pct": f"{pct:.1f}", "price": _format_price_2dp(price)})
+
+    return {
+        "swing_low": _format_price_2dp(swing_low),
+        "swing_high": _format_price_2dp(swing_high),
+        "direction": direction,
+        "levels": levels,
+    }
+
+
 def format_proactive_xml(data_package: Dict) -> str:
     """Convert a proactive data package dict into the XML-tagged snapshot format."""
     dp = data_package or {}
@@ -61,6 +117,8 @@ def format_proactive_xml(data_package: Dict) -> str:
     h4 = dp.get("h4_candles", []) or []
     d1 = dp.get("d1_candles", []) or []
     m5 = dp.get("m5_candles", []) or []
+
+    fib = _compute_fibonacci_from_h1(h1)
 
     mtf = dp.get("mtf_trend", {}) or {}
     patterns = dp.get("candlestick_patterns", {}) or {}
@@ -150,6 +208,19 @@ def format_proactive_xml(data_package: Dict) -> str:
             lines.append(f"    {r}")
     lines.append("  </m5_candles>")
     lines.append("")
+
+    if fib:
+        lines.append(
+            f"  <fibonacci swing_low=\"{_xml_attr(fib.get('swing_low'))}\" swing_high=\"{_xml_attr(fib.get('swing_high'))}\" direction=\"{_xml_attr(fib.get('direction'))}\">"
+        )
+        for lvl in fib.get("levels") or []:
+            if not isinstance(lvl, dict):
+                continue
+            lines.append(
+                f"    <level pct=\"{_xml_attr(lvl.get('pct'))}\" price=\"{_xml_attr(lvl.get('price'))}\"/>"
+            )
+        lines.append("  </fibonacci>")
+        lines.append("")
 
     lines.append(
         f"  <mtf_trend d1=\"{_xml_attr(mtf.get('d1_direction'))}\" h4=\"{_xml_attr(mtf.get('h4_direction'))}\"/>")
