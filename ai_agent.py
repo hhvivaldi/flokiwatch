@@ -35,6 +35,7 @@ class AgentResult:
     reasoning: str
     key_factors: List[str]
     concerns: List[str]
+    trade_plan: Optional[Dict[str, Any]] = None
     raw_response: Optional[str] = None
     prompt_version: str = ""
     prompt_hash: str = ""
@@ -56,6 +57,7 @@ class AgentResult:
             "reasoning": self.reasoning,
             "key_factors": self.key_factors,
             "concerns": self.concerns,
+            "trade_plan": self.trade_plan,
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
             "model": self.model,
@@ -349,6 +351,9 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
             market_view = parsed.get("market_view")
             conditions_to_approve = parsed.get("conditions_to_approve")
             invalidation = parsed.get("invalidation")
+ 
+            # Parse v1.4 trade plan fields if present
+            trade_plan = parsed.get("trade_plan")
             
             return AgentResult(
                 decision=decision,
@@ -356,6 +361,7 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 reasoning=parsed.get("reasoning", ""),
                 key_factors=parsed.get("key_factors", []),
                 concerns=parsed.get("concerns", []),
+                trade_plan=trade_plan,
                 raw_response=content,
                 prompt_version=get_prompt_version(),
                 prompt_hash=get_prompt_hash(),

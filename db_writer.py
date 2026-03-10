@@ -187,6 +187,16 @@ def init_db() -> None:
                 agent_reasoning TEXT,
                 agent_key_factors TEXT,
                 agent_concerns TEXT,
+                tp_entry_strategy TEXT,
+                tp_entry_price REAL,
+                tp_entry_rationale TEXT,
+                tp_stop_loss REAL,
+                tp_stop_loss_rationale TEXT,
+                tp_take_profit REAL,
+                tp_take_profit_rationale TEXT,
+                tp_risk_reward_ratio REAL,
+                tp_timing TEXT,
+                tp_moment_assessment TEXT,
                 agreement INTEGER,
                 executed TEXT,
                 outcome TEXT,
@@ -198,6 +208,27 @@ def init_db() -> None:
                 latency_ms INTEGER
             )
         """)
+
+        # Migration: add agent_decisions columns if missing (safe no-op if they already exist)
+        agent_decisions_columns_to_add = [
+            ("tp_entry_strategy", "TEXT"),
+            ("tp_entry_price", "REAL"),
+            ("tp_entry_rationale", "TEXT"),
+            ("tp_stop_loss", "REAL"),
+            ("tp_stop_loss_rationale", "TEXT"),
+            ("tp_take_profit", "REAL"),
+            ("tp_take_profit_rationale", "TEXT"),
+            ("tp_risk_reward_ratio", "REAL"),
+            ("tp_timing", "TEXT"),
+            ("tp_moment_assessment", "TEXT"),
+        ]
+
+        for col_name, col_type in agent_decisions_columns_to_add:
+            try:
+                cursor.execute(f"ALTER TABLE agent_decisions ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS agent_proactive_analyses (
@@ -460,15 +491,28 @@ def record_agent_decision(
         
         agent_decision = agent_result.get("decision", "DEFER_TO_BRAIN")
         agreement_int = 1 if agreement else 0
+
+        tp = agent_result.get("trade_plan") or {}
         
         conn = _get_connection()
         conn.execute(
             """INSERT INTO agent_decisions
                (timestamp, brain_decision, brain_score, brain_confidence,
                 agent_decision, agent_confidence, agent_reasoning,
-                agent_key_factors, agent_concerns, agreement, executed, outcome,
+                agent_key_factors, agent_concerns,
+                tp_entry_strategy, tp_entry_price, tp_entry_rationale,
+                tp_stop_loss, tp_stop_loss_rationale,
+                tp_take_profit, tp_take_profit_rationale,
+                tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
+                agreement, executed, outcome,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?,
+                       ?, ?,
+                       ?, ?,
+                       ?, ?, ?,
+                       ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
                 brain_decision,
@@ -479,6 +523,16 @@ def record_agent_decision(
                 agent_result.get("reasoning", ""),
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
+                tp.get("entry_strategy"),
+                tp.get("entry_price"),
+                tp.get("entry_rationale"),
+                tp.get("stop_loss"),
+                tp.get("stop_loss_rationale"),
+                tp.get("take_profit"),
+                tp.get("take_profit_rationale"),
+                tp.get("risk_reward_ratio"),
+                tp.get("timing"),
+                tp.get("moment_assessment"),
                 agreement_int,
                 executed,
                 outcome,
