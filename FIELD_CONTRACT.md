@@ -163,6 +163,40 @@
 | `proactive_analysis.latency_ms` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-latency` |
 | `proactive_analysis.tokens_used` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-tokens` |
 
+### `agent_proactive_analyses` Table (SQLite)
+
+| Column | Type | Writer | Note |
+|--------|------|--------|------|
+| `id` | INTEGER | `db_writer.py` | Primary key |
+| `timestamp` | TEXT | `db_writer.py` | ISO timestamp |
+| `h1_close_time` | TEXT | `db_writer.py` | ISO timestamp of H1 close |
+| `agent_decision` | TEXT | `db_writer.py` | Decision (OPEN_BUY, OPEN_SELL, WAIT, REJECT, HOLD_TRADE, ADJUST_TRADE, CLOSE_TRADE) |
+| `agent_confidence` | INTEGER | `db_writer.py` | 0-100 |
+| `agent_reasoning` | TEXT | `db_writer.py` | Reasoning text |
+| `agent_key_factors` | TEXT | `db_writer.py` | JSON array of key factors |
+| `agent_concerns` | TEXT | `db_writer.py` | JSON array of concerns |
+| `raw_response` | TEXT | `db_writer.py` | Full response string |
+| `tp_entry_strategy` | TEXT | `db_writer.py` | Entry strategy |
+| `tp_entry_price` | REAL | `db_writer.py` | Entry price |
+| `tp_entry_rationale` | TEXT | `db_writer.py` | Entry rationale |
+| `tp_stop_loss` | REAL | `db_writer.py` | Stop loss price |
+| `tp_stop_loss_rationale` | TEXT | `db_writer.py` | Stop loss rationale |
+| `tp_take_profit` | REAL | `db_writer.py` | Take profit price |
+| `tp_take_profit_rationale` | TEXT | `db_writer.py` | Take profit rationale |
+| `tp_risk_reward_ratio` | REAL | `db_writer.py` | Risk/reward ratio |
+| `tp_timing` | TEXT | `db_writer.py` | Timing constraint |
+| `tp_moment_assessment` | TEXT | `db_writer.py` | Moment assessment |
+| `prompt_version` | TEXT | `db_writer.py` | Prompt version |
+| `prompt_hash` | TEXT | `db_writer.py` | Prompt hash |
+| `model` | TEXT | `db_writer.py` | Model used |
+| `input_tokens` | INTEGER | `db_writer.py` | Input tokens |
+| `output_tokens` | INTEGER | `db_writer.py` | Output tokens |
+| `latency_ms` | INTEGER | `db_writer.py` | Latency in milliseconds |
+| `adjustment_new_sl` | REAL | `db_writer.py` | New SL for ADJUST_TRADE |
+| `adjustment_new_tp` | REAL | `db_writer.py` | New TP for ADJUST_TRADE |
+| `adjustment_reason` | TEXT | `db_writer.py` | Reason for ADJUST_TRADE |
+| `close_reason` | TEXT | `db_writer.py` | Reason for CLOSE_TRADE |
+
 ### `agent_memory` Object (AI Agent Memory - v1.3)
 
 | Field | Type | Writer | Reader (app.js) |
