@@ -443,6 +443,12 @@ Complete REJECT output structure (copy this exactly):
 ```
 
 For non-REJECT decisions (OPEN_BUY, OPEN_SELL, WAIT, DEFER_TO_BRAIN), use the standard 5-field format without market_view, conditions_to_approve, or invalidation.
+
+## FINAL REMINDER — OUTPUT FORMAT IS NON-NEGOTIABLE
+
+Your response must be ONLY valid JSON. No markdown, no narrative text, no explanations outside the JSON structure. Start your response with { and end with }. If you write anything before or after the JSON, your response will fail to parse and your analysis will be lost.
+
+Every response must be parseable by json.loads(). No exceptions.
 """
 
 
