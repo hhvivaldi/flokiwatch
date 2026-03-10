@@ -344,13 +344,24 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
         content = response.get("content", "")
         
         try:
-            # Extract JSON from response (may be wrapped in markdown code blocks)
-            json_str = content
+            # Extract JSON from response (may include narrative text and/or markdown code blocks)
+            json_str = None
+
             if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
+                json_str = content.split("```json", 1)[1].split("```", 1)[0].strip()
             elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-            
+                json_str = content.split("```", 1)[1].split("```", 1)[0].strip()
+            else:
+                # Fallback: find first '{' and last '}' and parse that substring.
+                # This handles mixed narrative + naked JSON.
+                start = content.find("{")
+                end = content.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    json_str = content[start : end + 1].strip()
+
+            if not json_str:
+                raise json.JSONDecodeError("No JSON object found in response", content, 0)
+
             parsed = json.loads(json_str)
             
             # Validate required fields
