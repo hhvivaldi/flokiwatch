@@ -214,15 +214,17 @@ def _parse_candle_dt(value: Any):
     try:
         if value is None:
             return None
-        s = str(value)
+        s = str(value).strip()
         if not s:
             return None
+        if "T" not in s and " " in s:
+            s = s.replace(" ", "T", 1)
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
 
 
-def _find_day_open_price(h1_candles: List[Dict], current_dt: datetime) -> Optional[float]:
+def _find_day_open_candle(h1_candles: List[Dict], current_dt: datetime) -> Optional[Dict[str, Any]]:
     if not h1_candles or not current_dt:
         return None
 
@@ -231,31 +233,58 @@ def _find_day_open_price(h1_candles: List[Dict], current_dt: datetime) -> Option
         dt = _parse_candle_dt(c.get("time"))
         if not dt:
             continue
-        if dt.date() == day and dt.hour == 0:
-            try:
-                return float(c.get("o"))
-            except Exception:
-                return None
+        if dt.date() == day:
+            return c
     return None
 
 
-def _session_start_hour(session_name: str) -> Optional[int]:
+BROKER_UTC_OFFSET_HOURS = 3
+
+# Broker server timezone offset from UTC. Currently UTC+3 (CapitalPointTrading).
+# May change with DST — verify if price change calculations break after clock changes.
+
+
+def _current_session_name_broker_hour(broker_hour: int) -> str:
+    try:
+        h = int(broker_hour)
+    except Exception:
+        return "unknown"
+    if h < 11:
+        return "Asian"
+    if h < 16:
+        return "London"
+    return "NY"
+
+
+def _session_start_hour_from_broker_hour(broker_hour: int) -> Optional[int]:
+    try:
+        h = int(broker_hour)
+    except Exception:
+        return None
+    if h < 11:
+        return 3
+    if h < 16:
+        return 11
+    return 16
+
+
+def _session_start_hour_broker(session_name: str) -> Optional[int]:
     if not session_name:
         return None
     name = str(session_name).lower()
     if name == "asian":
-        return 0
+        return 3
     if name == "london":
-        return 8
+        return 11
     if name == "ny":
-        return 13
+        return 16
     return None
 
 
-def _find_session_open_price(h1_candles: List[Dict], current_dt: datetime, session_name: str) -> Optional[float]:
+def _find_session_open_candle(h1_candles: List[Dict], current_dt: datetime, session_name: str) -> Optional[Dict[str, Any]]:
     if not h1_candles or not current_dt:
         return None
-    start_hour = _session_start_hour(session_name)
+    start_hour = _session_start_hour_broker(session_name)
     if start_hour is None:
         return None
 
@@ -264,11 +293,26 @@ def _find_session_open_price(h1_candles: List[Dict], current_dt: datetime, sessi
         dt = _parse_candle_dt(c.get("time"))
         if not dt:
             continue
-        if dt.date() == day and dt.hour == start_hour:
-            try:
-                return float(c.get("o"))
-            except Exception:
-                return None
+        if dt.date() == day and dt.hour >= start_hour:
+            return c
+    return None
+
+
+def _find_session_open_candle_by_start_hour(h1_candles: List[Dict], current_dt: datetime, start_hour: int) -> Optional[Dict[str, Any]]:
+    if not h1_candles or not current_dt:
+        return None
+    try:
+        start = int(start_hour)
+    except Exception:
+        return None
+
+    day = current_dt.date()
+    for c in h1_candles:
+        dt = _parse_candle_dt(c.get("time"))
+        if not dt:
+            continue
+        if dt.date() == day and dt.hour >= start:
+            return c
     return None
 
 
@@ -294,11 +338,6 @@ def format_proactive_xml(data_package: Dict) -> str:
         current_bid = None
 
     current_dt = _parse_candle_dt(ts)
-    if current_dt and current_dt.tzinfo is None:
-        try:
-            current_dt = current_dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
 
     price_changes: List[Dict[str, Any]] = []
     if current_bid is not None:
@@ -318,14 +357,27 @@ def format_proactive_xml(data_package: Dict) -> str:
             if pct is not None:
                 price_changes.append({"period": "8h", "pct": _format_pct_signed(pct)})
 
-        day_open = _find_day_open_price(h1, current_dt) if current_dt else None
+        day_candle = _find_day_open_candle(h1, current_dt) if current_dt else None
+        day_open = None
+        if isinstance(day_candle, dict):
+            day_open = day_candle.get("o")
         if day_open is not None:
             pct = _pct_change(current_bid, day_open)
             if pct is not None:
                 price_changes.append({"period": "day", "pct": _format_pct_signed(pct)})
 
-        sess_name = (dp.get("session") or {}).get("name")
-        sess_open = _find_session_open_price(h1, current_dt, sess_name) if current_dt else None
+        sess_name = None
+        sess_start_hour = None
+        if current_dt:
+            sess_name = _current_session_name_broker_hour(current_dt.hour)
+            sess_start_hour = _session_start_hour_from_broker_hour(current_dt.hour)
+
+        sess_candle = None
+        if current_dt and sess_start_hour is not None:
+            sess_candle = _find_session_open_candle_by_start_hour(h1, current_dt, sess_start_hour)
+        sess_open = None
+        if isinstance(sess_candle, dict):
+            sess_open = sess_candle.get("o")
         if sess_open is not None:
             pct = _pct_change(current_bid, sess_open)
             if pct is not None:
