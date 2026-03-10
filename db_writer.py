@@ -46,9 +46,96 @@ def init_db() -> None:
                 scenario TEXT,
                 scenario_description TEXT,
                 gpt_action TEXT,
-                gpt_adjustment INTEGER
+                gpt_adjustment INTEGER,
+                utc_hour INTEGER,
+                session_name TEXT,
+                hold_forced INTEGER,
+                original_decision TEXT,
+                hold_reason TEXT,
+                rsi_14 REAL,
+                macd REAL,
+                macd_signal REAL,
+                macd_hist REAL,
+                ema_9 REAL,
+                ema_21 REAL,
+                ema_50 REAL,
+                bb_upper REAL,
+                bb_middle REAL,
+                bb_lower REAL,
+                bb_position REAL,
+                price_vs_ema50_pct REAL,
+                adx_14 REAL,
+                plus_di REAL,
+                minus_di REAL,
+                atr_14 REAL,
+                volume_ratio REAL,
+                volume_classification TEXT,
+                momentum_direction TEXT,
+                consecutive_count INTEGER,
+                consecutive_direction TEXT,
+                breakout_detected INTEGER,
+                breakout_type TEXT,
+                mtf_d1_direction TEXT,
+                mtf_h4_direction TEXT,
+                mtf_alignment TEXT,
+                mtf_confidence_adjustment REAL,
+                volume_gate_ratio REAL,
+                volume_gate_status TEXT,
+                volume_gate_confidence_adjustment REAL,
+                ml_h1_prob REAL,  -- calibrated ensemble scores normalized to 0-1 (not raw model probabilities)
+                ml_h4_prob REAL,  -- calibrated ensemble scores normalized to 0-1 (not raw model probabilities)
+                ml_direction TEXT
             )
         """)
+
+        # Migration: add analyses columns if missing (safe no-op if they already exist)
+        analyses_columns_to_add = [
+            ("utc_hour", "INTEGER"),
+            ("session_name", "TEXT"),
+            ("hold_forced", "INTEGER"),
+            ("original_decision", "TEXT"),
+            ("hold_reason", "TEXT"),
+            ("rsi_14", "REAL"),
+            ("macd", "REAL"),
+            ("macd_signal", "REAL"),
+            ("macd_hist", "REAL"),
+            ("ema_9", "REAL"),
+            ("ema_21", "REAL"),
+            ("ema_50", "REAL"),
+            ("bb_upper", "REAL"),
+            ("bb_middle", "REAL"),
+            ("bb_lower", "REAL"),
+            ("bb_position", "REAL"),
+            ("price_vs_ema50_pct", "REAL"),
+            ("adx_14", "REAL"),
+            ("plus_di", "REAL"),
+            ("minus_di", "REAL"),
+            ("atr_14", "REAL"),
+            ("volume_ratio", "REAL"),
+            ("volume_classification", "TEXT"),
+            ("momentum_direction", "TEXT"),
+            ("consecutive_count", "INTEGER"),
+            ("consecutive_direction", "TEXT"),
+            ("breakout_detected", "INTEGER"),
+            ("breakout_type", "TEXT"),
+            ("mtf_d1_direction", "TEXT"),
+            ("mtf_h4_direction", "TEXT"),
+            ("mtf_alignment", "TEXT"),
+            ("mtf_confidence_adjustment", "REAL"),
+            ("volume_gate_ratio", "REAL"),
+            ("volume_gate_status", "TEXT"),
+            ("volume_gate_confidence_adjustment", "REAL"),
+            ("ml_h1_prob", "REAL"),
+            ("ml_h4_prob", "REAL"),
+            ("ml_direction", "TEXT"),
+        ]
+
+        for col_name, col_type in analyses_columns_to_add:
+            try:
+                cursor.execute(f"ALTER TABLE analyses ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS trades (
@@ -146,14 +233,43 @@ def record_analysis(last_analysis: Dict[str, Any]) -> None:
 
         gpt = last_analysis.get("gpt_validation") or {}
 
+        mtf = last_analysis.get("mtf_trend") or {}
+        volume_gate = last_analysis.get("volume_gate") or {}
+        indicators = last_analysis.get("indicators") or {}
+        ml_meta = last_analysis.get("ml") or {}
+
         conn = _get_connection()
         conn.execute(
             """INSERT INTO analyses
                (timestamp, decision, final_score, confidence, confidence_level,
                 tech_score, news_score, ml_score, momentum_score, calendar_score,
                 current_price, volatility_status, scenario, scenario_description,
-                gpt_action, gpt_adjustment)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                gpt_action, gpt_adjustment,
+                utc_hour, session_name, hold_forced, original_decision, hold_reason,
+                rsi_14, macd, macd_signal, macd_hist,
+                ema_9, ema_21, ema_50,
+                bb_upper, bb_middle, bb_lower, bb_position,
+                price_vs_ema50_pct,
+                adx_14, plus_di, minus_di, atr_14,
+                volume_ratio, volume_classification,
+                momentum_direction, consecutive_count, consecutive_direction,
+                breakout_detected, breakout_type,
+                mtf_d1_direction, mtf_h4_direction, mtf_alignment, mtf_confidence_adjustment,
+                volume_gate_ratio, volume_gate_status, volume_gate_confidence_adjustment,
+                ml_h1_prob, ml_h4_prob, ml_direction)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?,
+                       ?, ?, ?,
+                       ?, ?, ?, ?,
+                       ?,
+                       ?, ?, ?, ?,
+                       ?, ?,
+                       ?, ?, ?,
+                       ?, ?,
+                       ?, ?, ?, ?,
+                       ?, ?, ?,
+                       ?, ?, ?)""",
             (
                 last_analysis.get("timestamp", datetime.now().isoformat()),
                 last_analysis.get("decision"),
@@ -171,6 +287,44 @@ def record_analysis(last_analysis: Dict[str, Any]) -> None:
                 last_analysis.get("scenario_description"),
                 gpt.get("action"),
                 gpt.get("adjustment"),
+                last_analysis.get("utc_hour"),
+                last_analysis.get("session_name"),
+                1 if last_analysis.get("hold_forced") else 0 if last_analysis.get("hold_forced") is not None else None,
+                last_analysis.get("original_decision"),
+                last_analysis.get("hold_reason"),
+                indicators.get("rsi_14"),
+                indicators.get("macd"),
+                indicators.get("macd_signal"),
+                indicators.get("macd_hist"),
+                indicators.get("ema_9"),
+                indicators.get("ema_21"),
+                indicators.get("ema_50"),
+                indicators.get("bb_upper"),
+                indicators.get("bb_middle"),
+                indicators.get("bb_lower"),
+                indicators.get("bb_position"),
+                indicators.get("price_vs_ema50_pct"),
+                indicators.get("adx_14"),
+                indicators.get("plus_di"),
+                indicators.get("minus_di"),
+                indicators.get("atr_14"),
+                indicators.get("volume_ratio"),
+                indicators.get("volume_classification"),
+                indicators.get("momentum_direction"),
+                indicators.get("consecutive_count"),
+                indicators.get("consecutive_direction"),
+                indicators.get("breakout_detected"),
+                indicators.get("breakout_type"),
+                mtf.get("d1_direction"),
+                mtf.get("h4_direction"),
+                mtf.get("alignment"),
+                mtf.get("confidence_adjustment"),
+                volume_gate.get("volume_ratio"),
+                volume_gate.get("status"),
+                volume_gate.get("confidence_adjustment"),
+                ml_meta.get("h1_prob"),
+                ml_meta.get("h4_prob"),
+                ml_meta.get("direction"),
             ),
         )
         conn.commit()

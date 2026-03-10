@@ -1790,6 +1790,117 @@ class TradingBot:
                 news_data, calendar_data, brain_result, get_hybrid_score_cached
             )
 
+            # Build rich scalar fields for history DB (no trade impact)
+            utc_hour = None
+            session_name = None
+            try:
+                from agent_data_builder import get_session_name
+                utc_hour = datetime.utcnow().hour
+                session_name = get_session_name(utc_hour)
+            except Exception:
+                pass
+
+            indicators = {}
+            try:
+                # Prefer detailed dicts (tech_data/momentum_data) when available
+                rsi_block = (tech_data or {}).get("rsi", {}) if isinstance(tech_data, dict) else {}
+                macd_block = (tech_data or {}).get("macd", {}) if isinstance(tech_data, dict) else {}
+                ema_block = (tech_data or {}).get("ema", {}) if isinstance(tech_data, dict) else {}
+                bb_block = (tech_data or {}).get("bollinger", {}) if isinstance(tech_data, dict) else {}
+
+                indicators["rsi_14"] = rsi_block.get("value")
+                indicators["macd"] = macd_block.get("macd")
+                indicators["macd_signal"] = macd_block.get("signal")
+                indicators["macd_hist"] = macd_block.get("histogram")
+                indicators["ema_9"] = ema_block.get("ema9")
+                indicators["ema_21"] = ema_block.get("ema21")
+                indicators["ema_50"] = ema_block.get("ema50")
+                indicators["bb_upper"] = bb_block.get("upper")
+                indicators["bb_middle"] = bb_block.get("middle")
+                indicators["bb_lower"] = bb_block.get("lower")
+                indicators["bb_position"] = bb_block.get("position")
+
+                # Fallback to dataframe last row columns when missing
+                last_row = None
+                try:
+                    last_row = df.iloc[-1] if df is not None and len(df) > 0 else None
+                except Exception:
+                    last_row = None
+
+                def _df_get(col: str):
+                    try:
+                        if last_row is not None and col in last_row:
+                            v = last_row[col]
+                            return float(v) if v is not None else None
+                    except Exception:
+                        return None
+                    return None
+
+                if indicators.get("rsi_14") is None:
+                    indicators["rsi_14"] = _df_get("rsi_14")
+                if indicators.get("macd") is None:
+                    indicators["macd"] = _df_get("macd")
+                if indicators.get("macd_signal") is None:
+                    indicators["macd_signal"] = _df_get("macd_signal")
+                if indicators.get("macd_hist") is None:
+                    indicators["macd_hist"] = _df_get("macd_hist")
+                if indicators.get("ema_9") is None:
+                    indicators["ema_9"] = _df_get("ema_9")
+                if indicators.get("ema_21") is None:
+                    indicators["ema_21"] = _df_get("ema_21")
+                if indicators.get("ema_50") is None:
+                    indicators["ema_50"] = _df_get("ema_50")
+                if indicators.get("bb_upper") is None:
+                    indicators["bb_upper"] = _df_get("bb_upper")
+                if indicators.get("bb_middle") is None:
+                    indicators["bb_middle"] = _df_get("bb_middle")
+                if indicators.get("bb_lower") is None:
+                    indicators["bb_lower"] = _df_get("bb_lower")
+                if indicators.get("bb_position") is None:
+                    indicators["bb_position"] = _df_get("bb_position")
+
+                # price_vs_ema50_pct
+                if indicators.get("ema_50") is not None and current_price:
+                    try:
+                        indicators["price_vs_ema50_pct"] = ((float(current_price) - float(indicators["ema_50"])) / float(current_price)) * 100
+                    except Exception:
+                        indicators["price_vs_ema50_pct"] = None
+            except Exception:
+                indicators = {}
+
+            try:
+                adx_block = (momentum_data or {}).get("adx", {}) if isinstance(momentum_data, dict) else {}
+                atr_block = (momentum_data or {}).get("atr", {}) if isinstance(momentum_data, dict) else {}
+                vol_block = (momentum_data or {}).get("volume", {}) if isinstance(momentum_data, dict) else {}
+                consec_block = (momentum_data or {}).get("consecutive", {}) if isinstance(momentum_data, dict) else {}
+                breakout_block = (momentum_data or {}).get("breakout", {}) if isinstance(momentum_data, dict) else {}
+
+                indicators["adx_14"] = adx_block.get("adx_value")
+                indicators["plus_di"] = adx_block.get("plus_di")
+                indicators["minus_di"] = adx_block.get("minus_di")
+                indicators["atr_14"] = atr_block.get("atr_value") if "atr_value" in atr_block else atr_block.get("atr_current")
+                indicators["volume_ratio"] = vol_block.get("volume_ratio")
+                indicators["volume_classification"] = vol_block.get("volume_classification")
+                indicators["momentum_direction"] = (momentum_data or {}).get("direction")
+                indicators["consecutive_count"] = consec_block.get("consecutive_count")
+                indicators["consecutive_direction"] = consec_block.get("consecutive_direction")
+                indicators["breakout_detected"] = breakout_block.get("breakout_detected")
+                indicators["breakout_type"] = breakout_block.get("breakout_type")
+            except Exception:
+                pass
+
+            ml_meta = {}
+            try:
+                score_h1 = float(ml_data.get("score_h1", ml_data.get("score", 50.0)))
+                score_h4 = float(ml_data.get("score_h4", ml_data.get("score", 50.0)))
+                ml_meta = {
+                    "h1_prob": score_h1 / 100.0,
+                    "h4_prob": score_h4 / 100.0,
+                    "direction": ml_data.get("prediction"),
+                }
+            except Exception:
+                ml_meta = {}
+
             prev_last_analysis = self.last_analysis if isinstance(self.last_analysis, dict) else {}
             preserved_proactive = prev_last_analysis.get("proactive_analysis")
             preserved_agent = prev_last_analysis.get("agent_decision")
@@ -1817,6 +1928,10 @@ class TradingBot:
                 "hold_reason": hold_reason,
                 "mtf_trend": brain_result.mtf_trend,
                 "volume_gate": brain_result.volume_gate,
+                "utc_hour": utc_hour,
+                "session_name": session_name,
+                "indicators": indicators,
+                "ml": ml_meta,
             }
 
             # Preserve nested fields that are not recalculated every analysis cycle
@@ -1824,9 +1939,9 @@ class TradingBot:
                 self.last_analysis["proactive_analysis"] = preserved_proactive
             if preserved_agent and "agent_decision" not in self.last_analysis:
                 self.last_analysis["agent_decision"] = preserved_agent
-        except Exception:
-            pass
-        
+        except Exception as e:
+            log.warning(f"Rich data enrichment failed: {e}")
+
         record_analysis(self.last_analysis)
         
         # Return decision tuple + agent_data dict for deferred Agent call
@@ -2830,7 +2945,12 @@ def run_single_analysis():
     
     print(f"\n📈 Current price: {current_price:.2f}")
     print(f"   ATR(14): {atr:.2f}")
-    
+
+    try:
+        from central_brain import is_actionable_signal, get_trade_direction
+    except Exception:
+        from confluence import is_actionable_signal, get_trade_direction
+
     if is_actionable_signal(result.decision):
         direction = get_trade_direction(result.decision)
         levels = calculate_sl_tp(current_price, direction, atr)
