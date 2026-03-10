@@ -646,6 +646,42 @@ def record_agent_proactive_analysis(
         log.warning(f"db_writer: failed to record proactive analysis: {e}")
 
 
+def get_recent_proactive_decisions(limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Query last N proactive decisions for Agent memory.
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT timestamp, agent_decision, agent_confidence, tp_entry_price, tp_stop_loss, tp_take_profit, tp_risk_reward_ratio
+               FROM agent_proactive_analyses
+               ORDER BY id DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            timestamp_str, decision, confidence, entry, sl, tp, rr = row
+            results.append({
+                "timestamp": timestamp_str,
+                "decision": decision,
+                "confidence": confidence,
+                "entry": entry,
+                "sl": sl,
+                "tp": tp,
+                "rr": rr
+            })
+        
+        return results
+    except Exception as e:
+        log.debug(f"db_writer: failed to get recent proactive decisions: {e}")
+        return []
+
+
 def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Query last N agent decisions for Agent memory.

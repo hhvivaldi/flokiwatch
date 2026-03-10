@@ -440,6 +440,39 @@ def format_proactive_xml(data_package: Dict) -> str:
         f"<current_price bid=\"{_xml_attr(cp.get('bid'))}\" ask=\"{_xml_attr(cp.get('ask'))}\" spread=\"{_xml_attr(cp.get('spread'))}\"/>")
     lines.append("")
 
+    recent_decisions = dp.get("recent_decisions", []) or []
+    if recent_decisions:
+        lines.append("--- SECTION 0: YOUR RECENT DECISIONS (Read this BEFORE anything else) ---")
+        lines.append("")
+        lines.append(f"<your_recent_decisions count=\"{len(recent_decisions)}\">")
+        for dec in recent_decisions:
+            if not isinstance(dec, dict):
+                continue
+            
+            t = dec.get("timestamp", "")
+            if t:
+                try:
+                    dt = datetime.fromisoformat(t.replace("Z", "+00:00"))
+                    t = dt.strftime("%H:%00 UTC")
+                except Exception:
+                    pass
+                    
+            action = dec.get("decision", "")
+            conf = dec.get("confidence", "")
+            
+            entry = dec.get("entry")
+            sl = dec.get("sl")
+            tp = dec.get("tp")
+            rr = dec.get("rr")
+            
+            attr_str = f"time=\"{_xml_attr(t)}\" action=\"{_xml_attr(action)}\" confidence=\"{_xml_attr(conf)}\""
+            if action in ("OPEN_BUY", "OPEN_SELL") and entry is not None:
+                attr_str += f" entry=\"{_xml_attr(entry)}\" sl=\"{_xml_attr(sl)}\" tp=\"{_xml_attr(tp)}\" rr=\"{_xml_attr(rr)}\""
+                
+            lines.append(f"  <decision {attr_str}/>")
+        lines.append("</your_recent_decisions>")
+        lines.append("")
+
     lines.append("--- SECTION 1: PRICE STRUCTURE (Read this FIRST) ---")
     lines.append("")
     lines.append("<price_structure>")
@@ -876,6 +909,7 @@ def build_proactive_data_package(
     h4_candles: Optional[List[Dict]] = None,
     trade_feedback: Optional[Dict] = None,
     ema200: Optional[float] = None,
+    recent_decisions: Optional[List[Dict]] = None,
 ) -> Dict:
     """Build an independent data package for proactive Agent snapshots.
 
@@ -921,6 +955,7 @@ def build_proactive_data_package(
             "sr_proximity": _format_sr_proximity(sr_proximity),
             "trade_feedback": _format_trade_feedback(trade_feedback),
             "mtf_trend": mtf_trend,
+            "recent_decisions": recent_decisions or [],
         }
 
         if ema200 is not None:

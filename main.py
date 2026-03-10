@@ -1197,7 +1197,7 @@ class TradingBot:
         import asyncio
         from ai_agent import get_agent
         from agent_data_builder import get_session_name
-        from db_writer import record_agent_proactive_analysis
+        from db_writer import record_agent_proactive_analysis, get_recent_proactive_decisions
         from ai_agent import agent_decide
         from agent_data_builder import build_proactive_data_package
 
@@ -1346,6 +1346,8 @@ class TradingBot:
             delta_context = None
             portfolio_data = None
             regime_context = None
+            
+            recent_decisions = get_recent_proactive_decisions(limit=5)
 
             data_package = build_proactive_data_package(
                 brain_result=brain_result,
@@ -1367,6 +1369,7 @@ class TradingBot:
                 h4_candles=h4_candles,
                 trade_feedback=trade_feedback,
                 ema200=ema200,
+                recent_decisions=recent_decisions,
             )
 
             loop = asyncio.new_event_loop()
