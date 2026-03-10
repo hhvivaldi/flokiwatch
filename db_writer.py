@@ -240,6 +240,7 @@ def init_db() -> None:
                 agent_reasoning TEXT,
                 agent_key_factors TEXT,
                 agent_concerns TEXT,
+                raw_response TEXT,
                 tp_entry_strategy TEXT,
                 tp_entry_price REAL,
                 tp_entry_rationale TEXT,
@@ -261,6 +262,7 @@ def init_db() -> None:
 
         # Migration: add agent_proactive_analyses columns if missing (safe no-op if they already exist)
         agent_proactive_columns_to_add = [
+            ("raw_response", "TEXT"),
             ("tp_entry_strategy", "TEXT"),
             ("tp_entry_price", "REAL"),
             ("tp_entry_rationale", "TEXT"),
@@ -598,13 +600,14 @@ def record_agent_proactive_analysis(
             """INSERT INTO agent_proactive_analyses
                (timestamp, h1_close_time,
                 agent_decision, agent_confidence, agent_reasoning,
-                agent_key_factors, agent_concerns,
+                agent_key_factors, agent_concerns, raw_response,
                 tp_entry_strategy, tp_entry_price, tp_entry_rationale,
                 tp_stop_loss, tp_stop_loss_rationale,
                 tp_take_profit, tp_take_profit_rationale,
                 tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
                VALUES (?, ?, ?, ?, ?, ?, ?,
+                       ?,
                        ?, ?, ?,
                        ?, ?,
                        ?, ?,
@@ -618,6 +621,7 @@ def record_agent_proactive_analysis(
                 agent_result.get("reasoning", ""),
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
+                agent_result.get("raw_response"),
                 tp.get("entry_strategy"),
                 tp.get("entry_price"),
                 tp.get("entry_rationale"),
