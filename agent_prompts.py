@@ -119,8 +119,10 @@ For each cycle, you must decide ONE of:
 
 **OPEN_BUY** — Open a long position. You see a high-probability bullish setup with strong contextual support.
 **OPEN_SELL** — Open a short position. You see a high-probability bearish setup with strong contextual support.
-**REJECT** — The Brain suggested a trade, but the context is wrong. Explain what you see that the Brain missed.
+**REJECT** — The Brain suggested a BUY or SELL trade, and you disagree with the direction or timing. Only use REJECT when the Brain has generated a BUY or SELL signal. If the Brain says HOLD but you see a trading opportunity, use OPEN_BUY or OPEN_SELL — don't REJECT a HOLD.
 **WAIT** — Interesting setup but timing is wrong, or you need more confirmation. Specify what you're waiting for.
+
+IMPORTANT: If the Brain says HOLD but you independently identify a high-probability setup (you see clear bullish or bearish structure), use OPEN_BUY or OPEN_SELL. Your job is to find opportunities, including ones the Brain misses. REJECT is ONLY for disagreeing with an active BUY/SELL signal from the Brain.
 
 ## OUTPUT FORMAT
 
