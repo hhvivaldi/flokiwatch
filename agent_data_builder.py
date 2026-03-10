@@ -89,7 +89,7 @@ def build_data_package(
             "h1_candles": _format_candles(h1_candles, limit=20),
             "m5_candles": _format_candles(m5_candles, limit=10),
             "d1_candles": _format_candles(d1_candles or [], limit=10),
-            "h4_candles": _format_candles(h4_candles or [], limit=15),
+            "h4_candles": _format_candles(h4_candles or [], limit=20),
             "indicators": _format_indicators(tech_data, momentum_data),
             "brain_analysis": _format_brain_result(brain_result),
             "ml_predictions": _format_ml_data(ml_data),

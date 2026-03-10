@@ -2164,7 +2164,7 @@ class TradingBot:
                     })
             
             # H4 candles (2-3 day structure)
-            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 15)
+            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
             if h4_rates is not None:
                 for r in h4_rates:
                     h4_candles.append({
