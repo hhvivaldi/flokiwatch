@@ -39,7 +39,7 @@ from risk_manager import calculate_position_size, calculate_sl_tp
 from safety_checks import is_safe_to_trade, record_trade_result, record_trade_opened, record_close_type, get_safety_status, is_market_open
 from executor import (
     connect_mt5, disconnect_mt5, is_mt5_connected,
-    get_account_balance, execute_buy, execute_sell, get_positions, executor,
+    get_account_balance, execute_buy, execute_sell, get_positions, close_position, executor,
     get_recent_closed_deals, get_deal_history
 )
 from monitor import monitor_positions, get_positions_summary, close_all_positions
@@ -1486,6 +1486,93 @@ class TradingBot:
             except Exception:
                 pass
 
+    def close_agent_trade(self, ticket: int, reason: str) -> dict:
+        """Close an open position by ticket.
+
+        Uses direct MT5 API close via executor. Records a pending close entry and alerts Discord.
+        """
+        try:
+            t = int(ticket)
+        except Exception:
+            t = 0
+
+        if t <= 0:
+            msg = f"Invalid ticket '{ticket}'"
+            log.warning(f"AGENT_CLOSE | Reject: {msg}")
+            try:
+                alert_error("Agent Close Rejected", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": None, "reason": msg}
+
+        reason_str = str(reason or "agent_close")
+
+        try:
+            order_result = close_position(t)
+        except Exception as e:
+            msg = f"close_position exception: {e}"
+            log.error(f"AGENT_CLOSE | Failed: {msg}")
+            try:
+                alert_error("Agent Close Failed", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        if not order_result or not getattr(order_result, "success", False):
+            msg = getattr(order_result, "error_message", None) or "close failed"
+            log.error(f"AGENT_CLOSE | Failed: ticket={t} | {msg}")
+            try:
+                alert_error("Agent Close Failed", f"ticket={t} | {msg}")
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        try:
+            record_trade_close(
+                ticket=t,
+                close_price=getattr(order_result, "price", None),
+                profit=None,
+                close_reason=f"{reason_str} (pending)",
+                close_time=datetime.utcnow().isoformat(),
+                breakeven_activated=None,
+            )
+        except Exception:
+            pass
+
+        try:
+            add_closed_trade(self, {
+                "ticket": t,
+                "direction": None,
+                "volume": getattr(order_result, "volume", None),
+                "open_price": None,
+                "close_price": getattr(order_result, "price", None),
+                "profit": None,
+                "reason": reason_str,
+                "close_time": datetime.utcnow().isoformat(),
+                "close_type": "agent",
+                "estimated": False,
+                "pending": True,
+                "outcome": None,
+                "orig_tp": None,
+                "orig_sl": None,
+            })
+        except Exception:
+            pass
+
+        try:
+            discord.send(
+                f"Agent requested CLOSE | ticket={t} | reason={reason_str}",
+                alert_type="warning",
+                title="Agent Close",
+            )
+        except Exception:
+            pass
+
+        log.info(f"AGENT_CLOSE | Success: ticket={t} | reason={reason_str}")
+        return {"success": True, "ticket": t, "reason": reason_str}
+        
+        
+
     def _get_last_closed_h1_time_iso(self) -> str:
         """Return ISO timestamp of the last CLOSED M30 candle, or empty string if unavailable."""
         try:
@@ -1801,6 +1888,57 @@ class TradingBot:
                             if isinstance(result, dict):
                                 reason = result.get("reason")
                             log.warning(f"PROACTIVE_H1 | Agent execution REJECTED | reason={reason}")
+            elif agent_result.decision == "CLOSE_TRADE":
+                close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
+
+                thesis_direction = None
+                try:
+                    from db_writer import get_active_trade_from_proactive
+                    active = get_active_trade_from_proactive()
+                    if active and isinstance(active, dict):
+                        d = str(active.get("decision") or "")
+                        if d == "OPEN_BUY":
+                            thesis_direction = "BUY"
+                        elif d == "OPEN_SELL":
+                            thesis_direction = "SELL"
+                except Exception:
+                    thesis_direction = None
+
+                positions_list = []
+                try:
+                    positions_list = get_positions() if self.executes_trades else []
+                except Exception:
+                    positions_list = []
+
+                if not positions_list:
+                    log.warning("PROACTIVE_H1 | CLOSE_TRADE but no open positions — nothing to close")
+                else:
+                    if thesis_direction is None:
+                        dirs = {getattr(p, "direction", None) for p in positions_list}
+                        dirs = {d for d in dirs if d in ("BUY", "SELL")}
+                        if len(dirs) == 1:
+                            thesis_direction = next(iter(dirs))
+
+                    if thesis_direction not in ("BUY", "SELL"):
+                        msg = "CLOSE_TRADE could not infer thesis direction (multiple positions?)"
+                        log.warning(f"PROACTIVE_H1 | {msg}")
+                        try:
+                            alert_error("Agent Close Skipped", msg)
+                        except Exception:
+                            pass
+                    else:
+                        to_close = [p for p in positions_list if getattr(p, "direction", None) == thesis_direction]
+                        if not to_close:
+                            log.warning(f"PROACTIVE_H1 | CLOSE_TRADE but no {thesis_direction} positions — nothing to close")
+                        else:
+                            log.warning(
+                                f"PROACTIVE_H1 | Closing {len(to_close)} {thesis_direction} position(s) per Agent CLOSE_TRADE"
+                            )
+                            for p in to_close:
+                                try:
+                                    self.close_agent_trade(getattr(p, "ticket", 0), close_reason)
+                                except Exception as e:
+                                    log.warning(f"PROACTIVE_H1 | close_agent_trade error (ignored): {e}")
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent execution error (ignored): {e}")
     
