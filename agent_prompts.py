@@ -197,6 +197,8 @@ For ADJUST_TRADE, include an "adjustment" object. For CLOSE_TRADE, include a "cl
 - `decision`: One of OPEN_BUY, OPEN_SELL, REJECT, WAIT
 - `confidence`: Integer 0-100. See CONFIDENCE CALIBRATION section below.
 - `reasoning`: 2-4 sentences explaining your decision. Reference specific data points and what the price sequence tells you.
+
+IMPORTANT: Your 'reasoning' field MUST explicitly mention: (1) Fibonacci levels and price's position relative to them, (2) EMA200 value and distance, (3) swing point structure, (4) price changes. If you omit any of these, your response is INCOMPLETE.
 - `key_factors`: 2-5 bullet points supporting your decision
 - `concerns`: 0-3 bullet points of risks or things to monitor (empty array if none)
 - `trade_plan`: Object with complete execution plan (OPEN_BUY / OPEN_SELL only)
