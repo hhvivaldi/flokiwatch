@@ -287,22 +287,22 @@ def state():
 @app.get("/api/recent-decisions")
 def recent_decisions():
     try:
-        # Use proactive agent timeline (last 5 H1 snapshots)
-        from db_writer import get_recent_proactive_decisions
-
-        rows = get_recent_proactive_decisions(limit=5) or []
+        conn = _get_history_conn()
+        q = """SELECT timestamp, agent_decision, agent_confidence
+               FROM agent_proactive_analyses
+               ORDER BY id DESC
+               LIMIT ?"""
+        rows = conn.execute(q, (5,)).fetchall()
+        conn.close()
 
         # app.js expects: [{timestamp, decision, score}]
-        # Here score is reused to represent confidence (0-100) for proactive decisions
         out = []
         for r in rows:
-            if not isinstance(r, dict):
-                continue
             out.append(
                 {
-                    "timestamp": r.get("timestamp"),
-                    "decision": r.get("decision"),
-                    "score": r.get("confidence"),
+                    "timestamp": r[0],
+                    "decision": r[1],
+                    "score": r[2],
                 }
             )
         out.reverse()
