@@ -1151,6 +1151,341 @@ class TradingBot:
             # Persist state for dashboard (must never block the bot)
             write_state(self)
 
+    def execute_agent_trade(
+        self,
+        direction: str,
+        sl: float,
+        tp: float,
+        confidence: float,
+        scenario: str = "agent_proactive",
+    ) -> dict:
+        """Shared execution path for Agent-driven trade opens.
+
+        This mirrors the (disabled) Brain execution pipeline, but uses Agent-provided SL/TP
+        instead of ATR-derived levels.
+        """
+        try:
+            direction = str(direction or "").upper()
+            if direction not in ("BUY", "SELL"):
+                reason = f"Invalid direction '{direction}'"
+                log.warning(f"AGENT_EXEC | Reject: {reason}")
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+
+            try:
+                sl_f = float(sl)
+                tp_f = float(tp)
+            except Exception:
+                reason = "Invalid SL/TP types"
+                log.warning(f"AGENT_EXEC | Reject: {reason} | sl={sl} tp={tp}")
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+
+            prices = None
+            try:
+                prices = executor.get_current_price()
+            except Exception:
+                prices = None
+            if prices:
+                entry_price = prices[1] if direction == "BUY" else prices[0]
+            else:
+                reason = "MT5 price unavailable"
+                log.warning(f"AGENT_EXEC | Reject: {reason}")
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+
+            if direction == "BUY":
+                if not (sl_f < entry_price and tp_f > entry_price):
+                    reason = f"Invalid levels for BUY: entry={entry_price:.2f} sl={sl_f:.2f} tp={tp_f:.2f}"
+                    log.warning(f"AGENT_EXEC | Reject: {reason}")
+                    try:
+                        alert_safety_block("AGENT_BUY", float(confidence or 0), reason)
+                    except Exception:
+                        pass
+                    return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+            else:
+                if not (sl_f > entry_price and tp_f < entry_price):
+                    reason = f"Invalid levels for SELL: entry={entry_price:.2f} sl={sl_f:.2f} tp={tp_f:.2f}"
+                    log.warning(f"AGENT_EXEC | Reject: {reason}")
+                    try:
+                        alert_safety_block("AGENT_SELL", float(confidence or 0), reason)
+                    except Exception:
+                        pass
+                    return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+
+            sl_pips = abs(entry_price - sl_f) / 0.1
+            min_sl_pips = getattr(config, "MIN_SL_PIPS", 150)
+            max_sl_pips = getattr(config, "MAX_SL_PIPS", 800)
+            if sl_pips < float(min_sl_pips):
+                reason = f"SL too tight: {sl_pips:.0f} pips < min {min_sl_pips}"
+                log.warning(f"AGENT_EXEC | Reject: {reason}")
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+            if sl_pips > float(max_sl_pips):
+                reason = f"SL too wide: {sl_pips:.0f} pips > max {max_sl_pips}"
+                log.warning(f"AGENT_EXEC | Reject: {reason}")
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+
+            # Safety Checks
+            positions_list = get_positions() if self.executes_trades else []
+            account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
+            open_positions = len(positions_list)
+            mt5_connected = is_mt5_connected() if self.executes_trades else True
+
+            is_safe, reasons = is_safe_to_trade(
+                account_balance=account_balance,
+                open_positions=open_positions,
+                mt5_connected=mt5_connected,
+                has_high_impact_news=False,
+                trade_direction=direction,
+                open_positions_list=positions_list,
+            )
+            if not is_safe:
+                reason_str = "; ".join(reasons)
+                log.safety_block(reason_str)
+                try:
+                    alert_safety_block(f"AGENT_{direction}", float(confidence or 0), reason_str)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason_str, "used_ea_bridge": False}
+
+            # M5 Reversal Detection (anti-lag filter)
+            try:
+                from momentum_detector import check_m5_reversal
+                m5_check = check_m5_reversal(direction)
+                log.info(f"   🔄 M5 Check: {m5_check['description']}")
+
+                if m5_check.get("reversal_detected"):
+                    if m5_check.get("reversal_strength") == "strong":
+                        reason = f"Strong M5 reversal: {m5_check.get('description', '')}"
+                        log.safety_block(reason)
+                        try:
+                            alert_m5_reversal_block(direction, m5_check.get("recent_move_pct", 0), m5_check.get("description", ""))
+                        except Exception:
+                            pass
+                        return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+                    if m5_check.get("reversal_strength") == "moderate":
+                        confidence = float(confidence or 0) - getattr(config, "M5_REVERSAL_CONFIDENCE_PENALTY", 0)
+                        log.info(
+                            f"   ⚠️ Moderate M5 reversal: confidence reduced {config.M5_REVERSAL_CONFIDENCE_PENALTY} → {confidence:.1f}"
+                        )
+                        if confidence < getattr(config, "BRAIN_MIN_CONFIDENCE", 0):
+                            reason = (
+                                f"Moderate M5 reversal reduced confidence below minimum "
+                                f"({confidence:.1f} < {config.BRAIN_MIN_CONFIDENCE})"
+                            )
+                            log.safety_block(reason)
+                            try:
+                                alert_m5_reversal_block(direction, m5_check.get("recent_move_pct", 0), m5_check.get("description", ""))
+                            except Exception:
+                                pass
+                            return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+            except Exception as e:
+                log.warning(f"M5 reversal check error (ignored): {e}")
+
+            # Spread Check with Retry Loop
+            spread = None
+            try:
+                spread = executor.get_spread()
+            except Exception:
+                spread = None
+            if spread is not None:
+                log.info(f"   📊 Spread: {spread:.1f} pips")
+
+                if spread > config.MAX_SPREAD_PIPS:
+                    log.warning(
+                        f"   ⏳ Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry"
+                    )
+                    try:
+                        alert_spread_delay(spread, config.MAX_SPREAD_PIPS, 1)
+                    except Exception:
+                        pass
+
+                    for retry in range(2, config.SPREAD_MAX_RETRIES + 1):
+                        time.sleep(config.SPREAD_RETRY_INTERVAL_SECONDS)
+                        try:
+                            spread = executor.get_spread()
+                        except Exception:
+                            spread = None
+                        if spread is None:
+                            log.warning(f"   ⚠️ Could not get spread on retry #{retry}")
+                            continue
+                        log.info(f"   📊 Spread retry #{retry}: {spread:.1f} pips")
+                        if spread <= config.MAX_SPREAD_PIPS:
+                            log.info(f"   ✅ Spread normalized: {spread:.1f} pips — proceeding with entry")
+                            break
+                    else:
+                        log.warning(
+                            f"   ⛔ Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped"
+                        )
+                        try:
+                            alert_spread_skip(direction, spread if spread else 0, float(confidence or 0))
+                        except Exception:
+                            pass
+                        return {
+                            "success": False,
+                            "ticket": None,
+                            "reason": "Spread did not normalize",
+                            "used_ea_bridge": False,
+                        }
+            else:
+                log.warning("   ⚠️ Could not get spread — proceeding anyway")
+
+            pos_size = calculate_position_size(account_balance, config.RISK_PER_TRADE, sl_pips)
+            log.info(f"   Entry: {entry_price:.2f}")
+            log.info(f"   SL: {sl_f:.2f} ({sl_pips:.0f} pips)")
+            tp_pips = abs(tp_f - entry_price) / 0.1
+            log.info(f"   TP1: {tp_f:.2f} ({tp_pips:.0f} pips)")
+            log.info(f"   Lot: {pos_size.lot_size}")
+
+            comment = f"Agent-{scenario}-{direction}-{int(confidence or 0)}"
+
+            sl_pips_orig = sl_pips
+            if self._last_vol_status == "COOLING_DOWN":
+                be_trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
+                tr_trigger = config.COOLING_TRAILING_TRIGGER_PIPS
+                tr_distance = config.COOLING_TRAILING_DISTANCE_PIPS
+            else:
+                be_trigger = sl_pips_orig * getattr(config, "BREAKEVEN_ATR_MULT", 0.7)
+                tr_trigger = sl_pips_orig * getattr(config, "TRAILING_ATR_MULT", 0.7)
+                tr_distance = sl_pips_orig * getattr(config, "TRAILING_DISTANCE_ATR_MULT", 0.7)
+
+            used_ea = False
+            if getattr(config, "USE_EA_BRIDGE", False) and self.executes_trades:
+                try:
+                    from ea_bridge import is_ea_online, write_signal
+                    stale_threshold = getattr(config, "EA_STALE_THRESHOLD_SECONDS", 60)
+                    if is_ea_online(stale_threshold):
+                        used_ea = True
+                        log.info("   🔗 EA Bridge: ONLINE — sending signal via JSON")
+                    else:
+                        log.warning("   ⚠️ EA Bridge: OFFLINE — falling back to direct MT5 API")
+                except Exception as e:
+                    log.warning(f"   ⚠️ EA Bridge error: {e} — falling back to direct MT5 API")
+
+            if used_ea:
+                from ea_bridge import write_signal
+
+                signal_ok = write_signal(
+                    signal=direction,
+                    sl=sl_f,
+                    tp=tp_f,
+                    lot_size=pos_size.lot_size,
+                    confidence=float(confidence or 0),
+                    breakeven_trigger_pips=be_trigger,
+                    trailing_trigger_pips=tr_trigger,
+                    trailing_distance_pips=tr_distance,
+                    max_drawdown_pips=config.MAX_POSITION_DRAWDOWN_PIPS,
+                    comment=comment,
+                )
+
+                if signal_ok:
+                    log.success(f"Signal sent to EA: {direction}")
+                    self.daily_stats["trades"] += 1
+                    record_trade_opened(direction)
+                    record_trade_open(
+                        ticket=0,
+                        direction=direction,
+                        volume=pos_size.lot_size,
+                        open_price=entry_price,
+                        sl=sl_f,
+                        tp=tp_f,
+                        comment=comment,
+                    )
+                    return {"success": True, "ticket": 0, "reason": None, "used_ea_bridge": True}
+
+                reason = "Failed to send signal to EA"
+                log.error(reason)
+                try:
+                    alert_error("Agent Execution Failed", reason)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": True}
+
+            trade_confidence = float(confidence or 0)
+            trade_scenario = scenario
+            trade_risk_amount = pos_size.risk_amount if pos_size else None
+            trade_risk_percent = config.RISK_PER_TRADE
+
+            if direction == "BUY":
+                order_result = execute_buy(
+                    lot_size=pos_size.lot_size,
+                    sl=sl_f,
+                    tp=tp_f,
+                    comment=comment,
+                    confidence=trade_confidence,
+                    scenario=trade_scenario,
+                    risk_amount=trade_risk_amount,
+                    risk_percent=trade_risk_percent,
+                )
+            else:
+                order_result = execute_sell(
+                    lot_size=pos_size.lot_size,
+                    sl=sl_f,
+                    tp=tp_f,
+                    comment=comment,
+                    confidence=trade_confidence,
+                    scenario=trade_scenario,
+                    risk_amount=trade_risk_amount,
+                    risk_percent=trade_risk_percent,
+                )
+
+            if order_result.success:
+                log.success(f"Trade executed! Ticket: {order_result.ticket}")
+                self.daily_stats["trades"] += 1
+                record_trade_opened(direction)
+                record_trade_open(
+                    ticket=order_result.ticket,
+                    direction=direction,
+                    volume=pos_size.lot_size,
+                    open_price=order_result.price,
+                    sl=sl_f,
+                    tp=tp_f,
+                    comment=comment,
+                )
+                return {"success": True, "ticket": order_result.ticket, "reason": None, "used_ea_bridge": False}
+
+            reason = f"Failed to execute trade: {order_result.error_message}"
+            log.error(reason)
+            try:
+                alert_error("Agent Execution Failed", reason)
+            except Exception:
+                pass
+            return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+        except Exception as e:
+            reason = f"Exception in execute_agent_trade: {e}"
+            log.error(reason)
+            try:
+                alert_error("Agent Execution Error", str(e))
+            except Exception:
+                pass
+            return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
+        finally:
+            try:
+                check_ea_bridge_status_and_alert()
+            except Exception:
+                pass
+            try:
+                write_state(self)
+            except Exception:
+                pass
+
     def _get_last_closed_h1_time_iso(self) -> str:
         """Return ISO timestamp of the last CLOSED M30 candle, or empty string if unavailable."""
         try:
