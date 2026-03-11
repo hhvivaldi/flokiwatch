@@ -18,6 +18,54 @@ class AgentMonitor:
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
         try:
+            tick_mid = None
+            try:
+                tick_mid = self._mid_price()
+            except Exception:
+                tick_mid = None
+
+            trade_summary = "none"
+            dist_sl_str = "n/a"
+            dist_tp_str = "n/a"
+            try:
+                trade = self._get_active_trade()
+                if trade:
+                    trade_summary = self._format_trade_summary(trade)
+                    dist_sl, dist_tp = self._compute_trade_distances(trade)
+                    if dist_sl is not None:
+                        dist_sl_str = f"{dist_sl:.1f}"
+                    if dist_tp is not None:
+                        dist_tp_str = f"{dist_tp:.1f}"
+            except Exception:
+                pass
+
+            conditions_status = "none"
+            try:
+                latest = self._load_latest_entry_conditions()
+                if latest and isinstance(latest.get("entry_conditions"), dict):
+                    conditions_status = "present"
+            except Exception:
+                pass
+
+            upcoming_high = "none"
+            try:
+                upcoming_high = self._get_upcoming_high_event_summary()
+            except Exception:
+                upcoming_high = "none"
+
+            try:
+                price_str = f"{tick_mid:.2f}" if isinstance(tick_mid, (int, float)) else "n/a"
+                log.debug(
+                    "AGENT_MONITOR | tick | "
+                    f"price={price_str} | "
+                    f"active_trade={trade_summary} | "
+                    f"dist_SL={dist_sl_str} | dist_TP={dist_tp_str} | "
+                    f"conditions={conditions_status} | "
+                    f"upcoming_high={upcoming_high}"
+                )
+            except Exception:
+                pass
+
             try:
                 self._check_trade_at_risk()
             except Exception as e:
@@ -58,6 +106,91 @@ class AgentMonitor:
                 log.debug(f"AGENT_MONITOR | entry-conditions error (ignored): {e}")
         except Exception as e:
             log.debug(f"AGENT_MONITOR | check error (ignored): {e}")
+
+    def _get_active_trade(self) -> Optional[Dict[str, Any]]:
+        try:
+            from db_writer import get_active_trade_from_proactive
+
+            return get_active_trade_from_proactive()
+        except Exception:
+            return None
+
+    def _trade_direction_from_decision(self, decision: str) -> str:
+        if decision == "OPEN_BUY":
+            return "BUY"
+        if decision == "OPEN_SELL":
+            return "SELL"
+        return ""
+
+    def _format_trade_summary(self, trade: Dict[str, Any]) -> str:
+        decision = str(trade.get("decision") or "")
+        direction = self._trade_direction_from_decision(decision)
+        entry = trade.get("entry")
+        try:
+            entry_f = float(entry) if entry is not None else None
+        except Exception:
+            entry_f = None
+
+        if direction and entry_f is not None:
+            return f"{direction}@{entry_f:.1f}"
+        if direction:
+            return direction
+        return "none"
+
+    def _compute_trade_distances(self, trade: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+        decision = str(trade.get("decision") or "")
+        direction = self._trade_direction_from_decision(decision)
+        if direction not in ("BUY", "SELL"):
+            return None, None
+
+        price_used = self._price_used(direction)
+        if price_used is None:
+            return None, None
+
+        sl = trade.get("sl")
+        tp = trade.get("tp")
+        try:
+            sl_f = float(sl) if sl is not None else None
+        except Exception:
+            sl_f = None
+        try:
+            tp_f = float(tp) if tp is not None else None
+        except Exception:
+            tp_f = None
+
+        dist_sl = abs(price_used - sl_f) if sl_f is not None else None
+        dist_tp = abs(tp_f - price_used) if tp_f is not None else None
+        return dist_sl, dist_tp
+
+    def _get_upcoming_high_event_summary(self) -> str:
+        from economic_calendar import get_upcoming_events
+
+        events = get_upcoming_events(max_events=3)
+        if not isinstance(events, list):
+            return "none"
+
+        best = None
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            importance = str(ev.get("importance") or "").upper()
+            if importance != "HIGH":
+                continue
+            minutes_until = ev.get("minutes_until")
+            try:
+                minutes_until_f = float(minutes_until)
+            except Exception:
+                continue
+            if minutes_until_f < 0:
+                continue
+            if best is None or minutes_until_f < best[0]:
+                best = (minutes_until_f, str(ev.get("name") or "?"))
+
+        if not best:
+            return "none"
+
+        minutes_until_f, name = best
+        return f"{int(minutes_until_f)}m:{name}"
 
     def _load_latest_entry_conditions(self) -> Optional[Dict[str, Any]]:
         try:
