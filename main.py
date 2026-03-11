@@ -1136,10 +1136,10 @@ class TradingBot:
             write_state(self)
 
     def _get_last_closed_h1_time_iso(self) -> str:
-        """Return ISO timestamp of the last CLOSED H1 candle, or empty string if unavailable."""
+        """Return ISO timestamp of the last CLOSED M30 candle, or empty string if unavailable."""
         try:
             import MetaTrader5 as mt5
-            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 1, 1)
+            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M30, 1, 1)
             if rates is None or len(rates) == 0:
                 return ""
             t = int(rates[0]["time"])

@@ -487,13 +487,22 @@ function updateProactiveCountdown(state) {
 
   const now = new Date();
 
-  // Compute next H1 close strictly in UTC (next top-of-hour UTC)
+  // Compute next M30 close strictly in UTC (next 00 or 30 minute boundary)
+  const utcYear = now.getUTCFullYear();
+  const utcMonth = now.getUTCMonth();
+  const utcDate = now.getUTCDate();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+
+  const nextMinute = utcMinute < 30 ? 30 : 0;
+  const nextHour = utcMinute < 30 ? utcHour : utcHour + 1;
+
   const nextClose = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-    now.getUTCHours() + 1,
-    0,
+    utcYear,
+    utcMonth,
+    utcDate,
+    nextHour,
+    nextMinute,
     0,
     0,
   ));

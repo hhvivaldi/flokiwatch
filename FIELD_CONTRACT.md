@@ -148,7 +148,7 @@
 | `agent_decision.executed` | `"BRAIN"` \| `"AGENT"` | `main.py` | `renderAgentCard()` → `#agent-executed` |
 | `agent_decision.latency_ms` | int | `main.py` | `renderAgentCard()` → `#agent-latency` |
 
-### `last_analysis.proactive_analysis` Object (AI Agent - Proactive H1 Snapshot)
+### `last_analysis.proactive_analysis` Object (AI Agent - Proactive M30 Snapshot)
 
 | Field | Type | Writer | Reader (app.js) |
 |-------|------|--------|-----------------|
@@ -187,7 +187,7 @@
 |--------|------|--------|------|
 | `id` | INTEGER | `db_writer.py` | Primary key |
 | `timestamp` | TEXT | `db_writer.py` | ISO timestamp |
-| `h1_close_time` | TEXT | `db_writer.py` | ISO timestamp of H1 close |
+| `h1_close_time` | TEXT | `db_writer.py` | ISO timestamp of M30 close |
 | `agent_decision` | TEXT | `db_writer.py` | Decision (OPEN_BUY, OPEN_SELL, WAIT, REJECT, HOLD_TRADE, ADJUST_TRADE, CLOSE_TRADE) |
 | `agent_confidence` | INTEGER | `db_writer.py` | 0-100 |
 | `agent_reasoning` | TEXT | `db_writer.py` | Reasoning text |
@@ -295,7 +295,7 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 ### AI Agent Memory (v1.3)
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
 
-### Proactive Analysis (H1 Snapshot)
+### Proactive Analysis (M30 Snapshot)
 `proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
 
 Required for proactive OPEN trade plan display:
