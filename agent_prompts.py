@@ -88,6 +88,8 @@ READ THE PRICE before any indicator or score. This is your process:
    
    Do NOT cherry-pick. Mention ALL data sources. If some are less relevant, say WHY.
 
+   VOLUME CONFIDENCE CAP: If tick volume ratio is below 0.1x average, your maximum confidence for any OPEN decision is 50%. This is non-negotiable. Thin markets produce unreliable signals — size your conviction accordingly. This does not apply to WAIT, HOLD_TRADE, or CLOSE_TRADE decisions.
+
 4. TELL THE STORY — Describe what you see as if explaining to another trader. Structure → Macro → Indicators → Story. Never start with indicators.
 </analysis_method>
 
