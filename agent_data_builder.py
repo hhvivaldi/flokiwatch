@@ -76,6 +76,81 @@ def _csv_candle_rows(candles: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def format_fast_xml(
+    trigger_type: str,
+    trigger_data: Dict[str, Any],
+    current_price: Dict[str, Any],
+    m5_candles: List[Dict[str, Any]],
+    positions: List[Dict[str, Any]],
+    upcoming_events: List[Dict[str, Any]],
+) -> str:
+    lines: List[str] = []
+    tt = str(trigger_type or "").strip()
+    td = trigger_data if isinstance(trigger_data, dict) else {}
+    cp = current_price if isinstance(current_price, dict) else {}
+
+    lines.append("## FAST DECISION — MONITOR TRIGGER")
+    lines.append("You are receiving a compact snapshot because a 1-minute monitor trigger fired.")
+    lines.append("Respond using the FAST_DECISION schema in your system prompt.")
+    lines.append("")
+
+    lines.append(f"<snapshot_time>{_xml_escape(datetime.utcnow().isoformat())}</snapshot_time>")
+    lines.append("")
+
+    lines.append(
+        f"<current_price bid=\"{_xml_attr(cp.get('bid'))}\" ask=\"{_xml_attr(cp.get('ask'))}\" spread=\"{_xml_attr(cp.get('spread'))}\"/>")
+    lines.append("")
+
+    lines.append(f"<trigger type=\"{_xml_attr(tt)}\">")
+    for k, v in td.items():
+        lines.append(f"  <field name=\"{_xml_attr(k)}\">{_xml_escape(v)}</field>")
+    lines.append("</trigger>")
+    lines.append("")
+
+    lines.append(f"<m5_candles count=\"{_xml_attr(len(m5_candles or []))}\" description=\"Last 10 M5 candles\">")
+    rows = _csv_candle_rows(m5_candles or [])
+    if rows:
+        for r in rows.splitlines():
+            lines.append(f"  {r}")
+    lines.append("</m5_candles>")
+    lines.append("")
+
+    pos_list = positions if isinstance(positions, list) else []
+    lines.append(f"<positions count=\"{_xml_attr(len(pos_list))}\">")
+    for p in pos_list:
+        if not isinstance(p, dict):
+            continue
+        lines.append(
+            "  <position "
+            f"ticket=\"{_xml_attr(p.get('ticket'))}\" "
+            f"direction=\"{_xml_attr(p.get('direction'))}\" "
+            f"open=\"{_xml_attr(p.get('open_price'))}\" "
+            f"current=\"{_xml_attr(p.get('current_price'))}\" "
+            f"sl=\"{_xml_attr(p.get('sl'))}\" "
+            f"tp=\"{_xml_attr(p.get('tp'))}\" "
+            f"profit_pips=\"{_xml_attr(p.get('profit_pips'))}\" "
+            f"profit=\"{_xml_attr(p.get('profit'))}\"/>")
+    lines.append("</positions>")
+    lines.append("")
+
+    evs = upcoming_events if isinstance(upcoming_events, list) else []
+    lines.append(f"<upcoming_events count=\"{_xml_attr(len(evs))}\">")
+    for ev in evs:
+        if not isinstance(ev, dict):
+            continue
+        lines.append(
+            "  <event "
+            f"name=\"{_xml_attr(ev.get('name'))}\" "
+            f"time=\"{_xml_attr(ev.get('time'))}\" "
+            f"importance=\"{_xml_attr(ev.get('importance'))}\" "
+            f"minutes_until=\"{_xml_attr(ev.get('minutes_until'))}\"/>"
+        )
+    lines.append("</upcoming_events>")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 def _format_price_2dp(value: Any) -> str:
     try:
         return f"{float(value):.2f}"

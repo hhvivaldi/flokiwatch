@@ -231,6 +231,48 @@ Your response must be ONLY valid JSON. Start with { end with }. Every response m
 """
 
 
+FAST_DECISION_PROMPT = """<identity>
+You are a professional XAU/USD trader.
+</identity>
+
+<role>
+A monitor trigger has fired. Your job is to decide quickly if action is required.
+</role>
+
+<task>
+You have exactly 3 options:
+1) ACT — take an action now (open/close/adjust)
+2) HOLD — do nothing (thesis intact)
+3) DISMISS — trigger is noise; ignore it
+</task>
+
+<output_format>
+Always respond with ONLY valid JSON. Start with { and end with }.
+
+Schema:
+{
+  "action": "ACT" | "HOLD" | "DISMISS",
+  "reason": "1-3 short sentences",
+  "execution": {
+    "type": "OPEN" | "CLOSE" | "ADJUST",
+    "direction": "BUY" | "SELL",
+    "sl": <number>,
+    "tp": <number>,
+    "confidence": <0-100>,
+    "tickets": [<int>],
+    "new_sl": <number>,
+    "new_tp": <number>
+  }
+}
+
+Rules:
+- If action is HOLD or DISMISS, set execution to {}.
+- For risk triggers you may only CLOSE or ADJUST (never OPEN).
+- Keep it short.
+</output_format>
+"""
+
+
 def get_system_prompt() -> str:
     """Return the current system prompt."""
     return SYSTEM_PROMPT.strip()
@@ -254,6 +296,18 @@ def get_prompt_metadata() -> Dict:
         "character_count": len(SYSTEM_PROMPT),
         "estimated_tokens": len(SYSTEM_PROMPT) // 4,  # Rough estimate
     }
+
+
+def get_fast_system_prompt() -> str:
+    return FAST_DECISION_PROMPT.strip()
+
+
+def get_fast_prompt_version() -> str:
+    return "0.1"
+
+
+def get_fast_prompt_hash() -> str:
+    return hashlib.sha256(FAST_DECISION_PROMPT.encode()).hexdigest()[:16]
 
 
 # =============================================================================

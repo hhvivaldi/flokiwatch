@@ -825,7 +825,7 @@ class TradingBot:
                             if (now_ts - last_ts) >= 60:
                                 if self._agent_monitor is None:
                                     from agent_monitor import AgentMonitor
-                                    self._agent_monitor = AgentMonitor()
+                                    self._agent_monitor = AgentMonitor(bot=self)
                                 self._agent_monitor.check()
                                 self._last_agent_monitor_tick = now_ts
                         except Exception as e:
@@ -1713,6 +1713,229 @@ class TradingBot:
 
         log.info(f"AGENT_ADJUST | Success: ticket={t} | SL={sl_f} TP={tp_f} | reason={reason_str}")
         return {"success": True, "ticket": t, "reason": reason_str}
+
+    def agent_fast_decide(self, trigger_type: str, trigger_data: dict) -> dict:
+        try:
+            trigger_type = str(trigger_type or "")
+            trigger_data = trigger_data if isinstance(trigger_data, dict) else {}
+
+            prices = None
+            try:
+                prices = executor.get_current_price()
+            except Exception:
+                prices = None
+
+            bid = None
+            ask = None
+            spread = None
+            if prices:
+                try:
+                    bid = float(prices[0])
+                    ask = float(prices[1])
+                    spread = (ask - bid) / 0.1
+                except Exception:
+                    bid = None
+                    ask = None
+                    spread = None
+
+            m5_candles = []
+            try:
+                import MetaTrader5 as mt5
+                rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
+                if rates is not None:
+                    for r in rates:
+                        m5_candles.append({
+                            "time": datetime.fromtimestamp(int(r["time"]), tz=timezone.utc).isoformat(),
+                            "o": float(r["open"]),
+                            "h": float(r["high"]),
+                            "l": float(r["low"]),
+                            "c": float(r["close"]),
+                            "v": int(r["tick_volume"]),
+                        })
+            except Exception:
+                m5_candles = []
+
+            positions = []
+            try:
+                if self.executes_trades:
+                    pos_list = executor.get_open_positions()
+                    for p in pos_list[:5]:
+                        positions.append({
+                            "ticket": p.ticket,
+                            "direction": p.direction,
+                            "open_price": p.open_price,
+                            "current_price": p.current_price,
+                            "sl": p.sl,
+                            "tp": p.tp,
+                            "profit": p.profit,
+                            "profit_pips": p.profit_pips,
+                        })
+            except Exception:
+                positions = []
+
+            upcoming_events = []
+            try:
+                from economic_calendar import get_upcoming_events
+                upcoming_events = get_upcoming_events(max_events=3)
+            except Exception:
+                upcoming_events = []
+
+            price_payload = {"bid": bid, "ask": ask, "spread": spread}
+
+            try:
+                from agent_data_builder import format_fast_xml
+                user_message = format_fast_xml(
+                    trigger_type=trigger_type,
+                    trigger_data=trigger_data,
+                    current_price=price_payload,
+                    m5_candles=m5_candles,
+                    positions=positions,
+                    upcoming_events=upcoming_events,
+                )
+            except Exception as e:
+                log.debug(f"AGENT_FAST | XML build failed: {e}")
+                return {"success": False, "reason": "format_fast_xml failed"}
+
+            system_prompt = ""
+            try:
+                from agent_prompts import get_fast_system_prompt
+                system_prompt = get_fast_system_prompt()
+            except Exception:
+                system_prompt = ""
+
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            if not api_key:
+                return {"success": False, "reason": "ANTHROPIC_API_KEY not set"}
+
+            try:
+                from anthropic import Anthropic
+                client = Anthropic(api_key=api_key)
+            except Exception as e:
+                return {"success": False, "reason": f"anthropic client init failed: {e}"}
+
+            start_ts = time.time()
+            resp_text = ""
+            input_tokens = 0
+            output_tokens = 0
+            model_used = None
+            try:
+                resp = client.messages.create(
+                    model=getattr(config, "AI_AGENT_MODEL", "claude-sonnet-4-20250514"),
+                    max_tokens=600,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                resp_text = resp.content[0].text if resp.content else ""
+                model_used = getattr(resp, "model", None)
+                try:
+                    input_tokens = int(getattr(resp.usage, "input_tokens", 0))
+                    output_tokens = int(getattr(resp.usage, "output_tokens", 0))
+                except Exception:
+                    input_tokens = 0
+                    output_tokens = 0
+            except Exception as e:
+                log.warning(f"AGENT_FAST | call failed (ignored): {e}")
+                return {"success": False, "reason": str(e)}
+
+            latency_ms = int((time.time() - start_ts) * 1000)
+
+            parsed = None
+            try:
+                start = resp_text.find("{")
+                end = resp_text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    parsed = json.loads(resp_text[start:end + 1])
+            except Exception:
+                parsed = None
+
+            action = None
+            exec_payload = {}
+            reason_txt = ""
+            if isinstance(parsed, dict):
+                action = str(parsed.get("action") or "").upper()
+                exec_payload = parsed.get("execution") if isinstance(parsed.get("execution"), dict) else {}
+                reason_txt = str(parsed.get("reason") or "")
+
+            if action not in ("ACT", "HOLD", "DISMISS"):
+                action = "HOLD"
+
+            fast_state = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "trigger_type": trigger_type,
+                "trigger_data": trigger_data,
+                "action": action,
+                "reason": reason_txt,
+                "execution": exec_payload,
+                "latency_ms": latency_ms,
+                "model": model_used,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+            }
+            try:
+                if self.last_analysis and isinstance(self.last_analysis, dict):
+                    self.last_analysis["fast_decision"] = fast_state
+            except Exception:
+                pass
+
+            if action in ("HOLD", "DISMISS"):
+                log.info(f"AGENT_FAST | {action} | {trigger_type} | {reason_txt}")
+                return {"success": True, "action": action, "executed": False}
+
+            exec_type = str(exec_payload.get("type") or "").upper()
+
+            if trigger_type.startswith("TRADE_RISK"):
+                if exec_type not in ("CLOSE", "ADJUST"):
+                    log.warning(f"AGENT_FAST | ACT blocked for risk trigger (type={exec_type})")
+                    return {"success": True, "action": action, "executed": False, "reason": "risk trigger allows CLOSE/ADJUST only"}
+
+            result = None
+            if exec_type == "OPEN":
+                d = str(exec_payload.get("direction") or "").upper()
+                sl = exec_payload.get("sl")
+                tp = exec_payload.get("tp")
+                conf = exec_payload.get("confidence", 50)
+                result = self.execute_agent_trade(direction=d, sl=sl, tp=tp, confidence=conf, scenario=f"fast_{trigger_type}")
+            elif exec_type == "CLOSE":
+                tickets = exec_payload.get("tickets")
+                if not isinstance(tickets, list):
+                    tickets = []
+                if not tickets:
+                    for p in positions:
+                        t = p.get("ticket")
+                        if t is not None:
+                            tickets.append(t)
+                for t in tickets:
+                    try:
+                        self.close_agent_trade(int(t), reason_txt or f"fast_{trigger_type}")
+                    except Exception:
+                        pass
+                result = {"success": True, "closed": tickets}
+            elif exec_type == "ADJUST":
+                new_sl = exec_payload.get("new_sl")
+                new_tp = exec_payload.get("new_tp")
+                tickets = exec_payload.get("tickets")
+                if not isinstance(tickets, list):
+                    tickets = []
+                if not tickets:
+                    for p in positions:
+                        t = p.get("ticket")
+                        if t is not None:
+                            tickets.append(t)
+                for t in tickets:
+                    try:
+                        self.adjust_agent_trade(int(t), new_sl=new_sl, new_tp=new_tp, reason=reason_txt or f"fast_{trigger_type}")
+                    except Exception:
+                        pass
+                result = {"success": True, "adjusted": tickets}
+            else:
+                log.warning(f"AGENT_FAST | ACT but unknown execution type '{exec_type}'")
+                result = {"success": False, "reason": f"unknown exec type {exec_type}"}
+
+            log.info(f"AGENT_FAST | ACT | {trigger_type} | exec={exec_type} | result={result}")
+            return {"success": True, "action": action, "executed": True, "result": result}
+        except Exception as e:
+            log.warning(f"AGENT_FAST | error (ignored): {e}")
+            return {"success": False, "reason": str(e)}
         
         
 

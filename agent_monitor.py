@@ -1,4 +1,5 @@
 import time
+import threading
 from datetime import datetime
 from typing import Any, Dict, Optional, List, Tuple
 
@@ -6,7 +7,8 @@ from logger import log
 
 
 class AgentMonitor:
-    def __init__(self):
+    def __init__(self, bot=None):
+        self.bot = bot
         self.entry_conditions: Optional[Dict[str, Any]] = None
         self.entry_conditions_timestamp: Optional[str] = None
         self.last_trigger_times: Dict[str, float] = {}
@@ -266,6 +268,21 @@ class AgentMonitor:
         self.last_trigger_times[key] = now
         return True
 
+    def _fire_fast_decision(self, trigger_type: str, trigger_data: Dict[str, Any]) -> None:
+        try:
+            if self.bot is None:
+                return
+            if not hasattr(self.bot, "agent_fast_decide"):
+                return
+            t = threading.Thread(
+                target=self.bot.agent_fast_decide,
+                args=(trigger_type, trigger_data),
+                daemon=True,
+            )
+            t.start()
+        except Exception as e:
+            log.debug(f"AGENT_MONITOR | fast_decision error (ignored): {e}")
+
     def _check_trade_at_risk(self) -> None:
         from db_writer import get_active_trade_from_proactive
 
@@ -300,6 +317,10 @@ class AgentMonitor:
                 key = "trade_risk_sl"
                 if self._can_fire(key, cooldown_seconds=300):
                     log.info(f"MONITOR | Trade at risk — SL {dist_to_sl:.1f} points away")
+                    self._fire_fast_decision(
+                        "TRADE_RISK_SL",
+                        {"direction": direction, "dist_to_sl": dist_to_sl, "price": price_used, "sl": sl_f},
+                    )
 
         if tp_f is not None:
             dist_to_tp = abs(tp_f - price_used)
@@ -307,6 +328,10 @@ class AgentMonitor:
                 key = "trade_risk_tp"
                 if self._can_fire(key, cooldown_seconds=300):
                     log.info(f"MONITOR | Trade near TP — {dist_to_tp:.1f} points away")
+                    self._fire_fast_decision(
+                        "TRADE_RISK_TP",
+                        {"direction": direction, "dist_to_tp": dist_to_tp, "price": price_used, "tp": tp_f},
+                    )
 
         if entry_f is not None:
             pnl_points = (price_used - entry_f) if direction == "BUY" else (entry_f - price_used)
@@ -315,6 +340,16 @@ class AgentMonitor:
                     key = "trade_pnl_flip"
                     if self._can_fire(key, cooldown_seconds=300):
                         log.info("MONITOR | P&L flipped negative")
+                        self._fire_fast_decision(
+                            "TRADE_RISK_PNL_FLIP",
+                            {
+                                "direction": direction,
+                                "pnl_points": pnl_points,
+                                "prev_pnl_points": self.last_trade_pnl_points,
+                                "price": price_used,
+                                "entry": entry_f,
+                            },
+                        )
             self.last_trade_pnl_points = pnl_points
 
     def _check_calendar_events(self) -> None:
@@ -348,6 +383,10 @@ class AgentMonitor:
                 continue
 
             log.info(f"MONITOR | HIGH impact event in {int(minutes_until_f)} minutes: {name}")
+            self._fire_fast_decision(
+                "CALENDAR_HIGH_IMPACT",
+                {"minutes_until": minutes_until_f, "name": name, "time": t},
+            )
 
     def _check_breakout(self) -> None:
         price = self._mid_price()
@@ -376,6 +415,10 @@ class AgentMonitor:
         signed_move = last_price - first_price
         sign = "+" if signed_move >= 0 else "-"
         log.info(f"MONITOR | Breakout detected — price moved {sign}{abs(move):.1f} points in 5 minutes")
+        self._fire_fast_decision(
+            "BREAKOUT_5M",
+            {"move": float(move), "signed_move": float(signed_move), "window_seconds": 300},
+        )
 
     def _check_session_change(self) -> None:
         now = datetime.utcnow()
@@ -386,12 +429,14 @@ class AgentMonitor:
             if self.session_last_trigger_date.get(london_key) != today:
                 self.session_last_trigger_date[london_key] = today
                 log.info("MONITOR | London session opening")
+                self._fire_fast_decision("SESSION_OPEN_LONDON", {"time_utc": now.isoformat()})
 
         ny_key = "ny"
         if now.hour == 13 and 0 <= now.minute < 5:
             if self.session_last_trigger_date.get(ny_key) != today:
                 self.session_last_trigger_date[ny_key] = today
                 log.info("MONITOR | NY session opening")
+                self._fire_fast_decision("SESSION_OPEN_NY", {"time_utc": now.isoformat()})
 
     def _check_entry_conditions(self, entry_conditions: Dict[str, Any]) -> None:
         direction = str(entry_conditions.get("direction") or "").upper()
@@ -437,5 +482,15 @@ class AgentMonitor:
 
                 label = desc or f"{ctype} @ {level_f}"
                 log.info(f"MONITOR | Entry condition met — {direction} {ctype} @ {level_f} | {label}")
+                self._fire_fast_decision(
+                    "ENTRY_CONDITION_MET",
+                    {
+                        "direction": direction,
+                        "condition_type": ctype,
+                        "level": level_f,
+                        "price": price_used,
+                        "description": label,
+                    },
+                )
 
         self.last_price_used = price_used
