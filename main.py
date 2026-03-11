@@ -9,6 +9,7 @@ import time
 import signal
 import json
 import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import traceback
@@ -142,6 +143,8 @@ class TradingBot:
 
         self._agent_monitor = None
         self._last_agent_monitor_tick = None
+
+        self._fast_decision_lock = threading.Lock()
         
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -1715,7 +1718,17 @@ class TradingBot:
         return {"success": True, "ticket": t, "reason": reason_str}
 
     def agent_fast_decide(self, trigger_type: str, trigger_data: dict) -> dict:
+        acquired = False
         try:
+            try:
+                acquired = self._fast_decision_lock.acquire(blocking=False)
+            except Exception:
+                acquired = True
+
+            if not acquired:
+                log.debug(f"AGENT_FAST | skip (in progress) | {trigger_type}")
+                return {"success": False, "reason": "fast_decision_in_progress"}
+
             trigger_type = str(trigger_type or "")
             trigger_data = trigger_data if isinstance(trigger_data, dict) else {}
 
@@ -1936,6 +1949,12 @@ class TradingBot:
         except Exception as e:
             log.warning(f"AGENT_FAST | error (ignored): {e}")
             return {"success": False, "reason": str(e)}
+        finally:
+            if acquired:
+                try:
+                    self._fast_decision_lock.release()
+                except Exception:
+                    pass
         
         
 
