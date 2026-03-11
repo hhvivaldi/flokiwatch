@@ -499,6 +499,23 @@ def format_proactive_xml(data_package: Dict) -> str:
         lines.append("</your_recent_decisions>")
         lines.append("")
 
+    active_trade_context = dp.get("active_trade_context") or {}
+    if isinstance(active_trade_context, dict) and active_trade_context:
+        entry = active_trade_context.get("entry") or {}
+        lines.append("<active_trade_context>")
+        lines.append(
+            "  <entry direction=\"" + _xml_attr(entry.get("direction")) + "\" price=\"" + _xml_attr(entry.get("price")) + "\" timestamp=\"" + _xml_attr(entry.get("timestamp")) + "\"/>"
+        )
+        lines.append(f"  <current_price>{_xml_escape(active_trade_context.get('current_price'))}</current_price>")
+        lines.append(f"  <pnl_points>{_xml_escape(active_trade_context.get('pnl_points'))}</pnl_points>")
+        lines.append(f"  <pnl_status>{_xml_escape(active_trade_context.get('pnl_status'))}</pnl_status>")
+        lines.append(f"  <distance_to_sl>{_xml_escape(active_trade_context.get('distance_to_sl'))}</distance_to_sl>")
+        lines.append(f"  <distance_to_tp>{_xml_escape(active_trade_context.get('distance_to_tp'))}</distance_to_tp>")
+        lines.append(f"  <sl>{_xml_escape(active_trade_context.get('sl'))}</sl>")
+        lines.append(f"  <tp>{_xml_escape(active_trade_context.get('tp'))}</tp>")
+        lines.append("</active_trade_context>")
+        lines.append("")
+
     lines.append("--- SECTION 1: PRICE STRUCTURE (Read this FIRST) ---")
     lines.append("")
     lines.append("<price_structure>")
@@ -1015,6 +1032,77 @@ def build_proactive_data_package(
             "mtf_trend": mtf_trend,
             "recent_decisions": recent_decisions or [],
         }
+
+        try:
+            active = None
+            for dec in (recent_decisions or []):
+                if not isinstance(dec, dict):
+                    continue
+                if dec.get("decision") in ("OPEN_BUY", "OPEN_SELL") and dec.get("entry") is not None:
+                    active = dec
+                    break
+
+            if active:
+                direction = "BUY" if active.get("decision") == "OPEN_BUY" else "SELL"
+                entry_price = float(active.get("entry"))
+                sl = active.get("sl")
+                tp = active.get("tp")
+
+                bid = None
+                ask = None
+                try:
+                    bid = float((current_price or {}).get("bid"))
+                except Exception:
+                    bid = None
+                try:
+                    ask = float((current_price or {}).get("ask"))
+                except Exception:
+                    ask = None
+
+                current_used = bid if direction == "SELL" else ask
+                if current_used is None:
+                    current_used = bid if bid is not None else ask
+
+                if current_used is not None:
+                    pnl_points = (entry_price - current_used) if direction == "SELL" else (current_used - entry_price)
+
+                    dist_sl = None
+                    dist_tp = None
+                    try:
+                        if sl is not None:
+                            sl_f = float(sl)
+                            dist_sl = abs(sl_f - current_used)
+                    except Exception:
+                        dist_sl = None
+                    try:
+                        if tp is not None:
+                            tp_f = float(tp)
+                            dist_tp = abs(current_used - tp_f)
+                    except Exception:
+                        dist_tp = None
+
+                    pnl_status = "BREAKEVEN"
+                    if pnl_points > 0:
+                        pnl_status = "WINNING"
+                    elif pnl_points < 0:
+                        pnl_status = "LOSING"
+
+                    package["active_trade_context"] = {
+                        "entry": {
+                            "direction": direction,
+                            "price": _safe_round(entry_price, 2),
+                            "timestamp": active.get("timestamp", ""),
+                        },
+                        "current_price": _safe_round(current_used, 2),
+                        "pnl_points": _safe_round(pnl_points, 2),
+                        "pnl_status": pnl_status,
+                        "distance_to_sl": _safe_round(dist_sl, 2) if dist_sl is not None else None,
+                        "distance_to_tp": _safe_round(dist_tp, 2) if dist_tp is not None else None,
+                        "sl": _safe_round(float(sl), 2) if sl is not None else None,
+                        "tp": _safe_round(float(tp), 2) if tp is not None else None,
+                    }
+        except Exception:
+            pass
 
         if ema200 is not None:
             try:

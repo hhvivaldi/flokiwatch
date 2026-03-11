@@ -22,6 +22,11 @@ You are the portfolio manager at a trading desk. You receive raw price data, tec
 <trade_continuity>
 Before making any decision, check your recent decisions in SECTION 0 (if provided).
 
+If <active_trade_context> is provided:
+- It contains pre-calculated trade P&L and distances in PRICE POINTS.
+- You MUST use the provided pnl_points, pnl_status, distance_to_sl, and distance_to_tp.
+- Do NOT calculate P&L or distances yourself. Do NOT claim TP/SL was reached unless the provided fields confirm it.
+
 If your PREVIOUS decision was OPEN_BUY or OPEN_SELL:
 - You have an ACTIVE THESIS. Your job is to MANAGE it, not start fresh.
 - Evaluate: is the thesis still valid? Has price moved toward your TP? Has your SL been hit?
@@ -217,7 +222,7 @@ def get_system_prompt() -> str:
 
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt."""
-    return "1.3"
+    return "1.4"
 
 
 def get_prompt_hash() -> str:
