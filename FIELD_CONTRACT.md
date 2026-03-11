@@ -301,6 +301,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 Required for proactive OPEN trade plan display:
 `proactive-tp-block`, `proactive-tp-entry`, `proactive-tp-sl`, `proactive-tp-tp`, `proactive-tp-rr`
 
+Required for proactive CLOSE/ADJUST details display:
+`proactive-close-reason-block`, `proactive-close-reason`, `proactive-adjust-block`, `proactive-adjust-sl`, `proactive-adjust-tp`, `proactive-adjust-reason`
+
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
 

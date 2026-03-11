@@ -1033,6 +1033,14 @@ function renderProactiveAnalysis(proactive) {
   const tpTpEl = el("proactive-tp-tp");
   const tpRrEl = el("proactive-tp-rr");
 
+  const closeReasonBlockEl = el("proactive-close-reason-block");
+  const closeReasonEl = el("proactive-close-reason");
+
+  const adjustBlockEl = el("proactive-adjust-block");
+  const adjustSlEl = el("proactive-adjust-sl");
+  const adjustTpEl = el("proactive-adjust-tp");
+  const adjustReasonEl = el("proactive-adjust-reason");
+
   const h1El = el("proactive-h1-close");
   if (h1El) {
     try {
@@ -1097,6 +1105,42 @@ function renderProactiveAnalysis(proactive) {
     }
   } catch (e) {
     if (tpBlockEl) tpBlockEl.classList.add("hidden");
+  }
+
+  // CLOSE reason / ADJUST details blocks
+  try {
+    const closeReason = toRender.close_reason;
+    const adjustment = toRender.adjustment;
+
+    const shouldShowCloseReason = decision === "CLOSE_TRADE" && !!(closeReason && String(closeReason).trim());
+    const shouldShowAdjustment = decision === "ADJUST_TRADE" && !!adjustment;
+
+    if (closeReasonBlockEl) {
+      if (shouldShowCloseReason) closeReasonBlockEl.classList.remove("hidden");
+      else closeReasonBlockEl.classList.add("hidden");
+    }
+
+    if (closeReasonEl) {
+      closeReasonEl.textContent = shouldShowCloseReason ? String(closeReason) : "—";
+    }
+
+    if (adjustBlockEl) {
+      if (shouldShowAdjustment) adjustBlockEl.classList.remove("hidden");
+      else adjustBlockEl.classList.add("hidden");
+    }
+
+    if (adjustSlEl) {
+      adjustSlEl.textContent = shouldShowAdjustment ? fmtNum(adjustment?.new_sl, 2) : "—";
+    }
+    if (adjustTpEl) {
+      adjustTpEl.textContent = shouldShowAdjustment ? fmtNum(adjustment?.new_tp, 2) : "—";
+    }
+    if (adjustReasonEl) {
+      adjustReasonEl.textContent = shouldShowAdjustment ? (adjustment?.reason || "—") : "—";
+    }
+  } catch (e) {
+    if (closeReasonBlockEl) closeReasonBlockEl.classList.add("hidden");
+    if (adjustBlockEl) adjustBlockEl.classList.add("hidden");
   }
 
   const reasonEl = el("proactive-reasoning");
