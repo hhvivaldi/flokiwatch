@@ -739,6 +739,55 @@ def get_active_trade_from_proactive() -> Optional[Dict[str, Any]]:
         return None
 
 
+def get_latest_proactive_entry_conditions() -> Optional[Dict[str, Any]]:
+    """Return latest proactive WAIT entry_conditions payload, or None.
+
+    Shape:
+        {
+          "timestamp": <iso str>,
+          "entry_conditions": <dict>
+        }
+    """
+    try:
+        import json
+
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT timestamp, entry_conditions
+               FROM agent_proactive_analyses
+               WHERE agent_decision = 'WAIT'
+                 AND entry_conditions IS NOT NULL
+               ORDER BY id DESC
+               LIMIT 1"""
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        timestamp_str, entry_conditions_raw = row
+        if not entry_conditions_raw:
+            return None
+
+        try:
+            parsed = json.loads(entry_conditions_raw)
+        except Exception:
+            return None
+
+        if not isinstance(parsed, dict):
+            return None
+
+        return {
+            "timestamp": timestamp_str,
+            "entry_conditions": parsed,
+        }
+    except Exception as e:
+        log.debug(f"db_writer: failed to get latest proactive entry_conditions: {e}")
+        return None
+
+
 def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Query last N agent decisions for Agent memory.

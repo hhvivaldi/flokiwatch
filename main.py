@@ -139,6 +139,9 @@ class TradingBot:
         
         # GPT Confidence Validator stats
         self.gpt_stats = {"confirm": 0, "boost": 0, "reduce": 0, "from_cache": 0}
+
+        self._agent_monitor = None
+        self._last_agent_monitor_tick = None
         
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -814,6 +817,19 @@ class TradingBot:
                             break
                         time.sleep(1)
                     elapsed += sleep_time
+
+                    if self.running:
+                        try:
+                            now_ts = time.time()
+                            last_ts = self._last_agent_monitor_tick or 0
+                            if (now_ts - last_ts) >= 60:
+                                if self._agent_monitor is None:
+                                    from agent_monitor import AgentMonitor
+                                    self._agent_monitor = AgentMonitor()
+                                self._agent_monitor.check()
+                                self._last_agent_monitor_tick = now_ts
+                        except Exception as e:
+                            log.debug(f"AGENT_MONITOR | tick error (ignored): {e}")
                     
                     # If not yet time for next analysis, run monitor
                     if elapsed < interval and self.running and self.executes_trades:
