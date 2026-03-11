@@ -1570,6 +1570,149 @@ class TradingBot:
 
         log.info(f"AGENT_CLOSE | Success: ticket={t} | reason={reason_str}")
         return {"success": True, "ticket": t, "reason": reason_str}
+
+    def adjust_agent_trade(
+        self,
+        ticket: int,
+        new_sl: Optional[float],
+        new_tp: Optional[float],
+        reason: str,
+    ) -> dict:
+        """Modify SL/TP for an open position.
+
+        Uses direct MT5 API modify via executor.modify_position().
+        Validates new levels against current price and direction.
+        """
+        try:
+            t = int(ticket)
+        except Exception:
+            t = 0
+
+        if t <= 0:
+            msg = f"Invalid ticket '{ticket}'"
+            log.warning(f"AGENT_ADJUST | Reject: {msg}")
+            try:
+                alert_error("Agent Adjust Rejected", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": None, "reason": msg}
+
+        positions_list = []
+        try:
+            positions_list = get_positions() if self.executes_trades else []
+        except Exception:
+            positions_list = []
+
+        pos = None
+        for p in positions_list:
+            if getattr(p, "ticket", None) == t:
+                pos = p
+                break
+
+        if pos is None:
+            msg = f"Position {t} not found"
+            log.warning(f"AGENT_ADJUST | Reject: {msg}")
+            try:
+                alert_error("Agent Adjust Rejected", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        direction = str(getattr(pos, "direction", "") or "").upper()
+        current_price = getattr(pos, "current_price", None)
+        if direction not in ("BUY", "SELL") or current_price is None:
+            msg = f"Invalid position data for ticket {t}"
+            log.warning(f"AGENT_ADJUST | Reject: {msg}")
+            try:
+                alert_error("Agent Adjust Rejected", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        sl_f = None
+        tp_f = None
+        try:
+            sl_f = float(new_sl) if new_sl is not None else None
+        except Exception:
+            sl_f = None
+        try:
+            tp_f = float(new_tp) if new_tp is not None else None
+        except Exception:
+            tp_f = None
+
+        if sl_f is None and tp_f is None:
+            msg = "No new SL/TP provided"
+            log.warning(f"AGENT_ADJUST | Skip: ticket={t} | {msg}")
+            return {"success": False, "ticket": t, "reason": msg}
+
+        if direction == "SELL":
+            if sl_f is not None and not (sl_f > float(current_price)):
+                msg = f"Invalid SL for SELL: sl={sl_f:.2f} must be above price={float(current_price):.2f}"
+                log.warning(f"AGENT_ADJUST | Reject: {msg}")
+                try:
+                    alert_error("Agent Adjust Rejected", msg)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": t, "reason": msg}
+            if tp_f is not None and not (tp_f < float(current_price)):
+                msg = f"Invalid TP for SELL: tp={tp_f:.2f} must be below price={float(current_price):.2f}"
+                log.warning(f"AGENT_ADJUST | Reject: {msg}")
+                try:
+                    alert_error("Agent Adjust Rejected", msg)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": t, "reason": msg}
+        else:
+            if sl_f is not None and not (sl_f < float(current_price)):
+                msg = f"Invalid SL for BUY: sl={sl_f:.2f} must be below price={float(current_price):.2f}"
+                log.warning(f"AGENT_ADJUST | Reject: {msg}")
+                try:
+                    alert_error("Agent Adjust Rejected", msg)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": t, "reason": msg}
+            if tp_f is not None and not (tp_f > float(current_price)):
+                msg = f"Invalid TP for BUY: tp={tp_f:.2f} must be above price={float(current_price):.2f}"
+                log.warning(f"AGENT_ADJUST | Reject: {msg}")
+                try:
+                    alert_error("Agent Adjust Rejected", msg)
+                except Exception:
+                    pass
+                return {"success": False, "ticket": t, "reason": msg}
+
+        reason_str = str(reason or "agent_adjust")
+
+        try:
+            order_result = executor.modify_position(t, new_sl=sl_f, new_tp=tp_f)
+        except Exception as e:
+            msg = f"modify_position exception: {e}"
+            log.error(f"AGENT_ADJUST | Failed: {msg}")
+            try:
+                alert_error("Agent Adjust Failed", msg)
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        if not order_result or not getattr(order_result, "success", False):
+            msg = getattr(order_result, "error_message", None) or "modify failed"
+            log.error(f"AGENT_ADJUST | Failed: ticket={t} | {msg}")
+            try:
+                alert_error("Agent Adjust Failed", f"ticket={t} | {msg}")
+            except Exception:
+                pass
+            return {"success": False, "ticket": t, "reason": msg}
+
+        try:
+            discord.send(
+                f"Agent requested ADJUST | ticket={t} | SL={sl_f} TP={tp_f} | reason={reason_str}",
+                alert_type="info",
+                title="Agent Adjust",
+            )
+        except Exception:
+            pass
+
+        log.info(f"AGENT_ADJUST | Success: ticket={t} | SL={sl_f} TP={tp_f} | reason={reason_str}")
+        return {"success": True, "ticket": t, "reason": reason_str}
         
         
 
@@ -1939,6 +2082,75 @@ class TradingBot:
                                     self.close_agent_trade(getattr(p, "ticket", 0), close_reason)
                                 except Exception as e:
                                     log.warning(f"PROACTIVE_H1 | close_agent_trade error (ignored): {e}")
+            elif agent_result.decision == "ADJUST_TRADE":
+                adj = getattr(agent_result, "adjustment", None)
+                if not isinstance(adj, dict):
+                    log.warning("PROACTIVE_H1 | ADJUST_TRADE without adjustment payload — skipping")
+                else:
+                    new_sl = adj.get("new_sl")
+                    new_tp = adj.get("new_tp")
+                    adj_reason = adj.get("reason") or "agent_adjust"
+
+                    if new_sl is None and new_tp is None:
+                        log.warning("PROACTIVE_H1 | ADJUST_TRADE without new_sl/new_tp — skipping")
+                    else:
+                        thesis_direction = None
+                        try:
+                            from db_writer import get_active_trade_from_proactive
+                            active = get_active_trade_from_proactive()
+                            if active and isinstance(active, dict):
+                                d = str(active.get("decision") or "")
+                                if d == "OPEN_BUY":
+                                    thesis_direction = "BUY"
+                                elif d == "OPEN_SELL":
+                                    thesis_direction = "SELL"
+                        except Exception:
+                            thesis_direction = None
+
+                        positions_list = []
+                        try:
+                            positions_list = get_positions() if self.executes_trades else []
+                        except Exception:
+                            positions_list = []
+
+                        if not positions_list:
+                            log.warning("PROACTIVE_H1 | ADJUST_TRADE but no open positions — nothing to adjust")
+                        else:
+                            if thesis_direction is None:
+                                dirs = {getattr(p, "direction", None) for p in positions_list}
+                                dirs = {d for d in dirs if d in ("BUY", "SELL")}
+                                if len(dirs) == 1:
+                                    thesis_direction = next(iter(dirs))
+
+                            if thesis_direction not in ("BUY", "SELL"):
+                                msg = "ADJUST_TRADE could not infer thesis direction (multiple positions?)"
+                                log.warning(f"PROACTIVE_H1 | {msg}")
+                                try:
+                                    alert_error("Agent Adjust Skipped", msg)
+                                except Exception:
+                                    pass
+                            else:
+                                to_adjust = [
+                                    p for p in positions_list if getattr(p, "direction", None) == thesis_direction
+                                ]
+                                if not to_adjust:
+                                    log.warning(
+                                        f"PROACTIVE_H1 | ADJUST_TRADE but no {thesis_direction} positions — nothing to adjust"
+                                    )
+                                else:
+                                    log.warning(
+                                        f"PROACTIVE_H1 | Adjusting {len(to_adjust)} {thesis_direction} position(s) per Agent ADJUST_TRADE"
+                                    )
+                                    for p in to_adjust:
+                                        try:
+                                            self.adjust_agent_trade(
+                                                ticket=getattr(p, "ticket", 0),
+                                                new_sl=new_sl,
+                                                new_tp=new_tp,
+                                                reason=adj_reason,
+                                            )
+                                        except Exception as e:
+                                            log.warning(f"PROACTIVE_H1 | adjust_agent_trade error (ignored): {e}")
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent execution error (ignored): {e}")
     
