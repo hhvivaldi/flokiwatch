@@ -1027,6 +1027,12 @@ function renderProactiveAnalysis(proactive) {
   const latencyMs = toRender.latency_ms;
   const tokensUsed = toRender.tokens_used;
 
+  const tpBlockEl = el("proactive-tp-block");
+  const tpEntryEl = el("proactive-tp-entry");
+  const tpSlEl = el("proactive-tp-sl");
+  const tpTpEl = el("proactive-tp-tp");
+  const tpRrEl = el("proactive-tp-rr");
+
   const h1El = el("proactive-h1-close");
   if (h1El) {
     try {
@@ -1062,6 +1068,35 @@ function renderProactiveAnalysis(proactive) {
   const confEl = el("proactive-confidence");
   if (confEl) {
     confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+  }
+
+  // Trade plan block (OPEN decisions only)
+  try {
+    const isOpen = decision === "OPEN_BUY" || decision === "OPEN_SELL";
+    const tp = toRender.trade_plan;
+
+    if (tpBlockEl && tpEntryEl && tpSlEl && tpTpEl && tpRrEl && isOpen && tp) {
+      const entryStrategy = (tp.entry_strategy || "").toUpperCase() || "—";
+      const entryPrice = tp.entry_price;
+      const sl = tp.stop_loss;
+      const takeProfit = tp.take_profit;
+      const rr = tp.risk_reward_ratio;
+
+      tpEntryEl.textContent = `Entry: ${entryStrategy} @ ${fmtNum(entryPrice, 2)}`;
+      tpSlEl.textContent = `SL: ${fmtNum(sl, 2)}`;
+      tpTpEl.textContent = `TP: ${fmtNum(takeProfit, 2)}`;
+      tpRrEl.textContent = `R:R: ${fmtNum(rr, 1)}`;
+
+      tpBlockEl.classList.remove("hidden");
+    } else if (tpBlockEl) {
+      tpBlockEl.classList.add("hidden");
+      if (tpEntryEl) tpEntryEl.textContent = "—";
+      if (tpSlEl) tpSlEl.textContent = "—";
+      if (tpTpEl) tpTpEl.textContent = "—";
+      if (tpRrEl) tpRrEl.textContent = "—";
+    }
+  } catch (e) {
+    if (tpBlockEl) tpBlockEl.classList.add("hidden");
   }
 
   const reasonEl = el("proactive-reasoning");

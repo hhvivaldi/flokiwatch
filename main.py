@@ -1399,7 +1399,7 @@ class TradingBot:
         try:
             # Store for dashboard
             if self.last_analysis and isinstance(self.last_analysis, dict):
-                self.last_analysis["proactive_analysis"] = {
+                proactive_payload = {
                     "trigger": "PROACTIVE_H1",
                     "h1_close_time": h1_close_time_iso,
                     "timestamp": agent_result.timestamp.isoformat() if agent_result.timestamp else datetime.utcnow().isoformat(),
@@ -1416,6 +1416,24 @@ class TradingBot:
                     "output_tokens": agent_result.output_tokens,
                     "tokens_used": (agent_result.input_tokens or 0) + (agent_result.output_tokens or 0),
                 }
+
+                try:
+                    if agent_result.decision in ("OPEN_BUY", "OPEN_SELL"):
+                        tp = getattr(agent_result, "trade_plan", None)
+                        if tp is not None:
+                            proactive_payload["trade_plan"] = tp
+                    elif agent_result.decision == "ADJUST_TRADE":
+                        adj = getattr(agent_result, "adjustment", None)
+                        if adj is not None:
+                            proactive_payload["adjustment"] = adj
+                    elif agent_result.decision == "CLOSE_TRADE":
+                        cr = getattr(agent_result, "close_reason", None)
+                        if cr is not None:
+                            proactive_payload["close_reason"] = cr
+                except Exception:
+                    pass
+
+                self.last_analysis["proactive_analysis"] = proactive_payload
         except Exception as e:
             log.debug(f"PROACTIVE_H1 | state update error (ignored): {e}")
 

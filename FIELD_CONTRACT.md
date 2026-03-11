@@ -162,6 +162,24 @@
 | `proactive_analysis.concerns` | array of strings | `main.py` | `renderProactiveAnalysis()` → `#proactive-concerns` |
 | `proactive_analysis.latency_ms` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-latency` |
 | `proactive_analysis.tokens_used` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-tokens` |
+| `proactive_analysis.trade_plan` | object \| null | `main.py` | `renderProactiveAnalysis()` → trade plan block |
+| `proactive_analysis.adjustment` | object \| null | `main.py` | not directly used |
+| `proactive_analysis.close_reason` | string \| null | `main.py` | not directly used |
+
+### `last_analysis.proactive_analysis.trade_plan` Object
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `trade_plan.entry_strategy` | string | `main.py` | `renderProactiveAnalysis()` → `#proactive-tp-entry` |
+| `trade_plan.entry_price` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-tp-entry` |
+| `trade_plan.entry_rationale` | string | `main.py` | not directly used |
+| `trade_plan.stop_loss` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-tp-sl` |
+| `trade_plan.stop_loss_rationale` | string | `main.py` | not directly used |
+| `trade_plan.take_profit` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-tp-tp` |
+| `trade_plan.take_profit_rationale` | string | `main.py` | not directly used |
+| `trade_plan.risk_reward_ratio` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-tp-rr` |
+| `trade_plan.timing` | string | `main.py` | not directly used |
+| `trade_plan.moment_assessment` | string | `main.py` | not directly used |
 
 ### `agent_proactive_analyses` Table (SQLite)
 
@@ -279,6 +297,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### Proactive Analysis (H1 Snapshot)
 `proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
+
+Required for proactive OPEN trade plan display:
+`proactive-tp-block`, `proactive-tp-entry`, `proactive-tp-sl`, `proactive-tp-tp`, `proactive-tp-rr`
 
 ### Banners & Misc
 `offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
