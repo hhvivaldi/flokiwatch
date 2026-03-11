@@ -286,17 +286,27 @@ def state():
 
 @app.get("/api/recent-decisions")
 def recent_decisions():
-    if not HISTORY_DB.exists():
-        return JSONResponse([])
     try:
-        conn = _get_history_conn()
-        rows = conn.execute(
-            "SELECT timestamp, decision, final_score FROM analyses ORDER BY id DESC LIMIT 5"
-        ).fetchall()
-        conn.close()
-        result = [{"timestamp": r["timestamp"], "decision": r["decision"], "score": r["final_score"]} for r in rows]
-        result.reverse()
-        return JSONResponse(result)
+        # Use proactive agent timeline (last 5 H1 snapshots)
+        from db_writer import get_recent_proactive_decisions
+
+        rows = get_recent_proactive_decisions(limit=5) or []
+
+        # app.js expects: [{timestamp, decision, score}]
+        # Here score is reused to represent confidence (0-100) for proactive decisions
+        out = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            out.append(
+                {
+                    "timestamp": r.get("timestamp"),
+                    "decision": r.get("decision"),
+                    "score": r.get("confidence"),
+                }
+            )
+        out.reverse()
+        return JSONResponse(out)
     except Exception:
         return JSONResponse([])
 

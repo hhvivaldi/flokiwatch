@@ -1240,9 +1240,18 @@ function renderAgentMemory(agentMemory) {
 
 function decisionColor(d) {
   const s = (d || "").toUpperCase();
+  if (s === "OPEN_BUY") return "text-green-400 border-green-700/50 bg-green-900/20 shadow-sm shadow-green-900/10";
+  if (s === "OPEN_SELL") return "text-red-400 border-red-700/50 bg-red-900/20 shadow-sm shadow-red-900/10";
+  if (s === "HOLD_TRADE") return "text-emerald-400 border-emerald-700/50 bg-emerald-900/20 shadow-sm shadow-emerald-900/10";
+  if (s === "CLOSE_TRADE") return "text-red-300 border-red-800/50 bg-red-950/30 shadow-sm shadow-red-900/10";
+  if (s === "ADJUST_TRADE") return "text-yellow-300 border-yellow-700/50 bg-yellow-900/20 shadow-sm shadow-yellow-900/10";
+  if (s === "WAIT") return "text-yellow-300 border-yellow-700/50 bg-yellow-900/20 shadow-sm shadow-yellow-900/10";
+
   if (s.includes("BUY")) return "text-green-400 border-green-700/50 bg-green-900/20 shadow-sm shadow-green-900/10";
   if (s.includes("SELL")) return "text-red-400 border-red-700/50 bg-red-900/20 shadow-sm shadow-red-900/10";
-  return "text-yellow-300 border-yellow-700/50 bg-yellow-900/20 shadow-sm shadow-yellow-900/10";
+  if (s.includes("CLOSE")) return "text-red-300 border-red-800/50 bg-red-950/30 shadow-sm shadow-red-900/10";
+  if (s.includes("HOLD")) return "text-yellow-300 border-yellow-700/50 bg-yellow-900/20 shadow-sm shadow-yellow-900/10";
+  return "text-gray-300 border-gray-700/50 bg-gray-900/20 shadow-sm";
 }
 
 function renderRecentDecisions(decisions) {
@@ -1258,7 +1267,7 @@ function renderRecentDecisions(decisions) {
   for (const d of decisions) {
     const time = (d.timestamp || "").split("T")[1]?.slice(0, 5) || "—";
     const decision = d.decision || "HOLD";
-    const score = d.score != null ? Number(d.score).toFixed(1) : "—";
+    const score = d.score != null ? `${fmtNum(d.score, 0)}%` : "—";
     const cls = decisionColor(decision);
 
     container.insertAdjacentHTML("beforeend", `
