@@ -1,6 +1,6 @@
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
 
@@ -11,25 +11,51 @@ class AgentMonitor:
         self.entry_conditions_timestamp: Optional[str] = None
         self.last_trigger_times: Dict[str, float] = {}
         self.last_price_used: Optional[float] = None
+        self.last_trade_pnl_points: Optional[float] = None
+        self.recent_prices: List[Tuple[float, float]] = []
+        self.session_last_trigger_date: Dict[str, str] = {}
 
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
         try:
-            latest = self._load_latest_entry_conditions()
-            if not latest:
-                return
+            try:
+                self._check_trade_at_risk()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | trade-risk error (ignored): {e}")
 
-            entry_conditions = latest.get("entry_conditions")
-            if not isinstance(entry_conditions, dict):
-                return
+            try:
+                self._check_calendar_events()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | calendar error (ignored): {e}")
 
-            self.entry_conditions = entry_conditions
-            self.entry_conditions_timestamp = latest.get("timestamp")
+            try:
+                self._check_breakout()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | breakout error (ignored): {e}")
 
-            if self._is_expired(self.entry_conditions_timestamp, entry_conditions):
-                return
+            try:
+                self._check_session_change()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | session error (ignored): {e}")
 
-            self._check_entry_conditions(entry_conditions)
+            try:
+                latest = self._load_latest_entry_conditions()
+                if not latest:
+                    return
+
+                entry_conditions = latest.get("entry_conditions")
+                if not isinstance(entry_conditions, dict):
+                    return
+
+                self.entry_conditions = entry_conditions
+                self.entry_conditions_timestamp = latest.get("timestamp")
+
+                if self._is_expired(self.entry_conditions_timestamp, entry_conditions):
+                    return
+
+                self._check_entry_conditions(entry_conditions)
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | entry-conditions error (ignored): {e}")
         except Exception as e:
             log.debug(f"AGENT_MONITOR | check error (ignored): {e}")
 
@@ -38,6 +64,19 @@ class AgentMonitor:
             from db_writer import get_latest_proactive_entry_conditions
 
             return get_latest_proactive_entry_conditions()
+        except Exception:
+            return None
+
+    def _mid_price(self) -> Optional[float]:
+        try:
+            from executor import executor
+
+            prices = executor.get_current_price()
+            if not prices:
+                return None
+
+            bid, ask = prices
+            return float((float(bid) + float(ask)) / 2.0)
         except Exception:
             return None
 
@@ -86,13 +125,140 @@ class AgentMonitor:
         cross_dir = str(cond.get("direction") or "").strip().lower()
         return f"{direction}:{ctype}:{level}:{cross_dir}"
 
-    def _can_fire(self, key: str) -> bool:
+    def _can_fire(self, key: str, cooldown_seconds: int = 300) -> bool:
         now = time.time()
         last = self.last_trigger_times.get(key)
-        if last is not None and (now - last) < 300:
+        if last is not None and (now - last) < cooldown_seconds:
             return False
         self.last_trigger_times[key] = now
         return True
+
+    def _check_trade_at_risk(self) -> None:
+        from db_writer import get_active_trade_from_proactive
+
+        trade = get_active_trade_from_proactive()
+        if not trade:
+            self.last_trade_pnl_points = None
+            return
+
+        decision = str(trade.get("decision") or "")
+        direction = "BUY" if decision == "OPEN_BUY" else "SELL" if decision == "OPEN_SELL" else ""
+        if direction not in ("BUY", "SELL"):
+            return
+
+        price_used = self._price_used(direction)
+        if price_used is None:
+            return
+
+        entry = trade.get("entry")
+        sl = trade.get("sl")
+        tp = trade.get("tp")
+
+        try:
+            sl_f = float(sl) if sl is not None else None
+            tp_f = float(tp) if tp is not None else None
+            entry_f = float(entry) if entry is not None else None
+        except Exception:
+            return
+
+        if sl_f is not None:
+            dist_to_sl = abs(price_used - sl_f)
+            if dist_to_sl < 5.0:
+                key = "trade_risk_sl"
+                if self._can_fire(key, cooldown_seconds=300):
+                    log.info(f"MONITOR | Trade at risk — SL {dist_to_sl:.1f} points away")
+
+        if tp_f is not None:
+            dist_to_tp = abs(tp_f - price_used)
+            if dist_to_tp < 5.0:
+                key = "trade_risk_tp"
+                if self._can_fire(key, cooldown_seconds=300):
+                    log.info(f"MONITOR | Trade near TP — {dist_to_tp:.1f} points away")
+
+        if entry_f is not None:
+            pnl_points = (price_used - entry_f) if direction == "BUY" else (entry_f - price_used)
+            if self.last_trade_pnl_points is not None:
+                if self.last_trade_pnl_points > 0 and pnl_points < 0:
+                    key = "trade_pnl_flip"
+                    if self._can_fire(key, cooldown_seconds=300):
+                        log.info("MONITOR | P&L flipped negative")
+            self.last_trade_pnl_points = pnl_points
+
+    def _check_calendar_events(self) -> None:
+        from economic_calendar import get_upcoming_events
+
+        events = get_upcoming_events(max_events=3)
+        if not isinstance(events, list):
+            return
+
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+
+            importance = str(ev.get("importance") or "").upper()
+            if importance != "HIGH":
+                continue
+
+            minutes_until = ev.get("minutes_until")
+            try:
+                minutes_until_f = float(minutes_until)
+            except Exception:
+                continue
+
+            if minutes_until_f < 0 or minutes_until_f >= 15:
+                continue
+
+            name = str(ev.get("name") or "?")
+            t = str(ev.get("time") or "?")
+            key = f"calendar_high:{name}:{t}"
+            if not self._can_fire(key, cooldown_seconds=600):
+                continue
+
+            log.info(f"MONITOR | HIGH impact event in {int(minutes_until_f)} minutes: {name}")
+
+    def _check_breakout(self) -> None:
+        price = self._mid_price()
+        if price is None:
+            return
+
+        now_ts = time.time()
+        self.recent_prices.append((now_ts, price))
+
+        cutoff = now_ts - 300.0
+        self.recent_prices = [(ts, p) for (ts, p) in self.recent_prices if ts >= cutoff]
+        if len(self.recent_prices) < 2:
+            return
+
+        prices = [p for (_, p) in self.recent_prices]
+        move = max(prices) - min(prices)
+        if move <= 15.0:
+            return
+
+        key = "breakout"
+        if not self._can_fire(key, cooldown_seconds=300):
+            return
+
+        first_price = self.recent_prices[0][1]
+        last_price = self.recent_prices[-1][1]
+        signed_move = last_price - first_price
+        sign = "+" if signed_move >= 0 else "-"
+        log.info(f"MONITOR | Breakout detected — price moved {sign}{abs(move):.1f} points in 5 minutes")
+
+    def _check_session_change(self) -> None:
+        now = datetime.utcnow()
+        today = now.strftime("%Y-%m-%d")
+
+        london_key = "london"
+        if now.hour == 8 and 0 <= now.minute < 5:
+            if self.session_last_trigger_date.get(london_key) != today:
+                self.session_last_trigger_date[london_key] = today
+                log.info("MONITOR | London session opening")
+
+        ny_key = "ny"
+        if now.hour == 13 and 0 <= now.minute < 5:
+            if self.session_last_trigger_date.get(ny_key) != today:
+                self.session_last_trigger_date[ny_key] = today
+                log.info("MONITOR | NY session opening")
 
     def _check_entry_conditions(self, entry_conditions: Dict[str, Any]) -> None:
         direction = str(entry_conditions.get("direction") or "").upper()
@@ -133,7 +299,7 @@ class AgentMonitor:
 
             if fired:
                 key = self._spam_key(direction, cond)
-                if not self._can_fire(key):
+                if not self._can_fire(key, cooldown_seconds=300):
                     continue
 
                 label = desc or f"{ctype} @ {level_f}"
