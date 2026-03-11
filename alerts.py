@@ -987,6 +987,171 @@ def alert_spread_skip(direction: str, spread: float, final_score: float):
     )
 
 
+def alert_proactive_decision(agent_result) -> bool:
+    decision = getattr(agent_result, "decision", "") or ""
+    confidence = getattr(agent_result, "confidence", None)
+    try:
+        confidence_int = int(confidence) if confidence is not None else None
+    except Exception:
+        confidence_int = None
+
+    reasoning = getattr(agent_result, "reasoning", "") or ""
+    key_factors = getattr(agent_result, "key_factors", None) or []
+    concerns = getattr(agent_result, "concerns", None) or []
+    trade_plan = getattr(agent_result, "trade_plan", None)
+    adjustment = getattr(agent_result, "adjustment", None)
+    close_reason = getattr(agent_result, "close_reason", None)
+
+    if confidence_int is None:
+        title_suffix = ""
+    else:
+        title_suffix = f" ({confidence_int}%)"
+
+    def _truncate(text: str, max_chars: int) -> str:
+        if not text:
+            return ""
+        t = str(text).strip()
+        return (t[:max_chars] + "...") if len(t) > max_chars else t
+
+    def _as_lines(value) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            v = value.strip()
+            return [v] if v else []
+        if isinstance(value, list):
+            out = []
+            for item in value:
+                if item is None:
+                    continue
+                s = str(item).strip()
+                if s:
+                    out.append(s)
+            return out
+        if isinstance(value, dict):
+            out = []
+            for k, v in value.items():
+                if v is None:
+                    continue
+                s = str(v).strip()
+                if not s:
+                    continue
+                out.append(f"{k}: {s}")
+            return out
+        s = str(value).strip()
+        return [s] if s else []
+
+    title_prefix_map = {
+        "OPEN_BUY": "🎯 PROACTIVE: OPEN_BUY",
+        "OPEN_SELL": "🎯 PROACTIVE: OPEN_SELL",
+        "HOLD_TRADE": "🔄 PROACTIVE: HOLD_TRADE",
+        "CLOSE_TRADE": "🚪 PROACTIVE: CLOSE_TRADE",
+        "ADJUST_TRADE": "⚙️ PROACTIVE: ADJUST_TRADE",
+        "WAIT": "⏳ PROACTIVE WAIT",
+    }
+    title = f"{title_prefix_map.get(decision, '🤖 PROACTIVE')}{title_suffix}"
+
+    if decision in ("OPEN_BUY", "OPEN_SELL"):
+        color = 0x00ff00 if decision == "OPEN_BUY" else 0xff0000
+        fields: List[Dict] = []
+
+        if trade_plan is not None:
+            if isinstance(trade_plan, dict):
+                entry = trade_plan.get("entry") or trade_plan.get("entry_price")
+                sl = trade_plan.get("sl") or trade_plan.get("stop_loss")
+                tp = trade_plan.get("tp") or trade_plan.get("take_profit") or trade_plan.get("tp1")
+                rr = trade_plan.get("rr") or trade_plan.get("risk_reward")
+                entry_label = trade_plan.get("entry_type") or "MARKET"
+
+                plan_lines = []
+                if entry is not None:
+                    plan_lines.append(f"Entry: {entry_label} @ {entry}")
+                if sl is not None:
+                    plan_lines.append(f"SL: {sl}")
+                if tp is not None:
+                    plan_lines.append(f"TP: {tp}")
+                if rr is not None:
+                    plan_lines.append(f"R:R: {rr}")
+                if plan_lines:
+                    fields.append({"name": "Trade Plan", "value": "\n".join(plan_lines), "inline": False})
+            else:
+                plan_text = _truncate(str(trade_plan), 600)
+                if plan_text:
+                    fields.append({"name": "Trade Plan", "value": plan_text, "inline": False})
+
+        reasoning_snip = _truncate(reasoning, 200)
+        if reasoning_snip:
+            fields.append({"name": "Reasoning", "value": reasoning_snip, "inline": False})
+
+        kf_lines = _as_lines(key_factors)
+        if kf_lines:
+            fields.append({"name": "Key factors", "value": "\n".join(kf_lines[:6]), "inline": False})
+
+        con_lines = _as_lines(concerns)
+        if con_lines:
+            fields.append({"name": "Concerns", "value": "\n".join(con_lines[:6]), "inline": False})
+
+        return discord_router.send_embed(
+            CHANNEL_BRAIN,
+            title=title,
+            description="Proactive agent decision (H1 snapshot).",
+            color=color,
+            fields=fields if fields else None,
+        )
+
+    if decision == "WAIT":
+        reasoning_snip = _truncate(reasoning, 150)
+        desc = reasoning_snip or "Waiting."
+        return discord_router.send_embed(
+            CHANNEL_BRAIN,
+            title=title,
+            description=desc,
+            color=0xf39c12,
+        )
+
+    if decision in ("HOLD_TRADE", "CLOSE_TRADE", "ADJUST_TRADE"):
+        color = 0x3498db
+        if decision == "CLOSE_TRADE":
+            color = 0x95a5a6
+        elif decision == "ADJUST_TRADE":
+            color = 0x8e44ad
+
+        fields: List[Dict] = []
+        reasoning_snip = _truncate(reasoning, 200)
+        if reasoning_snip:
+            fields.append({"name": "Reasoning", "value": reasoning_snip, "inline": False})
+
+        if decision == "CLOSE_TRADE":
+            cr_lines = _as_lines(close_reason)
+            if cr_lines:
+                fields.append({"name": "Close reason", "value": "\n".join(cr_lines[:10]), "inline": False})
+        elif decision == "ADJUST_TRADE":
+            adj_lines = _as_lines(adjustment)
+            if adj_lines:
+                fields.append({"name": "Adjustment", "value": "\n".join(adj_lines[:12]), "inline": False})
+        elif decision == "HOLD_TRADE":
+            hold_detail = getattr(agent_result, "hold_summary", None) or getattr(agent_result, "hold_detail", None)
+            hold_lines = _as_lines(hold_detail)
+            if hold_lines:
+                fields.append({"name": "Hold", "value": "\n".join(hold_lines[:6]), "inline": False})
+
+        return discord_router.send_embed(
+            CHANNEL_BRAIN,
+            title=title,
+            description="Proactive agent decision (H1 snapshot).",
+            color=color,
+            fields=fields if fields else None,
+        )
+
+    # Unknown decision type: still send minimal context
+    return discord_router.send_embed(
+        CHANNEL_BRAIN,
+        title=title,
+        description=_truncate(reasoning, 200) or f"Decision: {decision}",
+        color=0x95a5a6,
+    )
+
+
 def alert_agent_decision(
     brain_decision: str,
     brain_score: float,

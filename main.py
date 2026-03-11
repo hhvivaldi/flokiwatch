@@ -29,6 +29,7 @@ from alerts import (
     alert_brain_decision,
     alert_spread_delay, alert_spread_skip,
     alert_agent_decision,
+    alert_proactive_decision,
     check_ea_bridge_status_and_alert
 )
 from confluence import analyze_confluence
@@ -1389,6 +1390,11 @@ class TradingBot:
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent call failed (non-blocking): {e}")
             return
+
+        try:
+            alert_proactive_decision(agent_result)
+        except Exception as e:
+            log.debug(f"PROACTIVE_H1 | Discord alert error (ignored): {e}")
 
         try:
             # Persist to SQLite
