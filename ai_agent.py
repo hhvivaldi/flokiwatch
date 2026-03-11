@@ -39,6 +39,7 @@ class AgentResult:
     key_factors: List[str]
     concerns: List[str]
     trade_plan: Optional[Dict[str, Any]] = None
+    entry_conditions: Optional[Dict[str, Any]] = None
     raw_response: Optional[str] = None
     prompt_version: str = ""
     prompt_hash: str = ""
@@ -63,6 +64,7 @@ class AgentResult:
             "key_factors": self.key_factors,
             "concerns": self.concerns,
             "trade_plan": self.trade_plan,
+            "entry_conditions": self.entry_conditions,
             "raw_response": self.raw_response,
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
@@ -386,6 +388,11 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
  
             # Parse v1.4 trade plan fields if present
             trade_plan = parsed.get("trade_plan")
+
+            entry_conditions = parsed.get("entry_conditions")
+            if entry_conditions is not None and not isinstance(entry_conditions, dict):
+                logger.warning("Invalid entry_conditions type (expected dict) — ignoring")
+                entry_conditions = None
             
             # Parse adjustment and close_reason
             adjustment = parsed.get("adjustment")
@@ -398,6 +405,7 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 key_factors=parsed.get("key_factors", []),
                 concerns=parsed.get("concerns", []),
                 trade_plan=trade_plan,
+                entry_conditions=entry_conditions,
                 raw_response=content,
                 prompt_version=get_prompt_version(),
                 prompt_hash=get_prompt_hash(),

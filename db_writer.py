@@ -277,6 +277,7 @@ def init_db() -> None:
             ("tp_risk_reward_ratio", "REAL"),
             ("tp_timing", "TEXT"),
             ("tp_moment_assessment", "TEXT"),
+            ("entry_conditions", "TEXT"),
             ("adjustment_new_sl", "REAL"),
             ("adjustment_new_tp", "REAL"),
             ("adjustment_reason", "TEXT"),
@@ -605,6 +606,11 @@ def record_agent_proactive_analysis(
         adj = agent_result.get("adjustment") or {}
 
         conn = _get_connection()
+        entry_conditions = agent_result.get("entry_conditions")
+        if entry_conditions is not None and not isinstance(entry_conditions, dict):
+            entry_conditions = None
+        entry_conditions_json = json.dumps(entry_conditions) if entry_conditions is not None else None
+
         conn.execute(
             """INSERT INTO agent_proactive_analyses
                (timestamp, h1_close_time,
@@ -615,14 +621,15 @@ def record_agent_proactive_analysis(
                 tp_take_profit, tp_take_profit_rationale,
                 tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms,
+                entry_conditions,
                 adjustment_new_sl, adjustment_new_tp, adjustment_reason, close_reason)
-               VALUES (?, ?, ?, ?, ?, ?, ?,
-                       ?,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?,
                        ?, ?, ?,
                        ?, ?,
                        ?, ?,
                        ?, ?, ?,
                        ?, ?, ?, ?, ?, ?,
+                       ?,
                        ?, ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
@@ -649,6 +656,7 @@ def record_agent_proactive_analysis(
                 agent_result.get("input_tokens", 0),
                 agent_result.get("output_tokens", 0),
                 agent_result.get("latency_ms", 0),
+                entry_conditions_json,
                 adj.get("new_sl"),
                 adj.get("new_tp"),
                 adj.get("reason"),

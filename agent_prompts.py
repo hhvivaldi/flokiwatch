@@ -156,6 +156,22 @@ Additional fields by decision type:
 - CLOSE_TRADE: include "close_reason" string
 - REJECT: include "market_view", "conditions_to_approve", "invalidation"
 
+When your decision is WAIT and you see a setup forming (a potential trade that needs confirmation), include entry_conditions:
+
+entry_conditions: {
+  direction: 'SELL' or 'BUY',
+  conditions: [
+    {type: 'price_touch', level: 5197.0, description: 'Price touches Fib 23.6% resistance'},
+    {type: 'price_break', level: 5172.0, direction: 'below', description: 'Price breaks below H4 support'}
+  ],
+  validity_minutes: 180,
+  preferred_entry: 5197.0,
+  sl: 5210.0,
+  tp: 5152.0
+}
+
+entry_conditions is OPTIONAL for WAIT. Only include it when you see a concrete setup forming. If you say WAIT because the market is directionless or you simply don't see a trade, omit entry_conditions entirely.
+
 trade_plan fields:
 - entry_strategy: MARKET, LIMIT, or MISSED
 - entry_price, entry_rationale
