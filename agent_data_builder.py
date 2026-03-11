@@ -1035,14 +1035,13 @@ def build_proactive_data_package(
 
         try:
             active = None
-            for dec in (recent_decisions or []):
-                if not isinstance(dec, dict):
-                    continue
-                if dec.get("decision") in ("OPEN_BUY", "OPEN_SELL") and dec.get("entry") is not None:
-                    active = dec
-                    break
+            try:
+                from db_writer import get_active_trade_from_proactive
+                active = get_active_trade_from_proactive()
+            except Exception:
+                active = None
 
-            if active:
+            if active and isinstance(active, dict) and active.get("decision") in ("OPEN_BUY", "OPEN_SELL") and active.get("entry") is not None:
                 direction = "BUY" if active.get("decision") == "OPEN_BUY" else "SELL"
                 entry_price = float(active.get("entry"))
                 sl = active.get("sl")

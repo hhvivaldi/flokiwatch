@@ -705,6 +705,40 @@ def get_recent_proactive_decisions(limit: int = 5) -> List[Dict[str, Any]]:
         return []
 
 
+def get_active_trade_from_proactive() -> Optional[Dict[str, Any]]:
+    """Return the last OPEN decision if it has not been followed by a CLOSE_TRADE; else None."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT id, timestamp, agent_decision, tp_entry_price, tp_stop_loss, tp_take_profit
+               FROM agent_proactive_analyses
+               WHERE agent_decision IN ('OPEN_BUY','OPEN_SELL','CLOSE_TRADE')
+               ORDER BY id DESC
+               LIMIT 1"""
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        _id, timestamp_str, decision, entry, sl, tp = row
+        if decision in ("OPEN_BUY", "OPEN_SELL"):
+            return {
+                "timestamp": timestamp_str,
+                "decision": decision,
+                "entry": entry,
+                "sl": sl,
+                "tp": tp,
+            }
+
+        return None
+    except Exception as e:
+        log.debug(f"db_writer: failed to get active trade from proactive: {e}")
+        return None
+
+
 def get_recent_agent_decisions(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Query last N agent decisions for Agent memory.
