@@ -34,6 +34,32 @@ def _xml_attr(value: Any) -> str:
     return _xml_escape(value)
 
 
+def _normalize_event_name(name: Any) -> str:
+    try:
+        return " ".join(str(name or "").strip().lower().split())
+    except Exception:
+        return ""
+
+
+def _as_optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if value == "":
+        return None
+    try:
+        # Preserve numeric formatting without trailing .0 if it was int-like
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            if isinstance(value, float) and value.is_integer():
+                return str(int(value))
+            return str(value)
+        s = str(value).strip()
+        return s if s else None
+    except Exception:
+        return None
+
+
 def _csv_candle_rows(candles: List[Dict]) -> str:
     """Render candles as compact CSV-style rows: time, o, h, l, c, v."""
     if not candles:
@@ -642,8 +668,40 @@ def format_proactive_xml(data_package: Dict) -> str:
         "  <calendar "
         f"phase=\"{_xml_attr(calendar.get('phase'))}\" "
         f"bias=\"{_xml_attr(calendar.get('bias'))}\" "
-        f"source=\"{_xml_attr(calendar.get('source', 'mt5_bridge'))}\"/>"
+        f"source=\"{_xml_attr(calendar.get('source', 'mt5_bridge'))}\">"
     )
+
+    upcoming_events = calendar.get("upcoming_events") or []
+    if isinstance(upcoming_events, list) and upcoming_events:
+        lines.append(f"    <upcoming_events count=\"{_xml_attr(len(upcoming_events))}\">")
+        for ev in upcoming_events[:5]:
+            if not isinstance(ev, dict):
+                continue
+
+            name = ev.get("name")
+            time_val = ev.get("time")
+            importance = ev.get("importance")
+            time_until = ev.get("time_until")
+
+            attrs = [
+                f"name=\"{_xml_attr(name)}\"",
+                f"time=\"{_xml_attr(time_val)}\"",
+                f"importance=\"{_xml_attr(importance)}\"",
+                f"time_until=\"{_xml_attr(time_until)}\"",
+            ]
+
+            forecast = _as_optional_str(ev.get("forecast"))
+            previous = _as_optional_str(ev.get("previous"))
+            if forecast is not None:
+                attrs.append(f"forecast=\"{_xml_attr(forecast)}\"")
+            if previous is not None:
+                attrs.append(f"previous=\"{_xml_attr(previous)}\"")
+
+            lines.append(f"      <event {' '.join(attrs)}/>")
+
+        lines.append("    </upcoming_events>")
+
+    lines.append("  </calendar>")
     lines.append(f"  <sentiment overall=\"{_xml_attr(sentiment.get('overall', sentiment.get('label')))}\"/>")
 
     lines.append(f"  <headlines count=\"{_xml_attr(min(len(headlines), 20))}\">")
@@ -1214,12 +1272,68 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
     }
     
     # Calendar
+    cal_phase = calendar_data.get("phase", "normal")
+    cal_bias = calendar_data.get("bias", "NEUTRAL")
+    cal_source = calendar_data.get("source") or "mt5_bridge"
+
+    # Build upcoming events list for the proactive Agent XML.
+    # name/time/importance/time_until come from economic_calendar.get_upcoming_events().
+    # forecast/previous come from economic_calendar.get_calendar_data()["events"] matched by event name.
+    upcoming_enriched: List[Dict[str, Any]] = []
+    try:
+        from economic_calendar import get_upcoming_events
+
+        upcoming_basic = get_upcoming_events(max_events=5)
+        if not isinstance(upcoming_basic, list):
+            upcoming_basic = []
+
+        raw_events = calendar_data.get("events", [])
+
+        if not isinstance(raw_events, list):
+            raw_events = []
+
+        lookup: Dict[str, Dict[str, Any]] = {}
+        for e in raw_events:
+            if not isinstance(e, dict):
+                continue
+            k = _normalize_event_name(e.get("name"))
+            if not k:
+                continue
+            lookup[k] = e
+
+        for ev in upcoming_basic[:5]:
+            if not isinstance(ev, dict):
+                continue
+            name = ev.get("name")
+            matched = lookup.get(_normalize_event_name(name)) or {}
+
+            item: Dict[str, Any] = {
+                "name": name,
+                "time": ev.get("time"),
+                "importance": ev.get("importance"),
+                "time_until": ev.get("time_until"),
+            }
+
+            # Attach optional values if present
+            fv = matched.get("forecast_value")
+            pv = matched.get("previous_value")
+            if fv is not None:
+                item["forecast"] = fv
+            if pv is not None:
+                item["previous"] = pv
+
+            upcoming_enriched.append(item)
+    except Exception:
+        upcoming_enriched = []
+
     macro["calendar"] = {
-        "phase": calendar_data.get("phase", "normal"),
-        "bias": calendar_data.get("bias", "NEUTRAL"),
+        "phase": cal_phase,
+        "bias": cal_bias,
+        "source": cal_source,
         "score": _safe_round(calendar_data.get("score", 50), 1),
         "next_event": calendar_data.get("next_event_name", ""),
         "next_event_in": calendar_data.get("next_event_minutes", 0),
+        "upcoming_events": upcoming_enriched,
     }
     
     # Sentiment
