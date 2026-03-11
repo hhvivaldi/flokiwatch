@@ -908,10 +908,7 @@ class TradingBot:
             
             # Analysis log
             log.analysis(tech_score, news_score, ml_score, final_score)
-            if direction is None and decision != "HOLD":
-                log.decision(f"FORCED HOLD ({decision} blocked: conf {confidence:.1f}% < {config.BRAIN_MIN_CONFIDENCE}%)", confidence, final_score)
-            else:
-                log.decision(decision, confidence, final_score)
+            log.decision(decision, confidence, final_score)
             
             if config.USE_CENTRAL_BRAIN:
                 self._check_heartbeat()
@@ -919,46 +916,12 @@ class TradingBot:
             # Check if actionable signal
             if direction is None:
                 log.info(f"   Decision: {decision} - Waiting...")
-                if config.USE_CENTRAL_BRAIN and hold_forced:
-                    alert_brain_decision(
-                        decision=decision,
-                        final_score=final_score,
-                        confidence=confidence,
-                        scenario=last_analysis.get("scenario", ""),
-                        tech_score=last_analysis.get("tech_score", tech_score),
-                        ml_score=last_analysis.get("ml_score", ml_score),
-                        momentum_score=last_analysis.get("momentum_score", 50.0),
-                        news_score=last_analysis.get("news_score", news_score),
-                        calendar_score=last_analysis.get("calendar_score", 50.0),
-                        gpt_validation=last_analysis.get("gpt_validation"),
-                        volatility_status=last_analysis.get("volatility_status", "NORMAL"),
-                        mtf_trend=last_analysis.get("mtf_trend"),
-                        volume_gate=last_analysis.get("volume_gate"),
-                        hold_forced=True,
-                        original_decision=original_decision,
-                        hold_reason=hold_reason,
-                    )
                 return
             
             # Signal detected!
             log.info(f"   🔔 SIGNAL: {decision} ({direction})")
 
-            if config.USE_CENTRAL_BRAIN:
-                alert_brain_decision(
-                    decision=decision,
-                    final_score=final_score,
-                    confidence=confidence,
-                    scenario=last_analysis.get("scenario", ""),
-                    tech_score=last_analysis.get("tech_score", tech_score),
-                    ml_score=last_analysis.get("ml_score", ml_score),
-                    momentum_score=last_analysis.get("momentum_score", 50.0),
-                    news_score=last_analysis.get("news_score", news_score),
-                    calendar_score=last_analysis.get("calendar_score", 50.0),
-                    gpt_validation=last_analysis.get("gpt_validation"),
-                    volatility_status=last_analysis.get("volatility_status", "NORMAL"),
-                    mtf_trend=last_analysis.get("mtf_trend"),
-                    volume_gate=last_analysis.get("volume_gate"),
-                )
+            # alert_brain_decision disabled in Phase 0 (dashboard shows Brain decision)
 
             atr = get_atr_value(df)
             prices = executor.get_current_price()
@@ -969,21 +932,12 @@ class TradingBot:
 
             levels = calculate_sl_tp(entry_price, direction, atr)
             
-            # Alert Discord
-            alert_signal_detected(
-                decision=decision,
-                final_score=final_score,
-                tech_score=tech_score,
-                news_score=news_score,
-                ml_score=ml_score,
-                confidence=confidence,
-                brain_summary=explanation,
-                current_price=entry_price,
-                stop_loss=levels.stop_loss,
-                take_profit=levels.take_profit_1,
-                scenario=last_analysis.get("scenario", None),
-            )
+            # alert_signal_detected disabled in Phase 0 (Brain no longer executes trades)
             
+            # NOTE: Safety checks and execution must be reconnected under Agent execution (Phase 3)
+            log.info("Brain execution disabled — Agent is sole decision maker")
+            return
+
             # Safety Checks
             positions_list = get_positions() if self.executes_trades else []
             account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
@@ -1679,9 +1633,9 @@ class TradingBot:
         )
         self.cycle_memory.add(snapshot)
         
-        # GPT Confidence Validator
+        # GPT Confidence Validator (disabled in Phase 0 — Agent is validator)
         cycle_history = self.cycle_memory.format_for_gpt()
-        if getattr(config, 'USE_GPT_CONFIDENCE', False) and vol_status.get('status') != 'EXTREME':
+        if False and getattr(config, 'USE_GPT_CONFIDENCE', False) and vol_status.get('status') != 'EXTREME':
             try:
                 from gpt_confidence import validate_confidence
                 gpt_result = validate_confidence(
@@ -1689,12 +1643,12 @@ class TradingBot:
                     news_data, calendar_data, vol_status, current_price,
                     cycle_history=cycle_history
                 )
-                
+
                 if gpt_result["action"] == "BOOST" and gpt_result["adjustment"] > 0:
                     brain_result.confidence = min(100, brain_result.confidence + gpt_result["adjustment"])
                 elif gpt_result["action"] == "REDUCE" and gpt_result["adjustment"] > 0:
                     brain_result.confidence = max(0, brain_result.confidence - gpt_result["adjustment"])
-                
+
                 # Re-classificar confidence_level
                 if brain_result.confidence >= 80:
                     brain_result.confidence_level = "VERY_HIGH"
@@ -1706,21 +1660,21 @@ class TradingBot:
                     brain_result.confidence_level = "LOW"
                 else:
                     brain_result.confidence_level = "VERY_LOW"
-                
+
                 brain_result.gpt_validation = gpt_result
-                
+
                 # Increment stats
                 self.gpt_stats[gpt_result["action"].lower()] += 1
                 if gpt_result.get("from_cache"):
                     self.gpt_stats["from_cache"] += 1
-                
+
                 cache_tag = " (cache)" if gpt_result.get("from_cache") else ""
                 if gpt_result["action"] != "CONFIRM" and gpt_result["adjustment"] > 0:
                     sign = "+" if gpt_result["action"] == "BOOST" else "-"
                     log.info(f"   🤖 GPT: {gpt_result['action']} ({sign}{gpt_result['adjustment']}) — {gpt_result['reason']}{cache_tag}")
                 else:
                     log.info(f"   🤖 GPT: CONFIRM — {gpt_result['reason']}{cache_tag}")
-                
+
             except Exception as e:
                 log.warning(f"GPT Confidence error (fallback CONFIRM): {e}")
                 self.gpt_stats["confirm"] += 1
@@ -1776,19 +1730,13 @@ class TradingBot:
         self._last_scenario_description = brain_result.scenario_description
         self._last_gpt_validation = brain_result.gpt_validation
         
-        # Check minimum confidence
+        # Determine direction (confidence gate removed in Phase 0)
         direction = None
         hold_forced = False
         original_decision = None
         hold_reason = None
         if is_actionable_signal(brain_result.decision):
-            if brain_result.confidence >= config.BRAIN_MIN_CONFIDENCE:
-                direction = get_trade_direction(brain_result.decision)
-            else:
-                hold_forced = True
-                original_decision = brain_result.decision
-                hold_reason = f"confidence {brain_result.confidence:.1f}% < {config.BRAIN_MIN_CONFIDENCE}%"
-                log.info(f"   ⚠️ Confidence ({brain_result.confidence:.1f}) below minimum ({config.BRAIN_MIN_CONFIDENCE}) - forced HOLD")
+            direction = get_trade_direction(brain_result.decision)
         
         # Persist last_analysis for dashboard
         try:
