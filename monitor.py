@@ -39,6 +39,8 @@ class PositionMonitor:
         self.volatility_status = "NORMAL"
         # Track last known SL per ticket (for EA-side change detection)
         self.last_known_sl = {}
+        # Track account balance at trade open (captured when ticket is first detected in MT5)
+        self.balance_at_open = {}
     
     def set_volatility_status(self, status: str):
         """Update volatility status (EXTREME, COOLING_DOWN, NORMAL)"""
@@ -78,6 +80,14 @@ class PositionMonitor:
                 tr_dist = sl_dist * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
                 log.info(f"   Monitor: #{pos.ticket} {pos.direction} @ {pos.open_price:.2f} | SL original={pos.sl:.2f} ({sl_dist:.0f} pips)")
                 log.info(f"   Monitor: #{pos.ticket} Triggers: BE={be_trig:.0f} pips, Trail={tr_trig:.0f} pips, Dist={tr_dist:.0f} pips)")
+
+                # Capture balance at trade open (PRIMARY reference for real P&L on broker close)
+                try:
+                    account_info = executor.get_account_info()
+                    if account_info and account_info.get('balance') is not None:
+                        self.balance_at_open[pos.ticket] = float(account_info['balance'])
+                except Exception as e:
+                    log.debug(f"   Monitor: balance capture error (non-blocking): {e}")
                 
                 # Update DB with actual MT5 fill price (EA Bridge path records ticket=0 initially)
                 try:
@@ -401,17 +411,41 @@ class PositionMonitor:
             
             # Position disappeared — was closed by broker
             log.info(f"   Monitor: Position #{ticket} disappeared — checking history...")
+
+            # PRIMARY P&L source of truth: balance diff (single-position invariant)
+            profit_balance = None
+            try:
+                bal_open = self.balance_at_open.get(ticket)
+                account_info_now = executor.get_account_info()
+                bal_now = float(account_info_now['balance']) if account_info_now and account_info_now.get('balance') is not None else None
+                if bal_open is not None and bal_now is not None:
+                    profit_balance = bal_now - float(bal_open)
+            except Exception as e:
+                log.debug(f"   Monitor: balance diff error (non-blocking): {e}")
             
             deal = get_deal_history(ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
             
             if deal:
                 # We have close details
                 is_pending = deal.get('pending', False)
-                profit = deal['profit'] if not is_pending else 0
+                profit = profit_balance if profit_balance is not None else (deal['profit'] if not is_pending else 0)
                 reason = deal['reason']
                 direction = deal['direction']
                 close_price = deal['close_price']
                 outcome = deal.get('outcome')
+
+                if profit_balance is not None:
+                    is_pending = False
+                    try:
+                        deal_profit = deal.get('profit')
+                        if deal_profit is not None:
+                            drift = abs(float(deal_profit) - float(profit_balance))
+                            if drift > 0.05:
+                                log.warning(
+                                    f"   Monitor: P&L drift for #{ticket}: balance_diff=${profit_balance:+.2f} vs deal=${float(deal_profit):+.2f}"
+                                )
+                    except Exception:
+                        pass
                 
                 account_info = executor.get_account_info()
                 balance = account_info['balance'] if account_info else config.CAPITAL_INICIAL
@@ -477,13 +511,20 @@ class PositionMonitor:
                     ticket, "BROKER_CLOSE",
                     f"Position closed (no details in history)"
                 )
+
+                profit = profit_balance if profit_balance is not None else 0
+                is_pending = False if profit_balance is not None else True
+                account_info = executor.get_account_info()
+                balance = account_info['balance'] if account_info else config.CAPITAL_INICIAL
+                profit_percent = (profit / balance) * 100 if not is_pending else 0
                 
                 alert_trade_closed(
                     ticket=ticket,
                     direction=pos.direction,
-                    profit=0,
-                    profit_percent=0,
-                    reason="Closed by broker (details unavailable)"
+                    profit=profit,
+                    profit_percent=profit_percent,
+                    reason="Closed by broker (details unavailable)",
+                    pending=is_pending,
                 )
                 
                 actions.append({
@@ -492,11 +533,12 @@ class PositionMonitor:
                     'volume': pos.volume,
                     'open_price': pos.open_price,
                     'close_price': None,
-                    'profit': 0,
+                    'profit': profit,
                     'reason': 'unknown',
                     'close_time': None,
                     'close_type': 'sl',  # conservative default
                     'direction': pos.direction,
+                    'pending': is_pending,
                     'breakeven_activated': self.breakeven_activated_tickets.get(ticket, False),
                 })
             
@@ -511,6 +553,7 @@ class PositionMonitor:
         self.breakeven_activated_tickets.pop(ticket, None)
         self.trailing_sl.pop(ticket, None)
         self.original_sl_pips.pop(ticket, None)
+        self.balance_at_open.pop(ticket, None)
     
     def get_position_phase(self, ticket: int) -> str:
         """
