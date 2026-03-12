@@ -283,6 +283,21 @@ class AgentMonitor:
         except Exception as e:
             log.debug(f"AGENT_MONITOR | fast_decision error (ignored): {e}")
 
+    def _fire_proactive_out_of_cycle(self, trigger_type: str, trigger_data: Dict[str, Any]) -> None:
+        try:
+            if self.bot is None:
+                return
+            if not hasattr(self.bot, "agent_proactive_out_of_cycle"):
+                return
+            t = threading.Thread(
+                target=self.bot.agent_proactive_out_of_cycle,
+                args=(trigger_type, trigger_data),
+                daemon=True,
+            )
+            t.start()
+        except Exception as e:
+            log.debug(f"AGENT_MONITOR | proactive_out_of_cycle error (ignored): {e}")
+
     def _check_trade_at_risk(self) -> None:
         from db_writer import get_active_trade_from_proactive
 
@@ -425,7 +440,7 @@ class AgentMonitor:
         signed_move = last_price - first_price
         sign = "+" if signed_move >= 0 else "-"
         log.info(f"MONITOR | Breakout detected — price moved {sign}{abs(move):.1f} points in 5 minutes")
-        self._fire_fast_decision(
+        self._fire_proactive_out_of_cycle(
             "BREAKOUT_5M",
             {"move": float(move), "signed_move": float(signed_move), "window_seconds": 300},
         )
@@ -492,7 +507,7 @@ class AgentMonitor:
 
                 label = desc or f"{ctype} @ {level_f}"
                 log.info(f"MONITOR | Entry condition met — {direction} {ctype} @ {level_f} | {label}")
-                self._fire_fast_decision(
+                self._fire_proactive_out_of_cycle(
                     "ENTRY_CONDITION_MET",
                     {
                         "direction": direction,

@@ -145,6 +145,10 @@ class TradingBot:
         self._last_agent_monitor_tick = None
 
         self._fast_decision_lock = threading.Lock()
+
+        self._proactive_lock = threading.Lock()
+        self._last_agent_data = None
+        self._last_df = None
         
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -180,17 +184,67 @@ class TradingBot:
                         daily_stats["date"] = datetime.strptime(daily_stats["date"], "%Y-%m-%d").date()
                     except Exception:
                         pass
+
+            if isinstance(daily_stats, dict) and daily_stats:
                 self.daily_stats = daily_stats
 
             lkp = payload.get("last_known_price")
             if lkp is not None:
-                self.last_known_price = float(lkp)
+                try:
+                    self.last_known_price = float(lkp)
+                except Exception:
+                    pass
 
             trade_history = payload.get("trade_history")
             if isinstance(trade_history, list):
                 self.closed_trades_today = trade_history
         except Exception as e:
             log.debug(f"Failed to load persisted dashboard state: {e}")
+
+    def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
+        acquired = False
+        try:
+            try:
+                acquired = self._proactive_lock.acquire(blocking=False)
+            except Exception:
+                acquired = True
+
+            if not acquired:
+                log.info("MONITOR | Out-of-cycle Proactive skipped — analysis already running")
+                return {"success": False, "reason": "proactive_in_progress"}
+
+            agent_data = getattr(self, "_last_agent_data", None)
+            df = getattr(self, "_last_df", None)
+
+            if not agent_data or not isinstance(agent_data, dict):
+                return {"success": False, "reason": "missing_agent_data"}
+            if df is None or len(df) < 50:
+                return {"success": False, "reason": "missing_df"}
+
+            snapshot_time_iso = datetime.utcnow().isoformat()
+            self._call_agent_proactive_snapshot(
+                trigger_type=str(trigger_type or ""),
+                snapshot_time_iso=snapshot_time_iso,
+                agent_data=agent_data,
+                df=df,
+                trigger_data=trigger_data if isinstance(trigger_data, dict) else {},
+            )
+
+            try:
+                write_state(self)
+            except Exception:
+                pass
+
+            return {"success": True}
+        except Exception as e:
+            log.warning(f"PROACTIVE_OOC | error (non-blocking): {e}")
+            return {"success": False, "reason": str(e)}
+        finally:
+            if acquired:
+                try:
+                    self._proactive_lock.release()
+                except Exception:
+                    pass
 
     def _reconcile_with_mt5(self) -> None:
         """Reconcile saved state with MT5 reality.
@@ -891,6 +945,12 @@ class TradingBot:
             else:
                 decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                     self._confluence_analysis(df)
+
+            try:
+                self._last_agent_data = agent_data
+                self._last_df = df
+            except Exception:
+                pass
 
             # ================================================================
             # PROACTIVE AI AGENT (H1 snapshot) — shadow mode, diagnostic only
@@ -1978,19 +2038,17 @@ class TradingBot:
 
             exec_type = str(exec_payload.get("type") or "").upper()
 
+            if exec_type == "OPEN":
+                log.warning(f"AGENT_FAST | ACT blocked (OPEN disabled) | {trigger_type}")
+                return {"success": True, "action": action, "executed": False, "reason": "fast_open_disabled"}
+
             if trigger_type.startswith("TRADE_RISK"):
                 if exec_type not in ("CLOSE", "ADJUST"):
                     log.warning(f"AGENT_FAST | ACT blocked for risk trigger (type={exec_type})")
                     return {"success": True, "action": action, "executed": False, "reason": "risk trigger allows CLOSE/ADJUST only"}
 
             result = None
-            if exec_type == "OPEN":
-                d = str(exec_payload.get("direction") or "").upper()
-                sl = exec_payload.get("sl")
-                tp = exec_payload.get("tp")
-                conf = exec_payload.get("confidence", 50)
-                result = self.execute_agent_trade(direction=d, sl=sl, tp=tp, confidence=conf, scenario=f"fast_{trigger_type}")
-            elif exec_type == "CLOSE":
+            if exec_type == "CLOSE":
                 tickets = exec_payload.get("tickets")
                 if not isinstance(tickets, list):
                     tickets = []
@@ -2054,6 +2112,32 @@ class TradingBot:
 
     def _call_agent_proactive_h1_snapshot(self, h1_close_time_iso: str, agent_data: dict, df):
         """Call the AI Agent proactively once per H1 candle close (diagnostic only)."""
+        acquired = False
+        try:
+            try:
+                acquired = self._proactive_lock.acquire(blocking=False)
+            except Exception:
+                acquired = True
+
+            if not acquired:
+                log.info("PROACTIVE_H1 | skipped — analysis already running")
+                return
+
+            self._call_agent_proactive_snapshot(
+                trigger_type="PROACTIVE_H1",
+                snapshot_time_iso=h1_close_time_iso,
+                agent_data=agent_data,
+                df=df,
+                trigger_data=None,
+            )
+        finally:
+            if acquired:
+                try:
+                    self._proactive_lock.release()
+                except Exception:
+                    pass
+
+    def _call_agent_proactive_snapshot(self, trigger_type: str, snapshot_time_iso: str, agent_data: dict, df, trigger_data: Optional[dict] = None):
         import asyncio
         from ai_agent import get_agent
         from agent_data_builder import get_session_name
@@ -2068,7 +2152,7 @@ class TradingBot:
         if not agent_data or not isinstance(agent_data, dict):
             return
 
-        log.info(f"PROACTIVE_H1 | Calling AI Agent (independent snapshot) | H1 close: {h1_close_time_iso}")
+        log.info(f"{trigger_type} | Calling AI Agent (independent snapshot) | ts: {snapshot_time_iso}")
 
         try:
             # Reuse the same full payload used by reactive calls
@@ -2237,7 +2321,7 @@ class TradingBot:
             agent_result = loop.run_until_complete(
                 agent_decide(
                     data_package,
-                    trigger_type="PROACTIVE_H1",
+                    trigger_type=trigger_type,
                     allow_memory_write=False,
                 )
             )
@@ -2253,20 +2337,20 @@ class TradingBot:
         try:
             alert_proactive_decision(agent_result)
         except Exception as e:
-            log.debug(f"PROACTIVE_H1 | Discord alert error (ignored): {e}")
+            log.debug(f"{trigger_type} | Discord alert error (ignored): {e}")
 
         try:
             # Persist to SQLite
-            record_agent_proactive_analysis(h1_close_time_iso, agent_result.to_dict())
+            record_agent_proactive_analysis(snapshot_time_iso, agent_result.to_dict())
         except Exception as e:
-            log.warning(f"PROACTIVE_H1 | DB write error (ignored): {e}")
+            log.warning(f"{trigger_type} | DB write error (ignored): {e}")
 
         try:
             # Store for dashboard
             if self.last_analysis and isinstance(self.last_analysis, dict):
                 proactive_payload = {
-                    "trigger": "PROACTIVE_H1",
-                    "h1_close_time": h1_close_time_iso,
+                    "trigger": trigger_type,
+                    "h1_close_time": snapshot_time_iso,
                     "timestamp": agent_result.timestamp.isoformat() if agent_result.timestamp else datetime.utcnow().isoformat(),
                     "model": agent_result.model,
                     "prompt_version": agent_result.prompt_version,
@@ -2281,6 +2365,9 @@ class TradingBot:
                     "output_tokens": agent_result.output_tokens,
                     "tokens_used": (agent_result.input_tokens or 0) + (agent_result.output_tokens or 0),
                 }
+
+                if isinstance(trigger_data, dict) and trigger_data:
+                    proactive_payload["trigger_data"] = trigger_data
 
                 try:
                     if agent_result.decision in ("OPEN_BUY", "OPEN_SELL"):
@@ -2300,12 +2387,12 @@ class TradingBot:
 
                 self.last_analysis["proactive_analysis"] = proactive_payload
         except Exception as e:
-            log.debug(f"PROACTIVE_H1 | state update error (ignored): {e}")
+            log.debug(f"{trigger_type} | state update error (ignored): {e}")
 
         try:
             log.info(
-                f"PROACTIVE_H1 | Agent decision: {agent_result.decision} | "
-                f"conf={agent_result.confidence} | H1 close: {h1_close_time_iso}"
+                f"{trigger_type} | Agent decision: {agent_result.decision} | "
+                f"conf={agent_result.confidence} | ts: {snapshot_time_iso}"
             )
         except Exception:
             pass
