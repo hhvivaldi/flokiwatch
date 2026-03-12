@@ -79,132 +79,160 @@
       <div id="stale-overlay" class="hidden"></div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 stale-dim">
         <section class="lg:col-span-2">
-          <section id="proactive-section" class="stale-dim hidden">
-            <div class="bg-gray-900/40 backdrop-blur-md border border-emerald-700/50 rounded-2xl p-5 shadow-lg">
-              <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="text-sm font-bold tracking-[0.2em] text-emerald-400 uppercase">📷 PROACTIVE ANALYSIS</div>
-                  <span class="text-[10px] uppercase font-semibold tracking-widest text-gray-500 px-2 py-0.5 bg-gray-800 rounded">M30 SNAPSHOT</span>
+          <section id="proactive-section" class="stale-dim hidden space-y-6">
+            <!-- Section Header -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-xs font-black tracking-[0.2em] text-emerald-400 uppercase flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  PROACTIVE ANALYSIS
                 </div>
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono font-medium text-gray-500">
-                  <span>M30 close: <span id="proactive-h1-close" class="text-gray-300">—</span></span>
-                  <span>Next snapshot in: <span id="proactive-countdown" class="text-gray-300">—</span></span>
-                  <span>Latency: <span id="proactive-latency" class="text-gray-300">—</span>ms</span>
-                  <span>Tokens: <span id="proactive-tokens" class="text-gray-300">—</span></span>
+                <span class="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 px-2 py-0.5 bg-white/5 rounded">M30 SNAPSHOT</span>
+              </div>
+              <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-[10px] font-mono font-black text-gray-500 uppercase tracking-[0.2em]">
+                <span>M30 close: <span id="proactive-h1-close" class="text-gray-300">—</span></span>
+                <span>Next snapshot: <span id="proactive-countdown" class="text-gray-300">—</span></span>
+                <span>Latency: <span id="proactive-latency" class="text-gray-300">—</span>ms</span>
+                <span>Tokens: <span id="proactive-tokens" class="text-gray-300">—</span></span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- Decision Card -->
+              <div id="proactive-decision-card" class="glass-panel rounded-2xl p-6 relative overflow-hidden group flex flex-col justify-center min-h-[160px]">
+                <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-2">AGENT DECISION</div>
+                <div id="proactive-decision" class="text-4xl font-black tracking-tighter animate-pulse-slow">—</div>
+                <div class="mt-4 flex items-center gap-2">
+                  <span class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">Confidence:</span>
+                  <span id="proactive-confidence" class="text-sm font-mono font-bold text-emerald-400">—%</span>
+                </div>
+                <div id="proactive-hold-block" class="hidden mt-4 pt-4 border-t border-white/5">
+                  <div id="proactive-hold-summary" class="text-[10px] text-gray-300 font-black uppercase tracking-[0.2em]">—</div>
+                  <div id="proactive-hold-pnl" class="text-xs font-mono mt-1">—</div>
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div class="lg:col-span-1">
-                  <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30">
-                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">AGENT DECISION</div>
-                    <div id="proactive-decision" class="text-3xl sm:text-4xl font-bold">—</div>
-                    <div class="mt-2 flex items-center gap-2">
-                      <span class="text-xs text-gray-500">Confidence:</span>
-                      <span id="proactive-confidence" class="text-sm font-mono font-semibold text-gray-200">—%</span>
+              <!-- Sentiment Card -->
+              <div id="proactive-sentiment-card" class="glass-panel rounded-2xl p-6 flex flex-col justify-center min-h-[160px]">
+                <div class="flex items-center justify-between gap-4 mb-5">
+                  <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase">SENTIMENT</div>
+                  <div id="sentiment-label" class="text-[10px] font-black tracking-[0.2em] uppercase text-emerald-400">—</div>
+                </div>
+                <div class="relative py-1">
+                  <div id="sentiment-bar" class="flex gap-1 h-4">
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                  </div>
+                  <div id="sentiment-indicator" class="absolute top-1/2 -translate-y-1/2 w-1 h-6 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-10 hidden"></div>
+                </div>
+              </div>
+
+              <!-- Lifecycle Card -->
+              <div id="proactive-lifecycle-card" class="glass-panel rounded-2xl p-6 flex flex-col justify-center min-h-[160px]">
+                <div class="flex items-center justify-between gap-4 mb-5">
+                  <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase">LIFECYCLE</div>
+                  <div id="lifecycle-label" class="text-[10px] font-black tracking-[0.2em] uppercase text-emerald-400">—</div>
+                </div>
+                <div class="relative py-1">
+                  <div id="lifecycle-bar" class="flex gap-1 h-4">
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                    <div class="flex-1 rounded-sm bg-gray-800 transition-all duration-300"></div>
+                  </div>
+                  <div id="lifecycle-indicator" class="absolute top-1/2 -translate-y-1/2 w-1 h-6 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-10 hidden"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Reasoning spanning full width -->
+            <div id="proactive-reasoning-card" class="glass-panel rounded-2xl p-6 relative overflow-hidden">
+              <div class="flex items-center justify-between gap-2 mb-4">
+                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase">AGENT THESIS & REASONING</div>
+                <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-widest font-black text-emerald-500 hover:text-emerald-400 transition-colors">Expand</button>
+              </div>
+              
+              <div class="space-y-6">
+                <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed font-medium line-clamp-4">—</p>
+
+                <!-- Status Detail Blocks -->
+                <div class="flex flex-col gap-4">
+                  <div id="proactive-close-reason-block" class="hidden px-4 py-3 rounded-xl bg-black/40 text-xs font-mono text-gray-300">
+                    <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">CLOSE REASON</div>
+                    <div id="proactive-close-reason" class="text-gray-200">—</div>
+                  </div>
+
+                  <div id="proactive-adjust-block" class="hidden px-4 py-3 rounded-xl bg-black/40 text-xs font-mono text-gray-300">
+                    <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">POSITION ADJUSTMENT</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-2">
+                      <div>
+                        <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">NEW SL</div>
+                        <div id="proactive-adjust-sl" class="text-sm font-bold text-white">—</div>
+                      </div>
+                      <div>
+                        <div id="proactive-adjust-tp-label" class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">NEW TP</div>
+                        <div id="proactive-adjust-tp" class="text-sm font-bold text-white">—</div>
+                      </div>
+                      <div class="sm:col-span-3 border-t border-white/5 pt-2">
+                        <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">RATIONALE</div>
+                        <div id="proactive-adjust-reason" class="text-xs text-gray-300">—</div>
+                      </div>
                     </div>
-                    <div id="proactive-hold-block" class="hidden mt-3 pt-3 border-t border-gray-700/30">
-                      <div id="proactive-hold-summary" class="text-xs text-gray-300 font-mono font-semibold">—</div>
-                      <div id="proactive-hold-pnl" class="text-xs font-mono mt-1">—</div>
+                  </div>
+
+                  <div id="proactive-tp-block" class="hidden px-4 py-3 rounded-xl bg-black/40 text-xs font-mono text-gray-300">
+                    <div class="flex flex-wrap items-center gap-x-10 gap-y-3">
+                      <div>
+                        <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">ENTRY STRATEGY</div>
+                        <div id="proactive-tp-entry" class="text-sm font-bold text-white">—</div>
+                      </div>
+                      <div class="flex gap-10">
+                        <div>
+                          <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">STOP LOSS</div>
+                          <div id="proactive-tp-sl" class="text-sm font-bold text-red-400">—</div>
+                        </div>
+                        <div>
+                          <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">TAKE PROFIT</div>
+                          <div id="proactive-tp-tp" class="text-sm font-bold text-emerald-400">—</div>
+                        </div>
+                        <div>
+                          <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-0.5">R:R RATIO</div>
+                          <div id="proactive-tp-rr" class="text-sm font-bold text-white">—</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="lg:col-span-2 space-y-3">
-                  <div class="bg-gray-800/50 rounded-xl p-3 border border-gray-700/30">
-                    <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">SENTIMENT</div>
-                      <div class="flex-1">
-                        <div class="relative">
-                          <div id="sentiment-bar" class="flex gap-1 h-3">
-                            <div class="flex-1 rounded sentiment-strong-sell"></div>
-                            <div class="flex-1 rounded sentiment-sell"></div>
-                            <div class="flex-1 rounded sentiment-neutral"></div>
-                            <div class="flex-1 rounded sentiment-buy"></div>
-                            <div class="flex-1 rounded sentiment-strong-buy"></div>
-                          </div>
-                          <div id="sentiment-indicator" class="absolute top-1/2 -translate-y-1/2 w-2 h-6 rounded bg-white/80 border border-black/40 shadow"></div>
-                        </div>
-                      </div>
-                      <div id="sentiment-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
-                    </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-10 pt-6 border-t border-white/5">
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4">KEY ARGUMENTS</div>
+                    <ul id="proactive-factors" class="text-xs text-gray-400 space-y-2.5">
+                      <li class="opacity-50">—</li>
+                    </ul>
                   </div>
-
-                  <div class="bg-gray-800/50 rounded-xl p-3 border border-gray-700/30">
-                    <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">LIFECYCLE</div>
-                      <div class="flex-1">
-                        <div class="relative">
-                          <div id="lifecycle-bar" class="flex gap-1 h-3">
-                            <div class="flex-1 rounded lifecycle-watching"></div>
-                            <div class="flex-1 rounded lifecycle-preparing"></div>
-                            <div class="flex-1 rounded lifecycle-entry"></div>
-                            <div class="flex-1 rounded lifecycle-managing"></div>
-                            <div class="flex-1 rounded lifecycle-closing"></div>
-                            <div class="flex-1 rounded lifecycle-result"></div>
-                          </div>
-                          <div id="lifecycle-indicator" class="absolute top-1/2 -translate-y-1/2 w-2 h-6 rounded bg-white/80 border border-black/40 shadow"></div>
-                        </div>
-                      </div>
-                      <div id="lifecycle-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
-                    </div>
-                  </div>
-
-                  <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30 h-full">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase">REASONING</div>
-                      <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-widest font-semibold text-gray-500 hover:text-gray-300 transition-colors">Expand</button>
-                    </div>
-                    <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed mt-2 line-clamp-4">—</p>
-
-                    <div id="proactive-close-reason-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CLOSE REASON</div>
-                      <div id="proactive-close-reason" class="text-gray-200">—</div>
-                    </div>
-
-                    <div id="proactive-adjust-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">ADJUSTMENT</div>
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div>
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW SL</div>
-                          <div id="proactive-adjust-sl" class="text-gray-200">—</div>
-                        </div>
-                        <div>
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW TP</div>
-                          <div id="proactive-adjust-tp" class="text-gray-200">—</div>
-                        </div>
-                        <div class="sm:col-span-3">
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">REASON</div>
-                          <div id="proactive-adjust-reason" class="text-gray-200">—</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div id="proactive-tp-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div id="proactive-tp-entry" class="text-gray-200">—</div>
-                      <div class="mt-1 text-gray-400">
-                        <span id="proactive-tp-sl">—</span>
-                        <span class="mx-1">|</span>
-                        <span id="proactive-tp-tp">—</span>
-                        <span class="mx-1">|</span>
-                        <span id="proactive-tp-rr">—</span>
-                      </div>
-                    </div>
-
-                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">KEY FACTORS</div>
-                        <ul id="proactive-factors" class="text-xs text-gray-400 space-y-1">
-                          <li class="text-gray-600">—</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CONCERNS</div>
-                        <ul id="proactive-concerns" class="text-xs text-gray-400 space-y-1">
-                          <li class="text-gray-600">—</li>
-                        </ul>
-                      </div>
-                    </div>
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4">CONCERNS & RISKS</div>
+                    <ul id="proactive-concerns" class="text-xs text-gray-400 space-y-2.5">
+                      <li class="opacity-50">—</li>
+                    </ul>
                   </div>
                 </div>
               </div>
