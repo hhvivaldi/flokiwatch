@@ -61,201 +61,245 @@
       </div>
     </div>
 
-    <main id="app" class="relative container mx-auto px-4 sm:px-6 py-6 max-w-6xl">
+    <main id="app" class="relative">
       <div id="stale-overlay" class="hidden"></div>
 
-      <!-- PROACTIVE ANALYSIS SECTION -->
-      <section id="proactive-section" class="stale-dim hidden space-y-5">
+      <!-- ══════════════════════════════════════════════════════════
+           HERO: FLOKI + PROACTIVE ANALYSIS
+           ══════════════════════════════════════════════════════════ -->
+      <div class="relative overflow-hidden" style="background: linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.7) 100%);">
 
-        <!-- PROACTIVE HEADER -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 px-1">
-          <div class="flex items-center gap-3 shrink-0">
-            <div class="text-xs font-black tracking-[0.2em] text-emerald-400 uppercase flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              PROACTIVE ANALYSIS
-            </div>
-            <span class="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 px-2 py-0.5 bg-white/5 rounded">M30 SNAPSHOT</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] font-mono text-gray-500 uppercase tracking-[0.15em]">
-            <span>M30 CLOSE: <span id="proactive-h1-close" class="text-gray-300">—</span></span>
-            <span>NEXT SNAPSHOT IN: <span id="proactive-countdown" class="text-gray-200 font-black">—</span></span>
-            <span>LATENCY: <span id="proactive-latency" class="text-gray-300">—</span>MS</span>
-            <span>TOKENS: <span id="proactive-tokens" class="text-gray-300">—</span></span>
-          </div>
+        <!-- Animated Floki -->
+        <div class="absolute right-0 top-0 bottom-0 pointer-events-none select-none hidden lg:block" style="width:340px; z-index:0;">
+          <video
+            src="/image/flokivideowatch.mp4"
+            autoplay loop muted playsinline
+            class="floki-decorative absolute bottom-0 right-0"
+            style="height:420px; width:auto; object-fit:contain; opacity:0.72; filter:drop-shadow(0 0 40px rgba(56,189,248,0.18));">
+          </video>
         </div>
 
-        <!-- MAIN GRID: 2 columns — Decision left, Indicators right -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- PROACTIVE ANALYSIS SECTION -->
+        <section id="proactive-section" class="stale-dim hidden relative" style="z-index:1;">
+          <div class="container mx-auto px-4 sm:px-6 pt-8 pb-6 max-w-6xl space-y-6">
 
-          <!-- LEFT: AGENT DECISION -->
-          <div id="proactive-decision-card" class="glass-panel rounded-2xl flex flex-col justify-center min-h-[200px]" style="border-color: rgba(239,68,68,0.25); box-shadow: 0 0 32px rgba(239,68,68,0.07), 0 8px 32px rgba(0,0,0,0.4);">
-            <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4">AGENT DECISION</div>
-            <div id="proactive-decision" class="text-5xl font-black tracking-wider leading-none animate-pulse-slow transition-all duration-500">—</div>
-            <div class="mt-5 flex items-center gap-2">
-              <span class="text-xs text-gray-500 font-black uppercase tracking-[0.15em]">Confidence:</span>
-              <span id="proactive-confidence" class="text-sm font-mono font-black text-emerald-400">—%</span>
-            </div>
-            <!-- HOLD STATE DATA -->
-            <div id="proactive-hold-block" class="hidden mt-4 pt-4 border-t border-white/5">
-              <div id="proactive-hold-summary" class="text-[10px] text-gray-300 font-black uppercase tracking-[0.2em]"></div>
-              <div id="proactive-hold-pnl" class="text-xs font-mono mt-1 font-black"></div>
-            </div>
-          </div>
-
-          <!-- RIGHT: SENTIMENT + LIFECYCLE stacked -->
-          <div class="flex flex-col gap-5">
-
-            <!-- SENTIMENT -->
-            <div id="proactive-sentiment-card" class="glass-panel rounded-2xl flex items-center gap-4">
-              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase shrink-0" style="min-width:80px">SENTIMENT</div>
-              <div id="sentiment-bar" class="flex-1 flex gap-[3px]" style="height:16px;">
-                <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
-                <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+            <!-- PROACTIVE HEADER -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-xs font-black tracking-[0.2em] text-emerald-400 uppercase flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  PROACTIVE ANALYSIS
+                </div>
+                <span class="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 px-2 py-0.5 bg-white/5 rounded border border-white/5">M30 SNAPSHOT</span>
               </div>
-              <div id="sentiment-label" class="text-xs font-black tracking-[0.2em] uppercase shrink-0 text-right" style="min-width:52px">—</div>
+              <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] font-mono text-gray-500 uppercase tracking-[0.15em]">
+                <span>M30 CLOSE: <span id="proactive-h1-close" class="text-gray-300">—</span></span>
+                <span>NEXT IN: <span id="proactive-countdown" class="text-gray-200 font-black">—</span></span>
+                <span>LATENCY: <span id="proactive-latency" class="text-gray-300">—</span>MS</span>
+                <span>TOKENS: <span id="proactive-tokens" class="text-gray-300">—</span></span>
+              </div>
             </div>
 
-            <!-- LIFECYCLE -->
-            <div id="proactive-lifecycle-card" class="glass-panel rounded-2xl flex items-center gap-4">
-              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase shrink-0" style="min-width:80px">LIFECYCLE</div>
-              <div id="lifecycle-bar" class="flex-1 flex gap-[3px]" style="height:16px;">
-                <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
-                <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+            <!-- TOP GRID: DECISION (left) + SENTIMENT/LIFECYCLE (right) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5" style="padding-right: clamp(0px, 340px, 30%);">
+
+              <!-- LEFT: AGENT DECISION — most visually dominant -->
+              <div id="proactive-decision-card" class="glass-panel rounded-2xl flex flex-col justify-center min-h-[220px] glow-red" style="border-color: rgba(239,68,68,0.25);">
+                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                  <span class="w-1 h-4 bg-current rounded-full opacity-50"></span>
+                  AGENT DECISION
+                </div>
+                <div id="proactive-decision" class="text-5xl sm:text-6xl font-black tracking-wider leading-none animate-pulse-slow transition-all duration-500">—</div>
+                <div class="mt-6 flex items-center gap-3">
+                  <span class="text-[10px] text-gray-600 font-black uppercase tracking-[0.2em]">CONFIDENCE</span>
+                  <span id="proactive-confidence" class="text-lg font-mono font-black text-emerald-400 tracking-[0.1em]">—%</span>
+                </div>
+                <!-- HOLD STATE DATA -->
+                <div id="proactive-hold-block" class="hidden mt-4 pt-4 border-t border-white/5">
+                  <div id="proactive-hold-summary" class="text-[10px] text-gray-300 font-black uppercase tracking-[0.2em]"></div>
+                  <div id="proactive-hold-pnl" class="text-xs font-mono mt-1 font-black"></div>
+                </div>
               </div>
-              <div id="lifecycle-label" class="text-xs font-black tracking-[0.2em] uppercase shrink-0 text-right" style="min-width:52px">—</div>
+
+              <!-- RIGHT: SENTIMENT + LIFECYCLE stacked -->
+              <div class="flex flex-col gap-5">
+
+                <!-- SENTIMENT -->
+                <div id="proactive-sentiment-card" class="glass-panel rounded-2xl flex items-center gap-4">
+                  <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase shrink-0" style="min-width:80px">SENTIMENT</div>
+                  <div id="sentiment-bar" class="flex-1 flex gap-[3px]" style="height:16px;">
+                    <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+                    <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+                  </div>
+                  <div id="sentiment-label" class="text-xs font-black tracking-[0.2em] uppercase shrink-0 text-right" style="min-width:56px">—</div>
+                </div>
+
+                <!-- LIFECYCLE -->
+                <div id="proactive-lifecycle-card" class="glass-panel rounded-2xl flex items-center gap-4">
+                  <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase shrink-0" style="min-width:80px">LIFECYCLE</div>
+                  <div id="lifecycle-bar" class="flex-1 flex gap-[3px]" style="height:16px;">
+                    <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+                    <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+                  </div>
+                  <div id="lifecycle-label" class="text-xs font-black tracking-[0.2em] uppercase shrink-0 text-right" style="min-width:56px">—</div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- REASONING: FULL WIDTH -->
+            <div id="proactive-reasoning-card" class="glass-panel rounded-2xl">
+              <div class="flex items-center justify-between gap-2 mb-5">
+                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase flex items-center gap-2">
+                  <span class="w-1 h-4 bg-emerald-500 rounded-full opacity-60"></span>
+                  REASONING
+                </div>
+                <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-[0.2em] font-black text-emerald-500 hover:text-emerald-400 transition-all active:scale-95 px-3 py-1 bg-white/5 rounded border border-white/5">EXPAND</button>
+              </div>
+
+              <div class="space-y-5">
+                <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed line-clamp-4 transition-all duration-500">—</p>
+
+                <!-- Close Reason -->
+                <div id="proactive-close-reason-block" class="hidden rounded-xl bg-black/40 border border-white/5 px-5 py-4 text-xs font-mono text-gray-300">
+                  <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">CLOSE RATIONALE</div>
+                  <div id="proactive-close-reason" class="text-gray-200">—</div>
+                </div>
+
+                <!-- Adjustment -->
+                <div id="proactive-adjust-block" class="hidden rounded-xl bg-black/40 border border-white/5 px-5 py-4 text-xs font-mono text-gray-300">
+                  <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3">POSITION MODIFICATION</div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                      <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">NEW SL</div>
+                      <div id="proactive-adjust-sl" class="text-sm font-black text-white">—</div>
+                    </div>
+                    <div>
+                      <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">NEW TP</div>
+                      <div id="proactive-adjust-tp" class="text-sm font-black text-white">—</div>
+                    </div>
+                    <div class="sm:col-span-3 border-t border-white/5 pt-3">
+                      <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">ADJUSTMENT RATIONALE</div>
+                      <div id="proactive-adjust-reason" class="text-xs text-gray-300">—</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Trade Execution (Entry/SL/TP box) -->
+                <div id="proactive-tp-block" class="hidden rounded-xl border border-white/10 px-5 py-4 font-mono relative overflow-hidden" style="background:rgba(0,0,0,0.5);">
+                  <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-xl"></div>
+                  <div class="pl-3">
+                    <div class="text-sm font-black text-white mb-2">Entry: <span id="proactive-tp-entry" class="text-emerald-400">—</span></div>
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-gray-400 font-black">
+                      <span>SL: <span id="proactive-tp-sl" class="text-red-400 ml-1">—</span></span>
+                      <span class="text-gray-700">|</span>
+                      <span>TP: <span id="proactive-tp-tp" class="text-emerald-400 ml-1">—</span></span>
+                      <span class="text-gray-700">|</span>
+                      <span>R:R: <span id="proactive-tp-rr" class="text-white ml-1">—</span></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- KEY FACTORS + CONCERNS -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-5 border-t border-white/10">
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>KEY FACTORS
+                    </div>
+                    <ul id="proactive-factors" class="text-xs text-gray-300 space-y-2">
+                      <li class="opacity-40">—</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>CONCERNS
+                    </div>
+                    <ul id="proactive-concerns" class="text-xs text-gray-300 space-y-2">
+                      <li class="opacity-40">—</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
+        </section>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════
+           BELOW-FOLD SECTIONS
+           ══════════════════════════════════════════════════════════ -->
+      <div class="container mx-auto px-4 sm:px-6 pb-20 max-w-6xl space-y-10">
+
+        <!-- ── SECTION SEPARATOR ── -->
+        <div class="flex items-center gap-4 pt-4">
+          <div class="h-px flex-1 bg-white/5"></div>
+          <div class="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">SYSTEM REFERENCE & TELEMETRY</div>
+          <button id="reference-toggle" class="text-[10px] font-black tracking-[0.2em] text-gray-500 hover:text-gray-300 uppercase px-3 py-1 bg-white/5 rounded border border-white/5 transition-colors active:bg-white/10">SHOW PANELS</button>
+          <div class="h-px flex-1 bg-white/5"></div>
         </div>
 
-        <!-- REASONING: FULL WIDTH -->
-        <div id="proactive-reasoning-card" class="glass-panel rounded-2xl">
-          <div class="flex items-center justify-between gap-2 mb-5">
-            <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase">REASONING</div>
-            <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-[0.2em] font-black text-emerald-500 hover:text-emerald-400 transition-all active:scale-95">EXPAND</button>
-          </div>
+        <div id="reference-panels" class="hidden space-y-10">
 
-          <div class="space-y-5">
-            <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed line-clamp-4 transition-all duration-500">—</p>
-
-            <!-- Close Reason -->
-            <div id="proactive-close-reason-block" class="hidden rounded-xl bg-black/40 border border-white/5 px-5 py-4 text-xs font-mono text-gray-300">
-              <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">CLOSE RATIONALE</div>
-              <div id="proactive-close-reason" class="text-gray-200">—</div>
-            </div>
-
-            <!-- Adjustment -->
-            <div id="proactive-adjust-block" class="hidden rounded-xl bg-black/40 border border-white/5 px-5 py-4 text-xs font-mono text-gray-300">
-              <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3">POSITION MODIFICATION</div>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div>
-                  <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">NEW SL</div>
-                  <div id="proactive-adjust-sl" class="text-sm font-black text-white">—</div>
-                </div>
-                <div>
-                  <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">NEW TP</div>
-                  <div id="proactive-adjust-tp" class="text-sm font-black text-white">—</div>
-                </div>
-                <div class="sm:col-span-3 border-t border-white/5 pt-3">
-                  <div class="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">ADJUSTMENT RATIONALE</div>
-                  <div id="proactive-adjust-reason" class="text-xs text-gray-300">—</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Trade Execution (Entry/SL/TP box) -->
-            <div id="proactive-tp-block" class="hidden rounded-xl border border-white/10 px-5 py-4 font-mono relative overflow-hidden" style="background:rgba(0,0,0,0.5);">
-              <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-xl"></div>
-              <div class="pl-2">
-                <div class="text-sm font-black text-white mb-2">Entry: <span id="proactive-tp-entry" class="text-emerald-400">—</span></div>
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-gray-400 font-black">
-                  <span>SL: <span id="proactive-tp-sl" class="text-red-400 ml-1">—</span></span>
-                  <span class="text-gray-700">|</span>
-                  <span>TP: <span id="proactive-tp-tp" class="text-emerald-400 ml-1">—</span></span>
-                  <span class="text-gray-700">|</span>
-                  <span>R:R: <span id="proactive-tp-rr" class="text-white ml-1">—</span></span>
-                </div>
-              </div>
-            </div>
-
-            <!-- KEY FACTORS + CONCERNS -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-5 border-t border-white/10">
-              <div>
-                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4">KEY FACTORS</div>
-                <ul id="proactive-factors" class="text-xs text-gray-300 space-y-2">
-                  <li class="opacity-40">—</li>
-                </ul>
-              </div>
-              <div>
-                <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4">CONCERNS</div>
-                <ul id="proactive-concerns" class="text-xs text-gray-300 space-y-2">
-                  <li class="opacity-40">—</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </section>
-
-      <!-- SYSTEM REFERENCE SECTION (Collapsible) -->
-      <section class="mt-12 space-y-6 pb-20">
-        <div class="flex items-center justify-between border-t border-white/5 pt-8 px-2">
-          <div class="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">SYSTEM REFERENCE & TELEMETRY</div>
-          <button id="reference-toggle" class="text-[10px] font-black tracking-[0.2em] text-gray-500 hover:text-gray-300 uppercase px-3 py-1 bg-white/5 rounded transition-colors active:bg-white/10">SHOW PANELS</button>
-        </div>
-
-        <div id="reference-panels" class="hidden space-y-6">
-          <!-- MAIN STATS -->
+          <!-- ── ACCOUNT METRICS ── -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-2">BALANCE</div>
-              <div id="balance" class="text-xl font-black font-mono text-gray-100">—</div>
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-3">BALANCE</div>
+              <div id="balance" class="text-2xl font-black font-mono text-gray-100">—</div>
             </div>
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-2">EQUITY</div>
-              <div id="equity" class="text-xl font-black font-mono text-gray-100">—</div>
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-3">EQUITY</div>
+              <div id="equity" class="text-2xl font-black font-mono text-gray-100">—</div>
             </div>
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-2">P&L DAY</div>
-              <div id="pnl" class="text-xl font-black font-mono text-gray-100">—</div>
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-3">P&amp;L TODAY</div>
+              <div id="pnl" class="text-2xl font-black font-mono text-gray-100">—</div>
             </div>
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-2">PRICE</div>
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase mb-3">XAU/USD</div>
               <div class="flex items-baseline gap-2">
-                <div id="price" class="text-xl font-black font-mono text-gray-100">—</div>
+                <div id="price" class="text-2xl font-black font-mono text-gray-100">—</div>
                 <span id="price-label" class="text-[10px] text-gray-500 font-black tracking-[0.2em]"></span>
               </div>
             </div>
           </div>
 
-          <!-- TRADING INFO -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="flex items-center justify-between mb-4">
-                <div class="text-xs font-black tracking-[0.2em] uppercase text-gray-200">OPEN POSITIONS</div>
+          <!-- ── OPEN POSITIONS + TRADES TODAY ── -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-panel rounded-2xl">
+              <div class="flex items-center justify-between mb-5">
+                <div class="text-xs font-black tracking-[0.2em] uppercase text-gray-200 flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                  OPEN POSITIONS
+                </div>
                 <div class="text-[9px] font-black tracking-[0.2em] text-gray-500 uppercase">COUNT: <span id="positions-count" class="text-gray-300">0</span></div>
               </div>
               <div id="positions" class="space-y-3 text-xs text-gray-500 font-black uppercase">NO ACTIVE POSITIONS</div>
             </div>
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                <div class="text-xs font-black tracking-[0.2em] uppercase text-gray-200">TRADES TODAY</div>
+            <div class="glass-panel rounded-2xl">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                <div class="text-xs font-black tracking-[0.2em] uppercase text-gray-200 flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                  TRADES TODAY
+                </div>
                 <div class="text-[10px] font-mono font-black text-gray-400 flex flex-wrap gap-x-4 gap-y-1 uppercase">
-                  <span>W:<span id="trades-w" class="text-gray-200 ml-1">0</span></span>
-                  <span>L:<span id="trades-l" class="text-gray-200 ml-1">0</span></span>
-                  <span>BE:<span id="trades-be" class="text-gray-200 ml-1">0</span></span>
-                  <span>WR:<span id="trades-wr" class="text-gray-200 ml-1">0%</span></span>
-                  <span>P&L:<span id="trades-pnl" class="text-emerald-400 ml-1">$0.00</span></span>
+                  <span>W: <span id="trades-w" class="text-emerald-400 ml-0.5">0</span></span>
+                  <span>L: <span id="trades-l" class="text-red-400 ml-0.5">0</span></span>
+                  <span>BE: <span id="trades-be" class="text-gray-300 ml-0.5">0</span></span>
+                  <span>WR: <span id="trades-wr" class="text-gray-200 ml-0.5">0%</span></span>
+                  <span>P&amp;L: <span id="trades-pnl" class="text-emerald-400 ml-0.5">$0.00</span></span>
                 </div>
               </div>
               <div id="trades" class="text-xs text-gray-500 font-black uppercase">NO CLOSED DEALS</div>
             </div>
           </div>
 
-          <!-- CENTRAL BRAIN SIGNAL REFERENCE -->
-          <div id="goldcon" class="glass-panel rounded-2xl p-8 relative overflow-hidden">
-            <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-5">CENTRAL BRAIN SIGNAL REFERENCE</div>
+          <!-- ── CENTRAL BRAIN SIGNAL ── -->
+          <div id="goldcon" class="glass-panel rounded-2xl relative overflow-hidden">
+            <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-5 flex items-center gap-2">
+              <span class="w-1 h-4 bg-cyan-500 rounded-full opacity-60"></span>
+              CENTRAL BRAIN SIGNAL REFERENCE
+            </div>
             <div class="flex flex-wrap items-end gap-8 mb-6">
               <div id="goldcon-decision" class="text-4xl font-black tracking-[0.2em] uppercase transition-colors duration-500">—</div>
               <div class="flex gap-6 text-sm font-mono font-black bg-black/40 rounded-xl p-3 border border-white/5 shadow-inner text-shadow-soft">
@@ -266,7 +310,6 @@
             </div>
             <div id="goldcon-blocked" class="hidden mb-4 text-xs text-amber-400 font-black tracking-[0.2em] uppercase animate-pulse"></div>
             <div id="signal-segments" class="flex gap-1.5 h-10 mb-6">
-              <!-- 12 segments for goldcon -->
               <div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div>
               <div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div>
               <div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div><div class="flex-1 bg-gray-800 rounded-sm"></div>
@@ -274,12 +317,15 @@
             <div id="goldcon-scenario" class="text-xs text-gray-400 font-black tracking-[0.2em] uppercase italic">SCENARIO: —</div>
           </div>
 
-          <!-- INTEL FEED (REFERENCE) -->
-          <section id="intel-feed-section" class="glass-panel rounded-2xl p-6">
+          <!-- ── INTEL FEED: HEADLINES + MACRO (DXY/Yields/VIX) + S/R ── -->
+          <section id="intel-feed-section" class="glass-panel rounded-2xl">
             <div class="flex items-center justify-between mb-6">
               <div class="flex items-center gap-3">
-                <div class="text-xs font-black tracking-[0.2em] text-amber-400 uppercase">INTEL FEED</div>
-                <span class="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 px-2 py-0.5 bg-white/5 rounded">NEWS / MACRO</span>
+                <div class="text-xs font-black tracking-[0.2em] text-amber-400 uppercase flex items-center gap-2">
+                  <span class="w-1 h-4 bg-amber-500 rounded-full opacity-60"></span>
+                  INTEL FEED
+                </div>
+                <span class="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 px-2 py-0.5 bg-white/5 rounded border border-white/5">NEWS / MACRO</span>
               </div>
               <div class="flex items-center gap-4 text-[10px] font-mono font-black text-gray-500 intel-feed-content hidden uppercase tracking-[0.2em]">
                 <span id="intel-method" class="px-2 py-1 border border-gray-700/50 rounded text-gray-400 bg-black/40"></span>
@@ -288,37 +334,103 @@
             </div>
             <div class="intel-feed-empty text-center py-10 text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] shadow-inner rounded-xl bg-black/20">AWAITING SYSTEM SYNCHRONIZATION...</div>
             <div class="intel-feed-content hidden space-y-8">
+              <!-- Headlines -->
               <div id="intel-headlines" class="space-y-2 border-l border-white/5 pl-4"></div>
+              <!-- Market metrics (DXY / Yields / VIX) + Calendar -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-white/5">
                 <div id="intel-macro" class="space-y-3"></div>
                 <div id="intel-calendar" class="text-xs text-gray-400 leading-relaxed font-mono"></div>
               </div>
+              <!-- MTF Trend mini row -->
+              <div class="pt-4 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-[10px] font-mono font-black uppercase tracking-[0.2em]">
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">D1 TREND</div>
+                  <div id="mtf-d1" class="text-gray-400">—</div>
+                </div>
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">H4 TREND</div>
+                  <div id="mtf-h4" class="text-gray-400">—</div>
+                </div>
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">MTF ALIGN</div>
+                  <div id="mtf-alignment" class="text-gray-400">—</div>
+                </div>
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">VOL RATIO</div>
+                  <div id="vol-ratio" class="text-gray-400">—</div>
+                </div>
+              </div>
+              <!-- Volume Gate row -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-[10px] font-mono font-black uppercase tracking-[0.2em]">
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">MTF ADJ</div>
+                  <div id="mtf-adj" class="text-gray-400">—</div>
+                </div>
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">VOL STATUS</div>
+                  <div id="vol-status" class="text-gray-400">—</div>
+                </div>
+                <div class="bg-black/30 rounded-lg px-3 py-2 border border-white/5">
+                  <div class="text-gray-600 mb-1">VOL ADJ</div>
+                  <div id="vol-adj" class="text-gray-400">—</div>
+                </div>
+              </div>
+              <!-- S/R Zones -->
               <div id="intel-sr" class="hidden pt-6 border-t border-white/5">
                 <div id="intel-sr-legend" class="hidden mb-4 text-[9px] font-black tracking-[0.2em] text-gray-500 flex flex-wrap gap-x-6 gap-y-2 uppercase"></div>
                 <div id="intel-sr-zones" class="flex flex-col md:flex-row gap-6 text-xs font-mono"></div>
               </div>
+              <!-- Candlestick Patterns -->
               <div id="intel-patterns" class="hidden pt-6 border-t border-white/5"></div>
+              <!-- GPT Validator -->
               <div id="intel-gpt" class="hidden pt-6 border-t border-white/5"></div>
+              <!-- Tags -->
               <div id="intel-tags" class="flex flex-wrap gap-2 pt-4"></div>
             </div>
           </section>
 
-          <!-- BRAIN PILLARS -->
-          <section id="brain-pillars-card" class="glass-panel rounded-2xl p-6">
-            <div class="text-xs font-black tracking-[0.2em] text-gray-200 mb-6 uppercase">BRAIN PILLARS TELEMETRY</div>
+          <!-- ── BRAIN PILLARS TELEMETRY ── -->
+          <section id="brain-pillars-card" class="glass-panel rounded-2xl">
+            <div class="text-xs font-black tracking-[0.2em] text-gray-200 mb-6 uppercase flex items-center gap-2">
+              <span class="w-1 h-4 bg-purple-500 rounded-full opacity-60"></span>
+              BRAIN PILLARS TELEMETRY
+            </div>
             <div class="space-y-4">
-              <div class="grid grid-cols-6 gap-4 items-center"><div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">TECHNICAL</div><div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-tech-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div><div id="p-tech-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div></div>
-              <div class="grid grid-cols-6 gap-4 items-center"><div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">ML MODELS</div><div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-ml-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div><div id="p-ml-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div></div>
-              <div class="grid grid-cols-6 gap-4 items-center"><div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">MOMENTUM</div><div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-mom-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div><div id="p-mom-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div></div>
-              <div class="grid grid-cols-6 gap-4 items-center"><div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">NEWS SENT.</div><div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-news-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div><div id="p-news-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div></div>
-              <div class="grid grid-cols-6 gap-4 items-center"><div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">CALENDAR</div><div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-cal-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div><div id="p-cal-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div></div>
+              <div class="grid grid-cols-6 gap-4 items-center">
+                <div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">TECHNICAL</div>
+                <div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-tech-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div>
+                <div id="p-tech-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div>
+              </div>
+              <div class="grid grid-cols-6 gap-4 items-center">
+                <div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">ML MODELS</div>
+                <div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-ml-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div>
+                <div id="p-ml-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div>
+              </div>
+              <div class="grid grid-cols-6 gap-4 items-center">
+                <div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">MOMENTUM</div>
+                <div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-mom-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div>
+                <div id="p-mom-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div>
+              </div>
+              <div class="grid grid-cols-6 gap-4 items-center">
+                <div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">NEWS SENT.</div>
+                <div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-news-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div>
+                <div id="p-news-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div>
+              </div>
+              <div class="grid grid-cols-6 gap-4 items-center">
+                <div class="col-span-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">CALENDAR</div>
+                <div class="col-span-4 bg-gray-800/50 rounded-full h-2 shadow-inner"><div id="p-cal-bar" class="h-full rounded-full bg-gray-600 w-0 transition-all duration-1000"></div></div>
+                <div id="p-cal-val" class="col-span-1 text-[10px] font-mono font-black text-gray-400 text-right">—</div>
+              </div>
             </div>
           </section>
 
-          <!-- AI AGENT SHADOW VIEW -->
-          <section id="agent-card" class="glass-panel border-purple-700/30 rounded-2xl p-6 hidden">
+          <!-- ── AI AGENT SHADOW VIEW ── -->
+          <section id="agent-card" class="glass-panel border-purple-700/30 rounded-2xl hidden" style="border-color: rgba(126,34,206,0.3);">
             <div class="flex items-center justify-between mb-6">
-              <div class="text-xs font-black tracking-[0.2em] text-purple-400 uppercase">🤖 AI AGENT INDEPENDENT VIEW</div>
+              <div class="text-xs font-black tracking-[0.2em] text-purple-400 uppercase flex items-center gap-2">
+                <span class="w-1 h-4 bg-purple-500 rounded-full opacity-60"></span>
+                AI AGENT INDEPENDENT VIEW
+              </div>
               <div class="text-[10px] font-mono font-black text-gray-500 uppercase">LAT: <span id="agent-latency" class="text-gray-300">—</span>MS</div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -334,18 +446,27 @@
                 <div class="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3">AGENT RATIONALE</div>
                 <p id="agent-reasoning" class="text-xs text-gray-300 leading-relaxed font-black uppercase tracking-[0.1em] mb-6">—</p>
                 <div class="grid grid-cols-2 gap-6">
-                  <div><div class="text-[9px] text-emerald-500/70 font-black uppercase mb-2 tracking-[0.2em]">SUPPORTING</div><ul id="agent-factors" class="text-[9px] text-gray-400 space-y-2 font-black uppercase tracking-[0.1em]"></ul></div>
-                  <div><div class="text-[9px] text-red-500/70 font-black uppercase mb-2 tracking-[0.2em]">INHIBITORS</div><ul id="agent-concerns" class="text-[9px] text-gray-400 space-y-2 font-black uppercase tracking-[0.1em]"></ul></div>
+                  <div>
+                    <div class="text-[9px] text-emerald-500/70 font-black uppercase mb-2 tracking-[0.2em]">SUPPORTING</div>
+                    <ul id="agent-factors" class="text-[9px] text-gray-400 space-y-2 font-black uppercase tracking-[0.1em]"></ul>
+                  </div>
+                  <div>
+                    <div class="text-[9px] text-red-500/70 font-black uppercase mb-2 tracking-[0.2em]">INHIBITORS</div>
+                    <ul id="agent-concerns" class="text-[9px] text-gray-400 space-y-2 font-black uppercase tracking-[0.1em]"></ul>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- AI AGENT MEMORY (GATE MODE PREP) -->
-          <section id="agent-memory-section" class="glass-panel border-cyan-700/30 rounded-2xl p-6 hidden shadow-2xl relative overflow-hidden">
+          <!-- ── COGNITIVE MEMORY CACHE ── -->
+          <section id="agent-memory-section" class="glass-panel rounded-2xl hidden shadow-2xl relative overflow-hidden" style="border-color: rgba(22,163,74,0.2);">
             <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl rounded-full -mr-16 -mt-16"></div>
             <div class="flex items-center justify-between mb-6 relative z-10">
-              <div class="text-xs font-black tracking-[0.2em] text-cyan-400 uppercase">🧠 COGNITIVE MEMORY CACHE</div>
+              <div class="text-xs font-black tracking-[0.2em] text-cyan-400 uppercase flex items-center gap-2">
+                <span class="w-1 h-4 bg-cyan-500 rounded-full opacity-60"></span>
+                COGNITIVE MEMORY CACHE
+              </div>
               <div class="text-[10px] font-mono font-black text-gray-500 uppercase">REJECTION EVENT: <span id="agent-memory-timestamp" class="text-gray-300">—</span></div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
@@ -365,25 +486,27 @@
             </div>
           </section>
 
-          <!-- SYSTEM LOGS / FAST DECISIONS -->
-          <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+          <!-- ── RECENT AI TRIGGERS + DECISION HISTORY ── -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-5 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping"></span>
                 RECENT AI TRIGGERS
               </div>
               <div id="fast-triggers-chips" class="flex flex-wrap gap-2 text-xs min-h-[40px]"></div>
             </div>
-            <div class="glass-panel rounded-2xl p-5">
-              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+            <div class="glass-panel rounded-2xl">
+              <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-5 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 bg-gray-500 rounded-full"></span>
                 DECISION HISTORY (M5)
               </div>
               <div id="recent-decisions" class="flex flex-wrap gap-2 text-xs min-h-[40px]"></div>
             </div>
           </div>
-        </div>
-      </section>
+
+        </div><!-- /reference-panels -->
+      </div><!-- /below-fold container -->
+
     </main>
 
     <!-- UI LOGIC ENTRY POINT -->
