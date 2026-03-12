@@ -493,11 +493,19 @@ function render(state) {
   if (modeEl) modeEl.textContent = state.bot?.mode || "DEMO";
 
   const marketOpen = state.market?.is_open;
+  const marketReason = (state.market?.reason || "").toLowerCase();
   const marketLabel = el("market");
   if (marketOpen === true) {
     marketLabel.textContent = "OPEN";
     marketLabel.className = "text-emerald-400 font-black tracking-widest-caps";
   } else if (marketOpen === false) {
+    marketLabel.textContent = "CLOSED";
+    marketLabel.className = "text-white/40 font-black tracking-widest-caps";
+  } else if (
+    marketReason.includes("weekend") ||
+    marketReason.includes("daily pause") ||
+    marketReason.includes("market closed")
+  ) {
     marketLabel.textContent = "CLOSED";
     marketLabel.className = "text-white/40 font-black tracking-widest-caps";
   } else {
