@@ -115,16 +115,23 @@
                     <div class="flex items-center gap-3">
                       <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">SENTIMENT</div>
                       <div class="flex-1">
-                        <div class="relative">
-                          <div id="sentiment-bar" class="flex gap-1 h-3">
-                            <div class="flex-1 rounded sentiment-strong-sell"></div>
-                            <div class="flex-1 rounded sentiment-sell"></div>
-                            <div class="flex-1 rounded sentiment-neutral"></div>
-                            <div class="flex-1 rounded sentiment-buy"></div>
-                            <div class="flex-1 rounded sentiment-strong-buy"></div>
-                          </div>
-                          <div id="sentiment-indicator" class="absolute top-1/2 -translate-y-1/2 w-2 h-6 rounded bg-white/80 border border-black/40 shadow"></div>
+                        <div id="sentiment-bar" class="vu-meter">
+                          <div class="vu-segment bearish"></div>
+                          <div class="vu-segment bearish"></div>
+                          <div class="vu-segment bearish"></div>
+                          <div class="vu-segment bearish"></div>
+                          <div class="vu-segment bearish"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment bullish"></div>
+                          <div class="vu-segment bullish"></div>
+                          <div class="vu-segment bullish"></div>
+                          <div class="vu-segment bullish"></div>
+                          <div class="vu-segment bullish"></div>
                         </div>
+                        <div id="sentiment-indicator" class="hidden"></div>
                       </div>
                       <div id="sentiment-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
                     </div>
@@ -134,17 +141,23 @@
                     <div class="flex items-center gap-3">
                       <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">LIFECYCLE</div>
                       <div class="flex-1">
-                        <div class="relative">
-                          <div id="lifecycle-bar" class="flex gap-1 h-3">
-                            <div class="flex-1 rounded lifecycle-watching"></div>
-                            <div class="flex-1 rounded lifecycle-preparing"></div>
-                            <div class="flex-1 rounded lifecycle-entry"></div>
-                            <div class="flex-1 rounded lifecycle-managing"></div>
-                            <div class="flex-1 rounded lifecycle-closing"></div>
-                            <div class="flex-1 rounded lifecycle-result"></div>
-                          </div>
-                          <div id="lifecycle-indicator" class="absolute top-1/2 -translate-y-1/2 w-2 h-6 rounded bg-white/80 border border-black/40 shadow"></div>
+                        <div id="lifecycle-bar" class="vu-meter">
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment neutral"></div>
                         </div>
+                        <div id="lifecycle-indicator" class="hidden"></div>
                       </div>
                       <div id="lifecycle-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
                     </div>

@@ -26,6 +26,64 @@
   box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.2);
 }
 
+/* ================================================================
+   VU METER (SEGMENTED PROGRESS BARS)
+   ================================================================ */
+
+.vu-meter {
+  display: flex;
+  gap: 3px;
+  height: 14px;
+  width: 100%;
+}
+
+.vu-segment {
+  flex: 1;
+  height: 100%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: transform 0.25s ease, opacity 0.25s ease, background 0.3s ease, box-shadow 0.3s ease;
+  opacity: 0.3;
+}
+
+.vu-segment.active {
+  opacity: 1;
+}
+
+/* Bearish segments (left side) */
+.vu-segment.active.bearish {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+/* Neutral segments (middle) */
+.vu-segment.active.neutral {
+  background: #94a3b8;
+  box-shadow: 0 0 8px rgba(148, 163, 184, 0.6);
+}
+
+/* Bullish segments (right side) */
+.vu-segment.active.bullish {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.vu-segment.pulse {
+  animation: vu-pulse 2s infinite ease-in-out;
+}
+
+@keyframes vu-pulse {
+  0% { filter: brightness(1); transform: scaleY(1); }
+  50% { filter: brightness(1.4); transform: scaleY(1.1); }
+  100% { filter: brightness(1); transform: scaleY(1); }
+}
+
+/* Hide legacy indicators */
+#sentiment-indicator,
+#lifecycle-indicator {
+  display: none !important;
+}
+
 /* Only additions to Tailwind */
 
 .scanlines::before {

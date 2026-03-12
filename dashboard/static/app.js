@@ -1,3 +1,24 @@
+function updateVUMeter(containerId, activeCount) {
+  const container = el(containerId);
+  if (!container) return;
+  const segments = container.children;
+  const count = Math.max(0, Math.min(segments.length, activeCount));
+  
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (i < count) {
+      seg.classList.add("active");
+      if (i === count - 1 && count > 0) {
+        seg.classList.add("pulse");
+      } else {
+        seg.classList.remove("pulse");
+      }
+    } else {
+      seg.classList.remove("active", "pulse");
+    }
+  }
+}
+
 let lastTimestamp = null;
 let lastMetaAgeSeconds = null;
 let lastBotStatus = null;
@@ -1331,16 +1352,12 @@ function renderProactiveAnalysis(proactive, positions) {
       }
 
       sentimentLabelEl.textContent = label;
-      const segs = sentimentBarEl.children;
-      for (let i = 0; i < segs.length; i++) {
-        const seg = segs[i];
-        if (!seg) continue;
-        if (i === activeIdx) seg.classList.add("is-active");
-        else seg.classList.remove("is-active");
-      }
-
-      const x = c != null ? (c / 100) : 0.5;
-      sentimentIndicatorEl.style.left = `${(Math.max(0, Math.min(1, x)) * 100).toFixed(1)}%`;
+      
+      // VU Meter logic: 14 segments total
+      // activeIdx was 0-4 (5 original steps)
+      // We map these 5 logical states to 14 segments
+      const segmentMapping = [3, 6, 8, 11, 14]; // Strong Sell(3), Sell(6), Neutral(8), Buy(11), Strong Buy(14)
+      updateVUMeter("sentiment-bar", segmentMapping[activeIdx]);
     }
 
     if (lifecycleBarEl && lifecycleIndicatorEl && lifecycleLabelEl) {
@@ -1381,36 +1398,13 @@ function renderProactiveAnalysis(proactive, positions) {
       }
 
       lifecycleLabelEl.textContent = step;
-
-      const segs = lifecycleBarEl.children;
-      for (let i = 0; i < segs.length; i++) {
-        const seg = segs[i];
-        if (!seg) continue;
-        if (i <= stepIdx) seg.classList.add("is-filled");
-        else seg.classList.remove("is-filled");
-      }
-
-      const entrySeg = segs[2];
-      if (entrySeg) {
-        if (d === "OPEN_SELL") entrySeg.style.backgroundColor = "#ef4444";
-        else entrySeg.style.backgroundColor = "#22c55e";
-      }
-
-      const managingSeg = segs[3];
-      if (managingSeg) {
-        if (hasPnl && !pnlNonNeg) managingSeg.style.backgroundColor = "#f59e0b";
-        else managingSeg.style.backgroundColor = "#10b981";
-      }
-
-      const resultSeg = segs[5];
-      if (resultSeg) {
-        if (Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0) resultSeg.style.backgroundColor = "#ef4444";
-        else resultSeg.style.backgroundColor = "#22c55e";
-      }
-
-      lifecycleIndicatorEl.style.left = `${(((stepIdx + 0.5) / 6) * 100).toFixed(1)}%`;
+      
+      // VU Meter logic: 14 segments total
+      // stepIdx was 0-5 (6 logical steps)
+      // Map: WATCHING(2), PREPARING(4), ENTRY(7), MANAGING(10), CLOSING(12), RESULT(14)
+      const lifecycleMapping = [2, 4, 7, 10, 12, 14];
+      updateVUMeter("lifecycle-bar", lifecycleMapping[stepIdx]);
     }
-
     lastProactiveDecision = (decision || "").toString().toUpperCase();
   } catch (e) {
     // silent
