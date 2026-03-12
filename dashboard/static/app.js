@@ -20,21 +20,19 @@ function decisionLabel(decision) {
   return d.replaceAll("_", " ");
 }
 
-function decisionHexColor(decision) {
-  const d = (decision || "").toString().toUpperCase();
-  const map = {
-    OPEN_BUY: "#4caf50",
-    OPEN_SELL: "#e74c3c",
-    HOLD_TRADE: "#2ecc71",
-    CLOSE_TRADE: "#e67e22",
-    ADJUST_TRADE: "#f1c40f",
-    WAIT: "#8e8e8e",
-  };
-  return map[d] || "#8e8e8e";
-}
-
 function bindUIHandlersOnce() {
   if (uiHandlersBound) return;
+
+  const brainToggle = el("brain-toggle");
+  if (brainToggle) {
+    brainToggle.addEventListener("click", () => {
+      try {
+        toggleBrainReferencePanel();
+      } catch (e) {
+        // silent
+      }
+    });
+  }
 
   const reasoningToggle = el("proactive-reasoning-toggle");
   if (reasoningToggle) {
@@ -47,23 +45,23 @@ function bindUIHandlersOnce() {
     });
   }
 
-  const refToggle = el("reference-toggle");
-  if (refToggle) {
-    refToggle.addEventListener("click", () => {
-      try {
-        toggleReferencePanels();
-      } catch (e) {
-        // silent
-      }
-    });
-  }
-
   uiHandlersBound = true;
 }
 
-function toggleReferencePanels() {
-  const panel = el("reference-panels");
-  const btn = el("reference-toggle");
+function decisionHexColor(decision) {
+  const d = (decision || "").toString().toUpperCase();
+  if (d === "OPEN_BUY") return "#4caf50";
+  if (d === "OPEN_SELL") return "#e74c3c";
+  if (d === "HOLD_TRADE") return "#2ecc71";
+  if (d === "CLOSE_TRADE") return "#e67e22";
+  if (d === "ADJUST_TRADE") return "#f1c40f";
+  if (d === "WAIT") return "#8e8e8e";
+  return "#8e8e8e";
+}
+
+function toggleBrainReferencePanel() {
+  const panel = el("brain-reference-panel");
+  const btn = el("brain-toggle");
   if (!panel || !btn) return;
 
   const isHidden = panel.classList.contains("hidden");
@@ -79,16 +77,15 @@ function toggleReferencePanels() {
 function toggleProactiveReasoning() {
   const p = el("proactive-reasoning");
   const btn = el("proactive-reasoning-toggle");
-  const card = el("proactive-reasoning-card");
   if (!p || !btn) return;
 
   proactiveReasoningExpanded = !proactiveReasoningExpanded;
   if (proactiveReasoningExpanded) {
     p.classList.remove("line-clamp-4");
-    btn.textContent = "COLLAPSE";
+    btn.textContent = "Collapse";
   } else {
     p.classList.add("line-clamp-4");
-    btn.textContent = "EXPAND";
+    btn.textContent = "Expand";
   }
 }
 
@@ -127,7 +124,7 @@ function renderFastTriggers(fastDecisions) {
   if (!container) return;
 
   if (!Array.isArray(fastDecisions) || fastDecisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-600 font-black uppercase tracking-[0.2em]">NO TRIGGERS YET</span>`;
+    container.innerHTML = `<span class="text-gray-600 font-medium">NO TRIGGERS YET</span>`;
     return;
   }
 
@@ -168,7 +165,7 @@ function renderFastTriggers(fastDecisions) {
 
     return `
       <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-black uppercase tracking-[0.2em]"
+        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium"
         style="color:${style.color};border-color:${style.border};"
       >${textParts.join(" — ")}</span>
     `;
@@ -240,45 +237,39 @@ function pillColor(score) {
 function renderPillar(rowId, score) {
   const bar = el(`${rowId}-bar`);
   const val = el(`${rowId}-val`);
-  if (!bar || !val) return;
   const s = Number(score);
   const pct = Number.isNaN(s) ? 0 : Math.max(0, Math.min(100, s));
   bar.style.width = `${pct}%`;
   bar.className = `h-2 rounded-full transition-all duration-1000 ease-out ${pillColor(s)}`;
   val.textContent = fmtNum(s, 1);
-  val.className = "col-span-1 text-xs font-mono font-black text-gray-300 text-right tracking-[0.2em]";
 }
 
 function setStatusDot(isOperational) {
   const dot = el("status-dot");
   const label = el("status-label");
-  if (!dot || !label) return;
 
   if (isOperational) {
     dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
     label.textContent = "OPERATIONAL";
-    label.className = "text-green-400 font-black tracking-[0.2em] uppercase";
+    label.className = "text-green-400";
   } else {
     dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
     label.textContent = "OFFLINE";
-    label.className = "text-red-400 font-black tracking-[0.2em] uppercase";
+    label.className = "text-red-400";
   }
 }
 
 function renderPositions(positions) {
   const container = el("positions");
-  const countEl = el("positions-count");
-  if (!container) return;
   container.innerHTML = "";
 
   if (!positions || positions.length === 0) {
     container.innerHTML = `<div class="text-xs text-gray-400">NO OPEN POSITIONS</div>`;
-    if (countEl) countEl.textContent = "0";
+    el("positions-count").textContent = "0";
     return;
   }
 
-  if (countEl) countEl.textContent = String(positions.length);
-  // ... rest of function remains same but uses container safely
+  el("positions-count").textContent = String(positions.length);
 
   for (const p of positions) {
     const pnl = Number(p.profit);
@@ -288,40 +279,40 @@ function renderPositions(positions) {
     const phase = p.phase || "OPEN";
     let phaseBadge = "";
     if (phase === "TRAILING") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black bg-green-500/20 text-green-400 border border-green-500/30 uppercase tracking-[0.2em]">TRAILING</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">TRAILING</span>`;
     } else if (phase === "BREAKEVEN") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase tracking-[0.2em]">BE ACTIVE</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BE ACTIVE</span>`;
     } else {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-[0.2em]">OPEN</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">OPEN</span>`;
     }
 
     // BE distance indicator
     let beIndicator = "";
     if (phase === "OPEN" && p.be_remaining_pips != null) {
-      beIndicator = `<span class="text-[10px] text-gray-500 font-mono font-black uppercase tracking-[0.2em]">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
+      beIndicator = `<span class="text-[10px] text-gray-500 font-mono">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
     } else if (phase === "BREAKEVEN" || phase === "TRAILING") {
-      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-black uppercase tracking-[0.2em]">BE ✓</span>`;
+      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">BE ✓</span>`;
     }
 
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="glass-panel rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
+      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
         <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-mono font-black text-gray-200 uppercase tracking-[0.2em]">
-            <span class="text-gray-500 mr-1 font-black tracking-[0.2em]">#</span>${p.ticket} 
-            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black border border-gray-600/50 text-gray-300 bg-gray-800/50 tracking-[0.2em]">${p.direction}</span> 
+          <div class="text-xs font-mono font-medium text-gray-200">
+            <span class="text-gray-500 mr-1">#</span>${p.ticket} 
+            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600/50 text-gray-300 bg-gray-800/50">${p.direction}</span> 
             ${phaseBadge}
-            <span class="ml-2 text-gray-400 uppercase tracking-[0.2em] font-black">${p.volume} lot</span>
+            <span class="ml-2 text-gray-400">${p.volume} lot</span>
           </div>
-          <div class="text-xs font-mono font-black ${pnlClass} tracking-[0.2em]">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-black ml-1 tracking-[0.2em]">(${fmtNum(p.profit_pips, 0)} p)</span></div>
+          <div class="text-xs font-mono font-bold ${pnlClass}">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)} p)</span></div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono font-black text-gray-500 uppercase tracking-[0.2em] bg-black/20 rounded-lg p-2 border border-white/5">
-          <div><span class="block mb-0.5 text-gray-600">Entry</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.open_price, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">SL</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.sl, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">TP</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.tp, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">Now</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.current_price, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">Protection</span>${beIndicator}</div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono font-medium text-gray-500 uppercase tracking-widest bg-black/20 rounded-lg p-2 border border-white/5">
+          <div><span class="block mb-0.5">Entry</span><span class="text-gray-200">${fmtNum(p.open_price, 2)}</span></div>
+          <div><span class="block mb-0.5">SL</span><span class="text-gray-200">${fmtNum(p.sl, 2)}</span></div>
+          <div><span class="block mb-0.5">TP</span><span class="text-gray-200">${fmtNum(p.tp, 2)}</span></div>
+          <div><span class="block mb-0.5">Now</span><span class="text-gray-200">${fmtNum(p.current_price, 2)}</span></div>
+          <div><span class="block mb-0.5">Protection</span>${beIndicator}</div>
         </div>
       </div>
       `
@@ -331,7 +322,6 @@ function renderPositions(positions) {
 
 function renderTrades(trades, daily) {
   const container = el("trades");
-  if (!container) return;
   container.innerHTML = "";
 
   const wins = Number(daily?.wins || 0);
@@ -340,12 +330,12 @@ function renderTrades(trades, daily) {
   const decisive = wins + losses;
   const wr = decisive ? (wins / decisive) * 100 : 0;
 
-  const twEl = el("trades-w"); if (twEl) twEl.textContent = String(wins);
-  const tlEl = el("trades-l"); if (tlEl) tlEl.textContent = String(losses);
-  const tbeEl = el("trades-be"); if (tbeEl) tbeEl.textContent = String(breakevens);
-  const twrEl = el("trades-wr"); if (twrEl) twrEl.textContent = `${wr.toFixed(1)}%`;
+  el("trades-w").textContent = String(wins);
+  el("trades-l").textContent = String(losses);
+  el("trades-be").textContent = String(breakevens);
+  el("trades-wr").textContent = `${wr.toFixed(1)}%`;
   const hasDailyPnl = daily && daily.pnl !== null && daily.pnl !== undefined && !Number.isNaN(Number(daily.pnl));
-  const tpnlEl = el("trades-pnl"); if (tpnlEl) tpnlEl.textContent = hasDailyPnl ? fmtMoney(daily?.pnl) : "—";
+  el("trades-pnl").textContent = hasDailyPnl ? fmtMoney(daily?.pnl) : "—";
 
   if (!trades || trades.length === 0) {
     container.innerHTML = `<div class="text-xs text-gray-400">NO CLOSED TRADES TODAY</div>`;
@@ -390,11 +380,11 @@ function renderTrades(trades, daily) {
       "beforeend",
       `
       <div class="flex items-center justify-between text-[11px] font-mono border-b border-gray-800/60 py-2.5 px-2 hover:bg-gray-800/30 transition-colors duration-200 rounded-lg group">
-        <div class="text-gray-500 font-black tracking-[0.2em] uppercase">${time}</div>
-        <div class="text-gray-300 font-black tracking-[0.2em] uppercase">${t.direction || "—"}</div>
-        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-black tracking-[0.2em] uppercase">${displayReason}</div>
-        <div class="${pnlClass} font-black tracking-[0.2em]">${pnlDisplay}</div>
-        <div class="text-[10px] uppercase tracking-[0.2em] font-black px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50 text-gray-400">${icon}</div>
+        <div class="text-gray-500 font-medium">${time}</div>
+        <div class="text-gray-300 font-bold">${t.direction || "—"}</div>
+        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-medium tracking-wide">${displayReason}</div>
+        <div class="${pnlClass} font-bold">${pnlDisplay}</div>
+        <div class="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50 text-gray-400">${icon}</div>
       </div>
       `
     );
@@ -406,10 +396,10 @@ function renderVolBanner(volStatus, volDesc) {
   const status = (volStatus || "NORMAL").toUpperCase();
 
   if (status === "EXTREME") {
-    banner.className = "block bg-red-900/60 border-b border-red-500 text-red-200 px-4 py-2 text-xs font-black tracking-[0.2em] uppercase animate-pulse";
+    banner.className = "block bg-red-900/60 border-b border-red-500 text-red-200 px-4 py-2 text-xs font-mono animate-pulse";
     banner.textContent = `BREAKING: EXTREME VOLATILITY — TRADING BLOCKED. ${volDesc || ""}`;
   } else if (status === "COOLING_DOWN") {
-    banner.className = "block bg-yellow-900/40 border-b border-yellow-500 text-yellow-200 px-4 py-2 text-xs font-black tracking-[0.2em] uppercase";
+    banner.className = "block bg-yellow-900/40 border-b border-yellow-500 text-yellow-200 px-4 py-2 text-xs font-mono";
     banner.textContent = `ALERT: COOLING DOWN — ONLY STRONG SIGNALS. ${volDesc || ""}`;
   } else {
     banner.className = "hidden";
@@ -419,73 +409,56 @@ function renderVolBanner(volStatus, volDesc) {
 
 function render(state) {
   const ts = state.timestamp || "—";
-  const lastUpdateEl = el("last-update");
-  if (lastUpdateEl) {
-    lastUpdateEl.textContent = ts.replace("T", " ").slice(0, 19);
-    lastUpdateEl.className = "text-gray-200 font-mono font-black tracking-[0.2em]";
-  }
+  el("last-update").textContent = ts.replace("T", " ").slice(0, 19);
 
   const metaAge = state._meta?.file_age_seconds;
   const operational = (state.bot?.status || "OFFLINE") === "OPERATIONAL";
   setStatusDot(operational);
 
-  const lastDataAgeEl = el("last-data-age");
-  if (lastDataAgeEl) {
-    lastDataAgeEl.textContent = fmtDuration(metaAge);
-    lastDataAgeEl.className = "text-gray-300 font-mono font-black tracking-[0.2em]";
-  }
+  el("last-data-age").textContent = fmtDuration(metaAge);
 
   setStaleUI(!operational, metaAge);
 
-  const modeEl = el("mode");
-  if (modeEl) {
-    modeEl.textContent = state.bot?.mode || "—";
-    modeEl.className = "text-blue-300 font-black tracking-[0.2em] uppercase";
+  el("mode").textContent = state.bot?.mode || "—";
+
+  const marketOpen = state.market?.is_open;
+  const marketLabel = el("market");
+  if (marketOpen === true) {
+    marketLabel.textContent = "OPEN";
+    marketLabel.className = "text-green-400";
+  } else if (marketOpen === false) {
+    marketLabel.textContent = "CLOSED";
+    marketLabel.className = "text-gray-300";
+  } else {
+    marketLabel.textContent = "—";
+    marketLabel.className = "text-gray-400";
   }
 
-  const marketEl = el("market");
-  if (marketEl) {
-    const marketOpen = state.market?.is_open;
-    if (marketOpen === true) {
-      marketEl.textContent = "OPEN";
-      marketEl.className = "text-green-400 font-black tracking-[0.2em] uppercase";
-    } else if (marketOpen === false) {
-      marketEl.textContent = "CLOSED";
-      marketEl.className = "text-gray-500 font-black tracking-[0.2em] uppercase";
-    } else {
-      marketEl.textContent = state.bot?.market_status || "—";
-      marketEl.className = "text-gray-400 font-black tracking-[0.2em] uppercase";
-    }
-  }
-
-  const eaBridgeEl = el("ea-bridge-status");
-  const eaSpreadEl = el("ea-spread");
+  // EA Bridge status
+  const eaStatus = el("ea-bridge-status");
+  const eaSpread = el("ea-spread");
   const eaBridge = state.ea_bridge || {};
-
-  if (eaBridgeEl) {
-    if (eaBridge.enabled === true) {
-      if (eaBridge.online === true) {
-        eaBridgeEl.textContent = "ONLINE";
-        eaBridgeEl.className = "text-green-400 font-black tracking-[0.2em] uppercase";
-      } else {
-        eaBridgeEl.textContent = "FALLBACK";
-        eaBridgeEl.className = "text-amber-400 font-black tracking-[0.2em] uppercase";
-      }
+  
+  if (eaBridge.enabled === true) {
+    if (eaBridge.online === true) {
+      eaStatus.textContent = "ONLINE";
+      eaStatus.className = "text-green-400 font-medium";
     } else {
-      eaBridgeEl.textContent = "OFF";
-      eaBridgeEl.className = "text-gray-500 font-black tracking-[0.2em] uppercase";
+      eaStatus.textContent = "FALLBACK";
+      eaStatus.className = "text-amber-400 font-medium";
     }
+  } else {
+    eaStatus.textContent = "OFF";
+    eaStatus.className = "text-gray-500";
   }
-
-  if (eaSpreadEl) {
-    if (eaBridge.spread_pips != null) {
-      const spread = Number(eaBridge.spread_pips);
-      eaSpreadEl.textContent = `${spread.toFixed(1)}p`;
-      eaSpreadEl.className = spread > 5 ? "font-mono font-black text-amber-400 tracking-[0.2em]" : "font-mono font-black text-gray-400 tracking-[0.2em]";
-    } else {
-      eaSpreadEl.textContent = "—";
-      eaSpreadEl.className = "font-mono font-black text-gray-500 tracking-[0.2em]";
-    }
+  
+  if (eaBridge.spread_pips != null) {
+    const spread = Number(eaBridge.spread_pips);
+    eaSpread.textContent = `${spread.toFixed(1)}p`;
+    eaSpread.className = spread > 5 ? "font-mono text-amber-400" : "font-mono text-gray-300";
+  } else {
+    eaSpread.textContent = "—";
+    eaSpread.className = "font-mono text-gray-500";
   }
 
   const la = state.last_analysis || {};
@@ -495,11 +468,11 @@ function render(state) {
   const card = el("goldcon");
 
   if (marketClosed) {
-    card.className = "relative glass-panel border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
+    card.className = "relative bg-gray-800/40 border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
     const reason = state.market?.reason || "";
     const isPausa = reason.toLowerCase().includes("pausa") || reason.toLowerCase().includes("daily pause");
     el("goldcon-decision").textContent = isPausa ? "DAILY PAUSE" : "MARKET CLOSED";
-    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-black leading-none text-gray-400 text-shadow-soft uppercase tracking-[0.2em]";
+    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-bold leading-none text-gray-400 text-shadow-soft";
     el("goldcon-score").textContent = "—";
     el("goldcon-conf").textContent = "—";
     const nextOpen = state.market?.next_open;
@@ -532,7 +505,7 @@ function render(state) {
     card.className = `relative ${cls.bg} ${cls.border} backdrop-blur-md border-2 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500 group`;
     
     el("goldcon-decision").textContent = decision;
-    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-black leading-none ${cls.text} text-shadow-soft transition-colors duration-300 tracking-[0.2em]`;
+    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-bold leading-none ${cls.text} text-shadow-soft transition-colors duration-300`;
     el("goldcon-score").textContent = fmtNum(score, 1);
     el("goldcon-conf").textContent = `${fmtNum(conf, 1)}%`;
     const scenarioDisplay = {
@@ -552,10 +525,10 @@ function render(state) {
     const blockedEl = el("goldcon-blocked");
     if (la.hold_forced && la.original_decision) {
       blockedEl.textContent = `${la.original_decision} blocked — ${la.hold_reason || "insufficient confidence"}`;
-      blockedEl.className = "text-xs text-amber-400 mt-2 font-black tracking-[0.2em] block uppercase";
+      blockedEl.className = "text-xs text-amber-400 mt-2 font-medium block";
     } else {
       blockedEl.textContent = "";
-      blockedEl.className = "hidden text-xs text-amber-400 mt-2 font-black tracking-[0.2em] uppercase";
+      blockedEl.className = "hidden text-xs text-amber-400 mt-2 font-medium";
     }
     
     // Update Segmented Bar
@@ -601,25 +574,22 @@ function render(state) {
 
   const bal = state.account?.balance;
   const eq = state.account?.equity;
-  const balEl = el("balance"); if (balEl) balEl.textContent = fmtMoney(bal);
-  const eqEl = el("equity"); if (eqEl) eqEl.textContent = fmtMoney(eq);
+  el("balance").textContent = fmtMoney(bal);
+  el("equity").textContent = fmtMoney(eq);
 
   const hasPnl = state.daily_stats && state.daily_stats.pnl !== null && state.daily_stats.pnl !== undefined && !Number.isNaN(Number(state.daily_stats.pnl));
   const hasPnlPct = state.daily_stats && state.daily_stats.pnl_percent !== null && state.daily_stats.pnl_percent !== undefined && !Number.isNaN(Number(state.daily_stats.pnl_percent));
 
   const noClosedTrades = (Number(state.daily_stats?.wins || 0) + Number(state.daily_stats?.losses || 0) + Number(state.daily_stats?.breakevens || 0)) === 0;
   const pnlIsZero = Number(state.daily_stats?.pnl || 0) === 0;
-  const pnlEl = el("pnl");
 
-  if (pnlEl) {
-    if (!operational || bal === null || bal === undefined || eq === null || eq === undefined || !hasPnl || !hasPnlPct || (noClosedTrades && pnlIsZero)) {
-      pnlEl.textContent = "—";
-      pnlEl.className = "text-xl font-black text-gray-300 tracking-[0.2em] font-mono";
-    } else {
-      pnlEl.textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
-      const pnlVal = Number(state.daily_stats?.pnl || 0);
-      pnlEl.className = pnlVal >= 0 ? "text-xl font-black text-green-400 tracking-[0.2em] font-mono" : "text-xl font-black text-red-400 tracking-[0.2em] font-mono";
-    }
+  if (!operational || bal === null || bal === undefined || eq === null || eq === undefined || !hasPnl || !hasPnlPct || (noClosedTrades && pnlIsZero)) {
+    el("pnl").textContent = "—";
+    el("pnl").className = "text-xl font-bold text-gray-300";
+  } else {
+    el("pnl").textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
+    const pnlVal = Number(state.daily_stats?.pnl || 0);
+    el("pnl").className = pnlVal >= 0 ? "text-xl font-bold text-green-400" : "text-xl font-bold text-red-400";
   }
 
   const livePrice = la.current_price;
@@ -627,20 +597,18 @@ function render(state) {
   const priceEl = el("price");
   const priceLabelEl = el("price-label");
 
-  if (priceEl) {
-    if (livePrice != null) {
-      priceEl.textContent = fmtNum(livePrice, 2);
-      priceEl.className = "text-2xl font-black text-white tracking-[0.2em] font-mono";
-      if (priceLabelEl) priceLabelEl.textContent = "";
-    } else if (lastKnown != null) {
-      priceEl.textContent = fmtNum(lastKnown, 2);
-      priceEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] font-mono";
-      if (priceLabelEl) priceLabelEl.textContent = "LAST";
-    } else {
-      priceEl.textContent = "—";
-      priceEl.className = "text-2xl font-black text-gray-500 tracking-[0.2em] font-mono";
-      if (priceLabelEl) priceLabelEl.textContent = "";
-    }
+  if (livePrice != null) {
+    priceEl.textContent = fmtNum(livePrice, 2);
+    priceEl.className = "text-2xl font-bold text-white";
+    if (priceLabelEl) priceLabelEl.textContent = "";
+  } else if (lastKnown != null) {
+    priceEl.textContent = fmtNum(lastKnown, 2);
+    priceEl.className = "text-2xl font-bold text-gray-400";
+    if (priceLabelEl) priceLabelEl.textContent = "LAST";
+  } else {
+    priceEl.textContent = "—";
+    priceEl.className = "text-2xl font-bold text-gray-500";
+    if (priceLabelEl) priceLabelEl.textContent = "";
   }
 
   renderPillar("p-tech", la.tech_score);
@@ -779,7 +747,7 @@ function categoryBadge(cat) {
     crisis_events: { label: "BLACK SWAN", cls: "bg-red-800/30 text-red-200" },
   };
   const m = map[cat] || { label: cat || "?", cls: "bg-gray-600/30 text-gray-400" };
-  return `<span class="px-1 py-0.5 rounded text-[9px] font-black uppercase tracking-[0.2em] ${m.cls}">${m.label}</span>`;
+  return `<span class="px-1 py-0.5 rounded text-[9px] font-bold uppercase ${m.cls}">${m.label}</span>`;
 }
 
 function renderIntelFeed(feed, mtfTrend, volumeGate) {
@@ -816,7 +784,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
         <div class="intel-headline flex items-stretch gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-default border border-transparent hover:border-white/10">
           <div class="w-1.5 rounded-full flex-shrink-0 ${sc.bg} opacity-80 shadow-[0_0_8px_currentColor]"></div>
           <div class="flex-1 min-w-0 py-0.5">
-            <div class="text-xs text-gray-200 leading-snug truncate font-black tracking-[0.2em] uppercase" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
+            <div class="text-xs text-gray-200 leading-snug truncate font-medium" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
             <div class="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 font-mono">
               ${categoryBadge(h.category)}
               <span>${age} ago</span>
@@ -826,9 +794,9 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
             <div class="intel-robot-bubble">
               <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-md ring-1 ring-white/10">
               <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50">
-                <div class="text-xs font-black ${sc.text} font-mono tracking-[0.2em]">${fmtNum(h.score, 0)}/100</div>
-                <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-400 mt-0.5">${sc.label}</div>
-                <div class="text-[9px] text-gray-500 mt-1 uppercase tracking-[0.2em]">via ${methodTag}</div>
+                <div class="text-xs font-bold ${sc.text} font-mono">${fmtNum(h.score, 0)}/100</div>
+                <div class="text-[10px] font-semibold tracking-wider uppercase text-gray-400 mt-0.5">${sc.label}</div>
+                <div class="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">via ${methodTag}</div>
               </div>
             </div>
           </div>
@@ -853,20 +821,20 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const unit = macroUnit(key);
 
     macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="glass-panel border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
+      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
-          <div class="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase">${macroLabel(key)}</div>
-          <div class="text-xs font-black font-mono ${sc.text} tracking-[0.2em]">${fmtNum(m.score, 0)}</div>
+          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)}</div>
+          <div class="text-xs font-bold font-mono ${sc.text}">${fmtNum(m.score, 0)}</div>
         </div>
         <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-black font-mono tracking-[0.2em]">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
-          <span class="text-xs font-mono font-black ${chgClass} tracking-[0.2em]">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
+          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
         <div class="intel-robot-bubble inline-flex mt-2 relative z-10">
           <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10">
           <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50 p-2">
-            <div class="text-xs text-gray-300 font-black uppercase tracking-[0.2em]">${impact}</div>
+            <div class="text-xs text-gray-300 font-medium">${impact}</div>
           </div>
         </div>
       </div>
@@ -896,29 +864,29 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const biasColor = cal.bias === "BULLISH" ? "text-green-400" : (cal.bias === "BEARISH" ? "text-red-400" : "text-gray-500");
     let calHtml = `
       <div class="flex items-center gap-2">
-        <span class="${phaseColor} font-black tracking-[0.2em] uppercase">${cal.phase.toUpperCase().replace("_", " ")}</span>
-        <span class="${biasColor} font-black tracking-[0.2em] uppercase">${biasIcon} ${cal.bias}</span>
+        <span class="${phaseColor} font-bold">${cal.phase.toUpperCase().replace("_", " ")}</span>
+        <span class="${biasColor}">${biasIcon} ${cal.bias}</span>
       </div>
-      ${cal.closest_event ? `<div class="text-gray-500 mt-1 font-black tracking-[0.2em] uppercase text-[10px]">${cal.closest_event}</div>` : ""}
-      ${cal.phase_description ? `<div class="text-gray-600 mt-1 text-[10px] font-black uppercase tracking-[0.2em] leading-tight">${cal.phase_description}</div>` : ""}
+      ${cal.closest_event ? `<div class="text-gray-500 mt-0.5">${cal.closest_event}</div>` : ""}
+      ${cal.phase_description ? `<div class="text-gray-600 mt-0.5">${cal.phase_description}</div>` : ""}
     `;
 
     // Upcoming events list
     const upcoming = cal.upcoming_events || [];
     if (upcoming.length > 0) {
-      calHtml += `<div class="mt-3 border-t border-gray-800 pt-2">`;
-      calHtml += `<div class="text-[10px] text-gray-600 font-black tracking-[0.2em] mb-2 uppercase">UPCOMING</div>`;
+      calHtml += `<div class="mt-2 border-t border-gray-800 pt-1.5">`;
+      calHtml += `<div class="text-[10px] text-gray-600 tracking-wider mb-1">UPCOMING</div>`;
       for (const ev of upcoming) {
-        const impColor = ev.importance === "HIGH" ? "text-red-400 border-red-800/50" : "text-yellow-500 border-yellow-800/50";
+        const impColor = ev.importance === "HIGH" ? "text-red-400 border-red-800" : "text-yellow-500 border-yellow-800";
         const impLabel = ev.importance === "HIGH" ? "H" : "M";
-        const timeColor = ev.is_past ? "text-gray-700" : "text-gray-500";
-        const nameColor = ev.is_past ? "text-gray-700" : "text-gray-400";
+        const timeColor = ev.is_past ? "text-gray-600" : "text-gray-400";
+        const nameColor = ev.is_past ? "text-gray-600" : "text-gray-300";
         calHtml += `
-          <div class="flex items-center gap-2 text-[10px] py-0.5 font-black uppercase tracking-[0.2em]">
-            <span class="px-1 border rounded ${impColor}" style="font-size:8px">${impLabel}</span>
-            <span class="${timeColor} font-mono">${ev.time}</span>
-            <span class="${nameColor} truncate flex-1">${ev.name}</span>
-            <span class="text-gray-600 ml-auto flex-shrink-0 text-[9px]">${ev.time_until}</span>
+          <div class="flex items-center gap-1.5 text-[11px] py-0.5">
+            <span class="px-1 border rounded ${impColor}" style="font-size:9px">${impLabel}</span>
+            <span class="${timeColor}">${ev.time}</span>
+            <span class="${nameColor} truncate">${ev.name}</span>
+            <span class="text-gray-600 ml-auto flex-shrink-0">${ev.time_until}</span>
           </div>
         `;
       }
@@ -939,23 +907,23 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const srZones = feed.sr_zones || [];
   const tfBadge = (tf) => {
     const colors = { "D1": "bg-amber-700 text-amber-200", "H4": "bg-blue-800 text-blue-300", "H1": "bg-gray-700 text-gray-400" };
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-[0.2em] ${colors[tf] || colors.H1}">${tf}</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold ${colors[tf] || colors.H1}">${tf}</span>`;
   };
   const mtfBadge = (confluence) => {
     if (!confluence || confluence.length < 2) return "";
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-black bg-purple-800 text-purple-300 ml-0.5 uppercase tracking-[0.2em]" title="${confluence.join("+")}">MTF</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold bg-purple-800 text-purple-300 ml-0.5" title="${confluence.join("+")}">MTF</span>`;
   };
   const ztBadge = (zt) => {
     const ztColors = { "FLIP": "bg-yellow-800 text-yellow-300", "SUPPORT": "bg-green-900 text-green-400", "RESISTANCE": "bg-red-900 text-red-400" };
     const label = zt === "SUPPORT" ? "SUP" : zt === "RESISTANCE" ? "RES" : zt;
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-[0.2em] ${ztColors[zt] || "bg-gray-700 text-gray-400"} ml-0.5">${label}</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold ${ztColors[zt] || "bg-gray-700 text-gray-400"} ml-0.5">${label}</span>`;
   };
   const zoneRow = (z, color, borderColor) => {
     const isMtf = z.confluence && z.confluence.length >= 2;
     const isStrong = z.strength === "strong" || z.touches >= 4;
-    const weight = isStrong ? "font-black" : "font-black";
+    const weight = isStrong ? "font-bold" : "";
     const border = isMtf ? "border-purple-500" : borderColor;
-    return `<div class="${color} ${weight} border-l-2 ${border} pl-1.5 py-0.5 uppercase tracking-[0.2em]">${z.price.toFixed(2)} ${tfBadge(z.timeframe)}${mtfBadge(z.confluence)}${ztBadge(z.zone_type)} <span class="text-gray-500 tracking-normal">${z.touches}T — ${z.dist_pips.toFixed(0)}p</span></div>`;
+    return `<div class="${color} ${weight} border-l-2 ${border} pl-1.5 py-0.5">${z.price.toFixed(2)} ${tfBadge(z.timeframe)}${mtfBadge(z.confluence)}${ztBadge(z.zone_type)} <span class="text-gray-500">${z.touches}T — ${z.dist_pips.toFixed(0)}p</span></div>`;
   };
   if (srZones.length > 0) {
     srEl.classList.remove("hidden");
@@ -964,12 +932,12 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const above = srZones.filter(z => z.position === "above");
     const below = srZones.filter(z => z.position === "below");
     // Resistance (above) — right column
-    let aboveHtml = '<div class="w-full md:w-1/2"><div class="text-red-400 font-black tracking-[0.2em] uppercase mb-1">&#9650; RESISTANCE</div>';
+    let aboveHtml = '<div class="w-full md:w-1/2"><div class="text-red-400 font-bold mb-1">&#9650; RESISTANCE</div>';
     if (above.length === 0) { aboveHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of above) { aboveHtml += zoneRow(z, "text-red-300", "border-red-700"); }
     aboveHtml += '</div>';
     // Support (below) — left column
-    let belowHtml = '<div class="w-full md:w-1/2 md:pr-3 md:border-r border-gray-700/50"><div class="text-green-400 font-black tracking-[0.2em] uppercase mb-1">&#9660; SUPPORT</div>';
+    let belowHtml = '<div class="w-full md:w-1/2 md:pr-3 md:border-r border-gray-700/50"><div class="text-green-400 font-bold mb-1">&#9660; SUPPORT</div>';
     if (below.length === 0) { belowHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of below) { belowHtml += zoneRow(z, "text-green-300", "border-green-700"); }
     belowHtml += '</div>';
@@ -1004,7 +972,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-md ring-2 ring-white/10 opacity-90">
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-[10px] font-black tracking-[0.2em] uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
+          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
           <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-sans break-words whitespace-normal">${text.replace(/"/g, '&quot;')}</div>
         </div>
       </div>
@@ -1027,10 +995,10 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
       const srText = p.sr_context || "";
       patternEl.innerHTML = `
         <div class="flex items-center gap-2 text-xs flex-wrap">
-          <span class="px-1.5 py-0.5 border rounded font-black uppercase tracking-[0.2em] ${dirColor}">${p.name}</span>
-          <span class="${scoreColor} font-mono font-black tracking-[0.2em]">${p.final_score > 0 ? "+" : ""}${p.final_score}</span>
-          ${multText ? `<span class="text-amber-400 text-[10px] font-black uppercase tracking-[0.2em]">${multText} S/R</span>` : ""}
-          ${srText ? `<span class="text-gray-500 text-[10px] truncate max-w-xs font-black uppercase tracking-[0.2em]">${srText}</span>` : ""}
+          <span class="px-1.5 py-0.5 border rounded font-bold ${dirColor}">${p.name}</span>
+          <span class="${scoreColor} font-mono">${p.final_score > 0 ? "+" : ""}${p.final_score}</span>
+          ${multText ? `<span class="text-amber-400 text-[10px]">${multText} S/R</span>` : ""}
+          ${srText ? `<span class="text-gray-500 text-[10px] truncate max-w-xs">${srText}</span>` : ""}
         </div>
       `;
     } else {
@@ -1133,15 +1101,15 @@ function renderAgentCard(agentDecision) {
   if (decisionEl) {
     decisionEl.textContent = decision;
     if (decision.includes("BUY")) {
-      decisionEl.className = "text-2xl font-black text-green-400 tracking-[0.2em] uppercase";
+      decisionEl.className = "text-2xl font-bold text-green-400";
     } else if (decision.includes("SELL")) {
-      decisionEl.className = "text-2xl font-black text-red-400 tracking-[0.2em] uppercase";
+      decisionEl.className = "text-2xl font-bold text-red-400";
     } else if (decision === "REJECT") {
-      decisionEl.className = "text-2xl font-black text-red-500 tracking-[0.2em] uppercase";
+      decisionEl.className = "text-2xl font-bold text-red-500";
     } else if (decision === "WAIT") {
-      decisionEl.className = "text-2xl font-black text-yellow-400 tracking-[0.2em] uppercase";
+      decisionEl.className = "text-2xl font-bold text-yellow-400";
     } else {
-      decisionEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] uppercase";
+      decisionEl.className = "text-2xl font-bold text-gray-400";
     }
   }
 
@@ -1156,13 +1124,13 @@ function renderAgentCard(agentDecision) {
   if (agreeEl) {
     if (agreement === true) {
       agreeEl.textContent = "✅ AGREE";
-      agreeEl.className = "text-sm font-black text-green-400 tracking-[0.2em] uppercase";
+      agreeEl.className = "text-sm font-semibold text-green-400";
     } else if (agreement === false) {
       agreeEl.textContent = "❌ DISAGREE";
-      agreeEl.className = "text-sm font-black text-red-400 tracking-[0.2em] uppercase";
+      agreeEl.className = "text-sm font-semibold text-red-400";
     } else {
       agreeEl.textContent = "—";
-      agreeEl.className = "text-sm font-black text-gray-500 tracking-[0.2em] uppercase";
+      agreeEl.className = "text-sm font-semibold text-gray-500";
     }
   }
 
@@ -1188,9 +1156,9 @@ function renderAgentCard(agentDecision) {
   const factorsEl = el("agent-factors");
   if (factorsEl) {
     if (keyFactors.length > 0) {
-      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300 font-black tracking-[0.2em] uppercase text-[10px]">• ${f}</li>`).join("");
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${f}</li>`).join("");
     } else {
-      factorsEl.innerHTML = `<li class="text-gray-600 font-black tracking-[0.2em] uppercase text-[10px]">—</li>`;
+      factorsEl.innerHTML = `<li class="text-gray-600">—</li>`;
     }
   }
 
@@ -1198,9 +1166,9 @@ function renderAgentCard(agentDecision) {
   const concernsEl = el("agent-concerns");
   if (concernsEl) {
     if (concerns.length > 0) {
-      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400 font-black tracking-[0.2em] uppercase text-[10px]">• ${c}</li>`).join("");
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
     } else {
-      concernsEl.innerHTML = `<li class="text-gray-600 font-black tracking-[0.2em] uppercase text-[10px]">NONE</li>`;
+      concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
     }
   }
 }
@@ -1237,9 +1205,11 @@ function renderProactiveAnalysis(proactive, positions) {
   const tokensUsed = toRender.tokens_used;
 
   const sentimentBarEl = el("sentiment-bar");
+  const sentimentIndicatorEl = el("sentiment-indicator");
   const sentimentLabelEl = el("sentiment-label");
 
   const lifecycleBarEl = el("lifecycle-bar");
+  const lifecycleIndicatorEl = el("lifecycle-indicator");
   const lifecycleLabelEl = el("lifecycle-label");
 
   const tpBlockEl = el("proactive-tp-block");
@@ -1273,22 +1243,9 @@ function renderProactiveAnalysis(proactive, positions) {
   }
 
   const decisionEl = el("proactive-decision");
-  const decisionCardEl = el("proactive-decision-card");
   if (decisionEl) {
     decisionEl.textContent = decisionLabel(decision);
     decisionEl.style.color = decisionHexColor(decision);
-  }
-  if (decisionCardEl) {
-    const hexColor = decisionHexColor(decision);
-    decisionCardEl.style.borderColor = hexColor.replace(")", ", 0.3)").replace("rgb", "rgba").replace("#4caf50","rgba(76,175,80,0.3)").replace("#e74c3c","rgba(231,76,60,0.3)").replace("#2ecc71","rgba(46,204,113,0.3)").replace("#e67e22","rgba(230,126,34,0.3)").replace("#f1c40f","rgba(241,196,15,0.3)").replace("#8e8e8e","rgba(142,142,142,0.15)");
-    const glowMap = {
-      "#4caf50": "0 0 32px rgba(76,175,80,0.12), 0 8px 32px rgba(0,0,0,0.4)",
-      "#e74c3c": "0 0 32px rgba(231,76,60,0.12), 0 8px 32px rgba(0,0,0,0.4)",
-      "#2ecc71": "0 0 32px rgba(46,204,113,0.12), 0 8px 32px rgba(0,0,0,0.4)",
-      "#e67e22": "0 0 32px rgba(230,126,34,0.12), 0 8px 32px rgba(0,0,0,0.4)",
-      "#f1c40f": "0 0 32px rgba(241,196,15,0.12), 0 8px 32px rgba(0,0,0,0.4)",
-    };
-    decisionCardEl.style.boxShadow = glowMap[decisionHexColor(decision)] || "0 8px 32px rgba(0,0,0,0.4)";
   }
 
   // HOLD display from live positions[]
@@ -1338,12 +1295,15 @@ function renderProactiveAnalysis(proactive, positions) {
     }
     lastHadPosition = inTrade;
 
-    if (sentimentBarEl && sentimentLabelEl) {
+    if (sentimentBarEl && sentimentIndicatorEl && sentimentLabelEl) {
       const d = (decision || "").toString().toUpperCase();
 
       let label = "NEUTRAL";
-      let activeIdx = 2; // Default to Neutral (middle of 5 zones)
+      let activeIdx = 2;
       const c = confSafe;
+
+      const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
+      const holdDir = dirFromPos === "BUY" || dirFromPos === "SELL" ? dirFromPos : null;
 
       if (d === "OPEN_SELL") {
         if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
@@ -1351,66 +1311,48 @@ function renderProactiveAnalysis(proactive, positions) {
       } else if (d === "OPEN_BUY") {
         if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
         else { label = "BUY"; activeIdx = 3; }
-      } else if (d === "WAIT" || d === "CLOSE_TRADE") {
+      } else if (d === "WAIT") {
+        label = "NEUTRAL";
+        activeIdx = 2;
+      } else if (d === "CLOSE_TRADE") {
         label = "NEUTRAL";
         activeIdx = 2;
       } else if (d === "HOLD_TRADE" || d === "ADJUST_TRADE") {
-        const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
-        if (dirFromPos === "SELL") {
+        if (holdDir === "SELL") {
           if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
           else { label = "SELL"; activeIdx = 1; }
-        } else if (dirFromPos === "BUY") {
+        } else if (holdDir === "BUY") {
           if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
           else { label = "BUY"; activeIdx = 3; }
+        } else {
+          label = "NEUTRAL";
+          activeIdx = 2;
         }
       }
 
       sentimentLabelEl.textContent = label;
-      sentimentLabelEl.className = `text-xs font-black tracking-[0.2em] uppercase min-w-[60px] text-right ${activeIdx <= 1 ? 'text-red-400' : (activeIdx >= 3 ? 'text-emerald-400' : 'text-amber-400')}`;
-
       const segs = sentimentBarEl.children;
-      const numSegs = segs.length; // 16
-      
-      for (let i = 0; i < numSegs; i++) {
+      for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        
-        // Map 5 zones to 16 segments
-        // 0: Strong Sell (0-2), 1: Sell (3-5), 2: Neutral (6-9), 3: Buy (10-12), 4: Strong Buy (13-15)
-        let isInZone = false;
-        if (activeIdx === 0) isInZone = (i <= 2);
-        else if (activeIdx === 1) isInZone = (i >= 3 && i <= 5);
-        else if (activeIdx === 2) isInZone = (i >= 6 && i <= 9);
-        else if (activeIdx === 3) isInZone = (i >= 10 && i <= 12);
-        else if (activeIdx === 4) isInZone = (i >= 13);
-
-        if (isInZone) {
-          seg.classList.add("is-active");
-          // Determine color class based on zone
-          seg.classList.remove("zone-bearish", "zone-neutral", "zone-bullish");
-          if (activeIdx <= 1) seg.classList.add("zone-bearish");
-          else if (activeIdx === 2) seg.classList.add("zone-neutral");
-          else seg.classList.add("zone-bullish");
-
-          if ((activeIdx === 0 && i === 2) || (activeIdx === 1 && i === 5) || 
-              (activeIdx === 2 && i === 9) || (activeIdx === 3 && i === 12) || 
-              (activeIdx === 4 && i === 15)) {
-            seg.classList.add("last-active");
-          } else {
-            seg.classList.remove("last-active");
-          }
-        } else {
-          seg.classList.remove("is-active", "last-active", "zone-bearish", "zone-neutral", "zone-bullish");
-        }
+        if (i === activeIdx) seg.classList.add("is-active");
+        else seg.classList.remove("is-active");
       }
+
+      const x = c != null ? (c / 100) : 0.5;
+      sentimentIndicatorEl.style.left = `${(Math.max(0, Math.min(1, x)) * 100).toFixed(1)}%`;
     }
 
-    if (lifecycleBarEl && lifecycleLabelEl) {
+    if (lifecycleBarEl && lifecycleIndicatorEl && lifecycleLabelEl) {
       const d = (decision || "").toString().toUpperCase();
       const entryConditionsPresent = !!(toRender.entry_conditions && typeof toRender.entry_conditions === "object");
 
+      const posProfit = pos0 && pos0.profit != null ? Number(pos0.profit) : null;
+      const hasPnl = Number.isFinite(posProfit);
+      const pnlNonNeg = hasPnl ? posProfit >= 0 : true;
+
       let step = "WATCHING";
-      let stepIdx = 0; // 0: Watching, 1: Preparing, 2: Entry, 3: Managing, 4: Closing, 5: Result
+      let stepIdx = 0;
 
       if (!inTrade) {
         if (entryConditionsPresent) {
@@ -1428,6 +1370,9 @@ function renderProactiveAnalysis(proactive, positions) {
       } else if (inTrade && (d === "HOLD_TRADE" || d === "ADJUST_TRADE" || d === "WAIT")) {
         step = "MANAGING";
         stepIdx = 3;
+      } else if (!inTrade && d === "ADJUST_TRADE") {
+        step = "WATCHING";
+        stepIdx = 0;
       }
 
       if (!inTrade && lastProactiveDecision === "CLOSE_TRADE" && Number.isFinite(lastKnownClosedPnl)) {
@@ -1436,33 +1381,34 @@ function renderProactiveAnalysis(proactive, positions) {
       }
 
       lifecycleLabelEl.textContent = step;
-      lifecycleLabelEl.className = "text-xs font-black tracking-[0.2em] uppercase min-w-[60px] text-right text-purple-400";
 
       const segs = lifecycleBarEl.children;
-      const numSegs = segs.length; // 16
-      // Progressive mapping: fill segments up to current step
-      // Step 0: 2 segs, Step 1: 5 segs, Step 2: 8 segs, Step 3: 11 segs, Step 4: 14 segs, Step 5: 16 segs
-      const mapping = [2, 5, 8, 11, 14, 16];
-      const activeSegsCount = mapping[stepIdx];
-
-      for (let i = 0; i < numSegs; i++) {
+      for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        if (i < activeSegsCount) {
-          seg.classList.add("is-active");
-          if (i === activeSegsCount - 1) {
-            seg.classList.add("last-active");
-            if (stepIdx === 5) {
-               const isLoss = Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0;
-               seg.classList.add(isLoss ? "step-result-loss" : "step-result-win");
-            }
-          } else {
-            seg.classList.remove("last-active");
-          }
-        } else {
-          seg.classList.remove("is-active", "last-active", "step-result-win", "step-result-loss");
-        }
+        if (i <= stepIdx) seg.classList.add("is-filled");
+        else seg.classList.remove("is-filled");
       }
+
+      const entrySeg = segs[2];
+      if (entrySeg) {
+        if (d === "OPEN_SELL") entrySeg.style.backgroundColor = "#ef4444";
+        else entrySeg.style.backgroundColor = "#22c55e";
+      }
+
+      const managingSeg = segs[3];
+      if (managingSeg) {
+        if (hasPnl && !pnlNonNeg) managingSeg.style.backgroundColor = "#f59e0b";
+        else managingSeg.style.backgroundColor = "#10b981";
+      }
+
+      const resultSeg = segs[5];
+      if (resultSeg) {
+        if (Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0) resultSeg.style.backgroundColor = "#ef4444";
+        else resultSeg.style.backgroundColor = "#22c55e";
+      }
+
+      lifecycleIndicatorEl.style.left = `${(((stepIdx + 0.5) / 6) * 100).toFixed(1)}%`;
     }
 
     lastProactiveDecision = (decision || "").toString().toUpperCase();
@@ -1610,11 +1556,11 @@ function renderAgentMemory(agentMemory) {
     const dir = agentMemory.market_view?.direction || "—";
     viewDirEl.textContent = dir;
     if (dir === "BUY") {
-      viewDirEl.className = "text-lg font-black text-green-400 tracking-[0.2em] uppercase";
+      viewDirEl.className = "text-lg font-bold text-green-400";
     } else if (dir === "SELL") {
-      viewDirEl.className = "text-lg font-black text-red-400 tracking-[0.2em] uppercase";
+      viewDirEl.className = "text-lg font-bold text-red-400";
     } else {
-      viewDirEl.className = "text-lg font-black text-yellow-400 tracking-[0.2em] uppercase";
+      viewDirEl.className = "text-lg font-bold text-yellow-400";
     }
   }
 
@@ -1629,13 +1575,13 @@ function renderAgentMemory(agentMemory) {
   if (conditionsEl) {
     const conditions = agentMemory.conditions || [];
     if (conditions.length === 0) {
-      conditionsEl.innerHTML = `<li class="text-gray-500 font-black tracking-[0.2em] uppercase text-[10px]">No conditions set</li>`;
+      conditionsEl.innerHTML = `<li class="text-gray-500">No conditions set</li>`;
     } else {
       conditionsEl.innerHTML = conditions.map(c => {
         const icon = c.met ? "✅" : "❌";
         const currentVal = c.current_value != null ? ` (now: ${fmtNum(c.current_value, 1)})` : "";
         const textClass = c.met ? "text-green-400" : "text-gray-300";
-        return `<li class="${textClass} font-black tracking-[0.2em] uppercase text-[10px] leading-relaxed">${icon} ${c.description}${currentVal}</li>`;
+        return `<li class="${textClass}">${icon} ${c.description}${currentVal}</li>`;
       }).join("");
     }
   }
@@ -1659,13 +1605,13 @@ function renderAgentMemory(agentMemory) {
     
     if (allMet || status === "CONDITIONS_MET") {
       statusEl.textContent = "ALL CONDITIONS MET";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-black bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse tracking-[0.2em] uppercase";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse";
     } else if (status === "EXPIRED") {
       statusEl.textContent = "EXPIRED";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-black bg-gray-500/20 text-gray-400 border border-gray-500/30 tracking-[0.2em] uppercase";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30";
     } else {
       statusEl.textContent = "ACTIVE";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-[0.2em] uppercase";
+      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
     }
   }
 }
@@ -1695,7 +1641,7 @@ function renderRecentDecisions(decisions) {
   if (!container) return;
 
   if (!decisions || decisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-500 font-black tracking-[0.2em] text-[11px] uppercase">NO DECISIONS YET</span>`;
+    container.innerHTML = `<span class="text-gray-500 font-medium tracking-wide text-[11px] uppercase">NO DECISIONS YET</span>`;
     return;
   }
 
@@ -1708,9 +1654,9 @@ function renderRecentDecisions(decisions) {
 
     container.insertAdjacentHTML("beforeend", `
       <div class="flex items-center gap-1.5 px-2 py-1 rounded-md border ${cls} backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5">
-        <span class="text-[10px] text-gray-500 font-mono tracking-[0.2em] opacity-80 uppercase font-black">${time}</span>
-        <span class="font-black text-[10px] tracking-[0.2em] uppercase">${decision}</span>
-        <span class="text-[10px] font-mono opacity-90 font-black pl-1 border-l border-current/20 tracking-[0.2em]">${score}</span>
+        <span class="text-[10px] text-gray-500 font-mono tracking-wider opacity-80">${time}</span>
+        <span class="font-bold text-[10px] tracking-wide uppercase">${decision}</span>
+        <span class="text-[10px] font-mono opacity-90 font-medium pl-1 border-l border-current/20">${score}</span>
       </div>
     `);
   }
