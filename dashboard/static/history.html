@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
     
     <!-- Custom Style overrides -->
     <link rel="stylesheet" href="/static/style.css">
@@ -85,7 +85,7 @@
       <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         
         <!-- Equity Curve -->
-        <div class="lg:col-span-2 bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-6 shadow-lg h-[350px] flex flex-col hover:shadow-xl transition-shadow duration-300">
+        <div class="lg:col-span-2 glass-panel rounded-2xl p-6 h-[350px] flex flex-col">
           <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-4">Equity Curve</h2>
           <div class="relative flex-grow w-full h-full">
             <canvas id="equityChart"></canvas>
@@ -93,7 +93,7 @@
         </div>
 
         <!-- Backtest Comparison -->
-        <div class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <div class="glass-panel rounded-2xl p-6">
           <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-2">Live vs Backtest</h2>
           <p class="text-[10px] text-gray-500 font-black tracking-[0.2em] mb-4 uppercase">Ref: v3.1 (Aug 2024 - Feb 2026)</p>
           <div class="overflow-x-auto">
@@ -117,7 +117,7 @@
       </section>
 
       <!-- Monthly Summary -->
-      <section class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-6 shadow-lg mb-8">
+      <section class="glass-panel rounded-2xl p-6 mb-8">
         <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-4">Monthly Summary</h2>
         <div class="overflow-x-auto rounded-xl border border-gray-800/50">
           <table class="w-full text-sm text-left">
@@ -140,7 +140,7 @@
       </section>
 
       <!-- Trade History Table -->
-      <section class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-6 shadow-lg">
+      <section class="glass-panel rounded-2xl p-6">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200">Trade History</h2>
             <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">
@@ -189,7 +189,7 @@
           <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800/60">
             <div>
               <div class="text-sm font-black tracking-[0.2em] text-cyan-300 uppercase">TRADE ANALYST REPORT</div>
-              <div id="trade-report-meta" class="text-[10px] font-mono font-black text-gray-500 mt-1 uppercase tracking-tight">Ticket #—</div>
+              <div id="trade-report-meta" class="text-[10px] font-mono font-black text-gray-500 mt-1 uppercase tracking-[0.2em]">Ticket #—</div>
             </div>
             <button id="trade-report-close" class="px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300 bg-gray-800/60 border border-gray-700/60 rounded-lg hover:bg-gray-700/60 transition-colors">Close</button>
           </div>

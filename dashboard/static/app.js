@@ -124,7 +124,7 @@ function renderFastTriggers(fastDecisions) {
   if (!container) return;
 
   if (!Array.isArray(fastDecisions) || fastDecisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-600 font-medium">NO TRIGGERS YET</span>`;
+    container.innerHTML = `<span class="text-gray-600 font-black uppercase tracking-[0.2em]">NO TRIGGERS YET</span>`;
     return;
   }
 
@@ -165,7 +165,7 @@ function renderFastTriggers(fastDecisions) {
 
     return `
       <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium"
+        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-black uppercase tracking-[0.2em]"
         style="color:${style.color};border-color:${style.border};"
       >${textParts.join(" — ")}</span>
     `;
@@ -242,7 +242,7 @@ function renderPillar(rowId, score) {
   bar.style.width = `${pct}%`;
   bar.className = `h-2 rounded-full transition-all duration-1000 ease-out ${pillColor(s)}`;
   val.textContent = fmtNum(s, 1);
-  val.className = "col-span-1 text-xs font-mono font-black text-gray-300 text-right tracking-tight";
+  val.className = "col-span-1 text-xs font-mono font-black text-gray-300 text-right tracking-[0.2em]";
 }
 
 function setStatusDot(isOperational) {
@@ -290,7 +290,7 @@ function renderPositions(positions) {
     // BE distance indicator
     let beIndicator = "";
     if (phase === "OPEN" && p.be_remaining_pips != null) {
-      beIndicator = `<span class="text-[10px] text-gray-500 font-mono font-black uppercase tracking-tight">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
+      beIndicator = `<span class="text-[10px] text-gray-500 font-mono font-black uppercase tracking-[0.2em]">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
     } else if (phase === "BREAKEVEN" || phase === "TRAILING") {
       beIndicator = `<span class="text-[10px] text-green-500 font-mono font-black uppercase tracking-[0.2em]">BE ✓</span>`;
     }
@@ -300,19 +300,19 @@ function renderPositions(positions) {
       `
       <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
         <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-mono font-black text-gray-200 uppercase tracking-tight">
-            <span class="text-gray-500 mr-1">#</span>${p.ticket} 
+          <div class="text-xs font-mono font-black text-gray-200 uppercase tracking-[0.2em]">
+            <span class="text-gray-500 mr-1 font-black tracking-[0.2em]">#</span>${p.ticket} 
             <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black border border-gray-600/50 text-gray-300 bg-gray-800/50 tracking-[0.2em]">${p.direction}</span> 
             ${phaseBadge}
-            <span class="ml-2 text-gray-400 lowercase tracking-normal font-medium">${p.volume} lot</span>
+            <span class="ml-2 text-gray-400 uppercase tracking-[0.2em] font-black">${p.volume} lot</span>
           </div>
-          <div class="text-xs font-mono font-black ${pnlClass} tracking-tight">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-black ml-1 tracking-tight">(${fmtNum(p.profit_pips, 0)} p)</span></div>
+          <div class="text-xs font-mono font-black ${pnlClass} tracking-[0.2em]">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-black ml-1 tracking-[0.2em]">(${fmtNum(p.profit_pips, 0)} p)</span></div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono font-black text-gray-500 uppercase tracking-[0.2em] bg-black/20 rounded-lg p-2 border border-white/5">
-          <div><span class="block mb-0.5 text-gray-600">Entry</span><span class="text-gray-200 tracking-tight">${fmtNum(p.open_price, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">SL</span><span class="text-gray-200 tracking-tight">${fmtNum(p.sl, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">TP</span><span class="text-gray-200 tracking-tight">${fmtNum(p.tp, 2)}</span></div>
-          <div><span class="block mb-0.5 text-gray-600">Now</span><span class="text-gray-200 tracking-tight">${fmtNum(p.current_price, 2)}</span></div>
+          <div><span class="block mb-0.5 text-gray-600">Entry</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.open_price, 2)}</span></div>
+          <div><span class="block mb-0.5 text-gray-600">SL</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.sl, 2)}</span></div>
+          <div><span class="block mb-0.5 text-gray-600">TP</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.tp, 2)}</span></div>
+          <div><span class="block mb-0.5 text-gray-600">Now</span><span class="text-gray-200 tracking-[0.2em]">${fmtNum(p.current_price, 2)}</span></div>
           <div><span class="block mb-0.5 text-gray-600">Protection</span>${beIndicator}</div>
         </div>
       </div>
@@ -381,10 +381,10 @@ function renderTrades(trades, daily) {
       "beforeend",
       `
       <div class="flex items-center justify-between text-[11px] font-mono border-b border-gray-800/60 py-2.5 px-2 hover:bg-gray-800/30 transition-colors duration-200 rounded-lg group">
-        <div class="text-gray-500 font-black tracking-tight uppercase">${time}</div>
+        <div class="text-gray-500 font-black tracking-[0.2em] uppercase">${time}</div>
         <div class="text-gray-300 font-black tracking-[0.2em] uppercase">${t.direction || "—"}</div>
-        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-black tracking-wide uppercase">${displayReason}</div>
-        <div class="${pnlClass} font-black tracking-tight">${pnlDisplay}</div>
+        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-black tracking-[0.2em] uppercase">${displayReason}</div>
+        <div class="${pnlClass} font-black tracking-[0.2em]">${pnlDisplay}</div>
         <div class="text-[10px] uppercase tracking-[0.2em] font-black px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50 text-gray-400">${icon}</div>
       </div>
       `
@@ -413,7 +413,7 @@ function render(state) {
   const lastUpdateEl = el("last-update");
   if (lastUpdateEl) {
     lastUpdateEl.textContent = ts.replace("T", " ").slice(0, 19);
-    lastUpdateEl.className = "text-gray-200 font-mono font-black tracking-tight";
+    lastUpdateEl.className = "text-gray-200 font-mono font-black tracking-[0.2em]";
   }
 
   const metaAge = state._meta?.file_age_seconds;
@@ -423,7 +423,7 @@ function render(state) {
   const lastDataAgeEl = el("last-data-age");
   if (lastDataAgeEl) {
     lastDataAgeEl.textContent = fmtDuration(metaAge);
-    lastDataAgeEl.className = "text-gray-300 font-mono font-black tracking-tight";
+    lastDataAgeEl.className = "text-gray-300 font-mono font-black tracking-[0.2em]";
   }
 
   setStaleUI(!operational, metaAge);
@@ -472,10 +472,10 @@ function render(state) {
     if (eaBridge.spread_pips != null) {
       const spread = Number(eaBridge.spread_pips);
       eaSpreadEl.textContent = `${spread.toFixed(1)}p`;
-      eaSpreadEl.className = spread > 5 ? "font-mono font-black text-amber-400 tracking-tight" : "font-mono font-black text-gray-400 tracking-tight";
+      eaSpreadEl.className = spread > 5 ? "font-mono font-black text-amber-400 tracking-[0.2em]" : "font-mono font-black text-gray-400 tracking-[0.2em]";
     } else {
       eaSpreadEl.textContent = "—";
-      eaSpreadEl.className = "font-mono font-black text-gray-500 tracking-tight";
+      eaSpreadEl.className = "font-mono font-black text-gray-500 tracking-[0.2em]";
     }
   }
 
@@ -490,7 +490,7 @@ function render(state) {
     const reason = state.market?.reason || "";
     const isPausa = reason.toLowerCase().includes("pausa") || reason.toLowerCase().includes("daily pause");
     el("goldcon-decision").textContent = isPausa ? "DAILY PAUSE" : "MARKET CLOSED";
-    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-bold leading-none text-gray-400 text-shadow-soft";
+    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-black leading-none text-gray-400 text-shadow-soft uppercase tracking-[0.2em]";
     el("goldcon-score").textContent = "—";
     el("goldcon-conf").textContent = "—";
     const nextOpen = state.market?.next_open;
@@ -523,7 +523,7 @@ function render(state) {
     card.className = `relative ${cls.bg} ${cls.border} backdrop-blur-md border-2 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500 group`;
     
     el("goldcon-decision").textContent = decision;
-    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-black leading-none ${cls.text} text-shadow-soft transition-colors duration-300 tracking-tighter`;
+    el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-black leading-none ${cls.text} text-shadow-soft transition-colors duration-300 tracking-[0.2em]`;
     el("goldcon-score").textContent = fmtNum(score, 1);
     el("goldcon-conf").textContent = `${fmtNum(conf, 1)}%`;
     const scenarioDisplay = {
@@ -603,11 +603,11 @@ function render(state) {
 
   if (!operational || bal === null || bal === undefined || eq === null || eq === undefined || !hasPnl || !hasPnlPct || (noClosedTrades && pnlIsZero)) {
     el("pnl").textContent = "—";
-    el("pnl").className = "text-xl font-black text-gray-300 tracking-tight font-mono";
+    el("pnl").className = "text-xl font-black text-gray-300 tracking-[0.2em] font-mono";
   } else {
     el("pnl").textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
     const pnlVal = Number(state.daily_stats?.pnl || 0);
-    el("pnl").className = pnlVal >= 0 ? "text-xl font-black text-green-400 tracking-tight font-mono" : "text-xl font-black text-red-400 tracking-tight font-mono";
+    el("pnl").className = pnlVal >= 0 ? "text-xl font-black text-green-400 tracking-[0.2em] font-mono" : "text-xl font-black text-red-400 tracking-[0.2em] font-mono";
   }
 
   const livePrice = la.current_price;
@@ -617,15 +617,15 @@ function render(state) {
 
   if (livePrice != null) {
     priceEl.textContent = fmtNum(livePrice, 2);
-    priceEl.className = "text-2xl font-black text-white tracking-tight font-mono";
+    priceEl.className = "text-2xl font-black text-white tracking-[0.2em] font-mono";
     if (priceLabelEl) priceLabelEl.textContent = "";
   } else if (lastKnown != null) {
     priceEl.textContent = fmtNum(lastKnown, 2);
-    priceEl.className = "text-2xl font-black text-gray-400 tracking-tight font-mono";
+    priceEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] font-mono";
     if (priceLabelEl) priceLabelEl.textContent = "LAST";
   } else {
     priceEl.textContent = "—";
-    priceEl.className = "text-2xl font-black text-gray-500 tracking-tight font-mono";
+    priceEl.className = "text-2xl font-black text-gray-500 tracking-[0.2em] font-mono";
     if (priceLabelEl) priceLabelEl.textContent = "";
   }
 
@@ -802,7 +802,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
         <div class="intel-headline flex items-stretch gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-default border border-transparent hover:border-white/10">
           <div class="w-1.5 rounded-full flex-shrink-0 ${sc.bg} opacity-80 shadow-[0_0_8px_currentColor]"></div>
           <div class="flex-1 min-w-0 py-0.5">
-            <div class="text-xs text-gray-200 leading-snug truncate font-black tracking-tight uppercase" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
+            <div class="text-xs text-gray-200 leading-snug truncate font-black tracking-[0.2em] uppercase" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
             <div class="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 font-mono">
               ${categoryBadge(h.category)}
               <span>${age} ago</span>
@@ -812,7 +812,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
             <div class="intel-robot-bubble">
               <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-md ring-1 ring-white/10">
               <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50">
-                <div class="text-xs font-black ${sc.text} font-mono tracking-tight">${fmtNum(h.score, 0)}/100</div>
+                <div class="text-xs font-black ${sc.text} font-mono tracking-[0.2em]">${fmtNum(h.score, 0)}/100</div>
                 <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-400 mt-0.5">${sc.label}</div>
                 <div class="text-[9px] text-gray-500 mt-1 uppercase tracking-[0.2em]">via ${methodTag}</div>
               </div>
@@ -843,16 +843,16 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
           <div class="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase">${macroLabel(key)}</div>
-          <div class="text-xs font-black font-mono ${sc.text} tracking-tight">${fmtNum(m.score, 0)}</div>
+          <div class="text-xs font-black font-mono ${sc.text} tracking-[0.2em]">${fmtNum(m.score, 0)}</div>
         </div>
         <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-black font-mono tracking-tight">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
-          <span class="text-xs font-mono font-black ${chgClass} tracking-tight">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
+          <span class="text-lg text-gray-100 font-black font-mono tracking-[0.2em]">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-xs font-mono font-black ${chgClass} tracking-[0.2em]">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
         <div class="intel-robot-bubble inline-flex mt-2 relative z-10">
           <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10">
           <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50 p-2">
-            <div class="text-xs text-gray-300 font-black uppercase tracking-wide">${impact}</div>
+            <div class="text-xs text-gray-300 font-black uppercase tracking-[0.2em]">${impact}</div>
           </div>
         </div>
       </div>
@@ -885,8 +885,8 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
         <span class="${phaseColor} font-black tracking-[0.2em] uppercase">${cal.phase.toUpperCase().replace("_", " ")}</span>
         <span class="${biasColor} font-black tracking-[0.2em] uppercase">${biasIcon} ${cal.bias}</span>
       </div>
-      ${cal.closest_event ? `<div class="text-gray-500 mt-1 font-black tracking-wide uppercase text-[10px]">${cal.closest_event}</div>` : ""}
-      ${cal.phase_description ? `<div class="text-gray-600 mt-1 text-[10px] font-black uppercase tracking-wide leading-tight">${cal.phase_description}</div>` : ""}
+      ${cal.closest_event ? `<div class="text-gray-500 mt-1 font-black tracking-[0.2em] uppercase text-[10px]">${cal.closest_event}</div>` : ""}
+      ${cal.phase_description ? `<div class="text-gray-600 mt-1 text-[10px] font-black uppercase tracking-[0.2em] leading-tight">${cal.phase_description}</div>` : ""}
     `;
 
     // Upcoming events list
@@ -900,7 +900,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
         const timeColor = ev.is_past ? "text-gray-700" : "text-gray-500";
         const nameColor = ev.is_past ? "text-gray-700" : "text-gray-400";
         calHtml += `
-          <div class="flex items-center gap-2 text-[10px] py-0.5 font-black uppercase tracking-wide">
+          <div class="flex items-center gap-2 text-[10px] py-0.5 font-black uppercase tracking-[0.2em]">
             <span class="px-1 border rounded ${impColor}" style="font-size:8px">${impLabel}</span>
             <span class="${timeColor} font-mono">${ev.time}</span>
             <span class="${nameColor} truncate flex-1">${ev.name}</span>
@@ -925,23 +925,23 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const srZones = feed.sr_zones || [];
   const tfBadge = (tf) => {
     const colors = { "D1": "bg-amber-700 text-amber-200", "H4": "bg-blue-800 text-blue-300", "H1": "bg-gray-700 text-gray-400" };
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold ${colors[tf] || colors.H1}">${tf}</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-[0.2em] ${colors[tf] || colors.H1}">${tf}</span>`;
   };
   const mtfBadge = (confluence) => {
     if (!confluence || confluence.length < 2) return "";
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold bg-purple-800 text-purple-300 ml-0.5" title="${confluence.join("+")}">MTF</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-black bg-purple-800 text-purple-300 ml-0.5 uppercase tracking-[0.2em]" title="${confluence.join("+")}">MTF</span>`;
   };
   const ztBadge = (zt) => {
     const ztColors = { "FLIP": "bg-yellow-800 text-yellow-300", "SUPPORT": "bg-green-900 text-green-400", "RESISTANCE": "bg-red-900 text-red-400" };
     const label = zt === "SUPPORT" ? "SUP" : zt === "RESISTANCE" ? "RES" : zt;
-    return `<span class="px-1 py-0.5 rounded text-[10px] font-bold ${ztColors[zt] || "bg-gray-700 text-gray-400"} ml-0.5">${label}</span>`;
+    return `<span class="px-1 py-0.5 rounded text-[10px] font-black uppercase tracking-[0.2em] ${ztColors[zt] || "bg-gray-700 text-gray-400"} ml-0.5">${label}</span>`;
   };
   const zoneRow = (z, color, borderColor) => {
     const isMtf = z.confluence && z.confluence.length >= 2;
     const isStrong = z.strength === "strong" || z.touches >= 4;
-    const weight = isStrong ? "font-bold" : "";
+    const weight = isStrong ? "font-black" : "font-black";
     const border = isMtf ? "border-purple-500" : borderColor;
-    return `<div class="${color} ${weight} border-l-2 ${border} pl-1.5 py-0.5">${z.price.toFixed(2)} ${tfBadge(z.timeframe)}${mtfBadge(z.confluence)}${ztBadge(z.zone_type)} <span class="text-gray-500">${z.touches}T — ${z.dist_pips.toFixed(0)}p</span></div>`;
+    return `<div class="${color} ${weight} border-l-2 ${border} pl-1.5 py-0.5 uppercase tracking-[0.2em]">${z.price.toFixed(2)} ${tfBadge(z.timeframe)}${mtfBadge(z.confluence)}${ztBadge(z.zone_type)} <span class="text-gray-500 tracking-normal">${z.touches}T — ${z.dist_pips.toFixed(0)}p</span></div>`;
   };
   if (srZones.length > 0) {
     srEl.classList.remove("hidden");
@@ -950,12 +950,12 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const above = srZones.filter(z => z.position === "above");
     const below = srZones.filter(z => z.position === "below");
     // Resistance (above) — right column
-    let aboveHtml = '<div class="w-full md:w-1/2"><div class="text-red-400 font-bold mb-1">&#9650; RESISTANCE</div>';
+    let aboveHtml = '<div class="w-full md:w-1/2"><div class="text-red-400 font-black tracking-[0.2em] uppercase mb-1">&#9650; RESISTANCE</div>';
     if (above.length === 0) { aboveHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of above) { aboveHtml += zoneRow(z, "text-red-300", "border-red-700"); }
     aboveHtml += '</div>';
     // Support (below) — left column
-    let belowHtml = '<div class="w-full md:w-1/2 md:pr-3 md:border-r border-gray-700/50"><div class="text-green-400 font-bold mb-1">&#9660; SUPPORT</div>';
+    let belowHtml = '<div class="w-full md:w-1/2 md:pr-3 md:border-r border-gray-700/50"><div class="text-green-400 font-black tracking-[0.2em] uppercase mb-1">&#9660; SUPPORT</div>';
     if (below.length === 0) { belowHtml += '<div class="text-gray-600">None nearby</div>'; }
     for (const z of below) { belowHtml += zoneRow(z, "text-green-300", "border-green-700"); }
     belowHtml += '</div>';
@@ -990,7 +990,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-md ring-2 ring-white/10 opacity-90">
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
+          <div class="text-[10px] font-black tracking-[0.2em] uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
           <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-sans break-words whitespace-normal">${text.replace(/"/g, '&quot;')}</div>
         </div>
       </div>
@@ -1013,10 +1013,10 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
       const srText = p.sr_context || "";
       patternEl.innerHTML = `
         <div class="flex items-center gap-2 text-xs flex-wrap">
-          <span class="px-1.5 py-0.5 border rounded font-bold ${dirColor}">${p.name}</span>
-          <span class="${scoreColor} font-mono">${p.final_score > 0 ? "+" : ""}${p.final_score}</span>
-          ${multText ? `<span class="text-amber-400 text-[10px]">${multText} S/R</span>` : ""}
-          ${srText ? `<span class="text-gray-500 text-[10px] truncate max-w-xs">${srText}</span>` : ""}
+          <span class="px-1.5 py-0.5 border rounded font-black uppercase tracking-[0.2em] ${dirColor}">${p.name}</span>
+          <span class="${scoreColor} font-mono font-black tracking-[0.2em]">${p.final_score > 0 ? "+" : ""}${p.final_score}</span>
+          ${multText ? `<span class="text-amber-400 text-[10px] font-black uppercase tracking-[0.2em]">${multText} S/R</span>` : ""}
+          ${srText ? `<span class="text-gray-500 text-[10px] truncate max-w-xs font-black uppercase tracking-[0.2em]">${srText}</span>` : ""}
         </div>
       `;
     } else {
@@ -1119,15 +1119,15 @@ function renderAgentCard(agentDecision) {
   if (decisionEl) {
     decisionEl.textContent = decision;
     if (decision.includes("BUY")) {
-      decisionEl.className = "text-2xl font-black text-green-400 tracking-tighter uppercase";
+      decisionEl.className = "text-2xl font-black text-green-400 tracking-[0.2em] uppercase";
     } else if (decision.includes("SELL")) {
-      decisionEl.className = "text-2xl font-black text-red-400 tracking-tighter uppercase";
+      decisionEl.className = "text-2xl font-black text-red-400 tracking-[0.2em] uppercase";
     } else if (decision === "REJECT") {
-      decisionEl.className = "text-2xl font-black text-red-500 tracking-tighter uppercase";
+      decisionEl.className = "text-2xl font-black text-red-500 tracking-[0.2em] uppercase";
     } else if (decision === "WAIT") {
-      decisionEl.className = "text-2xl font-black text-yellow-400 tracking-tighter uppercase";
+      decisionEl.className = "text-2xl font-black text-yellow-400 tracking-[0.2em] uppercase";
     } else {
-      decisionEl.className = "text-2xl font-black text-gray-400 tracking-tighter uppercase";
+      decisionEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] uppercase";
     }
   }
 
@@ -1174,7 +1174,7 @@ function renderAgentCard(agentDecision) {
   const factorsEl = el("agent-factors");
   if (factorsEl) {
     if (keyFactors.length > 0) {
-      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300 font-black tracking-wide uppercase text-[10px]">• ${f}</li>`).join("");
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300 font-black tracking-[0.2em] uppercase text-[10px]">• ${f}</li>`).join("");
     } else {
       factorsEl.innerHTML = `<li class="text-gray-600 font-black tracking-[0.2em] uppercase text-[10px]">—</li>`;
     }
@@ -1184,7 +1184,7 @@ function renderAgentCard(agentDecision) {
   const concernsEl = el("agent-concerns");
   if (concernsEl) {
     if (concerns.length > 0) {
-      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400 font-black tracking-wide uppercase text-[10px]">• ${c}</li>`).join("");
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400 font-black tracking-[0.2em] uppercase text-[10px]">• ${c}</li>`).join("");
     } else {
       concernsEl.innerHTML = `<li class="text-gray-600 font-black tracking-[0.2em] uppercase text-[10px]">NONE</li>`;
     }
@@ -1583,11 +1583,11 @@ function renderAgentMemory(agentMemory) {
     const dir = agentMemory.market_view?.direction || "—";
     viewDirEl.textContent = dir;
     if (dir === "BUY") {
-      viewDirEl.className = "text-lg font-black text-green-400 tracking-tighter uppercase";
+      viewDirEl.className = "text-lg font-black text-green-400 tracking-[0.2em] uppercase";
     } else if (dir === "SELL") {
-      viewDirEl.className = "text-lg font-black text-red-400 tracking-tighter uppercase";
+      viewDirEl.className = "text-lg font-black text-red-400 tracking-[0.2em] uppercase";
     } else {
-      viewDirEl.className = "text-lg font-black text-yellow-400 tracking-tighter uppercase";
+      viewDirEl.className = "text-lg font-black text-yellow-400 tracking-[0.2em] uppercase";
     }
   }
 
@@ -1608,7 +1608,7 @@ function renderAgentMemory(agentMemory) {
         const icon = c.met ? "✅" : "❌";
         const currentVal = c.current_value != null ? ` (now: ${fmtNum(c.current_value, 1)})` : "";
         const textClass = c.met ? "text-green-400" : "text-gray-300";
-        return `<li class="${textClass} font-black tracking-wide uppercase text-[10px] leading-relaxed">${icon} ${c.description}${currentVal}</li>`;
+        return `<li class="${textClass} font-black tracking-[0.2em] uppercase text-[10px] leading-relaxed">${icon} ${c.description}${currentVal}</li>`;
       }).join("");
     }
   }
@@ -1668,7 +1668,7 @@ function renderRecentDecisions(decisions) {
   if (!container) return;
 
   if (!decisions || decisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-500 font-medium tracking-wide text-[11px] uppercase">NO DECISIONS YET</span>`;
+    container.innerHTML = `<span class="text-gray-500 font-black tracking-[0.2em] text-[11px] uppercase">NO DECISIONS YET</span>`;
     return;
   }
 
@@ -1681,9 +1681,9 @@ function renderRecentDecisions(decisions) {
 
     container.insertAdjacentHTML("beforeend", `
       <div class="flex items-center gap-1.5 px-2 py-1 rounded-md border ${cls} backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5">
-        <span class="text-[10px] text-gray-500 font-mono tracking-wider opacity-80">${time}</span>
-        <span class="font-bold text-[10px] tracking-wide uppercase">${decision}</span>
-        <span class="text-[10px] font-mono opacity-90 font-medium pl-1 border-l border-current/20">${score}</span>
+        <span class="text-[10px] text-gray-500 font-mono tracking-[0.2em] opacity-80 uppercase font-black">${time}</span>
+        <span class="font-black text-[10px] tracking-[0.2em] uppercase">${decision}</span>
+        <span class="text-[10px] font-mono opacity-90 font-black pl-1 border-l border-current/20 tracking-[0.2em]">${score}</span>
       </div>
     `);
   }

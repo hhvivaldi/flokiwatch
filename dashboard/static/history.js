@@ -109,11 +109,11 @@ class HistoryApp {
         ];
         
         grid.innerHTML = cards.map(c => `
-            <div class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-center items-center text-center">
+            <div class="glass-panel rounded-2xl p-4 flex flex-col justify-center items-center text-center">
                 <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 mb-2 flex items-center gap-1.5">
                     <span class="text-sm">${c.icon}</span> ${c.label}
                 </div>
-                <div class="text-xl sm:text-2xl font-black font-mono tracking-tight ${c.color || 'text-gray-100'} uppercase">${c.value}</div>
+                <div class="text-xl sm:text-2xl font-black font-mono tracking-[0.2em] ${c.color || 'text-gray-100'} uppercase">${c.value}</div>
             </div>
         `).join('');
     }
@@ -130,17 +130,17 @@ class HistoryApp {
             const pnlColor = ms.profit >= 0 ? 'text-green-400' : 'text-red-400';
             return `
             <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-300 font-black uppercase tracking-tight">${ms.month}</td>
-                <td class="p-3 text-right text-gray-400 font-black tracking-tight">${ms.trades}</td>
-                <td class="p-3 text-right font-black tracking-tight">
+                <td class="p-3 text-gray-300 font-black uppercase tracking-[0.2em]">${ms.month}</td>
+                <td class="p-3 text-right text-gray-400 font-black tracking-[0.2em]">${ms.trades}</td>
+                <td class="p-3 text-right font-black tracking-[0.2em]">
                     <span class="text-green-400">${ms.wins}</span> / 
                     <span class="text-red-400">${ms.losses}</span> / 
                     <span class="text-gray-500">${ms.breakevens}</span>
                 </td>
-                <td class="p-3 text-right text-gray-300 font-black tracking-tight">${ms.win_rate.toFixed(1)}%</td>
-                <td class="p-3 text-right font-black tracking-tight ${pnlColor}">$${ms.profit.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-300 font-black tracking-tight">${ms.profit_factor.toFixed(2)}</td>
-                <td class="p-3 text-right text-red-400 font-black tracking-tight">$${ms.max_drawdown.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-300 font-black tracking-[0.2em]">${ms.win_rate.toFixed(1)}%</td>
+                <td class="p-3 text-right font-black tracking-[0.2em] ${pnlColor}">$${ms.profit.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-300 font-black tracking-[0.2em]">${ms.profit_factor.toFixed(2)}</td>
+                <td class="p-3 text-right text-red-400 font-black tracking-[0.2em]">$${ms.max_drawdown.toFixed(2)}</td>
             </tr>
             `;
         }).join('');
@@ -168,9 +168,9 @@ class HistoryApp {
 
         tbody.innerHTML = rows.map(r => `
             <tr>
-                <td class="py-2 text-gray-400 font-black uppercase tracking-tight">${r.label}</td>
-                <td class="py-2 text-right text-gray-500 font-black tracking-tight">${r.format(r.bt)}</td>
-                <td class="py-2 text-right text-gray-200 font-black tracking-tight">${r.format(r.live)}</td>
+                <td class="py-2 text-gray-400 font-black uppercase tracking-[0.2em]">${r.label}</td>
+                <td class="py-2 text-right text-gray-500 font-black tracking-[0.2em]">${r.format(r.bt)}</td>
+                <td class="py-2 text-right text-gray-200 font-black tracking-[0.2em]">${r.format(r.live)}</td>
                 <!--<td class="py-2 text-right ${diffColor(r.diff, r.inverted)} text-xs">${diffSign(r.diff)}${r.format(r.diff)}</td>-->
             </tr>
         `).join('');
@@ -428,14 +428,14 @@ class HistoryApp {
 
             const list = (arr) => {
                 if (!arr || arr.length === 0) return '<div class="text-xs text-gray-600 font-black uppercase tracking-[0.2em]">—</div>';
-                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300 font-black uppercase tracking-wide leading-snug">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
+                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300 font-black uppercase tracking-[0.2em] leading-snug">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
             };
 
             body.innerHTML = `
                 <div class="space-y-4">
                     <div>
                         <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Summary</div>
-                        <div class="text-sm text-gray-200 mt-1 font-black uppercase tracking-wide leading-relaxed">${escapeHtml(report.summary || '—')}</div>
+                        <div class="text-sm text-gray-200 mt-1 font-black uppercase tracking-[0.2em] leading-relaxed">${escapeHtml(report.summary || '—')}</div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -460,7 +460,7 @@ class HistoryApp {
                         </div>
                     </div>
 
-                    <div class="text-xs text-gray-500 font-mono font-black uppercase tracking-tight">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
+                    <div class="text-xs text-gray-500 font-mono font-black uppercase tracking-[0.2em]">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
                 </div>
             `;
         } catch (e) {
@@ -522,17 +522,17 @@ class HistoryApp {
 
             return `
             <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-400 text-xs font-black tracking-tight uppercase">
+                <td class="p-3 text-gray-400 text-xs font-black tracking-[0.2em] uppercase">
                     <div>${this.formatDate(t.open_time)}</div>
                 </td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-black ${dirClass} tracking-[0.2em] uppercase">${t.direction}</span></td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-tight uppercase">${t.open_price ? t.open_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-tight uppercase">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right font-black tracking-tight uppercase ${pnlClass}">$${pnl.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-400 font-black tracking-tight uppercase">${t.pips ? t.pips.toFixed(1) : '--'}</td>
-                <td class="p-3 text-center uppercase font-black tracking-tight">${this.renderBeBadge(t.breakeven_activated)}</td>
-                <td class="p-3 text-right text-cyan-400 font-black tracking-tight uppercase">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
-                <td class="p-3 text-gray-400 text-xs font-black tracking-tight uppercase">${this.scenarioLabel(t)}</td>
+                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-[0.2em] uppercase">${t.open_price ? t.open_price.toFixed(2) : '--'}</td>
+                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-[0.2em] uppercase">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
+                <td class="p-3 text-right font-black tracking-[0.2em] uppercase ${pnlClass}">$${pnl.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-400 font-black tracking-[0.2em] uppercase">${t.pips ? t.pips.toFixed(1) : '--'}</td>
+                <td class="p-3 text-center uppercase font-black tracking-[0.2em]">${this.renderBeBadge(t.breakeven_activated)}</td>
+                <td class="p-3 text-right text-cyan-400 font-black tracking-[0.2em] uppercase">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
+                <td class="p-3 text-gray-400 text-xs font-black tracking-[0.2em] uppercase">${this.scenarioLabel(t)}</td>
                 <td class="p-3">${reasonBadge}${reportBtn}</td>
             </tr>
             `;

@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
 
     <link rel="stylesheet" href="/static/style.css" />
 
@@ -67,32 +67,32 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-active"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Monitor corrected GPT Validator</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Verify that the prompt rewrite produces balanced CONFIRM / BOOST / REDUCE distribution instead of 100% REDUCE</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Monitor corrected GPT Validator</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Verify that the prompt rewrite produces balanced CONFIRM / BOOST / REDUCE distribution instead of 100% REDUCE</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-active"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Monitor open trades</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Track DEMO trades for correct entry/exit logic, P&amp;L accuracy, trailing/breakeven triggers, and broker closure detection</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Monitor open trades</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Track DEMO trades for correct entry/exit logic, P&amp;L accuracy, trailing/breakeven triggers, and broker closure detection</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-active"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">FOMC Minutes — Feb 18 21:00 UTC</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">First high-impact event since calendar pillar integration — validate PRE_EVENT → DURING → POST_EVENT phase transitions</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">FOMC Minutes — Feb 18 21:00 UTC</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">First high-impact event since calendar pillar integration — validate PRE_EVENT → DURING → POST_EVENT phase transitions</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Support &amp; Resistance zones</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Integrated as informational display only. Backtest showed confidence penalty/TP/SL adjustments all degraded performance. Zone detection active for dashboard visibility.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Support &amp; Resistance zones</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Integrated as informational display only. Backtest showed confidence penalty/TP/SL adjustments all degraded performance. Zone detection active for dashboard visibility.</div>
             </div>
           </div>
         </div>
@@ -109,120 +109,120 @@
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Spread Monitoring</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Implemented. Checks spread before entry, delays if >5.0 pips, retries every 30s for up to 5 min.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Spread Monitoring</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Implemented. Checks spread before entry, delays if >5.0 pips, retries every 30s for up to 5 min.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Multi-TF Trend Confirmation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Implemented. D1/H4 EMA50 trend check. +10 aligned, -10 conflict. Combined with Volume Gate.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-TF Trend Confirmation</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Implemented. D1/H4 EMA50 trend check. +10 aligned, -10 conflict. Combined with Volume Gate.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Volume Gate</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Confidence penalty for low volume: -15 (<0.5x avg), -25 (<0.3x avg).</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Volume Gate</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Confidence penalty for low volume: -15 (<0.5x avg), -25 (<0.3x avg).</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">MACD Divergence Adjustment</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Reduced from ±25 to ±15 points. False signals in strong trends.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">MACD Divergence Adjustment</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Reduced from ±25 to ±15 points. False signals in strong trends.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">S/R Zones on MT5 Chart</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Bridge pattern (Python writes JSON, MQL5 EA draws lines). 8 nearest zones, width by strength.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">S/R Zones on MT5 Chart</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Bridge pattern (Python writes JSON, MQL5 EA draws lines). 8 nearest zones, width by strength.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Trade History Dashboard (/history)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Full trade table, equity curve, monthly summary, backtest vs live comparison.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Trade History Dashboard (/history)</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Full trade table, equity curve, monthly summary, backtest vs live comparison.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">GitHub Version Control</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Private repo at github.com/hhvivaldi/flokiwatch.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">GitHub Version Control</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Private repo at github.com/hhvivaldi/flokiwatch.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">FIELD_CONTRACT.md</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Data interface contract between bot and dashboard.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">FIELD_CONTRACT.md</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Data interface contract between bot and dashboard.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">News Feed Expansion (14 RSS feeds)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Expanded from 4 to 14 feeds covering geopolitics, crises, monetary policy, safe haven, sanctions.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">News Feed Expansion (14 RSS feeds)</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Expanded from 4 to 14 feeds covering geopolitics, crises, monetary policy, safe haven, sanctions.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">MT5 terminal pinning</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Fixed multi-terminal connection bug — bot now pins to the correct MT5 terminal via explicit path, preventing stale position data from wrong terminals.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">MT5 terminal pinning</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Fixed multi-terminal connection bug — bot now pins to the correct MT5 terminal via explicit path, preventing stale position data from wrong terminals.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Pending trade resolution</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Replaced N3 P&amp;L estimation with PENDING state. Trades show "Processing..." until MT5 deal history confirms real P&amp;L. Reconciliation resolves automatically.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Pending trade resolution</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Replaced N3 P&amp;L estimation with PENDING state. Trades show "Processing..." until MT5 deal history confirms real P&amp;L. Reconciliation resolves automatically.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">INTEL FEED fix</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Dual MT5 API call (long-range + today-only) defeats silent deal-dropping bug. Reconciliation rewritten as 3-pass architecture.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">INTEL FEED fix</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Dual MT5 API call (long-range + today-only) defeats silent deal-dropping bug. Reconciliation rewritten as 3-pass architecture.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Standardize everything to English</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Logs, dashboard labels, Discord alerts, brain confirmations/alerts — all user-facing text unified to English.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Standardize everything to English</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Logs, dashboard labels, Discord alerts, brain confirmations/alerts — all user-facing text unified to English.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">ML Retrain 3-year data (v3.1)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">v3.1 deployed. WF AUC stable, M5 SHAP healthy. +$302 P&amp;L vs v3 on same 18-month period, PF 2.25 vs 2.14.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">ML Retrain 3-year data (v3.1)</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">v3.1 deployed. WF AUC stable, M5 SHAP healthy. +$302 P&amp;L vs v3 on same 18-month period, PF 2.25 vs 2.14.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Early Exit <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Tested via 6-month backtest (Aug 2025 → Feb 2026, 275 trades) — abandoned. 70% of exits would have recovered. Baseline PF 2.32 outperforms EE ON PF 1.77.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Early Exit <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested via 6-month backtest (Aug 2025 → Feb 2026, 275 trades) — abandoned. 70% of exits would have recovered. Baseline PF 2.32 outperforms EE ON PF 1.77.</div>
             </div>
           </div>
         </div>
@@ -234,86 +234,86 @@
           <span class="roadmap-badge roadmap-badge-completed font-black tracking-[0.2em]">TESTED</span>
           <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Optimization Roadmap</h2>
         </div>
-        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-wide">10 features rigorously tested via data analysis on 662 backtest trades (Aug 2024 &rarr; Feb 2026, 18 months). <strong class="text-gray-400">All ten confirmed the system is already well-optimized.</strong> Every filter tested removed more winners than losers.</p>
+        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-[0.2em]">10 features rigorously tested via data analysis on 662 backtest trades (Aug 2024 &rarr; Feb 2026, 18 months). <strong class="text-gray-400">All ten confirmed the system is already well-optimized.</strong> Every filter tested removed more winners than losers.</p>
 
         <div class="space-y-4">
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Session / Hour Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">662 trades analyzed. No hour below 50% WR with meaningful sample size. All sessions profitable (PF 1.12&ndash;3.15). No action needed.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Session / Hour Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">662 trades analyzed. No hour below 50% WR with meaningful sample size. All sessions profitable (PF 1.12&ndash;3.15). No action needed.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Confidence-Based Position Sizing <span class="text-amber-400 text-[10px] font-black ml-1 uppercase">DEFERRED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Correlation r=0.70 confirmed (WR 67.6% &rarr; 77.6% by tier). But LOT_STEP 0.01 + MAX_LOT 0.02 = only 2 possible lot sizes. Dynamic sizing lost $129 vs fixed. Deferred until account &gt;$5,000.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Confidence-Based Position Sizing <span class="text-amber-400 text-[10px] font-black ml-1 uppercase">DEFERRED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Correlation r=0.70 confirmed (WR 67.6% &rarr; 77.6% by tier). But LOT_STEP 0.01 + MAX_LOT 0.02 = only 2 possible lot sizes. Dynamic sizing lost $129 vs fixed. Deferred until account &gt;$5,000.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Dynamic SL/TP by Session &amp; Volatility <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">MIN_SL clamping (45.6% of trades) caused by low-ATR markets, not SL miscalibration. ATR filter blocked 341 trades with 68.6% WR. TP contributes 48.6% of winner P&amp;L &mdash; essential.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Dynamic SL/TP by Session &amp; Volatility <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">MIN_SL clamping (45.6% of trades) caused by low-ATR markets, not SL miscalibration. ATR filter blocked 341 trades with 68.6% WR. TP contributes 48.6% of winner P&amp;L &mdash; essential.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Partial Close (50% at profit target) <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Tested 5 trigger levels (25%&ndash;75% of TP). Best result: +$18 at 75% (breakeven). Trailing stop already handles profit protection. Net effect zero.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Partial Close (50% at profit target) <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested 5 trigger levels (25%&ndash;75% of TP). Best result: +$18 at 75% (breakeven). Trailing stop already handles profit protection. Net effect zero.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Explicit Regime Detection <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">All regimes profitable: Trending 72% WR (PF 2.08), Ranging 70% WR (PF 2.49), Normal 74.7%. Central Brain scenarios already provide effective implicit detection.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Explicit Regime Detection <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">All regimes profitable: Trending 72% WR (PF 2.08), Ranging 70% WR (PF 2.49), Normal 74.7%. Central Brain scenarios already provide effective implicit detection.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Multi-Asset Correlation Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Conflict trades (BUY gold + DXY rising) have HIGHER WR (76.0%) than aligned (70.7%). Bot overrides macro headwinds with high-conviction calls. Filtering would remove $1,578&ndash;$2,174 profit.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-Asset Correlation Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Conflict trades (BUY gold + DXY rising) have HIGHER WR (76.0%) than aligned (70.7%). Bot overrides macro headwinds with high-conviction calls. Filtering would remove $1,578&ndash;$2,174 profit.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Weight Optimization <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">96 five-pillar + 19 three-pillar combos tested via walk-forward (12M train / 6M test). Best combo improved test PF by only +0.04 (below +0.10 threshold). Current weights confirmed near-optimal. PF range: 1.70&ndash;2.13 (train), 2.13&ndash;2.55 (test) &mdash; narrow band confirms robustness.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Weight Optimization <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">96 five-pillar + 19 three-pillar combos tested via walk-forward (12M train / 6M test). Best combo improved test PF by only +0.04 (below +0.10 threshold). Current weights confirmed near-optimal. PF range: 1.70&ndash;2.13 (train), 2.13&ndash;2.55 (test) &mdash; narrow band confirms robustness.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Tech Direction Split <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Attempted to split Tech pillar into Direction (EMAs/MACD) and Risk (RSI/BB). Backtest: PF 2.24 &rarr; 1.71 (drop of 0.54), WR 72.7% &rarr; 67.0%. RSI/BB penalties are a FEATURE &mdash; they prevent bad entries, not direction signals.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Tech Direction Split <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Attempted to split Tech pillar into Direction (EMAs/MACD) and Risk (RSI/BB). Backtest: PF 2.24 &rarr; 1.71 (drop of 0.54), WR 72.7% &rarr; 67.0%. RSI/BB penalties are a FEATURE &mdash; they prevent bad entries, not direction signals.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Confidence Threshold Analysis <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Tested 35%, 45%, 55%, 65% thresholds on 759 signals (662 executed + 97 blocked). 55% is optimal: lowering to 35% adds only $96 P&amp;L but drops PF 2.14 &rarr; 2.01. Blocked signals have PF 1.11 &mdash; correctly filtered.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Confidence Threshold Analysis <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested 35%, 45%, 55%, 65% thresholds on 759 signals (662 executed + 97 blocked). 55% is optimal: lowering to 35% adds only $96 P&amp;L but drops PF 2.14 &rarr; 2.01. Blocked signals have PF 1.11 &mdash; correctly filtered.</div>
             </div>
           </div>
 
           <div class="roadmap-item roadmap-item-completed">
             <div class="roadmap-dot roadmap-dot-completed"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Scenario-Specific Thresholds <span class="text-red-400 text-[10px] font-black ml-1 uppercase">NOT NEEDED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Analyzed blocked signals by scenario. No high-value scenario suppressed: momentum_forte_confirmado avg 95.5% conf (never affected). Blocked signals mostly zona_sr_forte/padrao with marginal PF 1.11.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Scenario-Specific Thresholds <span class="text-red-400 text-[10px] font-black ml-1 uppercase">NOT NEEDED</span></div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Analyzed blocked signals by scenario. No high-value scenario suppressed: momentum_forte_confirmado avg 95.5% conf (never affected). Blocked signals mostly zona_sr_forte/padrao with marginal PF 1.11.</div>
             </div>
           </div>
         </div>
@@ -330,24 +330,24 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">1. Candlestick Pattern Recognition</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Expand visual context features (morning/evening star, three soldiers, hammer at S/R). Needs backtest.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">1. Candlestick Pattern Recognition</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Expand visual context features (morning/evening star, three soldiers, hammer at S/R). Needs backtest.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">2. M5 Entry Timing</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Wait for favorable M5 pullback before entering. Needs backtest.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">2. M5 Entry Timing</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Wait for favorable M5 pullback before entering. Needs backtest.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">3. Adaptive Trailing Stop</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Dynamic trailing distance based on momentum strength. Needs backtest.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">3. Adaptive Trailing Stop</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Dynamic trailing distance based on momentum strength. Needs backtest.</div>
             </div>
           </div>
         </div>
@@ -364,24 +364,24 @@
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Backtest pyramid instrumentation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Add counters for pyramid attempts, blocks, allows, and separate P&amp;L stats. Do not change the 0.3% threshold until data is collected.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Backtest pyramid instrumentation</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Add counters for pyramid attempts, blocks, allows, and separate P&amp;L stats. Do not change the 0.3% threshold until data is collected.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">M5 Trigger (intra-candle early signal)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Influence analysis, not just re-trigger H1. Deferred until real trade data validates current system.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">M5 Trigger (intra-candle early signal)</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Influence analysis, not just re-trigger H1. Deferred until real trade data validates current system.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-pending"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">ML weight floor monitoring</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Track losses where ML weight &le;10% due to stacked penalties. No code change yet — monitoring only.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">ML weight floor monitoring</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Track losses where ML weight &le;10% due to stacked penalties. No code change yet — monitoring only.</div>
             </div>
           </div>
         </div>
@@ -393,62 +393,62 @@
           <span class="roadmap-badge roadmap-badge-future font-black tracking-[0.2em]">FUTURE</span>
           <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Future Roadmap</h2>
         </div>
-        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-wide">After stable DEMO validation — 2-3 weeks</p>
+        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-[0.2em]">After stable DEMO validation — 2-3 weeks</p>
 
         <div class="space-y-4">
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Telegram news channels</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Additional headline source. Requires channel curation to filter signal from noise.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Telegram news channels</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Additional headline source. Requires channel curation to filter signal from noise.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">TradingView News</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">No public API — evaluate feasibility via scraping, unofficial endpoints, or RSS.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">TradingView News</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">No public API — evaluate feasibility via scraping, unofficial endpoints, or RSS.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">TradingView Minds / Ideas</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Low priority — high risk of opinion noise diluting sentiment score.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">TradingView Minds / Ideas</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Low priority — high risk of opinion noise diluting sentiment score.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Multi-instrument expansion</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Extend to other pairs and commodities (XAG/USD, EUR/USD, etc.). Requires per-instrument config, model retraining, and indicator tuning.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-instrument expansion</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Extend to other pairs and commodities (XAG/USD, EUR/USD, etc.). Requires per-instrument config, model retraining, and indicator tuning.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Custom domain — floki.watch</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Split architecture: dedicated trading server vs public-facing dashboard.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Custom domain — floki.watch</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Split architecture: dedicated trading server vs public-facing dashboard.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Discord rebrand to FlokiWatch</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Rename server, channels, and bot identity to match dashboard branding.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Discord rebrand to FlokiWatch</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Rename server, channels, and bot identity to match dashboard branding.</div>
             </div>
           </div>
 
           <div class="roadmap-item">
             <div class="roadmap-dot roadmap-dot-future"></div>
             <div>
-              <div class="text-sm text-gray-200 font-black tracking-wide uppercase">Twitter / X automation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-wide uppercase">Phased rollout: manual posting first → semi-automated → fully automated.</div>
+              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Twitter / X automation</div>
+              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Phased rollout: manual posting first → semi-automated → fully automated.</div>
             </div>
           </div>
         </div>
@@ -457,7 +457,7 @@
       <!-- Disclaimer -->
       <section class="mt-16 pt-6 border-t border-gray-800">
         <h3 class="text-[10px] text-gray-500 font-black tracking-[0.2em] mb-2 uppercase">NOTE</h3>
-        <p class="text-[10px] text-gray-600 leading-relaxed font-black tracking-wide uppercase">
+        <p class="text-[10px] text-gray-600 leading-relaxed font-black tracking-[0.2em] uppercase">
           This roadmap reflects the current plan and may change as the system evolves. Items are not commitments — they are directions we're exploring.
         </p>
       </section>
