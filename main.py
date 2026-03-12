@@ -957,11 +957,6 @@ class TradingBot:
             log.info("Brain execution disabled — Agent is sole decision maker")
             return
 
-            # Safety Checks
-            positions_list = get_positions() if self.executes_trades else []
-            account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
-            open_positions = len(positions_list)
-            mt5_connected = is_mt5_connected() if self.executes_trades else True
             
             is_safe, reasons = is_safe_to_trade(
                 account_balance=account_balance,
@@ -1248,6 +1243,36 @@ class TradingBot:
 
             # Safety Checks
             positions_list = get_positions() if self.executes_trades else []
+
+            opposite_direction = "SELL" if direction == "BUY" else "BUY"
+            opposite_positions = [
+                p
+                for p in positions_list
+                if str(getattr(p, "direction", "") or "").upper() == opposite_direction
+            ]
+            if opposite_positions:
+                log.info(
+                    f"AGENT_EXEC | Closing {len(opposite_positions)} opposite position(s) before opening {direction}"
+                )
+                log.info(
+                    f"Closing opposite {opposite_direction} positions before opening {direction}"
+                )
+
+                for p in opposite_positions:
+                    try:
+                        self.close_agent_trade(
+                            getattr(p, "ticket", None),
+                            reason=f"close_opposite_{opposite_direction}_before_open_{direction}",
+                        )
+                    except Exception as e:
+                        log.warning(
+                            f"AGENT_EXEC | Failed closing opposite position: ticket={getattr(p, 'ticket', None)} | {e}"
+                        )
+
+                try:
+                    positions_list = get_positions() if self.executes_trades else []
+                except Exception:
+                    positions_list = []
             account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
             open_positions = len(positions_list)
             mt5_connected = is_mt5_connected() if self.executes_trades else True
