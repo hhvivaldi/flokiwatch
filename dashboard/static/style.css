@@ -110,6 +110,25 @@
   font-size: 0.625rem;
 }
 
+/* ================================================================
+   ANIMATIONS & TRANSITIONS
+   ================================================================ */
+
+@keyframes trigger-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trigger-entry {
+  animation: trigger-fade-in-up 0.4s ease-out forwards;
+}
+
 #sentiment-indicator,
 #lifecycle-indicator {
   left: 50%;

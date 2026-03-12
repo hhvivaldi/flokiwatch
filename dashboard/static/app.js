@@ -165,7 +165,7 @@ function renderFastTriggers(fastDecisions) {
 
     return `
       <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium"
+        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium trigger-entry"
         style="color:${style.color};border-color:${style.border};"
       >${textParts.join(" — ")}</span>
     `;
