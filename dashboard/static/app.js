@@ -1,3 +1,39 @@
+/**
+ * Smoothly animates numeric text in an element
+ */
+function animateValue(id, start, end, duration, formatter = (v) => v.toString()) {
+  const obj = el(id);
+  if (!obj) return;
+  
+  // If end is not a number, just set it and return
+  if (end === null || end === undefined || isNaN(Number(end))) {
+    obj.textContent = end || "—";
+    return;
+  }
+
+  const startNum = parseFloat(start) || 0;
+  const endNum = parseFloat(end);
+  
+  if (startNum === endNum) {
+    obj.textContent = formatter(endNum);
+    return;
+  }
+
+  const range = endNum - startNum;
+  let startTime = null;
+
+  function step(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const current = startNum + (range * progress);
+    obj.textContent = formatter(current);
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  }
+  window.requestAnimationFrame(step);
+}
+
 function updateVUMeter(containerId, activeCount) {
   const container = el(containerId);
   if (!container) return;
@@ -7,12 +43,15 @@ function updateVUMeter(containerId, activeCount) {
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     if (i < count) {
-      seg.classList.add("active");
-      if (i === count - 1 && count > 0) {
-        seg.classList.add("pulse");
-      } else {
-        seg.classList.remove("pulse");
-      }
+      // Delay each segment activation for a "filling" effect
+      setTimeout(() => {
+        seg.classList.add("active");
+        if (i === count - 1 && count > 0) {
+          seg.classList.add("pulse");
+        } else {
+          seg.classList.remove("pulse");
+        }
+      }, i * 30);
     } else {
       seg.classList.remove("active", "pulse");
     }
@@ -71,13 +110,13 @@ function bindUIHandlersOnce() {
 
 function decisionHexColor(decision) {
   const d = (decision || "").toString().toUpperCase();
-  if (d === "OPEN_BUY") return "#4caf50";
-  if (d === "OPEN_SELL") return "#e74c3c";
-  if (d === "HOLD_TRADE") return "#2ecc71";
-  if (d === "CLOSE_TRADE") return "#e67e22";
-  if (d === "ADJUST_TRADE") return "#f1c40f";
-  if (d === "WAIT") return "#8e8e8e";
-  return "#8e8e8e";
+  if (d === "OPEN_BUY") return "#10b981"; // Emerald
+  if (d === "OPEN_SELL") return "#ef4444"; // Red
+  if (d === "HOLD_TRADE") return "#10b981"; // Emerald
+  if (d === "CLOSE_TRADE") return "#f59e0b"; // Amber
+  if (d === "ADJUST_TRADE") return "#3b82f6"; // Blue
+  if (d === "WAIT") return "#f59e0b"; // Amber
+  return "#9ca3af"; // Gray
 }
 
 function toggleBrainReferencePanel() {
@@ -117,17 +156,17 @@ function fastChipStyleFromFastDecision(fd) {
 
   if (action === "ACT") {
     if (execType === "OPEN") {
-      if (direction === "BUY") return { color: "#4caf50", border: "rgba(76,175,80,0.35)" };
-      if (direction === "SELL") return { color: "#e74c3c", border: "rgba(231,76,60,0.35)" };
+      if (direction === "BUY") return { cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", icon: "▲", glow: "glow-emerald-pulse" };
+      if (direction === "SELL") return { cls: "bg-red-500/10 border-red-500/30 text-red-400", icon: "▼", glow: "glow-red-pulse" };
     }
-    if (execType === "CLOSE") return { color: "#e67e22", border: "rgba(230,126,34,0.35)" };
-    if (execType === "ADJUST") return { color: "#f1c40f", border: "rgba(241,196,15,0.35)" };
-    return { color: "#f1c40f", border: "rgba(241,196,15,0.35)" };
+    if (execType === "CLOSE") return { cls: "bg-amber-500/10 border-amber-500/30 text-amber-400", icon: "×", glow: "glow-amber-pulse" };
+    if (execType === "ADJUST") return { cls: "bg-blue-500/10 border-blue-500/30 text-blue-400", icon: "±", glow: "glow-blue-pulse" };
+    return { cls: "bg-amber-500/10 border-amber-500/30 text-amber-400", icon: "!", glow: "glow-amber-pulse" };
   }
 
-  if (action === "HOLD") return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
-  if (action === "DISMISS") return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
-  return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
+  if (action === "HOLD") return { cls: "bg-gray-500/10 border-white/10 text-gray-400", icon: "●", glow: "" };
+  if (action === "DISMISS") return { cls: "bg-gray-500/10 border-white/5 text-gray-500", icon: "○", glow: "" };
+  return { cls: "bg-gray-500/10 border-white/10 text-gray-400", icon: "●", glow: "" };
 }
 
 function fmtAgeShort(seconds) {
@@ -145,13 +184,13 @@ function renderFastTriggers(fastDecisions) {
   if (!container) return;
 
   if (!Array.isArray(fastDecisions) || fastDecisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-600 font-medium">NO TRIGGERS YET</span>`;
+    container.innerHTML = `<span class="text-gray-600 font-medium italic">SCANNING FOR SIGNALS...</span>`;
     return;
   }
 
   const now = Date.now();
-  const items = fastDecisions.slice(0, 3);
-  container.innerHTML = items.map((fd) => {
+  const items = fastDecisions.slice(0, 4);
+  container.innerHTML = items.map((fd, idx) => {
     const action = (fd?.action || "").toString().toUpperCase() || "HOLD";
     const reason = (fd?.reason || "").toString().trim();
     const exec = fd?.execution || {};
@@ -161,12 +200,12 @@ function renderFastTriggers(fastDecisions) {
 
     let suffix = "";
     if (execType === "OPEN") {
-      if (entry != null && Number.isFinite(Number(entry))) suffix = `Entry @ ${fmtNum(entry, 1)}`;
-      else suffix = dir ? `${dir} executed` : "OPEN executed";
+      if (entry != null && Number.isFinite(Number(entry))) suffix = `@ ${fmtNum(entry, 1)}`;
+      else suffix = dir ? `${dir}` : "OPEN";
     } else if (execType === "CLOSE") {
-      suffix = "CLOSE executed";
+      suffix = "CLOSE";
     } else if (execType === "ADJUST") {
-      suffix = "ADJUST executed";
+      suffix = "ADJ";
     }
 
     let ageText = "—";
@@ -178,17 +217,16 @@ function renderFastTriggers(fastDecisions) {
       ageText = "—";
     }
 
-    const style = fastChipStyleFromFastDecision(fd);
-    const textParts = [action];
-    if (reason) textParts.push(reason);
-    if (suffix) textParts.push(suffix);
-    textParts.push(ageText);
+    const delay = idx * 100;
 
     return `
-      <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium trigger-entry"
-        style="color:${style.color};border-color:${style.border};"
-      >${textParts.join(" — ")}</span>
+      <div class="px-2.5 py-1 rounded-lg border backdrop-blur-md flex items-center gap-2 trigger-entry ${style.cls} ${style.glow}" style="animation-delay: ${delay}ms">
+        <span class="text-[10px] font-black opacity-80">${style.icon}</span>
+        <span class="font-black tracking-widest-caps uppercase" style="font-size: 8px;">${action}</span>
+        <span class="w-px h-2.5 bg-current opacity-20"></span>
+        <span class="font-bold tracking-tight opacity-90 truncate max-w-[90px] uppercase" style="font-size: 9px;">${reason || suffix}</span>
+        <span class="text-[8px] font-mono font-black opacity-40 ml-1 italic">${ageText}</span>
+      </div>
     `;
   }).join("");
 }
@@ -242,9 +280,9 @@ function fmtDuration(seconds) {
 
 function badgeClassByDecision(decision) {
   const d = (decision || "").toUpperCase();
-  if (d.includes("BUY")) return { border: "border-green-500", bg: "bg-green-900/20", text: "text-green-400", glow: "glow-green animate-pulse" };
-  if (d.includes("SELL")) return { border: "border-red-500", bg: "bg-red-900/20", text: "text-red-400", glow: "glow-red animate-pulse" };
-  return { border: "border-yellow-500", bg: "bg-yellow-900/20", text: "text-yellow-400", glow: "glow-yellow" };
+  if (d.includes("BUY")) return { border: "border-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-400", glow: "glow-emerald-pulse" };
+  if (d.includes("SELL")) return { border: "border-red-500", bg: "bg-red-500/10", text: "text-red-400", glow: "glow-red-pulse" };
+  return { border: "border-amber-500", bg: "bg-amber-500/10", text: "text-amber-400", glow: "glow-amber-pulse" };
 }
 
 function pillColor(score) {
@@ -270,75 +308,78 @@ function setStatusDot(isOperational) {
   const label = el("status-label");
 
   if (isOperational) {
-    dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
+    dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]";
     label.textContent = "OPERATIONAL";
-    label.className = "text-green-400";
+    label.className = "text-emerald-400 font-bold";
   } else {
-    dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
+    dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]";
     label.textContent = "OFFLINE";
-    label.className = "text-red-400";
+    label.className = "text-red-400 font-bold";
   }
 }
 
 function renderPositions(positions) {
   const container = el("positions");
+  const prevContent = container.innerHTML;
   container.innerHTML = "";
 
   if (!positions || positions.length === 0) {
-    container.innerHTML = `<div class="text-xs text-gray-400">NO OPEN POSITIONS</div>`;
+    container.innerHTML = `<div class="text-xs text-gray-500 italic py-4 text-center border border-dashed border-white/5 rounded-xl">NO ACTIVE POSITIONS</div>`;
     el("positions-count").textContent = "0";
     return;
   }
 
   el("positions-count").textContent = String(positions.length);
 
-  for (const p of positions) {
+  positions.forEach((p, idx) => {
     const pnl = Number(p.profit);
-    const pnlClass = pnl >= 0 ? "text-green-400" : "text-red-400";
+    const pnlClass = pnl >= 0 ? "text-emerald-400" : "text-red-400";
+    const delay = idx * 100;
     
     // Phase badge styling
     const phase = p.phase || "OPEN";
     let phaseBadge = "";
     if (phase === "TRAILING") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">TRAILING</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.2)]">TRAILING</span>`;
     } else if (phase === "BREAKEVEN") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BE ACTIVE</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)]">BE ACTIVE</span>`;
     } else {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">OPEN</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">OPEN</span>`;
     }
 
     // BE distance indicator
     let beIndicator = "";
     if (phase === "OPEN" && p.be_remaining_pips != null) {
-      beIndicator = `<span class="text-[10px] text-gray-500 font-mono">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
+      beIndicator = `<span class="text-[9px] text-gray-500 font-mono">BE IN ${fmtNum(p.be_remaining_pips, 0)}P</span>`;
     } else if (phase === "BREAKEVEN" || phase === "TRAILING") {
-      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">BE ✓</span>`;
+      beIndicator = `<span class="text-[9px] text-emerald-500 font-mono font-bold">BE ✓</span>`;
     }
 
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-mono font-medium text-gray-200">
-            <span class="text-gray-500 mr-1">#</span>${p.ticket} 
-            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600/50 text-gray-300 bg-gray-800/50">${p.direction}</span> 
+      <div class="glass-panel-deep border border-white/5 rounded-xl p-3 hover:bg-white/5 transition-all duration-300 group trigger-entry" style="animation-delay: ${delay}ms">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-600 font-mono text-[10px]">#${p.ticket}</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border border-white/10 text-gray-300 bg-black/40">${p.direction}</span> 
             ${phaseBadge}
-            <span class="ml-2 text-gray-400">${p.volume} lot</span>
           </div>
-          <div class="text-xs font-mono font-bold ${pnlClass}">${fmtMoney(pnl)} <span class="text-[10px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)} p)</span></div>
+          <div class="text-xs font-mono font-bold ${pnlClass} bg-black/40 px-2 py-1 rounded border border-white/5 shadow-inner">
+            ${fmtMoney(pnl)} <span class="text-[9px] text-gray-500 font-medium ml-1">(${fmtNum(p.profit_pips, 0)}P)</span>
+          </div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono font-medium text-gray-500 uppercase tracking-widest bg-black/20 rounded-lg p-2 border border-white/5">
-          <div><span class="block mb-0.5">Entry</span><span class="text-gray-200">${fmtNum(p.open_price, 2)}</span></div>
-          <div><span class="block mb-0.5">SL</span><span class="text-gray-200">${fmtNum(p.sl, 2)}</span></div>
-          <div><span class="block mb-0.5">TP</span><span class="text-gray-200">${fmtNum(p.tp, 2)}</span></div>
-          <div><span class="block mb-0.5">Now</span><span class="text-gray-200">${fmtNum(p.current_price, 2)}</span></div>
-          <div><span class="block mb-0.5">Protection</span>${beIndicator}</div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px] font-mono font-bold text-gray-500 uppercase tracking-widest bg-black/40 rounded-lg p-2 border border-white/5">
+          <div class="flex flex-col"><span class="text-gray-600 mb-0.5">ENTRY</span><span class="text-gray-300">${fmtNum(p.open_price, 2)}</span></div>
+          <div class="flex flex-col"><span class="text-gray-600 mb-0.5">SL</span><span class="text-gray-300">${fmtNum(p.sl, 2)}</span></div>
+          <div class="flex flex-col"><span class="text-gray-600 mb-0.5">TP</span><span class="text-gray-300">${fmtNum(p.tp, 2)}</span></div>
+          <div class="flex flex-col"><span class="text-gray-600 mb-0.5">NOW</span><span class="text-gray-100">${fmtNum(p.current_price, 2)}</span></div>
+          <div class="flex flex-col"><span class="text-gray-600 mb-0.5">GUARD</span>${beIndicator}</div>
         </div>
       </div>
       `
     );
-  }
+  });
 }
 
 function renderTrades(trades, daily) {
@@ -351,80 +392,86 @@ function renderTrades(trades, daily) {
   const decisive = wins + losses;
   const wr = decisive ? (wins / decisive) * 100 : 0;
 
-  el("trades-w").textContent = String(wins);
-  el("trades-l").textContent = String(losses);
-  el("trades-be").textContent = String(breakevens);
+  // Smooth count for daily stats
+  const prevW = parseInt(el("trades-w").textContent) || 0;
+  const prevL = parseInt(el("trades-l").textContent) || 0;
+  const prevBE = parseInt(el("trades-be").textContent) || 0;
+  
+  animateValue("trades-w", prevW, wins, 800, (v) => Math.round(v).toString());
+  animateValue("trades-l", prevL, losses, 800, (v) => Math.round(v).toString());
+  animateValue("trades-be", prevBE, breakevens, 800, (v) => Math.round(v).toString());
   el("trades-wr").textContent = `${wr.toFixed(1)}%`;
+  
   const hasDailyPnl = daily && daily.pnl !== null && daily.pnl !== undefined && !Number.isNaN(Number(daily.pnl));
-  el("trades-pnl").textContent = hasDailyPnl ? fmtMoney(daily?.pnl) : "—";
+  const prevDailyPnl = parseFloat(el("trades-pnl").textContent.replace("$", "")) || 0;
+  animateValue("trades-pnl", prevDailyPnl, hasDailyPnl ? daily.pnl : 0, 800, fmtMoney);
 
   if (!trades || trades.length === 0) {
-    container.innerHTML = `<div class="text-xs text-gray-400">NO CLOSED TRADES TODAY</div>`;
+    container.innerHTML = `<div class="text-[10px] text-gray-600 italic py-4 text-center border border-dashed border-white/5 rounded-xl uppercase tracking-widest">SESSION HISTORY EMPTY</div>`;
     return;
   }
 
   const sorted = [...trades].sort((a, b) => (b.close_time || "").localeCompare(a.close_time || ""));
 
-  for (const t of sorted.slice(0, 30)) {
+  sorted.slice(0, 10).forEach((t, idx) => {
     const isPending = t.pending === true || t.profit === null || t.profit === undefined;
     const pnl = isPending ? 0 : Number(t.profit);
     const time = (t.close_time || "").split("T")[1]?.slice(0, 5) || "—";
+    const delay = idx * 50;
 
-    // Use close_type if available (from monitor), otherwise heuristic fallback for old data
     let displayReason;
     if (t.close_type) {
-      const typeMap = { tp: "Take Profit", trailing: "Trailing Stop", breakeven: "Breakeven", sl: "Stop Loss" };
+      const typeMap = { tp: "TP", trailing: "TRL", breakeven: "BE", sl: "SL" };
       displayReason = typeMap[t.close_type] || t.reason || "";
     } else {
       displayReason = t.reason || "";
       if (displayReason.toLowerCase().includes("stop loss")) {
-        if (pnl > 1.0) displayReason = "Trailing Stop";
-        else if (pnl >= 0) displayReason = "Breakeven";
-        else displayReason = "Stop Loss";
+        if (pnl > 1.0) displayReason = "TRL";
+        else if (pnl >= 0) displayReason = "BE";
+        else displayReason = "SL";
       }
     }
 
     let pnlDisplay, pnlClass, icon;
     if (isPending) {
-      const outcome = t.outcome || "?";
-      pnlDisplay = `<span class="text-amber-400 animate-pulse">Processing...</span>`;
+      pnlDisplay = `<span class="text-amber-400 animate-pulse">PROC...</span>`;
       pnlClass = "text-amber-400";
-      icon = outcome === "WIN" ? "WIN" : (outcome === "LOSS" ? "LOSS" : "...");
+      icon = "WAIT";
     } else {
-      pnlClass = pnl > 0 ? "text-green-400" : (pnl < 0 ? "text-red-400" : "text-gray-400");
-      const estBadge = t.estimated ? ` <span class="text-amber-400 opacity-75">(est.)</span>` : "";
-      pnlDisplay = `${fmtMoney(pnl)}${estBadge}`;
+      pnlClass = pnl > 0 ? "text-emerald-400" : (pnl < 0 ? "text-red-400" : "text-gray-500");
+      pnlDisplay = fmtMoney(pnl);
       icon = pnl > 0 ? "WIN" : (pnl < 0 ? "LOSS" : "BE");
     }
 
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="flex items-center justify-between text-[11px] font-mono border-b border-gray-800/60 py-2.5 px-2 hover:bg-gray-800/30 transition-colors duration-200 rounded-lg group">
-        <div class="text-gray-500 font-medium">${time}</div>
-        <div class="text-gray-300 font-bold">${t.direction || "—"}</div>
-        <div class="text-gray-400 truncate max-w-[14rem] sm:max-w-[10rem] md:max-w-[14rem] font-medium tracking-wide">${displayReason}</div>
-        <div class="${pnlClass} font-bold">${pnlDisplay}</div>
-        <div class="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50 text-gray-400">${icon}</div>
+      <div class="flex items-center justify-between text-[10px] font-mono border-b border-white/5 py-2 group trigger-entry" style="animation-delay: ${delay}ms">
+        <div class="text-gray-600 font-bold w-10">${time}</div>
+        <div class="text-gray-400 font-bold w-12">${t.direction || "—"}</div>
+        <div class="text-gray-500 truncate flex-1 px-2 font-bold tracking-tighter opacity-70">${displayReason}</div>
+        <div class="${pnlClass} font-bold w-20 text-right">${pnlDisplay}</div>
+        <div class="text-[8px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-gray-500 ml-2 w-10 text-center">${icon}</div>
       </div>
       `
     );
-  }
+  });
 }
 
 function renderVolBanner(volStatus, volDesc) {
   const banner = el("vol-banner");
+  if (!banner) return;
   const status = (volStatus || "NORMAL").toUpperCase();
 
   if (status === "EXTREME") {
-    banner.className = "block bg-red-900/60 border-b border-red-500 text-red-200 px-4 py-2 text-xs font-mono animate-pulse";
-    banner.textContent = `BREAKING: EXTREME VOLATILITY — TRADING BLOCKED. ${volDesc || ""}`;
+    banner.className = "block bg-red-600/20 backdrop-blur-md border-b border-red-500/50 text-red-200 px-4 py-2 text-[10px] font-black tracking-[0.2em] text-center animate-pulse uppercase";
+    banner.innerHTML = `<span class="bg-red-500 text-white px-1.5 py-0.5 rounded mr-2">CRITICAL</span> EXTREME VOLATILITY DETECTED — TRADING HALTED. ${volDesc || ""}`;
   } else if (status === "COOLING_DOWN") {
-    banner.className = "block bg-yellow-900/40 border-b border-yellow-500 text-yellow-200 px-4 py-2 text-xs font-mono";
-    banner.textContent = `ALERT: COOLING DOWN — ONLY STRONG SIGNALS. ${volDesc || ""}`;
+    banner.className = "block bg-amber-600/20 backdrop-blur-md border-b border-amber-500/50 text-amber-200 px-4 py-2 text-[10px] font-black tracking-[0.2em] text-center uppercase";
+    banner.innerHTML = `<span class="bg-amber-500 text-black px-1.5 py-0.5 rounded mr-2">ADVISORY</span> COOLING DOWN — AGGRESSIVE FILTERS ACTIVE. ${volDesc || ""}`;
   } else {
     banner.className = "hidden";
-    banner.textContent = "";
+    banner.innerHTML = "";
   }
 }
 
@@ -433,26 +480,29 @@ function render(state) {
   el("last-update").textContent = ts.replace("T", " ").slice(0, 19);
 
   const metaAge = state._meta?.file_age_seconds;
-  const operational = (state.bot?.status || "OFFLINE") === "OPERATIONAL";
+  const ageSeconds = Number(metaAge);
+  const hasValidAge = Number.isFinite(ageSeconds) && ageSeconds >= 0;
+  const isStale = hasValidAge ? ageSeconds > 60 : true;
+  const operational = !isStale;
+
   setStatusDot(operational);
-
   el("last-data-age").textContent = fmtDuration(metaAge);
+  setStaleUI(isStale, metaAge);
 
-  setStaleUI(!operational, metaAge);
-
-  el("mode").textContent = state.bot?.mode || "—";
+  const modeEl = el("mode");
+  if (modeEl) modeEl.textContent = state.bot?.mode || "DEMO";
 
   const marketOpen = state.market?.is_open;
   const marketLabel = el("market");
   if (marketOpen === true) {
     marketLabel.textContent = "OPEN";
-    marketLabel.className = "text-green-400";
+    marketLabel.className = "text-emerald-400 font-black tracking-widest-caps";
   } else if (marketOpen === false) {
     marketLabel.textContent = "CLOSED";
-    marketLabel.className = "text-gray-300";
+    marketLabel.className = "text-white/40 font-black tracking-widest-caps";
   } else {
-    marketLabel.textContent = "—";
-    marketLabel.className = "text-gray-400";
+    marketLabel.textContent = "UNKNOWN";
+    marketLabel.className = "text-white/20 font-black tracking-widest-caps";
   }
 
   // EA Bridge status
@@ -463,23 +513,23 @@ function render(state) {
   if (eaBridge.enabled === true) {
     if (eaBridge.online === true) {
       eaStatus.textContent = "ONLINE";
-      eaStatus.className = "text-green-400 font-medium";
+      eaStatus.className = "text-emerald-400 font-black tracking-widest-caps";
     } else {
       eaStatus.textContent = "FALLBACK";
-      eaStatus.className = "text-amber-400 font-medium";
+      eaStatus.className = "text-amber-400 font-black tracking-widest-caps";
     }
   } else {
     eaStatus.textContent = "OFF";
-    eaStatus.className = "text-gray-500";
+    eaStatus.className = "text-white/20 font-bold uppercase tracking-widest";
   }
   
   if (eaBridge.spread_pips != null) {
     const spread = Number(eaBridge.spread_pips);
-    eaSpread.textContent = `${spread.toFixed(1)}p`;
-    eaSpread.className = spread > 5 ? "font-mono text-amber-400" : "font-mono text-gray-300";
+    eaSpread.textContent = `${spread.toFixed(1)}P`;
+    eaSpread.className = spread > 5 ? "font-mono text-amber-400 font-black" : "font-mono text-white/60 font-black";
   } else {
-    eaSpread.textContent = "—";
-    eaSpread.className = "font-mono text-gray-500";
+    eaSpread.textContent = "N/A";
+    eaSpread.className = "font-mono text-white/20 font-black";
   }
 
   const la = state.last_analysis || {};
@@ -489,19 +539,19 @@ function render(state) {
   const card = el("goldcon");
 
   if (marketClosed) {
-    card.className = "relative bg-gray-800/40 border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
+    card.className = "relative glass-panel border-white/10 rounded-2xl p-6 overflow-hidden transition-all duration-700 shadow-xl group";
     const reason = state.market?.reason || "";
     const isPausa = reason.toLowerCase().includes("pausa") || reason.toLowerCase().includes("daily pause");
     el("goldcon-decision").textContent = isPausa ? "DAILY PAUSE" : "MARKET CLOSED";
-    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-bold leading-none text-gray-400 text-shadow-soft";
+    el("goldcon-decision").className = "text-3xl sm:text-4xl md:text-5xl font-black leading-none text-white/20 uppercase tracking-tighter transition-all duration-500";
     el("goldcon-score").textContent = "—";
     el("goldcon-conf").textContent = "—";
     const nextOpen = state.market?.next_open;
     if (nextOpen) {
       const dt = nextOpen.replace("T", " ").slice(0, 16);
-      el("goldcon-scenario").textContent = `Reopens: ${dt} UTC`;
+      el("goldcon-scenario").textContent = `REOPENS: ${dt} UTC`;
     } else {
-      el("goldcon-scenario").textContent = state.market?.reason || "—";
+      el("goldcon-scenario").textContent = (state.market?.reason || "MARKET OFFLINE").toUpperCase();
     }
     
     // Reset Segmented Bar
@@ -511,8 +561,8 @@ function render(state) {
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         if (seg) {
-          seg.className = "flex-1 rounded transition-all duration-700 bg-gray-800";
-          seg.style.height = "48px";
+          seg.className = "flex-1 rounded-sm transition-all duration-700 bg-white/5";
+          seg.style.height = "40px";
         }
       }
     }
@@ -522,8 +572,8 @@ function render(state) {
     const conf = la.confidence;
     const cls = badgeClassByDecision(decision);
     
-    // Apply new mockup styling classes to the card
-    card.className = `relative ${cls.bg} ${cls.border} backdrop-blur-md border-2 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500 group`;
+    // Apply new mockup styling classes to the card including the glow pulse
+    card.className = `relative ${cls.bg} ${cls.border} ${cls.glow} backdrop-blur-md border-2 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500 group`;
     
     el("goldcon-decision").textContent = decision;
     el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-bold leading-none ${cls.text} text-shadow-soft transition-colors duration-300`;
@@ -565,22 +615,22 @@ function render(state) {
         if (!seg) continue;
         
         // Reset classes
-        seg.className = "flex-1 rounded transition-all duration-700 bg-gray-800";
-        seg.style.height = "48px";
+        seg.className = "flex-1 rounded-sm transition-all duration-700 bg-white/5";
+        seg.style.height = "40px";
         
         // Determine color zone based on segment index
         // 0-35 SELL (roughly segments 0-3) -> RED
-        // 35-65 HOLD (roughly segments 4-7) -> YELLOW
-        // 65-100 BUY (roughly segments 8-11) -> GREEN
+        // 35-65 HOLD (roughly segments 4-7) -> AMBER
+        // 65-100 BUY (roughly segments 8-11) -> EMERALD
         let colorClass = "";
         if (i < 4) colorClass = "segment-red";
-        else if (i < 8) colorClass = "segment-yellow";
-        else colorClass = "segment-green";
+        else if (i < 8) colorClass = "segment-amber";
+        else colorClass = "segment-emerald";
         
         if (i < activeCount) {
           seg.classList.add("active");
           seg.classList.add(colorClass);
-          seg.classList.remove("bg-gray-800");
+          seg.classList.remove("bg-white/5");
           
           // Add pulse to the very last active segment
           if (i === activeCount - 1) {
@@ -593,10 +643,16 @@ function render(state) {
 
   renderVolBanner(la.volatility_status, la.volatility_description);
 
+  const prevBal = parseFloat(el("balance").textContent.replace("$", "")) || 0;
+  const prevEq = parseFloat(el("equity").textContent.replace("$", "")) || 0;
+  const prevPnl = parseFloat(el("pnl").textContent.replace("$", "")) || 0;
+  const prevPrice = parseFloat(el("price").textContent) || 0;
+
   const bal = state.account?.balance;
   const eq = state.account?.equity;
-  el("balance").textContent = fmtMoney(bal);
-  el("equity").textContent = fmtMoney(eq);
+  
+  animateValue("balance", prevBal, bal, 800, fmtMoney);
+  animateValue("equity", prevEq, eq, 800, fmtMoney);
 
   const hasPnl = state.daily_stats && state.daily_stats.pnl !== null && state.daily_stats.pnl !== undefined && !Number.isNaN(Number(state.daily_stats.pnl));
   const hasPnlPct = state.daily_stats && state.daily_stats.pnl_percent !== null && state.daily_stats.pnl_percent !== undefined && !Number.isNaN(Number(state.daily_stats.pnl_percent));
@@ -608,9 +664,9 @@ function render(state) {
     el("pnl").textContent = "—";
     el("pnl").className = "text-xl font-bold text-gray-300";
   } else {
-    el("pnl").textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
     const pnlVal = Number(state.daily_stats?.pnl || 0);
-    el("pnl").className = pnlVal >= 0 ? "text-xl font-bold text-green-400" : "text-xl font-bold text-red-400";
+    animateValue("pnl", prevPnl, pnlVal, 800, (v) => `${fmtMoney(v)} (${fmtPct(state.daily_stats?.pnl_percent)})`);
+    el("pnl").className = pnlVal >= 0 ? "text-xl font-bold text-emerald-400" : "text-xl font-bold text-red-400";
   }
 
   const livePrice = la.current_price;
@@ -619,16 +675,16 @@ function render(state) {
   const priceLabelEl = el("price-label");
 
   if (livePrice != null) {
-    priceEl.textContent = fmtNum(livePrice, 2);
-    priceEl.className = "text-2xl font-bold text-white";
+    animateValue("price", prevPrice, livePrice, 400, (v) => fmtNum(v, 2));
+    priceEl.className = "text-2xl sm:text-3xl font-bold text-white transition-colors duration-300";
     if (priceLabelEl) priceLabelEl.textContent = "";
   } else if (lastKnown != null) {
-    priceEl.textContent = fmtNum(lastKnown, 2);
-    priceEl.className = "text-2xl font-bold text-gray-400";
+    animateValue("price", prevPrice, lastKnown, 400, (v) => fmtNum(v, 2));
+    priceEl.className = "text-2xl sm:text-3xl font-bold text-gray-400";
     if (priceLabelEl) priceLabelEl.textContent = "LAST";
   } else {
     priceEl.textContent = "—";
-    priceEl.className = "text-2xl font-bold text-gray-500";
+    priceEl.className = "text-2xl sm:text-3xl font-bold text-gray-500";
     if (priceLabelEl) priceLabelEl.textContent = "";
   }
 
@@ -724,12 +780,12 @@ function updateProactiveCountdown(state) {
 
 function intelScoreColor(score) {
   const s = Number(score);
-  if (Number.isNaN(s)) return { border: "border-gray-600", bg: "bg-gray-600", text: "text-gray-400", label: "NEUTRAL" };
-  if (s >= 65) return { border: "border-green-500", bg: "bg-green-500", text: "text-green-400", label: "BULLISH" };
-  if (s >= 55) return { border: "border-green-700", bg: "bg-green-700", text: "text-green-500", label: "LEAN BULL" };
-  if (s <= 35) return { border: "border-red-500", bg: "bg-red-500", text: "text-red-400", label: "BEARISH" };
-  if (s <= 45) return { border: "border-red-700", bg: "bg-red-700", text: "text-red-500", label: "LEAN BEAR" };
-  return { border: "border-gray-600", bg: "bg-gray-600", text: "text-gray-400", label: "NEUTRAL" };
+  if (Number.isNaN(s)) return { border: "border-white/10", bg: "bg-white/5", text: "text-gray-500", label: "NEUTRAL" };
+  if (s >= 65) return { border: "border-emerald-500/50", bg: "bg-emerald-500", text: "text-emerald-400", label: "BULLISH" };
+  if (s >= 55) return { border: "border-emerald-700/50", bg: "bg-emerald-700", text: "text-emerald-500", label: "LEAN BULL" };
+  if (s <= 35) return { border: "border-red-500/50", bg: "bg-red-500", text: "text-red-400", label: "BEARISH" };
+  if (s <= 45) return { border: "border-red-700/50", bg: "bg-red-700", text: "text-red-500", label: "LEAN BEAR" };
+  return { border: "border-white/10", bg: "bg-white/5", text: "text-gray-500", label: "NEUTRAL" };
 }
 
 function macroImpactText(key, changePct) {
@@ -755,20 +811,20 @@ function macroUnit(key) {
 
 function categoryBadge(cat) {
   const map = {
-    gold: { label: "GOLD", cls: "bg-yellow-600/30 text-yellow-400" },
-    us_monetary: { label: "FED", cls: "bg-blue-600/30 text-blue-400" },
-    geopolitics: { label: "GEO", cls: "bg-red-600/30 text-red-400" },
-    financial_crisis: { label: "CRISIS", cls: "bg-red-700/30 text-red-300" },
-    global_monetary: { label: "CB", cls: "bg-purple-600/30 text-purple-400" },
-    inflation_commodities: { label: "INFL", cls: "bg-orange-600/30 text-orange-400" },
-    safe_haven: { label: "HAVEN", cls: "bg-yellow-700/30 text-yellow-300" },
-    recession: { label: "RECESS", cls: "bg-gray-600/30 text-gray-300" },
-    market_risk: { label: "RISK", cls: "bg-pink-600/30 text-pink-400" },
-    sanctions: { label: "SANCT", cls: "bg-amber-600/30 text-amber-400" },
-    crisis_events: { label: "BLACK SWAN", cls: "bg-red-800/30 text-red-200" },
+    gold: { label: "GOLD", cls: "bg-amber-500/10 text-amber-400 border border-amber-500/20" },
+    us_monetary: { label: "FED", cls: "bg-blue-500/10 text-blue-400 border border-blue-500/20" },
+    geopolitics: { label: "GEO", cls: "bg-red-500/10 text-red-400 border border-red-500/20" },
+    financial_crisis: { label: "CRISIS", cls: "bg-red-600/10 text-red-300 border border-red-600/20" },
+    global_monetary: { label: "CB", cls: "bg-purple-500/10 text-purple-400 border border-purple-500/20" },
+    inflation_commodities: { label: "INFL", cls: "bg-orange-500/10 text-orange-400 border border-orange-500/20" },
+    safe_haven: { label: "HAVEN", cls: "bg-amber-600/10 text-amber-300 border border-amber-600/20" },
+    recession: { label: "RECESS", cls: "bg-white/5 text-gray-400 border border-white/10" },
+    market_risk: { label: "RISK", cls: "bg-pink-500/10 text-pink-400 border border-pink-500/20" },
+    sanctions: { label: "SANCT", cls: "bg-amber-500/10 text-amber-400 border border-amber-500/20" },
+    crisis_events: { label: "BLACK SWAN", cls: "bg-red-700/10 text-red-200 border border-red-700/20" },
   };
-  const m = map[cat] || { label: cat || "?", cls: "bg-gray-600/30 text-gray-400" };
-  return `<span class="px-1 py-0.5 rounded text-[9px] font-bold uppercase ${m.cls}">${m.label}</span>`;
+  const m = map[cat] || { label: cat || "?", cls: "bg-white/5 text-gray-500 border border-white/5" };
+  return `<span class="px-1.5 py-0.5 rounded-[4px] text-[8px] font-black uppercase tracking-widest-caps ${m.cls}">${m.label}</span>`;
 }
 
 function renderIntelFeed(feed, mtfTrend, volumeGate) {
@@ -794,21 +850,24 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   hlContainer.innerHTML = "";
   const headlines = feed.headlines || [];
   if (headlines.length === 0) {
-    hlContainer.innerHTML = `<div class="text-xs text-gray-500">No headlines available</div>`;
+    hlContainer.innerHTML = `<div class="text-xs text-gray-500 italic">No headlines available</div>`;
   } else {
-    for (const h of headlines) {
+    headlines.forEach((h, idx) => {
       const sc = intelScoreColor(h.score);
       const age = h.age_hours != null ? `${Number(h.age_hours).toFixed(1)}h` : "?";
       const titleTrunc = h.title.length > 90 ? h.title.slice(0, 90) + "..." : h.title;
       const methodTag = h.method === "gpt" ? "GPT" : "KW";
+      
+      // Stagger entry animation
+      const delay = idx * 50;
       hlContainer.insertAdjacentHTML("beforeend", `
-        <div class="intel-headline flex items-stretch gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-default border border-transparent hover:border-white/10">
+        <div class="intel-headline flex items-stretch gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-default border border-transparent hover:border-white/10 trigger-entry" style="animation-delay: ${delay}ms">
           <div class="w-1.5 rounded-full flex-shrink-0 ${sc.bg} opacity-80 shadow-[0_0_8px_currentColor]"></div>
           <div class="flex-1 min-w-0 py-0.5">
             <div class="text-xs text-gray-200 leading-snug truncate font-medium" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
             <div class="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 font-mono">
               ${categoryBadge(h.category)}
-              <span>${age} ago</span>
+              <span class="opacity-60">${age} ago</span>
             </div>
           </div>
           <div class="flex-shrink-0 flex items-center">
@@ -823,44 +882,46 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           </div>
         </div>
       `);
-    }
+    });
   }
 
   // Macro cards
   const macroContainer = el("intel-macro");
   macroContainer.innerHTML = "";
   const macro = feed.macro || {};
-  for (const key of ["dxy", "yields", "vix"]) {
+  const macroKeys = ["dxy", "yields", "vix"];
+  macroKeys.forEach((key, idx) => {
     const m = macro[key];
-    if (!m) continue;
+    if (!m) return;
     const val = m.value;
     const chg = m.change_pct;
     const sc = intelScoreColor(m.score);
     const impact = macroImpactText(key, chg);
     const arrow = Number(chg) > 0 ? "&#9650;" : (Number(chg) < 0 ? "&#9660;" : "");
-    const chgClass = Number(chg) > 0 ? "text-green-400" : (Number(chg) < 0 ? "text-red-400" : "text-gray-400");
+    const chgClass = Number(chg) > 0 ? "text-emerald-400" : (Number(chg) < 0 ? "text-red-400" : "text-white/40");
     const unit = macroUnit(key);
 
+    const delay = idx * 100;
     macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
+      <div class="bg-black/20 backdrop-blur-sm border ${sc.border.replace('border-', 'border-')}/30 rounded-xl p-3 shadow-md hover:bg-white/5 transition-all duration-300 intel-macro-card relative overflow-hidden group trigger-entry" style="animation-delay: ${delay}ms">
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
-          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)}</div>
-          <div class="text-xs font-bold font-mono ${sc.text}">${fmtNum(m.score, 0)}</div>
+          <div class="text-[10px] font-bold text-gray-500 tracking-widest-caps">${macroLabel(key)}</div>
+          <div class="text-[10px] font-bold font-mono ${sc.text} bg-black/40 px-1.5 py-0.5 rounded border border-white/5">${fmtNum(m.score, 0)}</div>
         </div>
-        <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
-          <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
+        <div class="flex items-baseline gap-2 mt-3 relative z-10">
+          <span class="text-xl text-gray-100 font-bold font-mono tracking-tighter">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-[10px] font-mono font-bold ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
-        <div class="intel-robot-bubble inline-flex mt-2 relative z-10">
-          <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10">
-          <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50 p-2">
-            <div class="text-xs text-gray-300 font-medium">${impact}</div>
+        <div class="intel-robot-bubble inline-flex mt-3 relative z-10">
+          <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10 grayscale hover:grayscale-0 transition-all duration-300">
+          <div class="intel-bubble backdrop-blur-md bg-gray-900/95 border border-white/10 p-2 shadow-2xl">
+            <div class="text-[10px] text-gray-200 font-medium leading-relaxed">${impact}</div>
           </div>
         </div>
       </div>
     `);
-  }
+  });
 
   // Anomalies
   const anomalies = feed.anomalies || [];
@@ -882,7 +943,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     };
     const phaseColor = phaseColors[cal.phase] || "text-gray-400";
     const biasIcon = cal.bias === "BULLISH" ? "&#9650;" : (cal.bias === "BEARISH" ? "&#9660;" : "&#9679;");
-    const biasColor = cal.bias === "BULLISH" ? "text-green-400" : (cal.bias === "BEARISH" ? "text-red-400" : "text-gray-500");
+    const biasColor = cal.bias === "BULLISH" ? "text-emerald-400" : (cal.bias === "BEARISH" ? "text-red-400" : "text-white/40");
     let calHtml = `
       <div class="flex items-center gap-2">
         <span class="${phaseColor} font-bold">${cal.phase.toUpperCase().replace("_", " ")}</span>
@@ -895,25 +956,25 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     // Upcoming events list
     const upcoming = cal.upcoming_events || [];
     if (upcoming.length > 0) {
-      calHtml += `<div class="mt-2 border-t border-gray-800 pt-1.5">`;
-      calHtml += `<div class="text-[10px] text-gray-600 tracking-wider mb-1">UPCOMING</div>`;
+      calHtml += `<div class="mt-2 border-t border-white/5 pt-2">`;
+      calHtml += `<div class="text-[9px] text-gray-600 font-bold tracking-widest-caps mb-2 uppercase">UPCOMING</div>`;
       for (const ev of upcoming) {
-        const impColor = ev.importance === "HIGH" ? "text-red-400 border-red-800" : "text-yellow-500 border-yellow-800";
+        const impColor = ev.importance === "HIGH" ? "text-red-400 border-red-500/30 bg-red-500/5" : "text-amber-500 border-amber-500/30 bg-amber-500/5";
         const impLabel = ev.importance === "HIGH" ? "H" : "M";
         const timeColor = ev.is_past ? "text-gray-600" : "text-gray-400";
         const nameColor = ev.is_past ? "text-gray-600" : "text-gray-300";
         calHtml += `
-          <div class="flex items-center gap-1.5 text-[11px] py-0.5">
-            <span class="px-1 border rounded ${impColor}" style="font-size:9px">${impLabel}</span>
-            <span class="${timeColor}">${ev.time}</span>
-            <span class="${nameColor} truncate">${ev.name}</span>
-            <span class="text-gray-600 ml-auto flex-shrink-0">${ev.time_until}</span>
+          <div class="flex items-center gap-2 text-[10px] py-1 border-b border-white/[0.02] last:border-0 font-medium">
+            <span class="px-1 border rounded font-black ${impColor}" style="font-size:8px">${impLabel}</span>
+            <span class="${timeColor} font-mono">${ev.time}</span>
+            <span class="${nameColor} truncate flex-1 tracking-tight">${ev.name}</span>
+            <span class="text-gray-600 flex-shrink-0 font-mono" style="font-size:9px">${ev.time_until}</span>
           </div>
         `;
       }
       calHtml += `</div>`;
     } else {
-      calHtml += `<div class="mt-1.5 text-[10px] text-gray-600">No upcoming events</div>`;
+      calHtml += `<div class="mt-2 text-[9px] text-gray-600 font-bold uppercase tracking-widest">No upcoming events</div>`;
     }
 
     calEl.innerHTML = calHtml;
@@ -942,9 +1003,23 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const zoneRow = (z, color, borderColor) => {
     const isMtf = z.confluence && z.confluence.length >= 2;
     const isStrong = z.strength === "strong" || z.touches >= 4;
-    const weight = isStrong ? "font-bold" : "";
+    const weight = isStrong ? "font-black" : "font-bold";
     const border = isMtf ? "border-purple-500" : borderColor;
-    return `<div class="${color} ${weight} border-l-2 ${border} pl-1.5 py-0.5">${z.price.toFixed(2)} ${tfBadge(z.timeframe)}${mtfBadge(z.confluence)}${ztBadge(z.zone_type)} <span class="text-gray-500">${z.touches}T — ${z.dist_pips.toFixed(0)}p</span></div>`;
+    const glow = isMtf ? "shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "";
+    
+    return `
+      <div class="${color} ${weight} border-l-2 ${border} pl-2 py-1.5 mb-1 bg-white/5 rounded-r-md flex items-center justify-between group hover:bg-white/10 transition-all duration-200 ${glow}">
+        <div class="flex items-center gap-2">
+          <span class="tracking-tighter">${z.price.toFixed(2)}</span>
+          ${tfBadge(z.timeframe)}
+          ${mtfBadge(z.confluence)}
+          ${ztBadge(z.zone_type)}
+        </div>
+        <div class="text-[9px] font-mono opacity-40 group-hover:opacity-100 transition-opacity">
+          ${z.touches}T — ${z.dist_pips.toFixed(0)}P
+        </div>
+      </div>
+    `;
   };
   if (srZones.length > 0) {
     srEl.classList.remove("hidden");
@@ -978,23 +1053,31 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     // Sign is determined by action: BOOST = +, REDUCE = -
     const sign = action === "BOOST" ? "+" : (action === "REDUCE" ? "-" : "+");
     const adjStr = (adj != null && adj !== 0) ? ` (${sign}${adj})` : "";
-    let bg = "bg-gray-800/50";
-    let border = "border-gray-700/50";
-    let textCls = "text-gray-300";
+    let bg = "bg-white/5";
+    let border = "border-white/10";
+    let textCls = "text-gray-400";
+    let accentCls = "bg-gray-500";
     
     // BOOST = green, REDUCE = red, BLOCK = red, CONFIRM = gray
-    if (action === "BOOST") { bg = "bg-green-900/20"; border = "border-green-700/50"; textCls = "text-green-400"; }
-    else if (action === "REDUCE") { bg = "bg-red-900/20"; border = "border-red-700/50"; textCls = "text-red-400"; }
-    else if (action === "BLOCK") { bg = "bg-red-900/20"; border = "border-red-700/50"; textCls = "text-red-400"; }
+    if (action === "BOOST") { bg = "bg-emerald-500/5"; border = "border-emerald-500/20"; textCls = "text-emerald-400"; accentCls = "bg-emerald-500"; }
+    else if (action === "REDUCE") { bg = "bg-red-500/5"; border = "border-red-500/20"; textCls = "text-red-400"; accentCls = "bg-red-500"; }
+    else if (action === "BLOCK") { bg = "bg-red-500/5"; border = "border-red-500/20"; textCls = "text-red-400"; accentCls = "bg-red-500"; }
 
     gptContainer.innerHTML = `
-      <div class="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border ${border} ${bg} backdrop-blur-sm w-full">
-        <div class="mt-0.5 sm:mt-1 flex-shrink-0">
-          <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-md ring-2 ring-white/10 opacity-90">
+      <div class="flex items-start gap-4 p-5 rounded-2xl border ${border} ${bg} backdrop-blur-md w-full relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+        <div class="mt-1 flex-shrink-0 relative z-10">
+          <div class="relative">
+            <img src="/image/flokiwatch.png" alt="Floki GPT" class="w-10 h-10 rounded-full shadow-2xl ring-2 ring-white/10 grayscale group-hover:grayscale-0 transition-all duration-500">
+            <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${accentCls} border-2 border-black flex items-center justify-center text-[8px] font-black text-white shadow-lg">AI</span>
+          </div>
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-[10px] font-bold tracking-widest uppercase ${textCls} mb-1 sm:mb-1.5 font-mono">GPT ${action}${adjStr}</div>
-          <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-sans break-words whitespace-normal">${text.replace(/"/g, '&quot;')}</div>
+        <div class="min-w-0 flex-1 relative z-10">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-[9px] font-black tracking-widest uppercase ${textCls} font-mono">GPT ${action}${adjStr}</div>
+            <div class="text-[8px] font-bold text-gray-600 uppercase tracking-widest">VALIDATOR ACTIVE</div>
+          </div>
+          <div class="text-[11px] sm:text-xs text-gray-300 leading-relaxed font-medium font-sans break-words whitespace-normal opacity-90 group-hover:opacity-100 transition-opacity">${text.replace(/"/g, '&quot;')}</div>
         </div>
       </div>
     `;
@@ -1051,13 +1134,13 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const alignment = mtfTrend.alignment;
     const mtfAdj = mtfTrend.confidence_adjustment || 0;
 
-    const dirColor = (dir) => dir === "bullish" ? "text-green-400" : dir === "bearish" ? "text-red-400" : "text-gray-500";
+    const dirColor = (dir) => dir === "bullish" ? "text-emerald-400" : dir === "bearish" ? "text-red-400" : "text-white/40";
     const dirLabel = (dir) => dir ? dir.charAt(0).toUpperCase() + dir.slice(1) : "—";
     
-    const alignColor = alignment === "aligned" ? "text-green-400" : alignment === "conflict" ? "text-red-400" : alignment === "mixed" ? "text-yellow-400" : "text-gray-500";
+    const alignColor = alignment === "aligned" ? "text-emerald-400" : alignment === "conflict" ? "text-red-400" : alignment === "mixed" ? "text-amber-400" : "text-white/40";
     const alignLabel = alignment === "aligned" ? "Aligned ✓" : alignment === "conflict" ? "Conflict ✗" : alignment === "mixed" ? "Mixed" : "N/A";
     
-    const adjColor = mtfAdj > 0 ? "text-green-400" : mtfAdj < 0 ? "text-red-400" : "text-gray-500";
+    const adjColor = mtfAdj > 0 ? "text-emerald-400" : mtfAdj < 0 ? "text-red-400" : "text-white/40";
     const adjText = mtfAdj > 0 ? `+${mtfAdj}` : mtfAdj < 0 ? `${mtfAdj}` : "0";
 
     const mtfD1El = document.getElementById("mtf-d1");
@@ -1077,10 +1160,10 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const volStatus = volumeGate.status;
     const volAdj = volumeGate.confidence_adjustment || 0;
 
-    const statusColor = volStatus === "normal" ? "text-green-400" : volStatus === "low" ? "text-yellow-400" : volStatus === "very_low" ? "text-red-400" : "text-gray-500";
+    const statusColor = volStatus === "normal" ? "text-emerald-400" : volStatus === "low" ? "text-amber-400" : volStatus === "very_low" ? "text-red-400" : "text-white/40";
     const statusLabel = volStatus === "normal" ? "Normal ✓" : volStatus === "low" ? "Low ⚠" : volStatus === "very_low" ? "Very Low ✗" : "—";
     
-    const adjColor = volAdj > 0 ? "text-green-400" : volAdj < 0 ? "text-red-400" : "text-gray-500";
+    const adjColor = volAdj > 0 ? "text-emerald-400" : volAdj < 0 ? "text-red-400" : "text-white/40";
     const adjText = volAdj > 0 ? `+${volAdj}` : volAdj < 0 ? `${volAdj}` : "0";
 
     const volRatioEl = document.getElementById("vol-ratio");
@@ -1144,14 +1227,14 @@ function renderAgentCard(agentDecision) {
   const agreeEl = el("agent-agreement");
   if (agreeEl) {
     if (agreement === true) {
-      agreeEl.textContent = "✅ AGREE";
-      agreeEl.className = "text-sm font-semibold text-green-400";
+      agreeEl.textContent = "✓ AGREE";
+      agreeEl.className = "text-xs font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 tracking-widest-caps";
     } else if (agreement === false) {
-      agreeEl.textContent = "❌ DISAGREE";
-      agreeEl.className = "text-sm font-semibold text-red-400";
+      agreeEl.textContent = "× DISAGREE";
+      agreeEl.className = "text-xs font-black text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20 tracking-widest-caps";
     } else {
       agreeEl.textContent = "—";
-      agreeEl.className = "text-sm font-semibold text-gray-500";
+      agreeEl.className = "text-xs font-black text-white/20 tracking-widest-caps";
     }
   }
 
@@ -1164,7 +1247,8 @@ function renderAgentCard(agentDecision) {
   // Latency
   const latEl = el("agent-latency");
   if (latEl) {
-    latEl.textContent = latencyMs != null ? latencyMs : "—";
+    const prevLat = parseInt(latEl.textContent) || 0;
+    animateValue("agent-latency", prevLat, latencyMs, 600, (v) => Math.round(v).toString());
   }
 
   // Reasoning
@@ -1326,30 +1410,30 @@ function renderProactiveAnalysis(proactive, positions) {
       const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
       const holdDir = dirFromPos === "BUY" || dirFromPos === "SELL" ? dirFromPos : null;
 
-      if (d === "OPEN_SELL") {
+    if (d === "OPEN_SELL") {
+      if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
+      else { label = "SELL"; activeIdx = 1; }
+    } else if (d === "OPEN_BUY") {
+      if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
+      else { label = "BUY"; activeIdx = 3; }
+    } else if (d === "WAIT") {
+      label = "WAITING";
+      activeIdx = 2;
+    } else if (d === "CLOSE_TRADE") {
+      label = "EXITING";
+      activeIdx = 2;
+    } else if (d === "HOLD_TRADE" || d === "ADJUST_TRADE") {
+      if (holdDir === "SELL") {
         if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
         else { label = "SELL"; activeIdx = 1; }
-      } else if (d === "OPEN_BUY") {
+      } else if (holdDir === "BUY") {
         if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
         else { label = "BUY"; activeIdx = 3; }
-      } else if (d === "WAIT") {
-        label = "NEUTRAL";
+      } else {
+        label = "MONITORING";
         activeIdx = 2;
-      } else if (d === "CLOSE_TRADE") {
-        label = "NEUTRAL";
-        activeIdx = 2;
-      } else if (d === "HOLD_TRADE" || d === "ADJUST_TRADE") {
-        if (holdDir === "SELL") {
-          if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
-          else { label = "SELL"; activeIdx = 1; }
-        } else if (holdDir === "BUY") {
-          if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
-          else { label = "BUY"; activeIdx = 3; }
-        } else {
-          label = "NEUTRAL";
-          activeIdx = 2;
-        }
       }
+    }
 
       sentimentLabelEl.textContent = label;
       
@@ -1532,7 +1616,8 @@ function renderAgentMemory(agentMemory) {
       const now = new Date();
       const diffMs = now - rejectTime;
       const diffMin = Math.floor(diffMs / 60000);
-      timestampEl.textContent = diffMin < 60 ? `${diffMin} min ago` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m ago`;
+      const timeStr = diffMin < 60 ? `${diffMin}M AGO` : `${Math.floor(diffMin / 60)}H ${diffMin % 60}M AGO`;
+      timestampEl.textContent = `LAST CAPTURE: ${timeStr}`;
     } catch (e) {
       timestampEl.textContent = "—";
     }
@@ -1550,11 +1635,11 @@ function renderAgentMemory(agentMemory) {
     const dir = agentMemory.market_view?.direction || "—";
     viewDirEl.textContent = dir;
     if (dir === "BUY") {
-      viewDirEl.className = "text-lg font-bold text-green-400";
+      viewDirEl.className = "text-xl font-black tracking-tighter text-emerald-400 uppercase";
     } else if (dir === "SELL") {
-      viewDirEl.className = "text-lg font-bold text-red-400";
+      viewDirEl.className = "text-xl font-black tracking-tighter text-red-400 uppercase";
     } else {
-      viewDirEl.className = "text-lg font-bold text-yellow-400";
+      viewDirEl.className = "text-xl font-black tracking-tighter text-amber-400 uppercase";
     }
   }
 
@@ -1564,18 +1649,24 @@ function renderAgentMemory(agentMemory) {
     viewDescEl.textContent = agentMemory.market_view?.description || "—";
   }
 
-  // Conditions
   const conditionsEl = el("agent-memory-conditions");
   if (conditionsEl) {
     const conditions = agentMemory.conditions || [];
     if (conditions.length === 0) {
-      conditionsEl.innerHTML = `<li class="text-gray-500">No conditions set</li>`;
+      conditionsEl.innerHTML = `<li class="text-gray-600 italic">No conditions set</li>`;
     } else {
-      conditionsEl.innerHTML = conditions.map(c => {
-        const icon = c.met ? "✅" : "❌";
-        const currentVal = c.current_value != null ? ` (now: ${fmtNum(c.current_value, 1)})` : "";
-        const textClass = c.met ? "text-green-400" : "text-gray-300";
-        return `<li class="${textClass}">${icon} ${c.description}${currentVal}</li>`;
+      conditionsEl.innerHTML = conditions.map((c, idx) => {
+        const icon = c.met ? "✓" : "×";
+        const currentVal = c.current_value != null ? `<span class="opacity-50 ml-2 font-mono">(NOW: ${fmtNum(c.current_value, 1)})</span>` : "";
+        const textClass = c.met ? "text-emerald-400" : "text-gray-400";
+        const bgClass = c.met ? "bg-emerald-500/5 border-emerald-500/10" : "bg-white/5 border-white/5";
+        const delay = idx * 50;
+        return `
+          <li class="flex items-center gap-3 p-2.5 rounded-xl border ${bgClass} ${textClass} transition-all duration-300 trigger-entry" style="animation-delay: ${delay}ms">
+            <span class="text-xs font-black">${icon}</span>
+            <span class="flex-1 font-bold tracking-widest-caps uppercase text-[9px]">${c.description}</span>
+            <span class="text-[9px] font-bold uppercase">${currentVal}</span>
+          </li>`;
       }).join("");
     }
   }
@@ -1585,27 +1676,27 @@ function renderAgentMemory(agentMemory) {
   if (expiryEl) {
     const inv = agentMemory.invalidation;
     if (inv) {
-      expiryEl.textContent = `${inv.candles_remaining} ${inv.timeframe} candles remaining`;
+      expiryEl.textContent = `${inv.candles_remaining} ${inv.timeframe} CANDLES REMAINING`;
     } else {
       expiryEl.textContent = "—";
     }
   }
 
-  // Status badge - read from JSON, handle ACTIVE, EXPIRED, conditions_met
+  // Status badge
   const statusEl = el("agent-memory-status");
   if (statusEl) {
     const status = (agentMemory.status || "ACTIVE").toUpperCase();
     const allMet = agentMemory.all_conditions_met;
     
     if (allMet || status === "CONDITIONS_MET") {
-      statusEl.textContent = "ALL CONDITIONS MET";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse";
+      statusEl.textContent = "RE-ENTRY ENABLED";
+      statusEl.className = "px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse tracking-widest";
     } else if (status === "EXPIRED") {
-      statusEl.textContent = "EXPIRED";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30";
+      statusEl.textContent = "MEMORY EXPIRED";
+      statusEl.className = "px-2 py-0.5 rounded text-[9px] font-black bg-gray-500/20 text-gray-400 border border-gray-500/30 tracking-widest";
     } else {
-      statusEl.textContent = "ACTIVE";
-      statusEl.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
+      statusEl.textContent = "MEMORY ACTIVE";
+      statusEl.className = "px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-widest";
     }
   }
 }
@@ -1635,25 +1726,27 @@ function renderRecentDecisions(decisions) {
   if (!container) return;
 
   if (!decisions || decisions.length === 0) {
-    container.innerHTML = `<span class="text-gray-500 font-medium tracking-wide text-[11px] uppercase">NO DECISIONS YET</span>`;
+    container.innerHTML = `<span class="text-gray-600 font-medium italic text-[10px] uppercase tracking-widest">SCANNING HISTORY...</span>`;
     return;
   }
 
   container.innerHTML = "";
-  for (const d of decisions) {
+  decisions.forEach((d, idx) => {
     const time = (d.timestamp || "").split("T")[1]?.slice(0, 5) || "—";
     const decision = d.decision || "HOLD";
     const score = d.score != null ? `${fmtNum(d.score, 0)}%` : "—";
     const cls = decisionColor(decision);
+    const delay = idx * 50;
 
     container.insertAdjacentHTML("beforeend", `
-      <div class="flex items-center gap-1.5 px-2 py-1 rounded-md border ${cls} backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5">
-        <span class="text-[10px] text-gray-500 font-mono tracking-wider opacity-80">${time}</span>
-        <span class="font-bold text-[10px] tracking-wide uppercase">${decision}</span>
-        <span class="text-[10px] font-mono opacity-90 font-medium pl-1 border-l border-current/20">${score}</span>
+      <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg border ${cls} backdrop-blur-md transition-all duration-300 hover:-translate-y-1 trigger-entry" style="animation-delay: ${delay}ms">
+        <span class="text-[9px] text-gray-500 font-mono tracking-wider opacity-60">${time}</span>
+        <span class="font-black text-[9px] tracking-tighter uppercase">${decision.replace("_", " ")}</span>
+        <span class="w-px h-2 bg-current opacity-20"></span>
+        <span class="text-[9px] font-mono opacity-90 font-bold">${score}</span>
       </div>
     `);
-  }
+  });
 }
 
 async function pollDecisions() {
@@ -1684,6 +1777,14 @@ async function poll() {
     lastMetaAgeSeconds = metaAge;
 
     if (!shouldRender) return;
+    
+    // Add subtle flash effect to the main container on update
+    const mainApp = el("app");
+    if (mainApp) {
+      mainApp.classList.add("data-update-flash");
+      setTimeout(() => mainApp.classList.remove("data-update-flash"), 1000);
+    }
+
     render(data);
   } catch (e) {
     render({ bot: { status: "OFFLINE" }, timestamp: new Date().toISOString(), _meta: { file_age_seconds: null } });
