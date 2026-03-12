@@ -331,6 +331,7 @@ function renderPositions(positions) {
 
 function renderTrades(trades, daily) {
   const container = el("trades");
+  if (!container) return;
   container.innerHTML = "";
 
   const wins = Number(daily?.wins || 0);
@@ -339,12 +340,12 @@ function renderTrades(trades, daily) {
   const decisive = wins + losses;
   const wr = decisive ? (wins / decisive) * 100 : 0;
 
-  el("trades-w").textContent = String(wins);
-  el("trades-l").textContent = String(losses);
-  el("trades-be").textContent = String(breakevens);
-  el("trades-wr").textContent = `${wr.toFixed(1)}%`;
+  const twEl = el("trades-w"); if (twEl) twEl.textContent = String(wins);
+  const tlEl = el("trades-l"); if (tlEl) tlEl.textContent = String(losses);
+  const tbeEl = el("trades-be"); if (tbeEl) tbeEl.textContent = String(breakevens);
+  const twrEl = el("trades-wr"); if (twrEl) twrEl.textContent = `${wr.toFixed(1)}%`;
   const hasDailyPnl = daily && daily.pnl !== null && daily.pnl !== undefined && !Number.isNaN(Number(daily.pnl));
-  el("trades-pnl").textContent = hasDailyPnl ? fmtMoney(daily?.pnl) : "—";
+  const tpnlEl = el("trades-pnl"); if (tpnlEl) tpnlEl.textContent = hasDailyPnl ? fmtMoney(daily?.pnl) : "—";
 
   if (!trades || trades.length === 0) {
     container.innerHTML = `<div class="text-xs text-gray-400">NO CLOSED TRADES TODAY</div>`;
@@ -600,22 +601,25 @@ function render(state) {
 
   const bal = state.account?.balance;
   const eq = state.account?.equity;
-  el("balance").textContent = fmtMoney(bal);
-  el("equity").textContent = fmtMoney(eq);
+  const balEl = el("balance"); if (balEl) balEl.textContent = fmtMoney(bal);
+  const eqEl = el("equity"); if (eqEl) eqEl.textContent = fmtMoney(eq);
 
   const hasPnl = state.daily_stats && state.daily_stats.pnl !== null && state.daily_stats.pnl !== undefined && !Number.isNaN(Number(state.daily_stats.pnl));
   const hasPnlPct = state.daily_stats && state.daily_stats.pnl_percent !== null && state.daily_stats.pnl_percent !== undefined && !Number.isNaN(Number(state.daily_stats.pnl_percent));
 
   const noClosedTrades = (Number(state.daily_stats?.wins || 0) + Number(state.daily_stats?.losses || 0) + Number(state.daily_stats?.breakevens || 0)) === 0;
   const pnlIsZero = Number(state.daily_stats?.pnl || 0) === 0;
+  const pnlEl = el("pnl");
 
-  if (!operational || bal === null || bal === undefined || eq === null || eq === undefined || !hasPnl || !hasPnlPct || (noClosedTrades && pnlIsZero)) {
-    el("pnl").textContent = "—";
-    el("pnl").className = "text-xl font-black text-gray-300 tracking-[0.2em] font-mono";
-  } else {
-    el("pnl").textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
-    const pnlVal = Number(state.daily_stats?.pnl || 0);
-    el("pnl").className = pnlVal >= 0 ? "text-xl font-black text-green-400 tracking-[0.2em] font-mono" : "text-xl font-black text-red-400 tracking-[0.2em] font-mono";
+  if (pnlEl) {
+    if (!operational || bal === null || bal === undefined || eq === null || eq === undefined || !hasPnl || !hasPnlPct || (noClosedTrades && pnlIsZero)) {
+      pnlEl.textContent = "—";
+      pnlEl.className = "text-xl font-black text-gray-300 tracking-[0.2em] font-mono";
+    } else {
+      pnlEl.textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
+      const pnlVal = Number(state.daily_stats?.pnl || 0);
+      pnlEl.className = pnlVal >= 0 ? "text-xl font-black text-green-400 tracking-[0.2em] font-mono" : "text-xl font-black text-red-400 tracking-[0.2em] font-mono";
+    }
   }
 
   const livePrice = la.current_price;
@@ -623,18 +627,20 @@ function render(state) {
   const priceEl = el("price");
   const priceLabelEl = el("price-label");
 
-  if (livePrice != null) {
-    priceEl.textContent = fmtNum(livePrice, 2);
-    priceEl.className = "text-2xl font-black text-white tracking-[0.2em] font-mono";
-    if (priceLabelEl) priceLabelEl.textContent = "";
-  } else if (lastKnown != null) {
-    priceEl.textContent = fmtNum(lastKnown, 2);
-    priceEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] font-mono";
-    if (priceLabelEl) priceLabelEl.textContent = "LAST";
-  } else {
-    priceEl.textContent = "—";
-    priceEl.className = "text-2xl font-black text-gray-500 tracking-[0.2em] font-mono";
-    if (priceLabelEl) priceLabelEl.textContent = "";
+  if (priceEl) {
+    if (livePrice != null) {
+      priceEl.textContent = fmtNum(livePrice, 2);
+      priceEl.className = "text-2xl font-black text-white tracking-[0.2em] font-mono";
+      if (priceLabelEl) priceLabelEl.textContent = "";
+    } else if (lastKnown != null) {
+      priceEl.textContent = fmtNum(lastKnown, 2);
+      priceEl.className = "text-2xl font-black text-gray-400 tracking-[0.2em] font-mono";
+      if (priceLabelEl) priceLabelEl.textContent = "LAST";
+    } else {
+      priceEl.textContent = "—";
+      priceEl.className = "text-2xl font-black text-gray-500 tracking-[0.2em] font-mono";
+      if (priceLabelEl) priceLabelEl.textContent = "";
+    }
   }
 
   renderPillar("p-tech", la.tech_score);
