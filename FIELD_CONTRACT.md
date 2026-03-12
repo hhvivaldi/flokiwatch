@@ -135,6 +135,17 @@
 | `volume_gate.status` | `"normal"` \| `"low"` \| `"very_low"` | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 | `volume_gate.confidence_adjustment` | float | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 
+### `last_analysis.fast_decisions` Array (Real-time Triggers)
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `fast_decisions[]` | array of objects | `main.py` | `renderFastTriggers()` → `#fast-triggers-chips` |
+| `fast_decisions[].action` | `"ACT"` \| `"HOLD"` \| `"DISMISS"` | `main.py` | action label/color |
+| `fast_decisions[].reason` | string | `main.py` | trigger reason |
+| `fast_decisions[].execution.type` | `"OPEN"` \| `"CLOSE"` \| `"ADJUST"` | `main.py` | execution differentiation |
+| `fast_decisions[].execution.direction` | `"BUY"` \| `"SELL"` | `main.py` | color-coding (Green/Red) |
+| `fast_decisions[].timestamp` | string (ISO) | `main.py` | age calculation |
+
 ### `last_analysis.proactive_analysis` Object (AI Agent - Proactive M30 Snapshot)
 
 | Field | Type | Writer | Reader (app.js) |
