@@ -23,6 +23,49 @@
 .glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.3), 0 0 40px rgba(234,179,8,0.15); }
 .glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.3), 0 0 40px rgba(239,68,68,0.15); }
 
+/* ================================================================
+   PROACTIVE — SENTIMENT + LIFECYCLE BARS
+   ================================================================ */
+
+#sentiment-bar > div,
+#lifecycle-bar > div {
+  opacity: 0.2;
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+#sentiment-bar > div.is-active {
+  opacity: 1;
+  filter: brightness(1.15);
+}
+
+#lifecycle-bar > div.is-filled {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
+/* Sentiment colors */
+.sentiment-strong-sell { background-color: #7f1d1d; }
+.sentiment-sell { background-color: #ef4444; }
+.sentiment-neutral { background-color: #6b7280; }
+.sentiment-buy { background-color: #22c55e; }
+.sentiment-strong-buy { background-color: #14532d; }
+
+/* Lifecycle base colors (filled state will override via JS if needed) */
+.lifecycle-watching { background-color: #6b7280; }
+.lifecycle-preparing { background-color: #3b82f6; }
+.lifecycle-entry { background-color: #22c55e; }
+.lifecycle-managing { background-color: #10b981; }
+.lifecycle-closing { background-color: #f59e0b; }
+.lifecycle-result { background-color: #22c55e; }
+
+/* Indicator styling */
+#sentiment-indicator,
+#lifecycle-indicator {
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 /* Segmented Progress Bar */
 #signal-segments > div {
   height: 100%;

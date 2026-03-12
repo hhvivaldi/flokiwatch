@@ -7,6 +7,10 @@ let lastStateForProactiveCountdown = null;
 
 let lastGoodProactiveAnalysis = null;
 
+let lastProactiveDecision = null;
+let lastHadPosition = false;
+let lastKnownClosedPnl = null;
+
 let proactiveReasoningExpanded = false;
 
 let uiHandlersBound = false;
@@ -1200,6 +1204,14 @@ function renderProactiveAnalysis(proactive, positions) {
   const latencyMs = toRender.latency_ms;
   const tokensUsed = toRender.tokens_used;
 
+  const sentimentBarEl = el("sentiment-bar");
+  const sentimentIndicatorEl = el("sentiment-indicator");
+  const sentimentLabelEl = el("sentiment-label");
+
+  const lifecycleBarEl = el("lifecycle-bar");
+  const lifecycleIndicatorEl = el("lifecycle-indicator");
+  const lifecycleLabelEl = el("lifecycle-label");
+
   const tpBlockEl = el("proactive-tp-block");
   const tpEntryEl = el("proactive-tp-entry");
   const tpSlEl = el("proactive-tp-sl");
@@ -1267,6 +1279,141 @@ function renderProactiveAnalysis(proactive, positions) {
   const confEl = el("proactive-confidence");
   if (confEl) {
     confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+  }
+
+  try {
+    const confNum = Number(confidence);
+    const confSafe = Number.isFinite(confNum) ? Math.max(0, Math.min(100, confNum)) : null;
+    const pos0 = Array.isArray(positions) && positions.length > 0 ? positions[0] : null;
+    const inTrade = Array.isArray(positions) && positions.length > 0;
+
+    const tradeHistory0 = lastStateForProactiveCountdown?.trade_history?.[0] || null;
+    const tradeHistoryProfit = tradeHistory0 && tradeHistory0.profit != null ? Number(tradeHistory0.profit) : null;
+
+    if (lastHadPosition === true && inTrade === false && Number.isFinite(tradeHistoryProfit)) {
+      lastKnownClosedPnl = tradeHistoryProfit;
+    }
+    lastHadPosition = inTrade;
+
+    if (sentimentBarEl && sentimentIndicatorEl && sentimentLabelEl) {
+      const d = (decision || "").toString().toUpperCase();
+
+      let label = "NEUTRAL";
+      let activeIdx = 2;
+      const c = confSafe;
+
+      const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
+      const holdDir = dirFromPos === "BUY" || dirFromPos === "SELL" ? dirFromPos : null;
+
+      if (d === "OPEN_SELL") {
+        if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
+        else { label = "SELL"; activeIdx = 1; }
+      } else if (d === "OPEN_BUY") {
+        if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
+        else { label = "BUY"; activeIdx = 3; }
+      } else if (d === "WAIT") {
+        label = "NEUTRAL";
+        activeIdx = 2;
+      } else if (d === "CLOSE_TRADE") {
+        label = "NEUTRAL";
+        activeIdx = 2;
+      } else if (d === "HOLD_TRADE" || d === "ADJUST_TRADE") {
+        if (holdDir === "SELL") {
+          if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
+          else { label = "SELL"; activeIdx = 1; }
+        } else if (holdDir === "BUY") {
+          if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
+          else { label = "BUY"; activeIdx = 3; }
+        } else {
+          label = "NEUTRAL";
+          activeIdx = 2;
+        }
+      }
+
+      sentimentLabelEl.textContent = label;
+      const segs = sentimentBarEl.children;
+      for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i];
+        if (!seg) continue;
+        if (i === activeIdx) seg.classList.add("is-active");
+        else seg.classList.remove("is-active");
+      }
+
+      const x = c != null ? (c / 100) : 0.5;
+      sentimentIndicatorEl.style.left = `${(Math.max(0, Math.min(1, x)) * 100).toFixed(1)}%`;
+    }
+
+    if (lifecycleBarEl && lifecycleIndicatorEl && lifecycleLabelEl) {
+      const d = (decision || "").toString().toUpperCase();
+      const entryConditionsPresent = !!(toRender.entry_conditions && typeof toRender.entry_conditions === "object");
+
+      const posProfit = pos0 && pos0.profit != null ? Number(pos0.profit) : null;
+      const hasPnl = Number.isFinite(posProfit);
+      const pnlNonNeg = hasPnl ? posProfit >= 0 : true;
+
+      let step = "WATCHING";
+      let stepIdx = 0;
+
+      if (!inTrade) {
+        if (entryConditionsPresent) {
+          step = "PREPARING";
+          stepIdx = 1;
+        }
+      }
+
+      if (d === "OPEN_BUY" || d === "OPEN_SELL") {
+        step = "ENTRY";
+        stepIdx = 2;
+      } else if (d === "CLOSE_TRADE") {
+        step = "CLOSING";
+        stepIdx = 4;
+      } else if (inTrade && (d === "HOLD_TRADE" || d === "ADJUST_TRADE" || d === "WAIT")) {
+        step = "MANAGING";
+        stepIdx = 3;
+      } else if (!inTrade && d === "ADJUST_TRADE") {
+        step = "WATCHING";
+        stepIdx = 0;
+      }
+
+      if (!inTrade && lastProactiveDecision === "CLOSE_TRADE" && Number.isFinite(lastKnownClosedPnl)) {
+        step = "RESULT";
+        stepIdx = 5;
+      }
+
+      lifecycleLabelEl.textContent = step;
+
+      const segs = lifecycleBarEl.children;
+      for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i];
+        if (!seg) continue;
+        if (i <= stepIdx) seg.classList.add("is-filled");
+        else seg.classList.remove("is-filled");
+      }
+
+      const entrySeg = segs[2];
+      if (entrySeg) {
+        if (d === "OPEN_SELL") entrySeg.style.backgroundColor = "#ef4444";
+        else entrySeg.style.backgroundColor = "#22c55e";
+      }
+
+      const managingSeg = segs[3];
+      if (managingSeg) {
+        if (hasPnl && !pnlNonNeg) managingSeg.style.backgroundColor = "#f59e0b";
+        else managingSeg.style.backgroundColor = "#10b981";
+      }
+
+      const resultSeg = segs[5];
+      if (resultSeg) {
+        if (Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0) resultSeg.style.backgroundColor = "#ef4444";
+        else resultSeg.style.backgroundColor = "#22c55e";
+      }
+
+      lifecycleIndicatorEl.style.left = `${(((stepIdx + 0.5) / 6) * 100).toFixed(1)}%`;
+    }
+
+    lastProactiveDecision = (decision || "").toString().toUpperCase();
+  } catch (e) {
+    // silent
   }
 
   // Trade plan block (OPEN decisions only)

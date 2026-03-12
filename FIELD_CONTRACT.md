@@ -149,6 +149,7 @@
 | `proactive_analysis.concerns` | array of strings | `main.py` | `renderProactiveAnalysis()` → `#proactive-concerns` |
 | `proactive_analysis.latency_ms` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-latency` |
 | `proactive_analysis.tokens_used` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-tokens` |
+| `proactive_analysis.entry_conditions` | object \| null | `main.py` | `renderProactiveAnalysis()` → lifecycle bar |
 | `proactive_analysis.trade_plan` | object \| null | `main.py` | `renderProactiveAnalysis()` → trade plan block |
 | `proactive_analysis.adjustment` | object \| null | `main.py` | not directly used |
 | `proactive_analysis.close_reason` | string \| null | `main.py` | not directly used |
@@ -284,6 +285,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### Proactive Analysis (M30 Snapshot)
 `proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`, `proactive-reasoning-toggle`
+
+Required for proactive sentiment + thesis lifecycle bars:
+`sentiment-bar`, `sentiment-indicator`, `sentiment-label`, `lifecycle-bar`, `lifecycle-indicator`, `lifecycle-label`
 
 Proactive HOLD display (live positions-based):
 `proactive-hold-block`, `proactive-hold-summary`, `proactive-hold-pnl`
