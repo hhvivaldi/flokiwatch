@@ -286,6 +286,16 @@ class AgentMonitor:
     def _check_trade_at_risk(self) -> None:
         from db_writer import get_active_trade_from_proactive
 
+        try:
+            from executor import executor
+
+            live_positions = executor.get_open_positions()
+            if not live_positions:
+                self.last_trade_pnl_points = None
+                return
+        except Exception:
+            pass
+
         trade = get_active_trade_from_proactive()
         if not trade:
             self.last_trade_pnl_points = None
