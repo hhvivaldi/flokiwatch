@@ -28,7 +28,7 @@ TAKE_PROFIT_1_ATR_MULT = 3.0  # ATR multiplier for TP1 (ratio 1:2 vs SL)
 TAKE_PROFIT_2_ATR_MULT = 4.5  # ATR multiplier for TP2 (ratio 1:3 vs SL)
 
 # SL limits in PIPS (protection — ATR decides the actual value)
-MIN_SL_PIPS = 150  # Minimum SL: 150 pips (calm market)
+MIN_SL_PIPS = 50  # Minimum SL: 50 pips (calm market)
 MAX_SL_PIPS = 800  # Maximum SL: 800 pips (effectively no cap — ATR decides)
 
 # ============================================================================

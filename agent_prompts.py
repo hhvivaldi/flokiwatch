@@ -246,6 +246,10 @@ You have exactly 3 options:
 3) DISMISS — trigger is noise; ignore it
 </task>
 
+<context>
+The spread and ATR tell you the minimum market noise. A stop loss that doesn't cover at least spread + typical candle range will be hit by random movement, not by thesis invalidation. Factor this into your SL placement.
+</context>
+
 <output_format>
 Always respond with ONLY valid JSON. Start with { and end with }.
 

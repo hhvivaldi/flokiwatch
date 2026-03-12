@@ -1795,12 +1795,31 @@ class TradingBot:
 
             price_payload = {"bid": bid, "ask": ask, "spread": spread}
 
+            atr_points = 10.0
+            try:
+                la = self.last_analysis if isinstance(self.last_analysis, dict) else {}
+                if isinstance(la.get("atr"), (int, float)):
+                    atr_points = float(la.get("atr"))
+                else:
+                    ind = la.get("indicators") if isinstance(la.get("indicators"), dict) else {}
+                    if isinstance(ind.get("atr_14"), (int, float)):
+                        atr_points = float(ind.get("atr_14"))
+                    else:
+                        atr_block = ind.get("atr") if isinstance(ind.get("atr"), dict) else {}
+                        if isinstance(atr_block.get("atr_value"), (int, float)):
+                            atr_points = float(atr_block.get("atr_value"))
+                        elif isinstance(atr_block.get("atr_current"), (int, float)):
+                            atr_points = float(atr_block.get("atr_current"))
+            except Exception:
+                atr_points = 10.0
+
             try:
                 from agent_data_builder import format_fast_xml
                 user_message = format_fast_xml(
                     trigger_type=trigger_type,
                     trigger_data=trigger_data,
                     current_price=price_payload,
+                    atr_points=atr_points,
                     m5_candles=m5_candles,
                     positions=positions,
                     upcoming_events=upcoming_events,

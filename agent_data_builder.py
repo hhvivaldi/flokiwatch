@@ -80,6 +80,7 @@ def format_fast_xml(
     trigger_type: str,
     trigger_data: Dict[str, Any],
     current_price: Dict[str, Any],
+    atr_points: Optional[float],
     m5_candles: List[Dict[str, Any]],
     positions: List[Dict[str, Any]],
     upcoming_events: List[Dict[str, Any]],
@@ -100,6 +101,15 @@ def format_fast_xml(
     lines.append(
         f"<current_price bid=\"{_xml_attr(cp.get('bid'))}\" ask=\"{_xml_attr(cp.get('ask'))}\" spread=\"{_xml_attr(cp.get('spread'))}\"/>")
     lines.append("")
+
+    atr_v = None
+    try:
+        atr_v = float(atr_points) if atr_points is not None else None
+    except Exception:
+        atr_v = None
+    if atr_v is not None:
+        lines.append(f"<atr value=\"{_xml_attr(round(atr_v, 2))}\" unit=\"points\"/>")
+        lines.append("")
 
     lines.append(f"<trigger type=\"{_xml_attr(tt)}\">")
     for k, v in td.items():
