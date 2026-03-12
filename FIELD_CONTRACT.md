@@ -135,19 +135,6 @@
 | `volume_gate.status` | `"normal"` \| `"low"` \| `"very_low"` | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 | `volume_gate.confidence_adjustment` | float | `main.py` | `renderIntelFeed()` → `#intel-volume` |
 
-### `last_analysis.agent_decision` Object (AI Agent - Shadow Mode)
-
-| Field | Type | Writer | Reader (app.js) |
-|-------|------|--------|-----------------|
-| `agent_decision.decision` | `"OPEN_BUY"` \| `"OPEN_SELL"` \| `"REJECT"` \| `"WAIT"` \| `"DEFER_TO_BRAIN"` | `main.py` | `renderAgentCard()` → `#agent-decision` |
-| `agent_decision.confidence` | int (0-100) | `main.py` | `renderAgentCard()` → `#agent-confidence` |
-| `agent_decision.reasoning` | string | `main.py` | `renderAgentCard()` → `#agent-reasoning` |
-| `agent_decision.key_factors` | array of strings | `main.py` | `renderAgentCard()` → `#agent-factors` |
-| `agent_decision.concerns` | array of strings | `main.py` | `renderAgentCard()` → `#agent-concerns` |
-| `agent_decision.agreement` | bool | `main.py` | `renderAgentCard()` → `#agent-agreement` |
-| `agent_decision.executed` | `"BRAIN"` \| `"AGENT"` | `main.py` | `renderAgentCard()` → `#agent-executed` |
-| `agent_decision.latency_ms` | int | `main.py` | `renderAgentCard()` → `#agent-latency` |
-
 ### `last_analysis.proactive_analysis` Object (AI Agent - Proactive M30 Snapshot)
 
 | Field | Type | Writer | Reader (app.js) |
@@ -296,7 +283,10 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
 
 ### Proactive Analysis (M30 Snapshot)
-`proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`
+`proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`, `proactive-reasoning-toggle`
+
+Proactive HOLD display (live positions-based):
+`proactive-hold-block`, `proactive-hold-summary`, `proactive-hold-pnl`
 
 Required for proactive OPEN trade plan display:
 `proactive-tp-block`, `proactive-tp-entry`, `proactive-tp-sl`, `proactive-tp-tp`, `proactive-tp-rr`
@@ -305,7 +295,7 @@ Required for proactive CLOSE/ADJUST details display:
 `proactive-close-reason-block`, `proactive-close-reason`, `proactive-adjust-block`, `proactive-adjust-sl`, `proactive-adjust-tp`, `proactive-adjust-reason`
 
 ### Banners & Misc
-`offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`
+`offline-banner`, `offline-last-update`, `pillars-cached-badge`, `vol-banner`, `news-marquee`, `recent-decisions`, `brain-toggle`, `brain-reference-panel`, `fast-triggers-chips`
 
 ---
 

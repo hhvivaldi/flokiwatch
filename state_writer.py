@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import config
 from logger import log
@@ -11,6 +11,8 @@ from db_writer import record_account_snapshot
 
 
 _last_valid_account_info: Optional[Dict[str, Any]] = None
+_fast_decisions_cache: List[Dict[str, Any]] = []
+_fast_decisions_last_ts: Optional[str] = None
 
 
 def _safe_iso(dt: Optional[datetime]) -> Optional[str]:
@@ -100,6 +102,30 @@ def write_state(bot_instance: Any) -> None:
             # Ensure dashboard never shows stale reactive Agent output
             last_analysis = dict(last_analysis)
             last_analysis.pop("agent_decision", None)
+
+            # Normalize fast decisions to `fast_decisions[]` (last 3, newest-first)
+            try:
+                global _fast_decisions_cache, _fast_decisions_last_ts
+
+                existing = last_analysis.get("fast_decisions")
+                if isinstance(existing, list):
+                    # Keep only dict entries and cap.
+                    _fast_decisions_cache = [x for x in existing if isinstance(x, dict)][:3]
+
+                latest = last_analysis.get("fast_decision")
+                if isinstance(latest, dict):
+                    ts = latest.get("timestamp")
+                    if ts and ts != _fast_decisions_last_ts:
+                        # De-dup by timestamp.
+                        _fast_decisions_cache = [x for x in _fast_decisions_cache if x.get("timestamp") != ts]
+                        _fast_decisions_cache.insert(0, latest)
+                        _fast_decisions_cache = _fast_decisions_cache[:3]
+                        _fast_decisions_last_ts = ts
+
+                last_analysis["fast_decisions"] = _fast_decisions_cache
+                last_analysis.pop("fast_decision", None)
+            except Exception as e:
+                log.debug(f"state_writer: failed to normalize fast_decisions: {e}")
 
         # last_known_price: persistent in bot_instance, never cleared.
         last_known_price = getattr(bot_instance, "last_known_price", None)

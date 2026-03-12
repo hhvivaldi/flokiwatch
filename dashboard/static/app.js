@@ -7,6 +7,167 @@ let lastStateForProactiveCountdown = null;
 
 let lastGoodProactiveAnalysis = null;
 
+let proactiveReasoningExpanded = false;
+
+let uiHandlersBound = false;
+
+function decisionLabel(decision) {
+  const d = (decision || "").toString();
+  return d.replaceAll("_", " ");
+}
+
+function bindUIHandlersOnce() {
+  if (uiHandlersBound) return;
+
+  const brainToggle = el("brain-toggle");
+  if (brainToggle) {
+    brainToggle.addEventListener("click", () => {
+      try {
+        toggleBrainReferencePanel();
+      } catch (e) {
+        // silent
+      }
+    });
+  }
+
+  const reasoningToggle = el("proactive-reasoning-toggle");
+  if (reasoningToggle) {
+    reasoningToggle.addEventListener("click", () => {
+      try {
+        toggleProactiveReasoning();
+      } catch (e) {
+        // silent
+      }
+    });
+  }
+
+  uiHandlersBound = true;
+}
+
+function decisionHexColor(decision) {
+  const d = (decision || "").toString().toUpperCase();
+  if (d === "OPEN_BUY") return "#4caf50";
+  if (d === "OPEN_SELL") return "#e74c3c";
+  if (d === "HOLD_TRADE") return "#2ecc71";
+  if (d === "CLOSE_TRADE") return "#e67e22";
+  if (d === "ADJUST_TRADE") return "#f1c40f";
+  if (d === "WAIT") return "#8e8e8e";
+  return "#8e8e8e";
+}
+
+function toggleBrainReferencePanel() {
+  const panel = el("brain-reference-panel");
+  const btn = el("brain-toggle");
+  if (!panel || !btn) return;
+
+  const isHidden = panel.classList.contains("hidden");
+  if (isHidden) {
+    panel.classList.remove("hidden");
+    btn.textContent = "Hide Brain Reference";
+  } else {
+    panel.classList.add("hidden");
+    btn.textContent = "Show Brain Reference";
+  }
+}
+
+function toggleProactiveReasoning() {
+  const p = el("proactive-reasoning");
+  const btn = el("proactive-reasoning-toggle");
+  if (!p || !btn) return;
+
+  proactiveReasoningExpanded = !proactiveReasoningExpanded;
+  if (proactiveReasoningExpanded) {
+    p.classList.remove("line-clamp-4");
+    btn.textContent = "Collapse";
+  } else {
+    p.classList.add("line-clamp-4");
+    btn.textContent = "Expand";
+  }
+}
+
+function fastChipStyleFromFastDecision(fd) {
+  const action = (fd?.action || "").toString().toUpperCase();
+  const execType = (fd?.execution?.type || "").toString().toUpperCase();
+  const direction = (fd?.execution?.direction || "").toString().toUpperCase();
+
+  if (action === "ACT") {
+    if (execType === "OPEN") {
+      if (direction === "BUY") return { color: "#4caf50", border: "rgba(76,175,80,0.35)" };
+      if (direction === "SELL") return { color: "#e74c3c", border: "rgba(231,76,60,0.35)" };
+    }
+    if (execType === "CLOSE") return { color: "#e67e22", border: "rgba(230,126,34,0.35)" };
+    if (execType === "ADJUST") return { color: "#f1c40f", border: "rgba(241,196,15,0.35)" };
+    return { color: "#f1c40f", border: "rgba(241,196,15,0.35)" };
+  }
+
+  if (action === "HOLD") return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
+  if (action === "DISMISS") return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
+  return { color: "#8e8e8e", border: "rgba(142,142,142,0.35)" };
+}
+
+function fmtAgeShort(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s < 0) return "—";
+  if (s < 60) return `${Math.round(s)}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
+function renderFastTriggers(fastDecisions) {
+  const container = el("fast-triggers-chips");
+  if (!container) return;
+
+  if (!Array.isArray(fastDecisions) || fastDecisions.length === 0) {
+    container.innerHTML = `<span class="text-gray-600 font-medium">NO TRIGGERS YET</span>`;
+    return;
+  }
+
+  const now = Date.now();
+  const items = fastDecisions.slice(0, 3);
+  container.innerHTML = items.map((fd) => {
+    const action = (fd?.action || "").toString().toUpperCase() || "HOLD";
+    const reason = (fd?.reason || "").toString().trim();
+    const exec = fd?.execution || {};
+    const execType = (exec?.type || "").toString().toUpperCase();
+    const dir = (exec?.direction || "").toString().toUpperCase();
+    const entry = exec?.entry ?? exec?.entry_price;
+
+    let suffix = "";
+    if (execType === "OPEN") {
+      if (entry != null && Number.isFinite(Number(entry))) suffix = `Entry @ ${fmtNum(entry, 1)}`;
+      else suffix = dir ? `${dir} executed` : "OPEN executed";
+    } else if (execType === "CLOSE") {
+      suffix = "CLOSE executed";
+    } else if (execType === "ADJUST") {
+      suffix = "ADJUST executed";
+    }
+
+    let ageText = "—";
+    try {
+      const ts = fd?.timestamp ? Date.parse(fd.timestamp) : NaN;
+      const ageS = Number.isFinite(ts) ? (now - ts) / 1000 : NaN;
+      ageText = fmtAgeShort(ageS);
+    } catch (e) {
+      ageText = "—";
+    }
+
+    const style = fastChipStyleFromFastDecision(fd);
+    const textParts = [action];
+    if (reason) textParts.push(reason);
+    if (suffix) textParts.push(suffix);
+    textParts.push(ageText);
+
+    return `
+      <span
+        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium"
+        style="color:${style.color};border-color:${style.border};"
+      >${textParts.join(" — ")}</span>
+    `;
+  }).join("");
+}
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -456,11 +617,14 @@ function render(state) {
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
   renderAgentCard(la.agent_decision);
-  renderProactiveAnalysis(la.proactive_analysis);
+  renderProactiveAnalysis(la.proactive_analysis, state.positions);
+  renderFastTriggers(la.fast_decisions);
   renderAgentMemory(state.agent_memory);
 
   lastStateForProactiveCountdown = state;
   ensureProactiveCountdownRunning();
+
+  bindUIHandlersOnce();
 }
 
 function ensureProactiveCountdownRunning() {
@@ -1009,7 +1173,7 @@ function renderAgentCard(agentDecision) {
    PROACTIVE ANALYSIS (H1 Snapshot)
    ================================================================ */
 
-function renderProactiveAnalysis(proactive) {
+function renderProactiveAnalysis(proactive, positions) {
   const section = el("proactive-section");
   if (!section) return;
 
@@ -1068,18 +1232,36 @@ function renderProactiveAnalysis(proactive) {
 
   const decisionEl = el("proactive-decision");
   if (decisionEl) {
-    decisionEl.textContent = decision;
-    if (decision.includes("BUY") || decision === "HOLD_TRADE") {
-      decisionEl.className = "text-2xl font-bold text-green-400";
-    } else if (decision.includes("SELL") || decision === "CLOSE_TRADE") {
-      decisionEl.className = "text-2xl font-bold text-red-400";
-    } else if (decision === "REJECT") {
-      decisionEl.className = "text-2xl font-bold text-red-500";
-    } else if (decision === "WAIT" || decision === "ADJUST_TRADE") {
-      decisionEl.className = "text-2xl font-bold text-yellow-400";
-    } else {
-      decisionEl.className = "text-2xl font-bold text-gray-400";
+    decisionEl.textContent = decisionLabel(decision);
+    decisionEl.style.color = decisionHexColor(decision);
+  }
+
+  // HOLD display from live positions[]
+  const holdBlockEl = el("proactive-hold-block");
+  const holdSummaryEl = el("proactive-hold-summary");
+  const holdPnlEl = el("proactive-hold-pnl");
+  try {
+    const isHold = (decision || "").toUpperCase() === "HOLD_TRADE";
+    const pos0 = Array.isArray(positions) && positions.length > 0 ? positions[0] : null;
+
+    if (holdBlockEl && holdSummaryEl && holdPnlEl && isHold && pos0) {
+      holdBlockEl.classList.remove("hidden");
+
+      const dir = (pos0.direction || "").toString().toUpperCase() || "—";
+      const entry = pos0.open_price;
+      holdSummaryEl.textContent = `Holding ${dir} from ${fmtNum(entry, 1)}`;
+
+      const pnl = Number(pos0.profit);
+      const pnlPips = pos0.profit_pips;
+      const pnlClass = pnl > 0 ? "text-green-400" : (pnl < 0 ? "text-red-400" : "text-gray-400");
+      const pipsPart = pnlPips != null ? ` (${fmtNum(pnlPips, 0)} p)` : "";
+      holdPnlEl.className = `text-xs font-mono mt-1 ${pnlClass}`;
+      holdPnlEl.textContent = `P&L: ${fmtMoney(pnl)}${pipsPart}`;
+    } else if (holdBlockEl) {
+      holdBlockEl.classList.add("hidden");
     }
+  } catch (e) {
+    if (holdBlockEl) holdBlockEl.classList.add("hidden");
   }
 
   const confEl = el("proactive-confidence");
