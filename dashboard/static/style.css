@@ -403,6 +403,16 @@
    RESPONSIVE — MOBILE (max 639px)
    ================================================================ */
 
+/* Fix for long text overflowing inside chips on mobile */
+#fast-triggers-chips span,
+#recent-decisions span {
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  display: inline-block;
+}
+
 @media (max-width: 639px) {
   .floki-header-icon {
     width: 36px;
