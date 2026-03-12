@@ -110,10 +110,10 @@ class HistoryApp {
         
         grid.innerHTML = cards.map(c => `
             <div class="bg-gray-900/40 backdrop-blur-md border border-gray-700/50 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-center items-center text-center">
-                <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500 mb-2 flex items-center gap-1.5">
+                <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 mb-2 flex items-center gap-1.5">
                     <span class="text-sm">${c.icon}</span> ${c.label}
                 </div>
-                <div class="text-xl sm:text-2xl font-bold font-mono ${c.color || 'text-gray-100'}">${c.value}</div>
+                <div class="text-xl sm:text-2xl font-black font-mono tracking-tight ${c.color || 'text-gray-100'} uppercase">${c.value}</div>
             </div>
         `).join('');
     }
@@ -130,17 +130,17 @@ class HistoryApp {
             const pnlColor = ms.profit >= 0 ? 'text-green-400' : 'text-red-400';
             return `
             <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-300 font-medium">${ms.month}</td>
-                <td class="p-3 text-right text-gray-400">${ms.trades}</td>
-                <td class="p-3 text-right">
+                <td class="p-3 text-gray-300 font-black uppercase tracking-tight">${ms.month}</td>
+                <td class="p-3 text-right text-gray-400 font-black tracking-tight">${ms.trades}</td>
+                <td class="p-3 text-right font-black tracking-tight">
                     <span class="text-green-400">${ms.wins}</span> / 
                     <span class="text-red-400">${ms.losses}</span> / 
                     <span class="text-gray-500">${ms.breakevens}</span>
                 </td>
-                <td class="p-3 text-right text-gray-300">${ms.win_rate.toFixed(1)}%</td>
-                <td class="p-3 text-right font-medium ${pnlColor}">$${ms.profit.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-300">${ms.profit_factor.toFixed(2)}</td>
-                <td class="p-3 text-right text-red-400">$${ms.max_drawdown.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-300 font-black tracking-tight">${ms.win_rate.toFixed(1)}%</td>
+                <td class="p-3 text-right font-black tracking-tight ${pnlColor}">$${ms.profit.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-300 font-black tracking-tight">${ms.profit_factor.toFixed(2)}</td>
+                <td class="p-3 text-right text-red-400 font-black tracking-tight">$${ms.max_drawdown.toFixed(2)}</td>
             </tr>
             `;
         }).join('');
@@ -168,9 +168,9 @@ class HistoryApp {
 
         tbody.innerHTML = rows.map(r => `
             <tr>
-                <td class="py-2 text-gray-400">${r.label}</td>
-                <td class="py-2 text-right text-gray-500">${r.format(r.bt)}</td>
-                <td class="py-2 text-right text-gray-200 font-medium">${r.format(r.live)}</td>
+                <td class="py-2 text-gray-400 font-black uppercase tracking-tight">${r.label}</td>
+                <td class="py-2 text-right text-gray-500 font-black tracking-tight">${r.format(r.bt)}</td>
+                <td class="py-2 text-right text-gray-200 font-black tracking-tight">${r.format(r.live)}</td>
                 <!--<td class="py-2 text-right ${diffColor(r.diff, r.inverted)} text-xs">${diffSign(r.diff)}${r.format(r.diff)}</td>-->
             </tr>
         `).join('');
@@ -327,11 +327,11 @@ class HistoryApp {
 
     renderBeBadge(beActivated) {
         if (beActivated === true) {
-            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold text-green-400 bg-green-400/10 border border-green-400/20">✓</span>`;
+            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black text-green-400 bg-green-400/10 border border-green-400/20 uppercase tracking-[0.2em]">✓</span>`;
         } else if (beActivated === false) {
-            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-500 bg-gray-500/10 border border-gray-500/20">—</span>`;
+            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black text-gray-500 bg-gray-500/10 border border-gray-500/20 uppercase tracking-[0.2em]">—</span>`;
         } else {
-            return `<span class="text-[10px] text-gray-600">?</span>`;
+            return `<span class="text-[10px] text-gray-600 font-black uppercase tracking-[0.2em]">?</span>`;
         }
     }
 
@@ -427,40 +427,40 @@ class HistoryApp {
             }
 
             const list = (arr) => {
-                if (!arr || arr.length === 0) return '<div class="text-xs text-gray-600">—</div>';
-                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
+                if (!arr || arr.length === 0) return '<div class="text-xs text-gray-600 font-black uppercase tracking-[0.2em]">—</div>';
+                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300 font-black uppercase tracking-wide leading-snug">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
             };
 
             body.innerHTML = `
                 <div class="space-y-4">
                     <div>
-                        <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Summary</div>
-                        <div class="text-sm text-gray-200 mt-1">${escapeHtml(report.summary || '—')}</div>
+                        <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Summary</div>
+                        <div class="text-sm text-gray-200 mt-1 font-black uppercase tracking-wide leading-relaxed">${escapeHtml(report.summary || '—')}</div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">What went well</div>
+                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">What went well</div>
                             ${list(report.what_went_well)}
                         </div>
                         <div>
-                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">What went wrong</div>
+                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">What went wrong</div>
                             ${list(report.what_went_wrong)}
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Key risks observed</div>
+                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Key risks observed</div>
                             ${list(report.key_risks_observed)}
                         </div>
                         <div>
-                            <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-gray-500">Suggested improvements</div>
+                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Suggested improvements</div>
                             ${list(report.suggested_improvements)}
                         </div>
                     </div>
 
-                    <div class="text-xs text-gray-500 font-mono">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
+                    <div class="text-xs text-gray-500 font-mono font-black uppercase tracking-tight">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
                 </div>
             `;
         } catch (e) {
@@ -503,37 +503,36 @@ class HistoryApp {
             if (pnl < -0.5) pnlClass = 'text-red-400';
             
             // Format Close Reason
-            let reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-gray-400 bg-gray-800">${t.close_reason || 'Unknown'}</span>`;
+            let reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-gray-400 bg-gray-800 tracking-[0.2em]">${t.close_reason || 'Unknown'}</span>`;
             const cr = (t.close_reason || '').toLowerCase();
             
             if (cr.includes('stop loss') || cr.includes('sl hit')) {
                 if (pnl > 0) {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-blue-400 bg-blue-400/10 border border-blue-400/20">Trailing</span>`;
+                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-blue-400 bg-blue-400/10 border border-blue-400/20 tracking-[0.2em]">Trailing</span>`;
                 } else if (pnl > -1.0) {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-gray-400 bg-gray-400/10 border border-gray-400/20">Breakeven</span>`;
+                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-gray-400 bg-gray-400/10 border border-gray-400/20 tracking-[0.2em]">Breakeven</span>`;
                 } else {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-red-400 bg-red-400/10 border border-red-400/20">SL</span>`;
+                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-red-400 bg-red-400/10 border border-red-400/20 tracking-[0.2em]">SL</span>`;
                 }
             } else if (cr.includes('take profit') || cr.includes('tp hit')) {
-                reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-green-400 bg-green-400/10 border border-green-400/20">TP</span>`;
+                reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-green-400 bg-green-400/10 border border-green-400/20 tracking-[0.2em]">TP</span>`;
             }
 
-            const reportBtn = t.ticket ? `<button class="ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-cyan-300 bg-cyan-300/10 border border-cyan-300/20 hover:bg-cyan-300/15 transition-colors" onclick="historyApp.openTradeReport(${t.ticket})">Report</button>` : '';
+            const reportBtn = t.ticket ? `<button class="ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-black text-cyan-300 bg-cyan-300/10 border border-cyan-300/20 hover:bg-cyan-300/15 transition-colors tracking-[0.2em]" onclick="historyApp.openTradeReport(${t.ticket})">Report</button>` : '';
 
             return `
             <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-400 text-xs">
+                <td class="p-3 text-gray-400 text-xs font-black tracking-tight uppercase">
                     <div>${this.formatDate(t.open_time)}</div>
-                    <!--<div class="text-gray-600 mt-0.5 text-[10px]">${this.formatDate(t.close_time)}</div>-->
                 </td>
-                <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-bold ${dirClass}">${t.direction}</span></td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs">${t.open_price ? t.open_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right font-medium ${pnlClass}">$${pnl.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-400">${t.pips ? t.pips.toFixed(1) : '--'}</td>
-                <td class="p-3 text-center">${this.renderBeBadge(t.breakeven_activated)}</td>
-                <td class="p-3 text-right text-cyan-400">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
-                <td class="p-3 text-gray-400 text-xs">${this.scenarioLabel(t)}</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-black ${dirClass} tracking-[0.2em] uppercase">${t.direction}</span></td>
+                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-tight uppercase">${t.open_price ? t.open_price.toFixed(2) : '--'}</td>
+                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-tight uppercase">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
+                <td class="p-3 text-right font-black tracking-tight uppercase ${pnlClass}">$${pnl.toFixed(2)}</td>
+                <td class="p-3 text-right text-gray-400 font-black tracking-tight uppercase">${t.pips ? t.pips.toFixed(1) : '--'}</td>
+                <td class="p-3 text-center uppercase font-black tracking-tight">${this.renderBeBadge(t.breakeven_activated)}</td>
+                <td class="p-3 text-right text-cyan-400 font-black tracking-tight uppercase">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
+                <td class="p-3 text-gray-400 text-xs font-black tracking-tight uppercase">${this.scenarioLabel(t)}</td>
                 <td class="p-3">${reasonBadge}${reportBtn}</td>
             </tr>
             `;
