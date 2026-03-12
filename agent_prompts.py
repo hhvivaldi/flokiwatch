@@ -180,6 +180,10 @@ trade_plan fields:
 - risk_reward_ratio (minimum 1.5:1)
 - timing: how long plan is valid
 - moment_assessment: honest self-assessment (ideal/late/missed)
+- breakeven_trigger: points profit to move SL to entry, or null (use defaults)
+- trailing_trigger: points profit to activate trailing, or null (use defaults)
+- trailing_distance: points trailing distance behind price, or null (use defaults)
+- management_mode: "ea_managed" or "agent_monitored"
 </output_format>
 
 <confidence_calibration>

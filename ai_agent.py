@@ -388,6 +388,30 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
  
             # Parse v1.4 trade plan fields if present
             trade_plan = parsed.get("trade_plan")
+            if trade_plan is not None and not isinstance(trade_plan, dict):
+                logger.warning("Invalid trade_plan type (expected dict) — ignoring")
+                trade_plan = None
+            if isinstance(trade_plan, dict):
+                # Optional trade management fields (Commit 2)
+                for k in ("breakeven_trigger", "trailing_trigger", "trailing_distance"):
+                    v = trade_plan.get(k)
+                    if v is None:
+                        continue
+                    try:
+                        trade_plan[k] = float(v)
+                    except Exception:
+                        logger.warning(f"Invalid trade_plan.{k} (expected number or null) — ignoring")
+                        trade_plan[k] = None
+
+                mm = trade_plan.get("management_mode")
+                if mm is None:
+                    pass
+                else:
+                    mm_s = str(mm).strip()
+                    if mm_s not in ("ea_managed", "agent_monitored"):
+                        logger.warning("Invalid trade_plan.management_mode — defaulting to ea_managed")
+                        mm_s = "ea_managed"
+                    trade_plan["management_mode"] = mm_s
 
             entry_conditions = parsed.get("entry_conditions")
             if entry_conditions is not None and not isinstance(entry_conditions, dict):

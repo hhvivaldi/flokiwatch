@@ -1160,6 +1160,7 @@ class TradingBot:
         sl: float,
         tp: float,
         confidence: float,
+        trade_plan: dict = None,
         scenario: str = "agent_proactive",
     ) -> dict:
         """Shared execution path for Agent-driven trade opens.
@@ -1368,6 +1369,33 @@ class TradingBot:
                 be_trigger = sl_pips_orig * getattr(config, "BREAKEVEN_ATR_MULT", 0.7)
                 tr_trigger = sl_pips_orig * getattr(config, "TRAILING_ATR_MULT", 0.7)
                 tr_distance = sl_pips_orig * getattr(config, "TRAILING_DISTANCE_ATR_MULT", 0.7)
+
+            # Optional: Agent-controlled per-trade management parameters
+            management_mode = "ea_managed"
+            try:
+                tp_obj = trade_plan if isinstance(trade_plan, dict) else {}
+                mm = tp_obj.get("management_mode")
+                if isinstance(mm, str) and mm.strip() in ("ea_managed", "agent_monitored"):
+                    management_mode = mm.strip()
+
+                be_points = tp_obj.get("breakeven_trigger")
+                tr_points = tp_obj.get("trailing_trigger")
+                dist_points = tp_obj.get("trailing_distance")
+
+                # Convert points -> pips (XAUUSD: 1 pip = 0.1 point)
+                if be_points is not None:
+                    be_trigger = float(be_points) * 10.0
+                if tr_points is not None:
+                    tr_trigger = float(tr_points) * 10.0
+                if dist_points is not None:
+                    tr_distance = float(dist_points) * 10.0
+            except Exception:
+                management_mode = "ea_managed"
+
+            if management_mode == "agent_monitored":
+                # Disable EA BE/trailing logic (Agent will manage via monitor triggers)
+                be_trigger = 0
+                tr_trigger = 0
 
             used_ea = False
             if getattr(config, "USE_EA_BRIDGE", False) and self.executes_trades:
@@ -2270,6 +2298,7 @@ class TradingBot:
                             sl=stop_loss,
                             tp=take_profit,
                             confidence=agent_result.confidence,
+                            trade_plan=tp,
                             scenario="agent_proactive",
                         )
                         if isinstance(result, dict) and result.get("success"):
@@ -3990,7 +4019,6 @@ def main():
         # Run bot
         bot = TradingBot()
         bot.run()
-
 
 if __name__ == "__main__":
     main()
