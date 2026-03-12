@@ -27,36 +27,68 @@
    PROACTIVE — SENTIMENT + LIFECYCLE BARS
    ================================================================ */
 
+#sentiment-bar,
+#lifecycle-bar {
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid #374151; /* Retro thick container border */
+  padding: 2px;
+  gap: 2px !important;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+}
+
 #sentiment-bar > div,
 #lifecycle-bar > div {
-  opacity: 0.2;
-  transition: opacity 0.25s ease, filter 0.25s ease;
+  opacity: 0.3;
+  border-radius: 0 !important; /* Retro blocky style */
+  border: none;
+  transition: opacity 0.15s steps(3, end), filter 0.15s steps(3, end);
+  position: relative;
+  overflow: hidden;
 }
 
 #sentiment-bar > div.is-active {
   opacity: 1;
-  filter: brightness(1.15);
+  filter: brightness(1.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), 0 0 10px currentColor;
+  z-index: 10;
 }
 
 #lifecycle-bar > div.is-filled {
   opacity: 1;
-  filter: brightness(1.1);
+  filter: brightness(1.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px currentColor;
 }
 
-/* Sentiment colors */
-.sentiment-strong-sell { background-color: #7f1d1d; }
-.sentiment-sell { background-color: #ef4444; }
-.sentiment-neutral { background-color: #6b7280; }
-.sentiment-buy { background-color: #22c55e; }
-.sentiment-strong-buy { background-color: #14532d; }
+/* Scanline effect for active segments */
+#sentiment-bar > div.is-active::after,
+#lifecycle-bar > div.is-filled::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.25) 2px,
+    rgba(0, 0, 0, 0.25) 4px
+  );
+  pointer-events: none;
+}
 
-/* Lifecycle base colors (filled state will override via JS if needed) */
-.lifecycle-watching { background-color: #6b7280; }
-.lifecycle-preparing { background-color: #3b82f6; }
-.lifecycle-entry { background-color: #22c55e; }
-.lifecycle-managing { background-color: #10b981; }
-.lifecycle-closing { background-color: #f59e0b; }
-.lifecycle-result { background-color: #22c55e; }
+/* Sentiment colors - Extremities are brightest */
+.sentiment-strong-sell { background-color: #ef4444; color: #ef4444; }
+.sentiment-sell { background-color: #991b1b; color: #991b1b; }
+.sentiment-neutral { background-color: #6b7280; color: #6b7280; }
+.sentiment-buy { background-color: #166534; color: #166534; }
+.sentiment-strong-buy { background-color: #22c55e; color: #22c55e; }
+
+/* Lifecycle base colors */
+.lifecycle-watching { background-color: #6b7280; color: #6b7280; }
+.lifecycle-preparing { background-color: #2563eb; color: #2563eb; }
+.lifecycle-entry { background-color: #8b5cf6; color: #8b5cf6; }
+.lifecycle-managing { background-color: #eab308; color: #eab308; }
+.lifecycle-closing { background-color: #f97316; color: #f97316; }
+.lifecycle-result { background-color: #22c55e; color: #22c55e; }
 
 /* Indicator styling */
 #sentiment-indicator,
@@ -64,6 +96,19 @@
   left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  border-radius: 0 !important; /* Blocky retro indicator */
+  background: #ffffff;
+  border: 2px solid #000;
+  width: 6px !important; /* Chunky cursor */
+  height: calc(100% + 8px) !important;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), inset 0 0 2px rgba(0, 0, 0, 0.5);
+  animation: retro-blink 1.2s steps(2, start) infinite;
+  z-index: 20;
+}
+
+@keyframes retro-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* Segmented Progress Bar */

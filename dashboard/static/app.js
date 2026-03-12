@@ -1339,7 +1339,18 @@ function renderProactiveAnalysis(proactive, positions) {
         else seg.classList.remove("is-active");
       }
 
-      const x = c != null ? (c / 100) : 0.5;
+      // x mapping: 0 = Strong Sell (left), 1 = Strong Buy (right)
+      // Conf range: 50 -> 100
+      let x = 0.5; // neutral
+      if (activeIdx < 2) {
+        // Sell side: activeIdx 1 (Sell) or 0 (Strong Sell)
+        // Conf 50 -> 0.5, Conf 100 -> 0.0
+        x = 0.5 - ((Math.max(50, Math.min(100, c || 50)) - 50) / 50) * 0.5;
+      } else if (activeIdx > 2) {
+        // Buy side: activeIdx 3 (Buy) or 4 (Strong Buy)
+        // Conf 50 -> 0.5, Conf 100 -> 1.0
+        x = 0.5 + ((Math.max(50, Math.min(100, c || 50)) - 50) / 50) * 0.5;
+      }
       sentimentIndicatorEl.style.left = `${(Math.max(0, Math.min(1, x)) * 100).toFixed(1)}%`;
     }
 
