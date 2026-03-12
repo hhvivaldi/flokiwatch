@@ -137,11 +137,24 @@ def format_fast_xml(
             f"open=\"{_xml_attr(p.get('open_price'))}\" "
             f"current=\"{_xml_attr(p.get('current_price'))}\" "
             f"sl=\"{_xml_attr(p.get('sl'))}\" "
+            f"phase=\"{_xml_attr(p.get('phase'))}\" "
+            f"current_sl=\"{_xml_attr(p.get('sl'))}\" "
             f"tp=\"{_xml_attr(p.get('tp'))}\" "
             f"profit_pips=\"{_xml_attr(p.get('profit_pips'))}\" "
             f"profit=\"{_xml_attr(p.get('profit'))}\"/>")
     lines.append("</positions>")
     lines.append("")
+
+    # Active trade context for FAST decisions (use first position snapshot)
+    try:
+        if pos_list and isinstance(pos_list[0], dict):
+            p0 = pos_list[0]
+            lines.append(
+                f"<active_trade_context phase=\"{_xml_attr(p0.get('phase'))}\" current_sl=\"{_xml_attr(p0.get('sl'))}\"/>"
+            )
+            lines.append("")
+    except Exception:
+        pass
 
     evs = upcoming_events if isinstance(upcoming_events, list) else []
     lines.append(f"<upcoming_events count=\"{_xml_attr(len(evs))}\">")
@@ -587,7 +600,11 @@ def format_proactive_xml(data_package: Dict) -> str:
     active_trade_context = dp.get("active_trade_context") or {}
     if isinstance(active_trade_context, dict) and active_trade_context:
         entry = active_trade_context.get("entry") or {}
-        lines.append("<active_trade_context>")
+        at_phase = active_trade_context.get("phase")
+        at_sl = active_trade_context.get("current_sl")
+        lines.append(
+            f"<active_trade_context phase=\"{_xml_attr(at_phase)}\" current_sl=\"{_xml_attr(at_sl)}\">"
+        )
         lines.append(
             "  <entry direction=\"" + _xml_attr(entry.get("direction")) + "\" price=\"" + _xml_attr(entry.get("price")) + "\" timestamp=\"" + _xml_attr(entry.get("timestamp")) + "\"/>"
         )
@@ -1185,6 +1202,38 @@ def build_proactive_data_package(
                         "sl": _safe_round(float(sl), 2) if sl is not None else None,
                         "tp": _safe_round(float(tp), 2) if tp is not None else None,
                     }
+
+                    # Enrich with EA phase + current SL when available
+                    try:
+                        from ea_bridge import read_ea_status
+
+                        status = read_ea_status(stale_threshold_seconds=120)
+                        if status and getattr(status, "positions", None):
+                            phase = None
+                            current_sl = None
+                            # Prefer matching direction; otherwise use first position
+                            for pos in status.positions:
+                                try:
+                                    if str(getattr(pos, "direction", "")).upper() == direction:
+                                        phase = getattr(pos, "phase", None)
+                                        current_sl = getattr(pos, "sl", None)
+                                        break
+                                except Exception:
+                                    continue
+                            if phase is None or current_sl is None:
+                                try:
+                                    pos0 = status.positions[0]
+                                    phase = phase or getattr(pos0, "phase", None)
+                                    current_sl = current_sl or getattr(pos0, "sl", None)
+                                except Exception:
+                                    pass
+
+                            if phase is not None:
+                                package["active_trade_context"]["phase"] = phase
+                            if current_sl is not None:
+                                package["active_trade_context"]["current_sl"] = _safe_round(float(current_sl), 2)
+                    except Exception:
+                        pass
         except Exception:
             pass
 

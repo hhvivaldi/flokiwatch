@@ -1800,16 +1800,44 @@ class TradingBot:
             try:
                 if self.executes_trades:
                     pos_list = executor.get_open_positions()
+
+                    phase_by_ticket = {}
+                    sl_by_ticket = {}
+                    try:
+                        from ea_bridge import read_ea_status
+
+                        status = read_ea_status(stale_threshold_seconds=120)
+                        if status and getattr(status, "positions", None):
+                            for pos in status.positions:
+                                try:
+                                    t = int(getattr(pos, "ticket", 0) or 0)
+                                    if t:
+                                        phase_by_ticket[t] = getattr(pos, "phase", None)
+                                        sl_by_ticket[t] = getattr(pos, "sl", None)
+                                except Exception:
+                                    continue
+                    except Exception:
+                        phase_by_ticket = {}
+                        sl_by_ticket = {}
+
                     for p in pos_list[:5]:
+                        p_sl = p.sl
+                        try:
+                            if int(p.ticket) in sl_by_ticket and sl_by_ticket.get(int(p.ticket)) is not None:
+                                p_sl = float(sl_by_ticket.get(int(p.ticket)))
+                        except Exception:
+                            p_sl = p.sl
+
                         positions.append({
                             "ticket": p.ticket,
                             "direction": p.direction,
                             "open_price": p.open_price,
                             "current_price": p.current_price,
-                            "sl": p.sl,
+                            "sl": p_sl,
                             "tp": p.tp,
                             "profit": p.profit,
                             "profit_pips": p.profit_pips,
+                            "phase": phase_by_ticket.get(int(p.ticket)) if phase_by_ticket else None,
                         })
             except Exception:
                 positions = []

@@ -27,6 +27,11 @@ If <active_trade_context> is provided:
 - You MUST use the provided pnl_points, pnl_status, distance_to_sl, and distance_to_tp.
 - Do NOT calculate P&L or distances yourself. Do NOT claim TP/SL was reached unless the provided fields confirm it.
 
+If <active_trade_context> includes phase and current_sl:
+- When phase is BREAKEVEN, your position is protected at entry.
+- When phase is TRAILING, your SL is following price at the trailing distance.
+- You can override at any time by choosing ADJUST_TRADE or CLOSE_TRADE.
+
 If your PREVIOUS decision was OPEN_BUY or OPEN_SELL:
 - You have an ACTIVE THESIS. Your job is to MANAGE it, not start fresh.
 - Evaluate: is the thesis still valid? Has price moved toward your TP? Has your SL been hit?
@@ -252,6 +257,11 @@ You have exactly 3 options:
 
 <context>
 The spread and ATR tell you the minimum market noise. A stop loss that doesn't cover at least spread + typical candle range will be hit by random movement, not by thesis invalidation. Factor this into your SL placement.
+
+If <active_trade_context> includes phase and current_sl:
+- When phase is BREAKEVEN, your position is protected at entry.
+- When phase is TRAILING, your SL is following price at the trailing distance.
+- You can override at any time by choosing execution type ADJUST or CLOSE.
 </context>
 
 <output_format>
