@@ -1244,35 +1244,17 @@ class TradingBot:
             # Safety Checks
             positions_list = get_positions() if self.executes_trades else []
 
-            opposite_direction = "SELL" if direction == "BUY" else "BUY"
-            opposite_positions = [
-                p
-                for p in positions_list
-                if str(getattr(p, "direction", "") or "").upper() == opposite_direction
-            ]
-            if opposite_positions:
+            if positions_list:
+                existing_ticket = getattr(positions_list[0], "ticket", None)
                 log.info(
-                    f"AGENT_EXEC | Closing {len(opposite_positions)} opposite position(s) before opening {direction}"
+                    f"AGENT_EXEC | Skipping OPEN — position already exists (ticket #{existing_ticket})"
                 )
-                log.info(
-                    f"Closing opposite {opposite_direction} positions before opening {direction}"
-                )
-
-                for p in opposite_positions:
-                    try:
-                        self.close_agent_trade(
-                            getattr(p, "ticket", None),
-                            reason=f"close_opposite_{opposite_direction}_before_open_{direction}",
-                        )
-                    except Exception as e:
-                        log.warning(
-                            f"AGENT_EXEC | Failed closing opposite position: ticket={getattr(p, 'ticket', None)} | {e}"
-                        )
-
-                try:
-                    positions_list = get_positions() if self.executes_trades else []
-                except Exception:
-                    positions_list = []
+                return {
+                    "success": False,
+                    "ticket": existing_ticket,
+                    "reason": "position already exists",
+                    "used_ea_bridge": False,
+                }
             account_balance = get_account_balance() if self.executes_trades else config.CAPITAL_INICIAL
             open_positions = len(positions_list)
             mt5_connected = is_mt5_connected() if self.executes_trades else True
