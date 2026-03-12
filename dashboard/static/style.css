@@ -32,50 +32,67 @@
 
 .vu-meter {
   display: flex;
-  gap: 3px;
-  height: 14px;
+  gap: 4px;
+  height: 20px;
   width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 3px;
+  align-items: center;
 }
 
 .vu-segment {
   flex: 1;
   height: 100%;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.05);
-  transition: transform 0.25s ease, opacity 0.25s ease, background 0.3s ease, box-shadow 0.3s ease;
-  opacity: 0.3;
+  border-radius: 1.5px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: all 0.25s ease;
+  color: transparent; /* For currentColor shadow control */
 }
 
 .vu-segment.active {
   opacity: 1;
+  box-shadow: 0 0 10px 2px currentColor;
 }
 
-/* Bearish segments (left side) */
-.vu-segment.active.bearish {
-  background: #ef4444;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+/* Sentiment State Colors (Logic based on activeCount mapping [3, 6, 8, 11, 14]) */
+
+/* SELL / STRONG SELL state: nth-child(1) is active but nth-child(7) is not (count 3 or 6) */
+.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(1).active):not(:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(7).active)) #sentiment-label,
+#sentiment-bar:has(.vu-segment:nth-child(1).active):not(:has(.vu-segment:nth-child(7).active)) .vu-segment.active {
+  background: #ef4444 !important;
+  color: #ef4444 !important;
 }
 
-/* Neutral segments (middle) */
-.vu-segment.active.neutral {
-  background: #94a3b8;
-  box-shadow: 0 0 8px rgba(148, 163, 184, 0.6);
+/* NEUTRAL state: nth-child(7) is active but nth-child(9) is not (count 8) */
+.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(7).active):not(:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(9).active)) #sentiment-label,
+#sentiment-bar:has(.vu-segment:nth-child(7).active):not(:has(.vu-segment:nth-child(9).active)) .vu-segment.active {
+  background: #eab308 !important;
+  color: #eab308 !important;
 }
 
-/* Bullish segments (right side) */
-.vu-segment.active.bullish {
-  background: #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+/* BUY / STRONG BUY state: nth-child(9) is active (count 11 or 14) */
+.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(9).active) #sentiment-label,
+#sentiment-bar:has(.vu-segment:nth-child(9).active) .vu-segment.active {
+  background: #22c55e !important;
+  color: #22c55e !important;
+}
+
+/* Lifecycle State Coloring (High-fidelity Purple matching reference) */
+.flex:has(> .flex-1 > #lifecycle-bar .vu-segment.active) #lifecycle-label,
+#lifecycle-bar .vu-segment.active {
+  background: #a855f7 !important;
+  color: #a855f7 !important;
 }
 
 .vu-segment.pulse {
-  animation: vu-pulse 2s infinite ease-in-out;
+  animation: vu-pulse 1.5s infinite ease-in-out;
 }
 
 @keyframes vu-pulse {
-  0% { filter: brightness(1); transform: scaleY(1); }
-  50% { filter: brightness(1.4); transform: scaleY(1.1); }
-  100% { filter: brightness(1); transform: scaleY(1); }
+  0%, 100% { filter: brightness(1); transform: scaleY(1); }
+  50% { filter: brightness(1.6); transform: scaleY(1.08); }
 }
 
 /* Hide legacy indicators */
@@ -109,42 +126,6 @@
 .glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.3), 0 0 40px rgba(234,179,8,0.15); }
 .glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.3), 0 0 40px rgba(239,68,68,0.15); }
 
-/* ================================================================
-   PROACTIVE — SENTIMENT + LIFECYCLE BARS
-   ================================================================ */
-
-#sentiment-bar > div,
-#lifecycle-bar > div {
-  opacity: 0.2;
-  transition: opacity 0.25s ease, filter 0.25s ease;
-}
-
-#sentiment-bar > div.is-active {
-  opacity: 1;
-  filter: brightness(1.15);
-}
-
-#lifecycle-bar > div.is-filled {
-  opacity: 1;
-  filter: brightness(1.1);
-}
-
-/* Sentiment colors */
-.sentiment-strong-sell { background-color: #7f1d1d; }
-.sentiment-sell { background-color: #ef4444; }
-.sentiment-neutral { background-color: #6b7280; }
-.sentiment-buy { background-color: #22c55e; }
-.sentiment-strong-buy { background-color: #14532d; }
-
-/* Lifecycle base colors (filled state will override via JS if needed) */
-.lifecycle-watching { background-color: #6b7280; }
-.lifecycle-preparing { background-color: #3b82f6; }
-.lifecycle-entry { background-color: #22c55e; }
-.lifecycle-managing { background-color: #10b981; }
-.lifecycle-closing { background-color: #f59e0b; }
-.lifecycle-result { background-color: #22c55e; }
-
-/* Indicator styling */
 /* ================================================================
    TYPOGRAPHY & UTILITIES
    ================================================================ */
