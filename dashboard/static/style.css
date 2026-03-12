@@ -87,6 +87,29 @@
 .lifecycle-result { background-color: #22c55e; }
 
 /* Indicator styling */
+/* ================================================================
+   TYPOGRAPHY & UTILITIES
+   ================================================================ */
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: -0.02em;
+}
+
+.tracking-tighter-caps {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tracking-widest-caps {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.text-xxs {
+  font-size: 0.625rem;
+}
+
 #sentiment-indicator,
 #lifecycle-indicator {
   left: 50%;
