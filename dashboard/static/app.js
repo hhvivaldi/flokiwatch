@@ -20,19 +20,21 @@ function decisionLabel(decision) {
   return d.replaceAll("_", " ");
 }
 
+function decisionHexColor(decision) {
+  const d = (decision || "").toString().toUpperCase();
+  const map = {
+    OPEN_BUY: "#4caf50",
+    OPEN_SELL: "#e74c3c",
+    HOLD_TRADE: "#2ecc71",
+    CLOSE_TRADE: "#e67e22",
+    ADJUST_TRADE: "#f1c40f",
+    WAIT: "#8e8e8e",
+  };
+  return map[d] || "#8e8e8e";
+}
+
 function bindUIHandlersOnce() {
   if (uiHandlersBound) return;
-
-  const brainToggle = el("brain-toggle");
-  if (brainToggle) {
-    brainToggle.addEventListener("click", () => {
-      try {
-        toggleBrainReferencePanel();
-      } catch (e) {
-        // silent
-      }
-    });
-  }
 
   const reasoningToggle = el("proactive-reasoning-toggle");
   if (reasoningToggle) {
@@ -45,23 +47,23 @@ function bindUIHandlersOnce() {
     });
   }
 
+  const refToggle = el("reference-toggle");
+  if (refToggle) {
+    refToggle.addEventListener("click", () => {
+      try {
+        toggleReferencePanels();
+      } catch (e) {
+        // silent
+      }
+    });
+  }
+
   uiHandlersBound = true;
 }
 
-function decisionHexColor(decision) {
-  const d = (decision || "").toString().toUpperCase();
-  if (d === "OPEN_BUY") return "#4caf50";
-  if (d === "OPEN_SELL") return "#e74c3c";
-  if (d === "HOLD_TRADE") return "#2ecc71";
-  if (d === "CLOSE_TRADE") return "#e67e22";
-  if (d === "ADJUST_TRADE") return "#f1c40f";
-  if (d === "WAIT") return "#8e8e8e";
-  return "#8e8e8e";
-}
-
-function toggleBrainReferencePanel() {
-  const panel = el("brain-reference-panel");
-  const btn = el("brain-toggle");
+function toggleReferencePanels() {
+  const panel = el("reference-panels");
+  const btn = el("reference-toggle");
   if (!panel || !btn) return;
 
   const isHidden = panel.classList.contains("hidden");
@@ -77,15 +79,16 @@ function toggleBrainReferencePanel() {
 function toggleProactiveReasoning() {
   const p = el("proactive-reasoning");
   const btn = el("proactive-reasoning-toggle");
+  const card = el("proactive-reasoning-card");
   if (!p || !btn) return;
 
   proactiveReasoningExpanded = !proactiveReasoningExpanded;
   if (proactiveReasoningExpanded) {
     p.classList.remove("line-clamp-4");
-    btn.textContent = "Collapse";
+    btn.textContent = "COLLAPSE";
   } else {
     p.classList.add("line-clamp-4");
-    btn.textContent = "Expand";
+    btn.textContent = "EXPAND";
   }
 }
 
@@ -237,6 +240,7 @@ function pillColor(score) {
 function renderPillar(rowId, score) {
   const bar = el(`${rowId}-bar`);
   const val = el(`${rowId}-val`);
+  if (!bar || !val) return;
   const s = Number(score);
   const pct = Number.isNaN(s) ? 0 : Math.max(0, Math.min(100, s));
   bar.style.width = `${pct}%`;
@@ -248,6 +252,7 @@ function renderPillar(rowId, score) {
 function setStatusDot(isOperational) {
   const dot = el("status-dot");
   const label = el("status-label");
+  if (!dot || !label) return;
 
   if (isOperational) {
     dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
@@ -262,15 +267,18 @@ function setStatusDot(isOperational) {
 
 function renderPositions(positions) {
   const container = el("positions");
+  const countEl = el("positions-count");
+  if (!container) return;
   container.innerHTML = "";
 
   if (!positions || positions.length === 0) {
     container.innerHTML = `<div class="text-xs text-gray-400">NO OPEN POSITIONS</div>`;
-    el("positions-count").textContent = "0";
+    if (countEl) countEl.textContent = "0";
     return;
   }
 
-  el("positions-count").textContent = String(positions.length);
+  if (countEl) countEl.textContent = String(positions.length);
+  // ... rest of function remains same but uses container safely
 
   for (const p of positions) {
     const pnl = Number(p.profit);
@@ -298,7 +306,7 @@ function renderPositions(positions) {
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
+      <div class="glass-panel rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
         <div class="flex items-center justify-between mb-2">
           <div class="text-xs font-mono font-black text-gray-200 uppercase tracking-[0.2em]">
             <span class="text-gray-500 mr-1 font-black tracking-[0.2em]">#</span>${p.ticket} 
@@ -486,7 +494,7 @@ function render(state) {
   const card = el("goldcon");
 
   if (marketClosed) {
-    card.className = "relative bg-gray-800/40 border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
+    card.className = "relative glass-panel border-gray-600 border-2 rounded-2xl p-6 scanlines transition-all duration-500 shadow-lg";
     const reason = state.market?.reason || "";
     const isPausa = reason.toLowerCase().includes("pausa") || reason.toLowerCase().includes("daily pause");
     el("goldcon-decision").textContent = isPausa ? "DAILY PAUSE" : "MARKET CLOSED";
@@ -839,7 +847,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const unit = macroUnit(key);
 
     macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
+      <div class="glass-panel border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
           <div class="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase">${macroLabel(key)}</div>
@@ -1223,11 +1231,9 @@ function renderProactiveAnalysis(proactive, positions) {
   const tokensUsed = toRender.tokens_used;
 
   const sentimentBarEl = el("sentiment-bar");
-  const sentimentIndicatorEl = el("sentiment-indicator");
   const sentimentLabelEl = el("sentiment-label");
 
   const lifecycleBarEl = el("lifecycle-bar");
-  const lifecycleIndicatorEl = el("lifecycle-indicator");
   const lifecycleLabelEl = el("lifecycle-label");
 
   const tpBlockEl = el("proactive-tp-block");
@@ -1261,9 +1267,22 @@ function renderProactiveAnalysis(proactive, positions) {
   }
 
   const decisionEl = el("proactive-decision");
+  const decisionCardEl = el("proactive-decision-card");
   if (decisionEl) {
     decisionEl.textContent = decisionLabel(decision);
     decisionEl.style.color = decisionHexColor(decision);
+  }
+  if (decisionCardEl) {
+    const hexColor = decisionHexColor(decision);
+    decisionCardEl.style.borderColor = hexColor.replace(")", ", 0.3)").replace("rgb", "rgba").replace("#4caf50","rgba(76,175,80,0.3)").replace("#e74c3c","rgba(231,76,60,0.3)").replace("#2ecc71","rgba(46,204,113,0.3)").replace("#e67e22","rgba(230,126,34,0.3)").replace("#f1c40f","rgba(241,196,15,0.3)").replace("#8e8e8e","rgba(142,142,142,0.15)");
+    const glowMap = {
+      "#4caf50": "0 0 32px rgba(76,175,80,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+      "#e74c3c": "0 0 32px rgba(231,76,60,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+      "#2ecc71": "0 0 32px rgba(46,204,113,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+      "#e67e22": "0 0 32px rgba(230,126,34,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+      "#f1c40f": "0 0 32px rgba(241,196,15,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+    };
+    decisionCardEl.style.boxShadow = glowMap[decisionHexColor(decision)] || "0 8px 32px rgba(0,0,0,0.4)";
   }
 
   // HOLD display from live positions[]
@@ -1313,15 +1332,12 @@ function renderProactiveAnalysis(proactive, positions) {
     }
     lastHadPosition = inTrade;
 
-    if (sentimentBarEl && sentimentIndicatorEl && sentimentLabelEl) {
+    if (sentimentBarEl && sentimentLabelEl) {
       const d = (decision || "").toString().toUpperCase();
 
       let label = "NEUTRAL";
-      let activeIdx = 2;
+      let activeIdx = 2; // Default to Neutral (middle of 5 zones)
       const c = confSafe;
-
-      const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
-      const holdDir = dirFromPos === "BUY" || dirFromPos === "SELL" ? dirFromPos : null;
 
       if (d === "OPEN_SELL") {
         if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
@@ -1329,50 +1345,56 @@ function renderProactiveAnalysis(proactive, positions) {
       } else if (d === "OPEN_BUY") {
         if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
         else { label = "BUY"; activeIdx = 3; }
-      } else if (d === "WAIT") {
-        label = "NEUTRAL";
-        activeIdx = 2;
-      } else if (d === "CLOSE_TRADE") {
+      } else if (d === "WAIT" || d === "CLOSE_TRADE") {
         label = "NEUTRAL";
         activeIdx = 2;
       } else if (d === "HOLD_TRADE" || d === "ADJUST_TRADE") {
-        if (holdDir === "SELL") {
+        const dirFromPos = (pos0?.direction || "").toString().toUpperCase();
+        if (dirFromPos === "SELL") {
           if (c != null && c >= 75) { label = "STRONG SELL"; activeIdx = 0; }
           else { label = "SELL"; activeIdx = 1; }
-        } else if (holdDir === "BUY") {
+        } else if (dirFromPos === "BUY") {
           if (c != null && c >= 75) { label = "STRONG BUY"; activeIdx = 4; }
           else { label = "BUY"; activeIdx = 3; }
-        } else {
-          label = "NEUTRAL";
-          activeIdx = 2;
         }
       }
 
+      sentimentLabelEl.textContent = label;
+      sentimentLabelEl.className = `text-xs font-black tracking-[0.2em] uppercase min-w-[60px] text-right ${activeIdx <= 1 ? 'text-red-400' : (activeIdx >= 3 ? 'text-emerald-400' : 'text-amber-400')}`;
+
       const segs = sentimentBarEl.children;
-      for (let i = 0; i < segs.length; i++) {
+      const numSegs = segs.length; // 16
+      
+      for (let i = 0; i < numSegs; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        // Map 5 zones (0-4) to 16 segments (0-15)
-        // Strong Sell: 0-1, Sell: 2-5, Neutral: 6-9, Buy: 10-13, Strong Buy: 14-15
+        
+        // Map 5 zones to 16 segments
+        // 0: Strong Sell (0-2), 1: Sell (3-5), 2: Neutral (6-9), 3: Buy (10-12), 4: Strong Buy (13-15)
         let isInZone = false;
-        if (activeIdx === 0) isInZone = (i <= 1);
-        else if (activeIdx === 1) isInZone = (i >= 2 && i <= 5);
+        if (activeIdx === 0) isInZone = (i <= 2);
+        else if (activeIdx === 1) isInZone = (i >= 3 && i <= 5);
         else if (activeIdx === 2) isInZone = (i >= 6 && i <= 9);
-        else if (activeIdx === 3) isInZone = (i >= 10 && i <= 13);
-        else if (activeIdx === 4) isInZone = (i >= 14);
+        else if (activeIdx === 3) isInZone = (i >= 10 && i <= 12);
+        else if (activeIdx === 4) isInZone = (i >= 13);
 
         if (isInZone) {
           seg.classList.add("is-active");
-          // Add pulse to the "center" of the zone or the last segment
-          if ((activeIdx === 0 && i === 1) || (activeIdx === 1 && i === 5) || 
-              (activeIdx === 2 && i === 9) || (activeIdx === 3 && i === 13) || 
+          // Determine color class based on zone
+          seg.classList.remove("zone-bearish", "zone-neutral", "zone-bullish");
+          if (activeIdx <= 1) seg.classList.add("zone-bearish");
+          else if (activeIdx === 2) seg.classList.add("zone-neutral");
+          else seg.classList.add("zone-bullish");
+
+          if ((activeIdx === 0 && i === 2) || (activeIdx === 1 && i === 5) || 
+              (activeIdx === 2 && i === 9) || (activeIdx === 3 && i === 12) || 
               (activeIdx === 4 && i === 15)) {
             seg.classList.add("last-active");
           } else {
             seg.classList.remove("last-active");
           }
         } else {
-          seg.classList.remove("is-active", "last-active");
+          seg.classList.remove("is-active", "last-active", "zone-bearish", "zone-neutral", "zone-bullish");
         }
       }
     }
@@ -1381,12 +1403,8 @@ function renderProactiveAnalysis(proactive, positions) {
       const d = (decision || "").toString().toUpperCase();
       const entryConditionsPresent = !!(toRender.entry_conditions && typeof toRender.entry_conditions === "object");
 
-      const posProfit = pos0 && pos0.profit != null ? Number(pos0.profit) : null;
-      const hasPnl = Number.isFinite(posProfit);
-      const pnlNonNeg = hasPnl ? posProfit >= 0 : true;
-
       let step = "WATCHING";
-      let stepIdx = 0;
+      let stepIdx = 0; // 0: Watching, 1: Preparing, 2: Entry, 3: Managing, 4: Closing, 5: Result
 
       if (!inTrade) {
         if (entryConditionsPresent) {
@@ -1404,9 +1422,6 @@ function renderProactiveAnalysis(proactive, positions) {
       } else if (inTrade && (d === "HOLD_TRADE" || d === "ADJUST_TRADE" || d === "WAIT")) {
         step = "MANAGING";
         stepIdx = 3;
-      } else if (!inTrade && d === "ADJUST_TRADE") {
-        step = "WATCHING";
-        stepIdx = 0;
       }
 
       if (!inTrade && lastProactiveDecision === "CLOSE_TRADE" && Number.isFinite(lastKnownClosedPnl)) {
@@ -1415,17 +1430,23 @@ function renderProactiveAnalysis(proactive, positions) {
       }
 
       lifecycleLabelEl.textContent = step;
+      lifecycleLabelEl.className = "text-xs font-black tracking-[0.2em] uppercase min-w-[60px] text-right text-purple-400";
 
       const segs = lifecycleBarEl.children;
-      for (let i = 0; i < segs.length; i++) {
+      const numSegs = segs.length; // 16
+      // Progressive mapping: fill segments up to current step
+      // Step 0: 2 segs, Step 1: 5 segs, Step 2: 8 segs, Step 3: 11 segs, Step 4: 14 segs, Step 5: 16 segs
+      const mapping = [2, 5, 8, 11, 14, 16];
+      const activeSegsCount = mapping[stepIdx];
+
+      for (let i = 0; i < numSegs; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        if (i <= stepIdx) {
+        if (i < activeSegsCount) {
           seg.classList.add("is-active");
-          if (i === stepIdx) {
+          if (i === activeSegsCount - 1) {
             seg.classList.add("last-active");
-            // Dynamic color override based on outcome if at Result step
-            if (i === 5) {
+            if (stepIdx === 5) {
                const isLoss = Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0;
                seg.classList.add(isLoss ? "step-result-loss" : "step-result-win");
             }
