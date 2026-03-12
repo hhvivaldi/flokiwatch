@@ -444,11 +444,7 @@
   color: rgb(75, 85, 99);
 }
 
-/* ================================================================
-   RESPONSIVE — MOBILE (max 639px)
-   ================================================================ */
-
-/* Fix for long text overflowing inside chips on mobile */
+/* Fix for long text overflowing inside chips (All devices) */
 #fast-triggers-chips span,
 #recent-decisions span {
   max-width: 100%;
@@ -457,6 +453,10 @@
   line-height: 1.4;
   display: inline-block;
 }
+
+/* ================================================================
+   RESPONSIVE — MOBILE (max 639px)
+   ================================================================ */
 
 @media (max-width: 639px) {
   .floki-header-icon {
