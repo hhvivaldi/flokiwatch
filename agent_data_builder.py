@@ -1266,6 +1266,7 @@ def build_proactive_data_package(
     ema200: Optional[float] = None,
     recent_decisions: Optional[List[Dict]] = None,
     trade_history: Optional[List[Dict]] = None,
+    last_execution_result: Optional[Dict] = None,
 ) -> Dict:
     """Build an independent data package for proactive Agent snapshots.
 
@@ -1313,6 +1314,7 @@ def build_proactive_data_package(
             "mtf_trend": mtf_trend,
             "recent_decisions": recent_decisions or [],
             "trade_history": trade_history or [],
+            "last_execution_result": last_execution_result or {},
         }
 
         try:
