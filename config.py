@@ -144,7 +144,7 @@ VERBOSE_NEWS_LOG = True  # True = detailed log of News Score inputs (headlines, 
 # ============================================================================
 # INTERVALS
 # ============================================================================
-ANALYSIS_INTERVAL_SECONDS = 300  # 5 minutes between analyses
+ANALYSIS_INTERVAL_SECONDS = 60  # 1 minute between analyses
 MONITOR_INTERVAL_SECONDS = 10  # 10s between position monitoring (when positions are open)
 NEWS_CACHE_MINUTES = 30  # News cache for 30 minutes
 
