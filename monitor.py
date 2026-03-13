@@ -463,6 +463,21 @@ class PositionMonitor:
                 log.debug(f"   Monitor: balance diff error (non-blocking): {e}")
             
             deal = get_deal_history(ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
+
+            deal_is_pending = bool(deal and (deal.get('pending') or deal.get('estimated')))
+            if deal is None or deal_is_pending:
+                log.info(f"DEAL_REFRESH | Forcing MT5 reconnect for ticket #{ticket}")
+                try:
+                    executor.disconnect()
+                    executor.connect()
+                except Exception as e:
+                    log.debug(f"   Monitor: MT5 reconnect failed (non-blocking): {e}")
+
+                deal_after_refresh = get_deal_history(ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
+                if deal_after_refresh is not None and not (deal_after_refresh.get('pending') or deal_after_refresh.get('estimated')):
+                    deal = deal_after_refresh
+                elif deal is None:
+                    deal = deal_after_refresh
             
             if deal:
                 # We have close details
