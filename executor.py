@@ -589,6 +589,11 @@ class MT5Executor:
                 if result:
                     return result
                 
+                # === LEVEL 2.5: Today-only search (MT5 long-range omission workaround) ===
+                result = self._search_deal_today_only(position_ticket, open_price)
+                if result:
+                    return result
+                
                 if attempt < total_attempts - 1:
                     log.warning(
                         f"Deal history: No close deal found for position_ticket={position_ticket} "
@@ -605,6 +610,42 @@ class MT5Executor:
         except Exception as e:
             log.warning(f"Error querying deal history: {e}")
             return None
+
+    def _search_deal_today_only(self, position_ticket: int, open_price: float = None) -> Optional[dict]:
+        """Level 2.5: Today-only search (00:00 → tomorrow) to catch recent deals omitted by long-range MT5 queries."""
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
+        log.info(f"Deal history [N2.5]: Today-only search — all XAUUSD deals (today)...")
+
+        deals = mt5.history_deals_get(
+            today_start,
+            tomorrow_start,
+            group=f"*{self.symbol}*",
+        )
+
+        if deals is None or len(deals) == 0:
+            log.warning(f"Deal history [N2.5]: No XAUUSD deals found today")
+            return None
+
+        correct_deals = [d for d in deals if d.position_id == position_ticket]
+        log.info(
+            f"Deal history [N2.5]: {len(deals)} XAUUSD deals total (today), "
+            f"{len(correct_deals)} with position_id={position_ticket}"
+        )
+
+        if not correct_deals:
+            recent_closes = [d for d in deals if d.entry != mt5.DEAL_ENTRY_IN]
+            recent_closes.sort(key=lambda d: d.time, reverse=True)
+            for d in recent_closes[:5]:
+                self._log_deal_full(d, "?", "N2.5-recent")
+            return None
+
+        for d in correct_deals:
+            self._log_deal_full(d, "✓", "N2.5")
+
+        return self._extract_close_deal(correct_deals, position_ticket, open_price, "N2.5")
     
     def _search_deal_by_position_param(self, position_ticket: int, open_price: float = None) -> Optional[dict]:
         """Level 1: Search via position= parameter + position_id filter."""
