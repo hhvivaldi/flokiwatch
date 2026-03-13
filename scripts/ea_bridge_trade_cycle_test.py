@@ -9,13 +9,24 @@ import config
 
 
 def _get_prices() -> tuple[float, float]:
-    from executor import executor
+    from executor import executor, connect_mt5, disconnect_mt5
 
-    prices = executor.get_current_price()
-    if not prices:
-        raise RuntimeError("No MT5 prices available")
-    bid, ask = prices
-    return float(bid), float(ask)
+    try:
+        try:
+            connect_mt5()
+        except Exception:
+            pass
+
+        prices = executor.get_current_price()
+        if not prices:
+            raise RuntimeError("No MT5 prices available")
+        bid, ask = prices
+        return float(bid), float(ask)
+    finally:
+        try:
+            disconnect_mt5()
+        except Exception:
+            pass
 
 
 def main() -> int:
