@@ -1424,40 +1424,6 @@ class TradingBot:
                     pass
                 return {"success": False, "ticket": None, "reason": reason_str, "used_ea_bridge": False}
 
-            # M5 Reversal Detection (anti-lag filter)
-            try:
-                from momentum_detector import check_m5_reversal
-                m5_check = check_m5_reversal(direction)
-                log.info(f"   🔄 M5 Check: {m5_check['description']}")
-
-                if m5_check.get("reversal_detected"):
-                    if m5_check.get("reversal_strength") == "strong":
-                        reason = f"Strong M5 reversal: {m5_check.get('description', '')}"
-                        log.safety_block(reason)
-                        try:
-                            alert_m5_reversal_block(direction, m5_check.get("recent_move_pct", 0), m5_check.get("description", ""))
-                        except Exception:
-                            pass
-                        return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
-                    if m5_check.get("reversal_strength") == "moderate":
-                        confidence = float(confidence or 0) - getattr(config, "M5_REVERSAL_CONFIDENCE_PENALTY", 0)
-                        log.info(
-                            f"   ⚠️ Moderate M5 reversal: confidence reduced {config.M5_REVERSAL_CONFIDENCE_PENALTY} → {confidence:.1f}"
-                        )
-                        if confidence < getattr(config, "BRAIN_MIN_CONFIDENCE", 0):
-                            reason = (
-                                f"Moderate M5 reversal reduced confidence below minimum "
-                                f"({confidence:.1f} < {config.BRAIN_MIN_CONFIDENCE})"
-                            )
-                            log.safety_block(reason)
-                            try:
-                                alert_m5_reversal_block(direction, m5_check.get("recent_move_pct", 0), m5_check.get("description", ""))
-                            except Exception:
-                                pass
-                            return {"success": False, "ticket": None, "reason": reason, "used_ea_bridge": False}
-            except Exception as e:
-                log.warning(f"M5 reversal check error (ignored): {e}")
-
             # Spread Check with Retry Loop
             spread = None
             try:
