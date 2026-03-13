@@ -555,6 +555,41 @@ class TradingBot:
         as 'pending'. This method re-queries MT5 until the deal appears.
         """
         try:
+            resolved_path = os.path.join("data", "deal_resolved.json")
+            try:
+                if os.path.exists(resolved_path):
+                    with open(resolved_path, "r", encoding="utf-8") as f:
+                        resolved_payload = json.load(f)
+
+                    if isinstance(resolved_payload, dict) and resolved_payload.get("resolved") is True:
+                        resolved_ticket = resolved_payload.get("ticket")
+                        for t in (getattr(self, "closed_trades_today", []) or []):
+                            if t.get("ticket") == resolved_ticket and t.get("pending"):
+                                t["profit"] = resolved_payload.get("profit")
+                                t["close_price"] = resolved_payload.get("close_price")
+                                t["reason"] = resolved_payload.get("reason")
+                                t["close_time"] = resolved_payload.get("close_time")
+                                t["pending"] = False
+                                t["estimated"] = False
+
+                                try:
+                                    record_trade_close(
+                                        ticket=resolved_ticket,
+                                        close_price=t.get("close_price"),
+                                        profit=t.get("profit"),
+                                        close_reason=t.get("reason"),
+                                        close_time=t.get("close_time"),
+                                    )
+                                except Exception:
+                                    pass
+                                break
+                    try:
+                        os.remove(resolved_path)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             pending = [t for t in self.closed_trades_today if t.get('pending')]
             if not pending:
                 return
@@ -611,6 +646,24 @@ class TradingBot:
                         log.debug(f"  Alert trade resolved error: {e_alert}")
                 else:
                     log.debug(f"  #{ticket}: deal still not in MT5 history — will retry next cycle")
+
+                    # Fresh MT5 connection workaround (fire-and-forget)
+                    try:
+                        base_dir = os.path.dirname(os.path.abspath(__file__))
+                        resolver_py = os.path.join(base_dir, "deal_resolver.py")
+                        if os.path.exists(resolver_py):
+                            creationflags = 0
+                            if os.name == "nt":
+                                creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                            subprocess.Popen(
+                                [sys.executable, resolver_py, str(ticket)],
+                                cwd=base_dir,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=creationflags,
+                            )
+                    except Exception:
+                        pass
             
             if resolved_any:
                 # Rebuild daily_stats
