@@ -525,13 +525,7 @@ def format_proactive_xml(data_package: Dict) -> str:
 
     primary = patterns.get("primary_pattern")
     all_patterns_list = patterns.get("patterns", []) or []
-    all_patterns_str = ", ".join(
-        [
-            str(p.get("name", "")).replace("Bullish ", "").replace("Bearish ", "")
-            for p in all_patterns_list
-            if isinstance(p, dict) and p.get("name")
-        ]
-    )
+    all_patterns_str = ", ".join([p.get("name", "") for p in all_patterns_list if isinstance(p, dict) and p.get("name")])
 
     headlines = macro.get("headlines", []) or []
 
