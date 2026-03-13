@@ -61,6 +61,51 @@ def _find_deal_by_ticket(deals, ticket: int):
     return None
 
 
+def _safe_int(x):
+    try:
+        return int(x)
+    except Exception:
+        return None
+
+
+def _is_close_deal(d) -> bool:
+    try:
+        entry = getattr(d, "entry", None)
+        if entry is None:
+            return False
+
+        entry_i = _safe_int(entry)
+        if entry_i is not None:
+            # MT5: DEAL_ENTRY_OUT = 1
+            return entry_i == 1
+
+        # Fallback if enum name is present
+        entry_s = str(entry).upper()
+        return "OUT" in entry_s
+    except Exception:
+        return False
+
+
+def _find_close_deal_by_position_id(deals, position_id: int):
+    if not deals:
+        return None
+    found = None
+    for d in deals:
+        try:
+            pos_id = getattr(d, "position_id", None)
+            if pos_id is None:
+                continue
+            if int(pos_id) != int(position_id):
+                continue
+            if not _is_close_deal(d):
+                continue
+            found = d
+            break
+        except Exception:
+            continue
+    return found
+
+
 def main(argv) -> int:
     ticket = None
     out_path = os.path.join("data", "deal_resolved.json")
@@ -100,10 +145,12 @@ def main(argv) -> int:
 
         found = None
         last_err = None
-        for _attempt in range(3):
+
+        for _attempt in range(5):
             try:
+                now = datetime.now()
                 deals = mt5.history_deals_get(start, now)
-                found = _find_deal_by_ticket(deals, ticket)
+                found = _find_close_deal_by_position_id(deals, ticket)
             except Exception as e:
                 last_err = str(e)
                 found = None
@@ -115,6 +162,7 @@ def main(argv) -> int:
 
                 payload = {
                     "ticket": ticket,
+                    "position_id": ticket,
                     "resolved": True,
                     "profit": profit,
                     "close_price": close_price,
@@ -124,9 +172,9 @@ def main(argv) -> int:
                 _write_json(out_path, payload)
                 return 0
 
-            time.sleep(2.0)
+            time.sleep(15.0)
 
-        payload = {"ticket": ticket, "resolved": False}
+        payload = {"ticket": ticket, "position_id": ticket, "resolved": False}
         if last_err:
             payload["error"] = last_err
         _write_json(out_path, payload)

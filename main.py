@@ -128,7 +128,8 @@ class TradingBot:
         # Temporary data from last analysis (for heartbeat)
         self._last_calendar_data = None
         self._last_vol_status = None
-        self._last_current_price = None
+        self.current_trade = None
+        self._last_deal_resolver_launch_ts_by_ticket = {}
         self._last_scenario_description = None
         self._last_gpt_validation = None
         
@@ -682,6 +683,12 @@ class TradingBot:
 
                     # Fresh MT5 connection workaround (fire-and-forget)
                     try:
+                        now_ts = time.time()
+                        last_ts = self._last_deal_resolver_launch_ts_by_ticket.get(int(ticket))
+                        if last_ts is not None and (now_ts - float(last_ts)) < 120.0:
+                            continue
+                        self._last_deal_resolver_launch_ts_by_ticket[int(ticket)] = now_ts
+
                         base_dir = os.path.dirname(os.path.abspath(__file__))
                         resolver_py = os.path.join(base_dir, "deal_resolver.py")
                         if os.path.exists(resolver_py):
