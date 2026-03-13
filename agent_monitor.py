@@ -15,6 +15,7 @@ class AgentMonitor:
         self.last_price_used: Optional[float] = None
         self.last_trade_pnl_points: Optional[float] = None
         self.max_profit_seen_points_by_ticket: Dict[int, float] = {}
+        self._last_drawdown_track_log_ts_by_ticket: Dict[int, float] = {}
         self.recent_prices: List[Tuple[float, float]] = []
         self.session_last_trigger_date: Dict[str, str] = {}
 
@@ -517,6 +518,19 @@ class AgentMonitor:
                 continue
 
             peak = float(prev_peak)
+
+            try:
+                now_ts = time.time()
+                last_log_ts = self._last_drawdown_track_log_ts_by_ticket.get(ticket_i) or 0
+                if (now_ts - float(last_log_ts)) >= 60.0:
+                    self._last_drawdown_track_log_ts_by_ticket[ticket_i] = now_ts
+                    log.info(
+                        "DRAWDOWN_TRACK | "
+                        f"ticket=#{ticket_i} | peak={peak:.1f} | current={current_profit_points:.1f}"
+                    )
+            except Exception:
+                pass
+
             if peak <= 3.0:
                 continue
 
