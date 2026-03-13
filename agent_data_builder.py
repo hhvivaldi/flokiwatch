@@ -635,6 +635,75 @@ def format_proactive_xml(data_package: Dict) -> str:
     except Exception:
         pass
 
+    try:
+        trade_history = dp.get("trade_history", []) or []
+        if isinstance(trade_history, list) and trade_history:
+            items = []
+            for t in trade_history[:5]:
+                if isinstance(t, dict) and (t.get("close_time") or t.get("profit") is not None or t.get("direction")):
+                    items.append(t)
+
+            if items:
+                now = datetime.now(timezone.utc)
+                lines.append("<recent_trade_history>")
+                for t in items:
+                    direction = t.get("direction")
+                    profit_dollars = t.get("profit")
+                    close_reason = t.get("reason")
+                    close_time = t.get("close_time")
+
+                    time_ago = ""
+                    try:
+                        if close_time:
+                            dt_close = datetime.fromisoformat(str(close_time).replace("Z", "+00:00"))
+                            if dt_close.tzinfo is None:
+                                dt_close = dt_close.replace(tzinfo=timezone.utc)
+                            secs = int((now - dt_close).total_seconds())
+                            if secs >= 0:
+                                hours = secs // 3600
+                                mins = (secs % 3600) // 60
+                                if hours > 0:
+                                    time_ago = f"{hours}h {mins}m"
+                                else:
+                                    time_ago = f"{mins}m"
+                    except Exception:
+                        time_ago = ""
+
+                    profit_dollars_str = ""
+                    try:
+                        if profit_dollars is not None:
+                            sign = "+" if float(profit_dollars) >= 0 else ""
+                            profit_dollars_str = f"{sign}${float(profit_dollars):.2f}"
+                    except Exception:
+                        profit_dollars_str = ""
+
+                    reason_short = close_reason
+                    try:
+                        ct = str(t.get("close_type") or "").lower()
+                        if ct == "tp":
+                            reason_short = "TP"
+                        elif ct == "sl":
+                            reason_short = "SL"
+                        elif ct == "trailing":
+                            reason_short = "TRAIL"
+                        elif ct == "breakeven":
+                            reason_short = "BE"
+                    except Exception:
+                        reason_short = close_reason
+
+                    lines.append(
+                        "  <trade"
+                        + f" direction=\"{_xml_attr(direction)}\""
+                        + f" profit=\"{_xml_attr(profit_dollars_str)}\""
+                        + f" close_reason=\"{_xml_attr(reason_short)}\""
+                        + f" time_ago=\"{_xml_attr(time_ago)}\""
+                        + "/>"
+                    )
+                lines.append("</recent_trade_history>")
+                lines.append("")
+    except Exception:
+        pass
+
     recent_decisions = dp.get("recent_decisions", []) or []
     if recent_decisions:
         lines.append("--- SECTION 0: YOUR RECENT DECISIONS (Read this BEFORE anything else) ---")
