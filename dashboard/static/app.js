@@ -1229,6 +1229,8 @@ function renderProactiveAnalysis(proactive, positions) {
   const latencyMs = toRender.latency_ms;
   const tokensUsed = toRender.tokens_used;
 
+  const entryConditionsEl = el("proactive-entry-conditions");
+
   const sentimentBarEl = el("sentiment-bar");
   const sentimentIndicatorEl = el("sentiment-indicator");
   const sentimentLabelEl = el("sentiment-label");
@@ -1334,6 +1336,37 @@ function renderProactiveAnalysis(proactive, positions) {
   const confEl = el("proactive-confidence");
   if (confEl) {
     confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+  }
+
+  try {
+    const dUp = (decision || "").toString().toUpperCase();
+    const entryConditions = toRender.entry_conditions;
+    const hasEntryConditions = !!(entryConditions && typeof entryConditions === "object");
+
+    if (entryConditionsEl && dUp === "WAIT" && hasEntryConditions) {
+      const side = (entryConditions.direction || "").toString().toUpperCase();
+      const touch = entryConditions.touch_price;
+      const rationale = (entryConditions.rationale || entryConditions.reason || "").toString();
+      const validHours = entryConditions.valid_hours;
+
+      let msg = "Watching";
+      if (side) msg += ` for ${side}`;
+      if (touch != null && Number.isFinite(Number(touch))) msg += ` if price touches ${fmtNum(touch, 1)}`;
+      if (rationale) msg += ` (${rationale})`;
+      if (validHours != null && Number.isFinite(Number(validHours))) msg += `. Valid for ${Number(validHours)}h.`;
+      else msg += ".";
+
+      entryConditionsEl.textContent = msg;
+      entryConditionsEl.classList.remove("hidden");
+    } else if (entryConditionsEl) {
+      entryConditionsEl.textContent = "";
+      entryConditionsEl.classList.add("hidden");
+    }
+  } catch (e) {
+    if (entryConditionsEl) {
+      entryConditionsEl.textContent = "";
+      entryConditionsEl.classList.add("hidden");
+    }
   }
 
   try {

@@ -2419,6 +2419,13 @@ class TradingBot:
                     "tokens_used": (agent_result.input_tokens or 0) + (agent_result.output_tokens or 0),
                 }
 
+                try:
+                    entry_conditions = getattr(agent_result, "entry_conditions", None)
+                    if entry_conditions is not None:
+                        proactive_payload["entry_conditions"] = entry_conditions
+                except Exception:
+                    pass
+
                 if isinstance(trigger_data, dict) and trigger_data:
                     proactive_payload["trigger_data"] = trigger_data
 

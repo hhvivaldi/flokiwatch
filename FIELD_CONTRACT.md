@@ -295,7 +295,7 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`
 
 ### Proactive Analysis (M30 Snapshot)
-`proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`, `proactive-reasoning-toggle`
+`proactive-section`, `proactive-h1-close`, `proactive-countdown`, `proactive-decision`, `proactive-confidence`, `proactive-reasoning`, `proactive-factors`, `proactive-concerns`, `proactive-latency`, `proactive-tokens`, `proactive-reasoning-toggle`, `proactive-entry-conditions`
 
 Required for proactive sentiment + thesis lifecycle bars:
 `sentiment-bar`, `sentiment-indicator`, `sentiment-label`, `lifecycle-bar`, `lifecycle-indicator`, `lifecycle-label`
