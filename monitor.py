@@ -452,8 +452,13 @@ class PositionMonitor:
                 bal_now = float(account_info_now['balance']) if account_info_now and account_info_now.get('balance') is not None else None
                 if bal_open is not None and bal_now is not None:
                     profit_balance = bal_now - float(bal_open)
+                    log.info(
+                        f"BALANCE_DIFF | ticket=#{ticket} | open=${float(bal_open):.2f} | now=${float(bal_now):.2f} | diff=${float(profit_balance):+.2f}"
+                    )
                 elif bal_open is None:
                     log.warning(f"BALANCE_CAPTURE | WARNING | no balance_at_open for ticket #{ticket}")
+                elif bal_now is None:
+                    log.warning(f"BALANCE_DIFF | WARNING | ticket=#{ticket} | balance_now_unavailable")
             except Exception as e:
                 log.debug(f"   Monitor: balance diff error (non-blocking): {e}")
             
