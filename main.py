@@ -2203,6 +2203,19 @@ class TradingBot:
         if not agent.is_enabled():
             return
 
+        try:
+            self._analysis_cycle()
+            try:
+                agent_data = getattr(self, "_last_agent_data", None) or agent_data
+            except Exception:
+                pass
+            try:
+                df = getattr(self, "_last_df", None) or df
+            except Exception:
+                pass
+        except Exception as e:
+            log.debug(f"{trigger_type} | Brain refresh before Agent call failed (ignored): {e}")
+
         if not agent_data or not isinstance(agent_data, dict):
             return
 
