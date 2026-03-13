@@ -115,6 +115,8 @@ class TradingBot:
             'date': datetime.now().date()
         }
 
+        self._breakeven_threshold = float(getattr(config, "BREAKEVEN_PROFIT_THRESHOLD", 0.50))
+
         # Closed trades today (for dashboard)
         self.closed_trades_today = []
         
@@ -525,8 +527,9 @@ class TradingBot:
             confirmed_trades = [t for t in self.closed_trades_today if not t.get('pending', False)]
             pending_trades = [t for t in self.closed_trades_today if t.get('pending', False)]
             new_trades = len(confirmed_trades)
-            new_wins = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) > 0)
-            new_losses = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) < 0)
+            be_thr = float(getattr(self, "_breakeven_threshold", 0.50))
+            new_wins = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) >= be_thr)
+            new_losses = sum(1 for t in confirmed_trades if float(t.get('profit', 0) or 0) <= -be_thr)
             new_breakevens = new_trades - new_wins - new_losses
             new_pnl = sum(float(t.get('profit', 0) or 0) for t in confirmed_trades)
             if pending_trades:
@@ -670,8 +673,9 @@ class TradingBot:
                 confirmed = [t for t in self.closed_trades_today if not t.get('pending', False)]
                 still_pending = [t for t in self.closed_trades_today if t.get('pending', False)]
                 self.daily_stats['trades'] = len(confirmed)
-                self.daily_stats['wins'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) > 0)
-                self.daily_stats['losses'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) < 0)
+                be_thr = float(getattr(self, "_breakeven_threshold", 0.50))
+                self.daily_stats['wins'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) >= be_thr)
+                self.daily_stats['losses'] = sum(1 for t in confirmed if float(t.get('profit', 0) or 0) <= -be_thr)
                 self.daily_stats['breakevens'] = self.daily_stats['trades'] - self.daily_stats['wins'] - self.daily_stats['losses']
                 self.daily_stats['pnl'] = sum(float(t.get('profit', 0) or 0) for t in confirmed)
                 if still_pending:
@@ -3971,13 +3975,14 @@ class TradingBot:
             if action['action'] in ['TIMEOUT_CLOSE', 'DRAWDOWN_CLOSE', 'BROKER_CLOSE']:
                 profit = action.get('profit', 0)
                 is_pending = action.get('pending', False)
+                be_thr = float(getattr(self, "_breakeven_threshold", 0.50))
                 
                 if not is_pending:
                     # Real P&L confirmed — count in daily stats
                     self.daily_stats['trades'] += 1
-                    if profit > 0:
+                    if profit >= be_thr:
                         self.daily_stats['wins'] += 1
-                    elif profit < 0:
+                    elif profit <= -be_thr:
                         self.daily_stats['losses'] += 1
                     else:
                         self.daily_stats['breakevens'] = self.daily_stats.get('breakevens', 0) + 1
@@ -4003,6 +4008,11 @@ class TradingBot:
                 
                 # Save to SQLite history
                 close_reason = action.get("reason", "unknown")
+                try:
+                    if isinstance(close_reason, str) and close_reason.strip() == "Stop Loss" and (not is_pending) and profit is not None and float(profit) > 0:
+                        close_reason = "Trailing Stop"
+                except Exception:
+                    pass
                 if is_pending:
                     close_reason = f"{close_reason} (pending)"
                 record_trade_close(
