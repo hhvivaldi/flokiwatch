@@ -564,6 +564,77 @@ def format_proactive_xml(data_package: Dict) -> str:
         f"<current_price bid=\"{_xml_attr(cp.get('bid'))}\" ask=\"{_xml_attr(cp.get('ask'))}\" spread=\"{_xml_attr(cp.get('spread'))}\"/>")
     lines.append("")
 
+    try:
+        trade_history = dp.get("trade_history", []) or []
+        last_trade = trade_history[0] if isinstance(trade_history, list) and trade_history else None
+        if isinstance(last_trade, dict):
+            direction = last_trade.get("direction")
+            entry = last_trade.get("open_price")
+            close = last_trade.get("close_price")
+            profit_dollars = last_trade.get("profit")
+            close_reason = last_trade.get("reason")
+            close_time = last_trade.get("close_time")
+
+            profit_points = None
+            try:
+                if entry is not None and close is not None:
+                    profit_points = float(close) - float(entry)
+                    if str(direction or "").upper() == "SELL":
+                        profit_points = -profit_points
+            except Exception:
+                profit_points = None
+
+            duration = None
+            try:
+                open_time = last_trade.get("open_time")
+                if open_time and close_time:
+                    dt_open = datetime.fromisoformat(str(open_time).replace("Z", "+00:00"))
+                    dt_close = datetime.fromisoformat(str(close_time).replace("Z", "+00:00"))
+                    secs = int((dt_close - dt_open).total_seconds())
+                    if secs >= 0:
+                        hours = secs // 3600
+                        mins = (secs % 3600) // 60
+                        if hours > 0:
+                            duration = f"{hours}h {mins}m"
+                        else:
+                            duration = f"{mins}m"
+            except Exception:
+                duration = None
+
+            profit_points_str = ""
+            try:
+                if profit_points is not None:
+                    sign = "+" if float(profit_points) >= 0 else ""
+                    profit_points_str = f"{sign}{float(profit_points):.2f}"
+            except Exception:
+                profit_points_str = ""
+
+            profit_dollars_str = ""
+            try:
+                if profit_dollars is not None:
+                    sign = "+" if float(profit_dollars) >= 0 else ""
+                    profit_dollars_str = f"{sign}${float(profit_dollars):.2f}"
+            except Exception:
+                profit_dollars_str = ""
+
+            lines.append("<last_trade_result>")
+            lines.append(
+                "  <trade"
+                + f" direction=\"{_xml_attr(direction)}\""
+                + f" entry=\"{_xml_attr(entry)}\""
+                + f" close=\"{_xml_attr(close)}\""
+                + f" profit_points=\"{_xml_attr(profit_points_str)}\""
+                + f" profit_dollars=\"{_xml_attr(profit_dollars_str)}\""
+                + f" duration=\"{_xml_attr(duration)}\""
+                + f" close_reason=\"{_xml_attr(close_reason)}\""
+                + f" timestamp=\"{_xml_attr(close_time)}\""
+                + "/>"
+            )
+            lines.append("</last_trade_result>")
+            lines.append("")
+    except Exception:
+        pass
+
     recent_decisions = dp.get("recent_decisions", []) or []
     if recent_decisions:
         lines.append("--- SECTION 0: YOUR RECENT DECISIONS (Read this BEFORE anything else) ---")
@@ -1087,6 +1158,7 @@ def build_proactive_data_package(
     trade_feedback: Optional[Dict] = None,
     ema200: Optional[float] = None,
     recent_decisions: Optional[List[Dict]] = None,
+    trade_history: Optional[List[Dict]] = None,
 ) -> Dict:
     """Build an independent data package for proactive Agent snapshots.
 
@@ -1133,6 +1205,7 @@ def build_proactive_data_package(
             "trade_feedback": _format_trade_feedback(trade_feedback),
             "mtf_trend": mtf_trend,
             "recent_decisions": recent_decisions or [],
+            "trade_history": trade_history or [],
         }
 
         try:

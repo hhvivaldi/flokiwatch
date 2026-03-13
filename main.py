@@ -2367,6 +2367,7 @@ class TradingBot:
                 trade_feedback=trade_feedback,
                 ema200=ema200,
                 recent_decisions=recent_decisions,
+                trade_history=getattr(self, "closed_trades_today", []) or [],
             )
 
             loop = asyncio.new_event_loop()
