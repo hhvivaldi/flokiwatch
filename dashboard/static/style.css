@@ -32,28 +32,29 @@
 
 .vu-meter {
   display: flex;
-  gap: 4px;
-  height: 20px;
+  gap: 3px;
+  height: 24px;
   width: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 3px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px;
   align-items: center;
 }
 
 .vu-segment {
   flex: 1;
   height: 100%;
-  border-radius: 1.5px;
-  background: rgba(255, 255, 255, 0.04);
-  transition: all 0.25s ease;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   color: transparent; /* For currentColor shadow control */
+  min-width: 0;
 }
 
 .vu-segment.active {
   opacity: 1;
-  box-shadow: 0 0 10px 2px currentColor;
+  box-shadow: 0 0 8px 1px currentColor;
 }
 
 /* Sentiment State Colors (Logic based on activeCount mapping [3, 6, 8, 11, 14]) */
@@ -288,7 +289,7 @@
 .section-separator {
   height: 1px;
   background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.1) 70%, transparent 100%);
-  margin: 4px 0;
+  margin: 12px 0;
   border: none;
 }
 
@@ -719,6 +720,40 @@
 }
 
 /* ================================================================
+   REASONING PANEL TYPOGRAPHY
+   ================================================================ */
+
+#proactive-reasoning {
+  line-height: 1.75;
+  font-size: 0.8125rem;
+  color: rgba(209, 213, 219, 0.92);
+}
+
+#proactive-factors li,
+#proactive-concerns li,
+#agent-factors li,
+#agent-concerns li {
+  line-height: 1.6;
+  padding: 1px 0;
+}
+
+#proactive-factors,
+#proactive-concerns,
+#agent-factors,
+#agent-concerns {
+  padding-left: 2px;
+}
+
+/* ================================================================
+   AGENT DECISION CARD — stronger contrast inner panel
+   ================================================================ */
+
+#proactive-section .glass-panel-deep {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ================================================================
    RESPONSIVE — MOBILE (max 639px)
    ================================================================ */
 
@@ -753,6 +788,48 @@
   .intel-robot-bubble .intel-bubble {
     white-space: normal;
     max-width: 200px;
+  }
+
+  /* Mobile: proactive analysis decision font */
+  #proactive-decision {
+    font-size: 2.5rem;
+    line-height: 1.1;
+    word-break: break-word;
+  }
+
+  /* Mobile: tighter account cards */
+  .account-card {
+    padding: 14px 16px;
+  }
+
+  /* Mobile: VU meter label stays readable */
+  #sentiment-label,
+  #lifecycle-label {
+    min-width: 56px;
+    font-size: 9px;
+  }
+
+  /* Mobile: inner proactive grid stacks cleanly */
+  #proactive-section .glass-panel {
+    padding: 16px;
+  }
+
+  /* Mobile: reasoning text */
+  #proactive-reasoning {
+    font-size: 0.8rem;
+  }
+
+  /* Mobile: triggers chip wrap */
+  #fast-triggers-chips {
+    gap: 6px;
+  }
+
+  /* Mobile: account card numbers smaller to fit */
+  .account-card #balance,
+  .account-card #equity,
+  .account-card #pnl,
+  .account-card #price {
+    font-size: 1.5rem;
   }
 }
 
