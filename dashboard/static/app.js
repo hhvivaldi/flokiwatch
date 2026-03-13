@@ -165,7 +165,7 @@ function renderFastTriggers(fastDecisions) {
 
     return `
       <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium"
+        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium trigger-entry"
         style="color:${style.color};border-color:${style.border};"
       >${textParts.join(" — ")}</span>
     `;
@@ -249,13 +249,27 @@ function setStatusDot(isOperational) {
   const label = el("status-label");
 
   if (isOperational) {
-    dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
+    dot.className = "status-dot-live";
     label.textContent = "OPERATIONAL";
     label.className = "text-green-400";
   } else {
-    dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
+    dot.className = "status-dot-offline";
     label.textContent = "OFFLINE";
     label.className = "text-red-400";
+  }
+}
+
+const _lastValues = {};
+function flashValue(id, newText) {
+  const e = el(id);
+  if (!e) return;
+  if (_lastValues[id] !== newText) {
+    _lastValues[id] = newText;
+    e.classList.remove("value-flash");
+    void e.offsetWidth;
+    e.classList.add("value-flash");
+    const cleanup = () => e.classList.remove("value-flash");
+    e.addEventListener("animationend", cleanup, { once: true });
   }
 }
 
@@ -574,8 +588,12 @@ function render(state) {
 
   const bal = state.account?.balance;
   const eq = state.account?.equity;
-  el("balance").textContent = fmtMoney(bal);
-  el("equity").textContent = fmtMoney(eq);
+  const balText = fmtMoney(bal);
+  const eqText = fmtMoney(eq);
+  el("balance").textContent = balText;
+  el("equity").textContent = eqText;
+  flashValue("balance", balText);
+  flashValue("equity", eqText);
 
   const hasPnl = state.daily_stats && state.daily_stats.pnl !== null && state.daily_stats.pnl !== undefined && !Number.isNaN(Number(state.daily_stats.pnl));
   const hasPnlPct = state.daily_stats && state.daily_stats.pnl_percent !== null && state.daily_stats.pnl_percent !== undefined && !Number.isNaN(Number(state.daily_stats.pnl_percent));
@@ -587,9 +605,11 @@ function render(state) {
     el("pnl").textContent = "—";
     el("pnl").className = "text-xl font-bold text-gray-300";
   } else {
-    el("pnl").textContent = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
+    const pnlText = `${fmtMoney(state.daily_stats?.pnl)}  (${fmtPct(state.daily_stats?.pnl_percent)})`;
+    el("pnl").textContent = pnlText;
     const pnlVal = Number(state.daily_stats?.pnl || 0);
     el("pnl").className = pnlVal >= 0 ? "text-xl font-bold text-green-400" : "text-xl font-bold text-red-400";
+    flashValue("pnl", pnlText);
   }
 
   const livePrice = la.current_price;
@@ -598,13 +618,17 @@ function render(state) {
   const priceLabelEl = el("price-label");
 
   if (livePrice != null) {
-    priceEl.textContent = fmtNum(livePrice, 2);
+    const pt = fmtNum(livePrice, 2);
+    priceEl.textContent = pt;
     priceEl.className = "text-2xl font-bold text-white";
     if (priceLabelEl) priceLabelEl.textContent = "";
+    flashValue("price", pt);
   } else if (lastKnown != null) {
-    priceEl.textContent = fmtNum(lastKnown, 2);
+    const pt = fmtNum(lastKnown, 2);
+    priceEl.textContent = pt;
     priceEl.className = "text-2xl font-bold text-gray-400";
     if (priceLabelEl) priceLabelEl.textContent = "LAST";
+    flashValue("price", pt);
   } else {
     priceEl.textContent = "—";
     priceEl.className = "text-2xl font-bold text-gray-500";
@@ -1245,7 +1269,27 @@ function renderProactiveAnalysis(proactive, positions) {
   const decisionEl = el("proactive-decision");
   if (decisionEl) {
     decisionEl.textContent = decisionLabel(decision);
-    decisionEl.style.color = decisionHexColor(decision);
+    decisionEl.style.color = "";
+    const d = (decision || "").toUpperCase();
+    const glowClasses = ["decision-buy", "decision-sell", "decision-hold", "decision-wait", "decision-close", "decision-adjust"];
+    glowClasses.forEach(c => decisionEl.classList.remove(c));
+    if (d === "OPEN_BUY") decisionEl.classList.add("decision-buy");
+    else if (d === "OPEN_SELL") decisionEl.classList.add("decision-sell");
+    else if (d === "HOLD_TRADE") decisionEl.classList.add("decision-hold");
+    else if (d === "CLOSE_TRADE") decisionEl.classList.add("decision-close");
+    else if (d === "ADJUST_TRADE") decisionEl.classList.add("decision-adjust");
+    else decisionEl.classList.add("decision-wait");
+  }
+
+  const confBarEl = el("proactive-confidence-bar");
+  if (confBarEl) {
+    const confNum = Number(confidence);
+    const confSafe = Number.isFinite(confNum) ? Math.max(0, Math.min(100, confNum)) : 0;
+    confBarEl.style.width = `${confSafe}%`;
+    confBarEl.classList.remove("conf-low", "conf-mid", "conf-high");
+    if (confSafe < 55) confBarEl.classList.add("conf-low");
+    else if (confSafe < 70) confBarEl.classList.add("conf-mid");
+    else confBarEl.classList.add("conf-high");
   }
 
   // HOLD display from live positions[]
