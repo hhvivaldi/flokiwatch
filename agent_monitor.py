@@ -14,6 +14,7 @@ class AgentMonitor:
         self.last_trigger_times: Dict[str, float] = {}
         self.last_price_used: Optional[float] = None
         self.last_trade_pnl_points: Optional[float] = None
+        self.max_profit_seen_points_by_ticket: Dict[int, float] = {}
         self.recent_prices: List[Tuple[float, float]] = []
         self.session_last_trigger_date: Dict[str, str] = {}
 
@@ -87,6 +88,11 @@ class AgentMonitor:
                 self._check_session_change()
             except Exception as e:
                 log.debug(f"AGENT_MONITOR | session error (ignored): {e}")
+
+            try:
+                self._check_profit_drawdown()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | profit-drawdown error (ignored): {e}")
 
             try:
                 latest = self._load_latest_entry_conditions()
@@ -462,6 +468,84 @@ class AgentMonitor:
                 self.session_last_trigger_date[ny_key] = today
                 log.info("MONITOR | NY session opening")
                 self._fire_proactive_out_of_cycle("SESSION_OPEN_NY", {"time_utc": now.isoformat()})
+
+    def _check_profit_drawdown(self) -> None:
+        try:
+            from executor import executor
+
+            live_positions = executor.get_open_positions()
+            if not live_positions:
+                self.max_profit_seen_points_by_ticket = {}
+                return
+        except Exception:
+            return
+
+        for pos in live_positions:
+            if not isinstance(pos, dict):
+                continue
+
+            ticket = pos.get("ticket")
+            if ticket is None:
+                continue
+            try:
+                ticket_i = int(ticket)
+            except Exception:
+                continue
+
+            direction = str(pos.get("direction") or pos.get("type") or "").upper()
+            if direction not in ("BUY", "SELL"):
+                continue
+
+            entry = pos.get("price_open")
+            if entry is None:
+                entry = pos.get("open_price")
+            if entry is None:
+                entry = pos.get("entry")
+            try:
+                entry_f = float(entry)
+            except Exception:
+                continue
+
+            price_used = self._price_used(direction)
+            if price_used is None:
+                continue
+
+            current_profit_points = (price_used - entry_f) if direction == "BUY" else (entry_f - price_used)
+            prev_peak = self.max_profit_seen_points_by_ticket.get(ticket_i)
+            if prev_peak is None or current_profit_points > prev_peak:
+                self.max_profit_seen_points_by_ticket[ticket_i] = float(current_profit_points)
+                continue
+
+            peak = float(prev_peak)
+            if peak <= 3.0:
+                continue
+
+            if current_profit_points >= (peak * 0.5):
+                continue
+
+            key = f"profit_drawdown:{ticket_i}"
+            if not self._can_fire(key, cooldown_seconds=300):
+                continue
+
+            log.info(
+                "MONITOR | Profit drawdown — "
+                f"ticket={ticket_i} {direction} peak=+{peak:.1f} now=+{current_profit_points:.1f} points"
+            )
+
+            self._fire_fast_decision(
+                "PROFIT_DRAWDOWN",
+                {
+                    "ticket": ticket_i,
+                    "direction": direction,
+                    "max_profit_points": float(peak),
+                    "current_profit_points": float(current_profit_points),
+                    "peak_to_now_ratio": float(current_profit_points / peak) if peak else None,
+                    "message": (
+                        f"Your {direction} was at +{peak:.1f} points profit and has dropped to "
+                        f"+{current_profit_points:.1f}. Do you want to protect profits?"
+                    ),
+                },
+            )
 
     def _check_entry_conditions(self, entry_conditions: Dict[str, Any]) -> None:
         direction = str(entry_conditions.get("direction") or "").upper()
