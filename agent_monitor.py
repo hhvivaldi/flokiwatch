@@ -454,14 +454,14 @@ class AgentMonitor:
             if self.session_last_trigger_date.get(london_key) != today:
                 self.session_last_trigger_date[london_key] = today
                 log.info("MONITOR | London session opening")
-                self._fire_fast_decision("SESSION_OPEN_LONDON", {"time_utc": now.isoformat()})
+                self._fire_proactive_out_of_cycle("SESSION_OPEN_LONDON", {"time_utc": now.isoformat()})
 
         ny_key = "ny"
         if now.hour == 13 and 0 <= now.minute < 5:
             if self.session_last_trigger_date.get(ny_key) != today:
                 self.session_last_trigger_date[ny_key] = today
                 log.info("MONITOR | NY session opening")
-                self._fire_fast_decision("SESSION_OPEN_NY", {"time_utc": now.isoformat()})
+                self._fire_proactive_out_of_cycle("SESSION_OPEN_NY", {"time_utc": now.isoformat()})
 
     def _check_entry_conditions(self, entry_conditions: Dict[str, Any]) -> None:
         direction = str(entry_conditions.get("direction") or "").upper()
