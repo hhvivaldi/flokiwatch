@@ -567,15 +567,24 @@ class TradingBot:
                     if isinstance(resolved_payload, dict) and resolved_payload.get("resolved") is True:
                         resolved_ticket = resolved_payload.get("ticket")
                         for t in (getattr(self, "closed_trades_today", []) or []):
-                            if t.get("ticket") == resolved_ticket and t.get("pending"):
-                                t["profit"] = resolved_payload.get("profit")
-                                t["close_price"] = resolved_payload.get("close_price")
-                                t["reason"] = resolved_payload.get("reason")
-                                t["close_time"] = resolved_payload.get("close_time")
-                                t["pending"] = False
-                                t["estimated"] = False
+                            if t.get("ticket") == resolved_ticket:
+                                if t.get("close_price") is None:
+                                    t["close_price"] = resolved_payload.get("close_price")
+                                if t.get("close_time") is None:
+                                    t["close_time"] = resolved_payload.get("close_time")
+                                if t.get("reason") is None or str(t.get("reason")).strip() == "":
+                                    t["reason"] = resolved_payload.get("reason")
+                                if t.get("pending"):
+                                    t["pending"] = False
+                                if t.get("estimated"):
+                                    t["estimated"] = False
 
                                 try:
+                                    if resolved_payload.get("close_price") is not None or resolved_payload.get("reason") is not None:
+                                        log.info(
+                                            f"RESOLVE_PENDING | resolved ticket #{resolved_ticket}: "
+                                            f"close_price={resolved_payload.get('close_price')}, reason={resolved_payload.get('reason')}"
+                                        )
                                     record_trade_close(
                                         ticket=resolved_ticket,
                                         close_price=t.get("close_price"),
@@ -593,14 +602,31 @@ class TradingBot:
             except Exception:
                 pass
 
-            pending = [t for t in self.closed_trades_today if t.get('pending')]
-            if not pending:
+            closed_trades = getattr(self, "closed_trades_today", []) or []
+            def _needs_deal_details(trade: dict) -> bool:
+                try:
+                    if trade.get("close_price") is None:
+                        return True
+                    r = trade.get("reason")
+                    if r is None:
+                        return True
+                    rs = str(r)
+                    if "estimated" in rs.lower():
+                        return True
+                    if rs.strip() == "Closed by broker (details unavailable)":
+                        return True
+                    return False
+                except Exception:
+                    return False
+
+            needs_details = [t for t in closed_trades if _needs_deal_details(t)]
+            log.info(f"RESOLVE_PENDING | checked {len(closed_trades)} closed trades | {len(needs_details)} need deal details")
+            if not needs_details:
                 return
-            
-            log.info(f"Resolving {len(pending)} pending trade(s)...")
+
             resolved_any = False
-            
-            for trade in pending:
+
+            for trade in needs_details:
                 ticket = trade.get('ticket')
                 if not ticket:
                     continue
@@ -614,23 +640,27 @@ class TradingBot:
                 
                 if deal and not deal.get('pending'):
                     # Real deal found — resolve
-                    trade['profit'] = deal['profit']
-                    trade['close_price'] = deal['close_price']
-                    trade['reason'] = deal['reason']
-                    trade['pending'] = False
-                    trade['estimated'] = False
+                    if trade.get('close_price') is None:
+                        trade['close_price'] = deal.get('close_price')
+                    if trade.get('reason') is None or str(trade.get('reason')).strip() == "" or "estimated" in str(trade.get('reason')).lower() or str(trade.get('reason')).strip() == "Closed by broker (details unavailable)":
+                        trade['reason'] = deal.get('reason')
+                    if trade.get('close_time') is None:
+                        trade['close_time'] = deal.get('close_time', datetime.now())
+                    if trade.get('pending'):
+                        trade['pending'] = False
+                    if trade.get('estimated'):
+                        trade['estimated'] = False
                     resolved_any = True
-                    
-                    log.info(
-                        f"  ✅ Resolved #{ticket}: close={deal['close_price']:.2f} | "
-                        f"P&L=${deal['profit']:+.2f} | {deal['reason']}"
-                    )
+
+                    log.info(f"RESOLVE_PENDING | resolved ticket #{ticket}: close_price={trade.get('close_price')}, reason={trade.get('reason')}")
                     
                     # Update SQLite
                     record_trade_close(
-                        ticket=ticket, close_price=deal['close_price'],
-                        profit=deal['profit'], close_reason=deal['reason'],
-                        close_time=deal.get('close_time', datetime.now()).isoformat() if hasattr(deal.get('close_time', ''), 'isoformat') else str(deal.get('close_time', '')),
+                        ticket=ticket,
+                        close_price=trade.get('close_price'),
+                        profit=trade.get('profit'),
+                        close_reason=trade.get('reason'),
+                        close_time=trade.get('close_time').isoformat() if hasattr(trade.get('close_time', ''), 'isoformat') else str(trade.get('close_time', '')),
                     )
                     
                     # Discord notification
@@ -658,6 +688,7 @@ class TradingBot:
                             creationflags = 0
                             if os.name == "nt":
                                 creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                            log.info(f"RESOLVE_PENDING | launching deal_resolver.py for ticket #{ticket} (profit known, details missing)")
                             subprocess.Popen(
                                 [sys.executable, resolver_py, str(ticket)],
                                 cwd=base_dir,
