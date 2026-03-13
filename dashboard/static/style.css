@@ -57,35 +57,80 @@
   box-shadow: 0 0 8px 1px currentColor;
 }
 
-/* Sentiment State Colors (Logic based on activeCount mapping [3, 6, 8, 11, 14]) */
+/* ================================================================
+   SENTIMENT BAR — single color per direction state
+   States driven by JS: activeIdx 0=STRONG SELL, 1=SELL, 2=NEUTRAL, 3=BUY, 4=STRONG BUY
+   Each state = one segment lit; segment color matches sentiment direction.
+   ================================================================ */
 
-/* SELL / STRONG SELL state: nth-child(1) is active but nth-child(7) is not (count 3 or 6) */
-.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(1).active):not(:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(7).active)) #sentiment-label,
-#sentiment-bar:has(.vu-segment:nth-child(1).active):not(:has(.vu-segment:nth-child(7).active)) .vu-segment.active {
-  background: #ef4444 !important;
-  color: #ef4444 !important;
+/* Default inactive: dark grey */
+#sentiment-bar .vu-segment {
+  background: rgba(255, 255, 255, 0.06);
 }
 
-/* NEUTRAL state: nth-child(7) is active but nth-child(9) is not (count 8) */
-.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(7).active):not(:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(9).active)) #sentiment-label,
-#sentiment-bar:has(.vu-segment:nth-child(7).active):not(:has(.vu-segment:nth-child(9).active)) .vu-segment.active {
-  background: #eab308 !important;
-  color: #eab308 !important;
+/* STRONG SELL (seg 0) — bright red */
+#sentiment-bar .vu-segment:nth-child(1).active {
+  background: #ef4444;
+  color: #ef4444;
+  box-shadow: 0 0 10px 2px rgba(239,68,68,0.6);
 }
 
-/* BUY / STRONG BUY state: nth-child(9) is active (count 11 or 14) */
-.flex:has(> .flex-1 > #sentiment-bar .vu-segment:nth-child(9).active) #sentiment-label,
-#sentiment-bar:has(.vu-segment:nth-child(9).active) .vu-segment.active {
-  background: #22c55e !important;
-  color: #22c55e !important;
+/* SELL (seg 1) — soft red */
+#sentiment-bar .vu-segment:nth-child(2).active {
+  background: #f87171;
+  color: #f87171;
+  box-shadow: 0 0 8px 2px rgba(248,113,113,0.5);
 }
 
-/* Lifecycle State Coloring (High-fidelity Purple matching reference) */
-.flex:has(> .flex-1 > #lifecycle-bar .vu-segment.active) #lifecycle-label,
-#lifecycle-bar .vu-segment.active {
-  background: #a855f7 !important;
-  color: #a855f7 !important;
+/* NEUTRAL (seg 2) — amber */
+#sentiment-bar .vu-segment:nth-child(3).active {
+  background: #f59e0b;
+  color: #f59e0b;
+  box-shadow: 0 0 8px 2px rgba(245,158,11,0.5);
 }
+
+/* BUY (seg 3) — soft green */
+#sentiment-bar .vu-segment:nth-child(4).active {
+  background: #4ade80;
+  color: #4ade80;
+  box-shadow: 0 0 8px 2px rgba(74,222,128,0.5);
+}
+
+/* STRONG BUY (seg 4) — bright green */
+#sentiment-bar .vu-segment:nth-child(5).active {
+  background: #22c55e;
+  color: #22c55e;
+  box-shadow: 0 0 10px 2px rgba(34,197,94,0.6);
+}
+
+/* Sentiment label color mirrors active segment */
+#sentiment-bar:has(.vu-segment:nth-child(1).active) ~ #sentiment-label { color: #ef4444 !important; }
+#sentiment-bar:has(.vu-segment:nth-child(2).active) ~ #sentiment-label { color: #f87171 !important; }
+#sentiment-bar:has(.vu-segment:nth-child(3).active) ~ #sentiment-label { color: #f59e0b !important; }
+#sentiment-bar:has(.vu-segment:nth-child(4).active) ~ #sentiment-label { color: #4ade80 !important; }
+#sentiment-bar:has(.vu-segment:nth-child(5).active) ~ #sentiment-label { color: #22c55e !important; }
+
+/* ================================================================
+   LIFECYCLE BAR — 6 segments, each with a fixed per-slot color
+   Slots: 0=WATCHING(purple) 1=PREPARING(blue) 2=ENTRY(green/red via JS)
+          3=MANAGING(teal) 4=CLOSING(orange) 5=RESULT(green/red via JS)
+   Active segments fill progressively up to current step.
+   ================================================================ */
+
+#lifecycle-bar .vu-segment {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Per-slot base colors when active */
+#lifecycle-bar .vu-segment:nth-child(1).active { background: #a855f7; color: #a855f7; box-shadow: 0 0 8px 2px rgba(168,85,247,0.5); }
+#lifecycle-bar .vu-segment:nth-child(2).active { background: #818cf8; color: #818cf8; box-shadow: 0 0 8px 2px rgba(129,140,248,0.45); }
+#lifecycle-bar .vu-segment:nth-child(3).active { background: #22c55e; color: #22c55e; box-shadow: 0 0 8px 2px rgba(34,197,94,0.5); }
+#lifecycle-bar .vu-segment:nth-child(4).active { background: #10b981; color: #10b981; box-shadow: 0 0 8px 2px rgba(16,185,129,0.5); }
+#lifecycle-bar .vu-segment:nth-child(5).active { background: #f97316; color: #f97316; box-shadow: 0 0 8px 2px rgba(249,115,22,0.5); }
+#lifecycle-bar .vu-segment:nth-child(6).active { background: #22c55e; color: #22c55e; box-shadow: 0 0 8px 2px rgba(34,197,94,0.5); }
+
+/* Lifecycle label stays grey — step name is self-explanatory */
+#lifecycle-label { color: rgba(156,163,175,0.9); }
 
 .vu-segment.pulse {
   animation: vu-pulse 1.5s infinite ease-in-out;
@@ -455,6 +500,63 @@
   color: rgba(254, 226, 226, 0.95);
   font-size: 11px;
   letter-spacing: 0.08em;
+}
+
+/* ================================================================
+   RECENT TRIGGERS — log-entry style
+   ================================================================ */
+
+.trigger-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.trigger-log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  animation: trigger-fade-in-up 0.35s ease-out forwards;
+  transition: background 0.15s;
+}
+
+.trigger-log-entry:last-child {
+  border-bottom: none;
+}
+
+.trigger-log-entry:hover {
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+}
+
+.trigger-log-action {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.trigger-log-body {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.6875rem;
+  color: rgba(156,163,175,0.85);
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.trigger-log-age {
+  font-size: 0.625rem;
+  color: rgba(107,114,128,0.7);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* ================================================================

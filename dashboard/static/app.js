@@ -158,16 +158,16 @@ function renderFastTriggers(fastDecisions) {
     }
 
     const style = fastChipStyleFromFastDecision(fd);
-    const textParts = [action];
-    if (reason) textParts.push(reason);
-    if (suffix) textParts.push(suffix);
-    textParts.push(ageText);
+    const bodyParts = [];
+    if (reason) bodyParts.push(reason);
+    if (suffix) bodyParts.push(suffix);
 
     return `
-      <span
-        class="px-2.5 py-1 rounded-full border bg-black/20 backdrop-blur-sm font-medium trigger-entry"
-        style="color:${style.color};border-color:${style.border};"
-      >${textParts.join(" — ")}</span>
+      <div class="trigger-log-entry">
+        <span class="trigger-log-action" style="color:${style.color};">${action}</span>
+        <span class="trigger-log-body">${bodyParts.join(' — ') || '—'}</span>
+        <span class="trigger-log-age">${ageText}</span>
+      </div>
     `;
   }).join("");
 }
@@ -1387,6 +1387,7 @@ function renderProactiveAnalysis(proactive, positions) {
 
       sentimentLabelEl.textContent = label;
       const segs = sentimentBarEl.children;
+      // 5 segments: 0=STRONG SELL, 1=SELL, 2=NEUTRAL, 3=BUY, 4=STRONG BUY
       for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
@@ -1437,30 +1438,13 @@ function renderProactiveAnalysis(proactive, positions) {
 
       lifecycleLabelEl.textContent = step;
 
+      // 6 segments, colors defined in CSS per nth-child slot
       const segs = lifecycleBarEl.children;
       for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
         if (i <= stepIdx) seg.classList.add("active");
         else seg.classList.remove("active");
-      }
-
-      const entrySeg = segs[2];
-      if (entrySeg) {
-        if (d === "OPEN_SELL") entrySeg.style.backgroundColor = "#ef4444";
-        else entrySeg.style.backgroundColor = "#22c55e";
-      }
-
-      const managingSeg = segs[3];
-      if (managingSeg) {
-        if (hasPnl && !pnlNonNeg) managingSeg.style.backgroundColor = "#f59e0b";
-        else managingSeg.style.backgroundColor = "#10b981";
-      }
-
-      const resultSeg = segs[5];
-      if (resultSeg) {
-        if (Number.isFinite(lastKnownClosedPnl) && lastKnownClosedPnl < 0) resultSeg.style.backgroundColor = "#ef4444";
-        else resultSeg.style.backgroundColor = "#22c55e";
       }
 
       lifecycleIndicatorEl.style.left = `${(((stepIdx + 0.5) / 6) * 100).toFixed(1)}%`;

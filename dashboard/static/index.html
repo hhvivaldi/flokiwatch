@@ -94,9 +94,10 @@
                 </div>
               </div>
 
+              <!-- ROW 1: Decision (left) + Indicators (right) -->
               <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 <div class="lg:col-span-1">
-                  <div class="glass-panel-deep rounded-xl p-5 sm:p-6 border border-white/5">
+                  <div class="glass-panel-deep rounded-xl p-5 sm:p-6 border border-white/5 h-full">
                     <div class="text-xxs text-gray-500 font-bold tracking-widest-caps mb-3">AGENT DECISION</div>
                     <div id="proactive-decision" class="text-4xl sm:text-5xl font-bold tracking-tighter">—</div>
                     <div class="mt-4 flex items-center gap-3">
@@ -113,114 +114,104 @@
                   </div>
                 </div>
 
-                <div class="lg:col-span-2 space-y-4">
+                <div class="lg:col-span-2 flex flex-col gap-4">
+                  <!-- SENTIMENT: 5 segments — one per state -->
                   <div class="glass-panel-deep rounded-xl p-3 sm:p-4">
                     <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">SENTIMENT</div>
+                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0 w-20">SENTIMENT</div>
                       <div class="flex-1">
                         <div id="sentiment-bar" class="vu-meter">
-                          <div class="vu-segment bearish"></div>
-                          <div class="vu-segment bearish"></div>
-                          <div class="vu-segment bearish"></div>
-                          <div class="vu-segment bearish"></div>
-                          <div class="vu-segment bearish"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment bullish"></div>
-                          <div class="vu-segment bullish"></div>
-                          <div class="vu-segment bullish"></div>
-                          <div class="vu-segment bullish"></div>
-                          <div class="vu-segment bullish"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
                         </div>
                         <div id="sentiment-indicator" class="hidden"></div>
                       </div>
-                      <div id="sentiment-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
+                      <div id="sentiment-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0 w-20 text-right">—</div>
                     </div>
                   </div>
 
+                  <!-- LIFECYCLE: 6 segments — one per step -->
                   <div class="glass-panel-deep rounded-xl p-3 sm:p-4">
                     <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0">LIFECYCLE</div>
+                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0 w-20">LIFECYCLE</div>
                       <div class="flex-1">
                         <div id="lifecycle-bar" class="vu-meter">
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
-                          <div class="vu-segment neutral"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
+                          <div class="vu-segment"></div>
                         </div>
                         <div id="lifecycle-indicator" class="hidden"></div>
                       </div>
-                      <div id="lifecycle-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0">—</div>
+                      <div id="lifecycle-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0 w-20 text-right">—</div>
+                    </div>
+                    <!-- Step labels -->
+                    <div class="flex justify-between mt-1.5 px-1 text-[9px] font-mono text-gray-600">
+                      <span>WATCH</span><span>PREP</span><span>ENTRY</span><span>MANAGE</span><span>CLOSE</span><span>RESULT</span>
                     </div>
                   </div>
+                </div>
+              </div>
 
-                  <div class="glass-panel-deep rounded-xl p-4 sm:p-5 h-full">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase">REASONING</div>
-                      <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-widest font-semibold text-gray-500 hover:text-gray-300 transition-colors">Expand</button>
-                    </div>
-                    <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed mt-3 line-clamp-4">—</p>
+              <!-- ROW 2: Reasoning — full width -->
+              <div class="mt-5 glass-panel-deep rounded-xl p-4 sm:p-5">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase">REASONING</div>
+                  <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-widest font-semibold text-gray-500 hover:text-gray-300 transition-colors">Expand</button>
+                </div>
+                <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed line-clamp-4">—</p>
 
-                    <div id="proactive-close-reason-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CLOSE REASON</div>
-                      <div id="proactive-close-reason" class="text-gray-200">—</div>
-                    </div>
+                <div id="proactive-close-reason-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
+                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CLOSE REASON</div>
+                  <div id="proactive-close-reason" class="text-gray-200">—</div>
+                </div>
 
-                    <div id="proactive-adjust-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">ADJUSTMENT</div>
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div>
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW SL</div>
-                          <div id="proactive-adjust-sl" class="text-gray-200">—</div>
-                        </div>
-                        <div>
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW TP</div>
-                          <div id="proactive-adjust-tp" class="text-gray-200">—</div>
-                        </div>
-                        <div class="sm:col-span-3">
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">REASON</div>
-                          <div id="proactive-adjust-reason" class="text-gray-200">—</div>
-                        </div>
-                      </div>
+                <div id="proactive-adjust-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
+                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">ADJUSTMENT</div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW SL</div>
+                      <div id="proactive-adjust-sl" class="text-gray-200">—</div>
                     </div>
+                    <div>
+                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW TP</div>
+                      <div id="proactive-adjust-tp" class="text-gray-200">—</div>
+                    </div>
+                    <div class="sm:col-span-3">
+                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">REASON</div>
+                      <div id="proactive-adjust-reason" class="text-gray-200">—</div>
+                    </div>
+                  </div>
+                </div>
 
-                    <div id="proactive-tp-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      <div id="proactive-tp-entry" class="text-gray-200">—</div>
-                      <div class="mt-1 text-gray-400">
-                        <span id="proactive-tp-sl">—</span>
-                        <span class="mx-1">|</span>
-                        <span id="proactive-tp-tp">—</span>
-                        <span class="mx-1">|</span>
-                        <span id="proactive-tp-rr">—</span>
-                      </div>
-                    </div>
+                <div id="proactive-tp-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
+                  <div id="proactive-tp-entry" class="text-gray-200">—</div>
+                  <div class="mt-1 text-gray-400">
+                    <span id="proactive-tp-sl">—</span>
+                    <span class="mx-1">|</span>
+                    <span id="proactive-tp-tp">—</span>
+                    <span class="mx-1">|</span>
+                    <span id="proactive-tp-rr">—</span>
+                  </div>
+                </div>
 
-                    <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">KEY FACTORS</div>
-                        <ul id="proactive-factors" class="text-xs text-gray-400 space-y-1.5">
-                          <li class="text-gray-600">—</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">CONCERNS</div>
-                        <ul id="proactive-concerns" class="text-xs text-gray-400 space-y-1.5">
-                          <li class="text-gray-600">—</li>
-                        </ul>
-                      </div>
-                    </div>
+                <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">KEY FACTORS</div>
+                    <ul id="proactive-factors" class="text-xs text-gray-400 space-y-1.5">
+                      <li class="text-gray-600">—</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">CONCERNS</div>
+                    <ul id="proactive-concerns" class="text-xs text-gray-400 space-y-1.5">
+                      <li class="text-gray-600">—</li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -229,9 +220,12 @@
 
           <hr class="section-separator" />
           <div class="mt-2 glass-panel-deep rounded-xl p-4 sm:p-5">
-            <div class="text-xs font-semibold text-gray-500 tracking-[0.1em] uppercase">RECENT TRIGGERS</div>
-            <div id="fast-triggers-chips" class="mt-3 flex flex-wrap gap-2 text-xs">
-              <span class="text-gray-600 font-medium">NO TRIGGERS YET</span>
+            <div class="text-xs font-semibold text-gray-500 tracking-[0.1em] uppercase mb-3">RECENT TRIGGERS</div>
+            <div id="fast-triggers-chips" class="trigger-log">
+              <div class="trigger-log-entry">
+                <span class="trigger-log-action text-gray-600">—</span>
+                <span class="trigger-log-body">NO TRIGGERS YET</span>
+              </div>
             </div>
           </div>
 
