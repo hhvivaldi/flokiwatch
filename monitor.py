@@ -85,7 +85,17 @@ class PositionMonitor:
                 try:
                     account_info = executor.get_account_info()
                     if account_info and account_info.get('balance') is not None:
-                        self.balance_at_open[pos.ticket] = float(account_info['balance'])
+                        bal = float(account_info['balance'])
+                        self.balance_at_open[pos.ticket] = bal
+                        source = "startup_first_sight" if not self._initialized else "first_sight"
+                        log.info(
+                            f"BALANCE_CAPTURE | ticket=#{pos.ticket} | balance=${bal:.2f} | source={source}"
+                        )
+                    else:
+                        source = "startup_first_sight" if not self._initialized else "first_sight"
+                        log.warning(
+                            f"BALANCE_CAPTURE | WARNING | ticket=#{pos.ticket} | balance_unavailable | source={source}"
+                        )
                 except Exception as e:
                     log.debug(f"   Monitor: balance capture error (non-blocking): {e}")
                 
@@ -442,6 +452,8 @@ class PositionMonitor:
                 bal_now = float(account_info_now['balance']) if account_info_now and account_info_now.get('balance') is not None else None
                 if bal_open is not None and bal_now is not None:
                     profit_balance = bal_now - float(bal_open)
+                elif bal_open is None:
+                    log.warning(f"BALANCE_CAPTURE | WARNING | no balance_at_open for ticket #{ticket}")
             except Exception as e:
                 log.debug(f"   Monitor: balance diff error (non-blocking): {e}")
             
