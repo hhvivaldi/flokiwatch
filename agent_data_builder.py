@@ -238,7 +238,7 @@ def _compute_swing_points_h1(h1_candles: List[Dict], n: int = 3, max_points: int
         return {
             "swing_highs": [],
             "swing_lows": [],
-            "structure": "insufficient data for swing analysis",
+            "structure": "",
         }
 
     start = n
@@ -270,7 +270,7 @@ def _compute_swing_points_h1(h1_candles: List[Dict], n: int = 3, max_points: int
     highs_newest = list(reversed(highs))[:max_points]
     lows_newest = list(reversed(lows))[:max_points]
 
-    structure = "insufficient data for swing analysis"
+    structure = ""
     try:
         has_2h = len(highs_newest) >= 2
         has_2l = len(lows_newest) >= 2
@@ -281,31 +281,31 @@ def _compute_swing_points_h1(h1_candles: List[Dict], n: int = 3, max_points: int
             l0 = float(lows_newest[0]["price"])
             l1p = float(lows_newest[1]["price"])
             if h0 > h1p and l0 > l1p:
-                structure = "higher highs and higher lows — uptrend"
+                structure = "higher highs and higher lows"
             elif h0 < h1p and l0 < l1p:
-                structure = "lower highs and lower lows — downtrend"
+                structure = "lower highs and lower lows"
             else:
                 structure = "mixed — no clear trend"
         elif has_2h and not has_2l:
             h0 = float(highs_newest[0]["price"])
             h1p = float(highs_newest[1]["price"])
             if h0 > h1p:
-                structure = "higher highs — bullish momentum"
+                structure = "higher highs"
             elif h0 < h1p:
-                structure = "lower highs — weakening momentum"
+                structure = "lower highs"
             else:
                 structure = "mixed — no clear trend"
         elif not has_2h and has_2l:
             l0 = float(lows_newest[0]["price"])
             l1p = float(lows_newest[1]["price"])
             if l0 > l1p:
-                structure = "higher lows — buyers defending"
+                structure = "higher lows"
             elif l0 < l1p:
-                structure = "lower lows — bearish pressure"
+                structure = "lower lows"
             else:
                 structure = "mixed — no clear trend"
     except Exception:
-        structure = "insufficient data for swing analysis"
+        structure = ""
 
     return {
         "swing_highs": highs_newest,
@@ -846,12 +846,10 @@ def format_proactive_xml(data_package: Dict) -> str:
         lines.append(
             "    <primary "
             f"name=\"{_xml_attr(primary.get('name'))}\" "
-            f"direction=\"{_xml_attr(primary.get('direction'))}\" "
-            f"score=\"{_xml_attr(primary.get('final_score'))}\" "
             f"sr_multiplier=\"{_xml_attr(primary.get('sr_multiplier'))}\"/>"
         )
     else:
-        lines.append("    <primary name=\"\" direction=\"\" score=\"0\" sr_multiplier=\"1.00\"/>")
+        lines.append("    <primary name=\"\" sr_multiplier=\"1.00\"/>")
     lines.append(f"    <all_patterns>{_xml_escape(all_patterns_str)}</all_patterns>")
     lines.append(f"    <sr_context>{_xml_escape(patterns.get('sr_context'))}</sr_context>")
     lines.append("  </candlestick_pattern>")
@@ -913,8 +911,7 @@ def format_proactive_xml(data_package: Dict) -> str:
         "  <dxy "
         f"value=\"{_xml_attr(dxy.get('value'))}\" "
         f"change_pct=\"{_xml_attr(dxy.get('change_24h'))}\" "
-        f"trend=\"{_xml_attr(dxy.get('trend'))}\" "
-        f"impact=\"{_xml_attr('bullish for gold' if str(dxy.get('trend', '')).lower() in ('falling','down') else '')}\"/>"
+        f"trend=\"{_xml_attr(dxy.get('trend'))}\"/>"
     )
     lines.append(
         f"  <vix value=\"{_xml_attr(vix.get('value'))}\" change_pct=\"{_xml_attr(vix.get('change_pct'))}\"/>"
@@ -926,7 +923,6 @@ def format_proactive_xml(data_package: Dict) -> str:
     lines.append(
         "  <calendar "
         f"phase=\"{_xml_attr(calendar.get('phase'))}\" "
-        f"bias=\"{_xml_attr(calendar.get('bias'))}\" "
         f"source=\"{_xml_attr(calendar.get('source', 'mt5_bridge'))}\">"
     )
 
@@ -961,22 +957,62 @@ def format_proactive_xml(data_package: Dict) -> str:
         lines.append("    </upcoming_events>")
 
     lines.append("  </calendar>")
-    lines.append(f"  <sentiment overall=\"{_xml_attr(sentiment.get('overall', sentiment.get('label')))}\"/>")
 
-    lines.append(f"  <headlines count=\"{_xml_attr(min(len(headlines), 20))}\">")
-    for h in headlines[:20]:
-        if isinstance(h, dict):
-            h_time = h.get("time") or h.get("timestamp") or ""
-            h_text = h.get("text") or h.get("headline") or ""
-            h_score = h.get("score")
-        else:
-            h_time = ""
-            h_text = str(h)
-            h_score = ""
-        lines.append(
-            f"    <headline time=\"{_xml_attr(h_time)}\" text=\"{_xml_attr(h_text)}\" score=\"{_xml_attr(h_score)}\"/>"
-        )
-    lines.append("  </headlines>")
+    # Headlines: 5 most recent, full text (title + optional description)
+    try:
+        parsed_headlines: List[Dict[str, Any]] = []
+        if isinstance(headlines, list):
+            for h in headlines:
+                if not isinstance(h, dict):
+                    continue
+
+                ts_val = h.get("timestamp") or h.get("time")
+                dt_val = None
+                try:
+                    if ts_val:
+                        dt_val = datetime.fromisoformat(str(ts_val).replace("Z", "+00:00"))
+                        if dt_val.tzinfo is None:
+                            dt_val = dt_val.replace(tzinfo=timezone.utc)
+                except Exception:
+                    dt_val = None
+
+                title = h.get("title") or h.get("headline") or h.get("text") or ""
+                desc = h.get("description") or ""
+                full_text = str(title).strip()
+                if desc:
+                    full_text = f"{full_text} — {str(desc).strip()}"
+
+                parsed_headlines.append(
+                    {
+                        "dt": dt_val,
+                        "time_attr": ts_val,
+                        "text": full_text,
+                    }
+                )
+
+        parsed_headlines.sort(key=lambda x: x.get("dt") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        top5 = parsed_headlines[:5]
+
+        lines.append("  <headlines>")
+        for h in top5:
+            t_attr = ""
+            try:
+                dt_val = h.get("dt")
+                if isinstance(dt_val, datetime):
+                    t_attr = dt_val.strftime("%H:%M UTC")
+                else:
+                    t_attr = str(h.get("time_attr") or "")
+            except Exception:
+                t_attr = str(h.get("time_attr") or "")
+
+            lines.append(
+                f"    <headline time=\"{_xml_attr(t_attr)}\" text=\"{_xml_attr(h.get('text'))}\"/>"
+            )
+        lines.append("  </headlines>")
+    except Exception:
+        lines.append("  <headlines>")
+        lines.append("  </headlines>")
+
     lines.append("</macro_context>")
     lines.append("")
 
@@ -985,14 +1021,13 @@ def format_proactive_xml(data_package: Dict) -> str:
 
     lines.append("<indicators>")
     lines.append(
-        f"  <rsi value=\"{_xml_attr(rsi.get('value'))}\" condition=\"{_xml_attr(rsi.get('level', rsi.get('condition')))}\"/>"
+        f"  <rsi value=\"{_xml_attr(rsi.get('value'))}\"/>"
     )
     lines.append(
         "  <macd "
         f"value=\"{_xml_attr(macd.get('value'))}\" "
         f"signal=\"{_xml_attr(macd.get('signal'))}\" "
-        f"histogram=\"{_xml_attr(macd.get('histogram'))}\" "
-        f"trend=\"{_xml_attr(macd.get('trend'))}\"/>"
+        f"histogram=\"{_xml_attr(macd.get('histogram'))}\"/>"
     )
     lines.append(
         "  <emas "
@@ -1029,26 +1064,13 @@ def format_proactive_xml(data_package: Dict) -> str:
         "  <adx "
         f"value=\"{_xml_attr(adx.get('value'))}\" "
         f"plus_di=\"{_xml_attr(adx.get('plus_di'))}\" "
-        f"minus_di=\"{_xml_attr(adx.get('minus_di'))}\" "
-        f"trend_strength=\"{_xml_attr(adx.get('trend_strength', adx.get('classification')))}\"/>"
+        f"minus_di=\"{_xml_attr(adx.get('minus_di'))}\"/>"
     )
     lines.append(
         "  <volume "
-        f"ratio=\"{_xml_attr(volume.get('ratio', volume.get('tick_volume_ratio')))}\" "
-        f"classification=\"{_xml_attr(volume.get('classification'))}\"/>"
+        f"ratio=\"{_xml_attr(volume.get('ratio', volume.get('tick_volume_ratio')))}\"/>"
     )
     lines.append("</indicators>")
-    lines.append("")
-
-    lines.append("<ml_predictions>")
-    lines.append(
-        f"  <prediction direction=\"{_xml_attr(ml_pred)}\" confidence=\"{_xml_attr(str(ml_conf) + '%' if isinstance(ml_conf, (int, float)) else ml_conf)}\"/>"
-    )
-    lines.append(f"  <h1_probability>{_xml_escape(ml_h1.get('bullish_prob'))}</h1_probability>")
-    lines.append(f"  <h4_probability>{_xml_escape(ml_h4.get('bullish_prob'))}</h4_probability>")
-    lines.append(f"  <ensemble_agreement>{_xml_escape(ml_agreement)}</ensemble_agreement>")
-    lines.append(f"  <pattern>{_xml_escape(ml_pattern)}</pattern>")
-    lines.append("</ml_predictions>")
     lines.append("")
 
     lines.append("--- SECTION 4: TRADING CONTEXT ---")
