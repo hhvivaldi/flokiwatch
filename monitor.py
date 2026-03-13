@@ -415,28 +415,6 @@ class PositionMonitor:
         """Detect positions closed by broker (SL/TP hit)"""
         actions = []
         
-        def _record_synthetic_agent_close(profit_value: Optional[float]) -> None:
-            try:
-                from datetime import datetime
-                from db_writer import record_agent_proactive_analysis
-        
-                close_reason = "Position closed by EA/broker"
-                if profit_value is not None:
-                    close_reason = f"{close_reason} | P&L(balance diff): ${float(profit_value):+.2f}"
-        
-                now_iso = datetime.now().isoformat()
-                record_agent_proactive_analysis(
-                    datetime.utcnow().isoformat(),
-                    {
-                        "timestamp": now_iso,
-                        "decision": "CLOSE_TRADE",
-                        "confidence": 100,
-                        "close_reason": close_reason,
-                    },
-                )
-            except Exception as e:
-                log.debug(f"   Monitor: synthetic agent CLOSE_TRADE insert failed (ignored): {e}")
-        
         for ticket, pos in self.known_positions.items():
             if ticket in current_tickets:
                 continue
