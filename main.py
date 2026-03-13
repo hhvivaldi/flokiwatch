@@ -3,8 +3,10 @@ MAIN - Main Trading Bot
 Orchestrator of the XAU/USD automated trading system
 """
 
-import os
 import sys
+sys.dont_write_bytecode = True
+
+import os
 import time
 import signal
 import json
