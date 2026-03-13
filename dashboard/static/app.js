@@ -339,6 +339,8 @@ function renderTrades(trades, daily) {
   const container = el("trades");
   container.innerHTML = "";
 
+  const beProfitThreshold = 0.50;
+
   const wins = Number(daily?.wins || 0);
   const losses = Number(daily?.losses || 0);
   const breakevens = Number(daily?.breakevens || 0);
@@ -372,8 +374,8 @@ function renderTrades(trades, daily) {
     } else {
       displayReason = t.reason || "";
       if (displayReason.toLowerCase().includes("stop loss")) {
-        if (pnl > 1.0) displayReason = "Trailing Stop";
-        else if (pnl >= 0) displayReason = "Breakeven";
+        if (pnl >= beProfitThreshold) displayReason = "Trailing Stop";
+        else if (Math.abs(pnl) < beProfitThreshold) displayReason = "Breakeven";
         else displayReason = "Stop Loss";
       }
     }
@@ -385,10 +387,10 @@ function renderTrades(trades, daily) {
       pnlClass = "text-amber-400";
       icon = outcome === "WIN" ? "WIN" : (outcome === "LOSS" ? "LOSS" : "...");
     } else {
-      pnlClass = pnl > 0 ? "text-green-400" : (pnl < 0 ? "text-red-400" : "text-gray-400");
+      pnlClass = pnl >= beProfitThreshold ? "text-green-400" : (pnl <= -beProfitThreshold ? "text-red-400" : "text-gray-400");
       const estBadge = t.estimated ? ` <span class="text-amber-400 opacity-75">(est.)</span>` : "";
       pnlDisplay = `${fmtMoney(pnl)}${estBadge}`;
-      icon = pnl > 0 ? "WIN" : (pnl < 0 ? "LOSS" : "BE");
+      icon = pnl >= beProfitThreshold ? "WIN" : (pnl <= -beProfitThreshold ? "LOSS" : "BE");
     }
 
     container.insertAdjacentHTML(
