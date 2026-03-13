@@ -6,13 +6,19 @@
 
 ## 1. Visão Geral
 
-Bot de trading algorítmico automatizado para XAU/USD. Opera no timeframe H1, toma decisões (BUY/SELL/HOLD) a cada 5 minutos usando 5 pilares de análise combinados pelo **Cérebro Central**.
+Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-first**. O sistema separa claramente:
+
+- **Brain (Python)**: pipeline de dados e cálculo (1 min). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
+- **Agent Proactive (Claude Sonnet)**: análise principal (a cada 30 min + triggers fora do ciclo). Analisa o pacote completo de dados brutos e decide **WAIT / OPEN / HOLD / CLOSE / ADJUST**. É o **único decisor**.
+- **Python Monitor (zero Claude cost)**: loop de 1 min para detetar triggers e chamar o agente certo.
+- **Agent Fast (Claude, só em trigger)**: gestão de emergência (CLOSE / ADJUST / HOLD / DISMISS). **Não pode abrir trades**.
+- **EA Bridge (MQL5, tick-by-tick)**: execução e gestão intra-tick (breakeven, trailing stop).
 
 **O que faz:**
-- Analisa mercado a cada 5 min (técnico, ML, momentum, notícias, calendário)
-- Decide com nível de confiança associado
-- Executa ordens no MT5 com SL/TP automáticos
-- Gere posições com breakeven, trailing stop, proteções
+- Brain atualiza o pacote de dados (1 min)
+- Agent Proactive decide a ação (30 min + triggers)
+- Executa ordens via EA Bridge (tick-by-tick) e/ou via Python quando aplicável
+- Gere posições via EA Bridge e via Agent Fast quando há risco/alerta
 - Notifica via Discord e apresenta tudo num dashboard web (FlokiWatch)
 
 **Princípios:** Nunca bloquear (fallback gracioso), segurança primeiro (múltiplas camadas), transparência (explicação de cada decisão), adaptabilidade (pesos dinâmicos).
@@ -23,18 +29,24 @@ Bot de trading algorítmico automatizado para XAU/USD. Opera no timeframe H1, to
 
 ```
 main.py (Orquestrador)
-  ├── Analysis Cycle (5 min) → central_brain.py (Cérebro Central)
-  │     ├── technical_analyzer.py (Pilar 1: Técnico)
-  │     ├── ml_predictor.py (Pilar 2: ML Ensemble)
-  │     ├── momentum_detector.py (Pilar 3: Momentum)
-  │     ├── news_score_hybrid.py (Pilar 4: News)
-  │     ├── economic_calendar.py (Pilar 5: Calendário)
-  │     ├── volatility_guard.py (Proteção crashes)
-  │     ├── gpt_confidence.py (GPT Validator)
-  │     └── cycle_memory.py (Memória temporal)
-  ├── Monitor Cycle (10 sec) → monitor.py (Breakeven, Trailing)
-  ├── Safety Checks → safety_checks.py
-  ├── Execution → executor.py (MT5 API)
+  ├── Brain Cycle (1 min) → central_brain.py (Pipeline de dados)
+  │     ├── MT5 data fetch (rates, ticks, positions, account)
+  │     ├── calculate_indicators.py / calculate_technical_score.py (indicadores)
+  │     ├── ml_predictor.py (ML Ensemble)
+  │     ├── news_score_hybrid.py / news_sentiment.py (news + macro)
+  │     ├── economic_calendar.py (calendário)
+  │     └── support_resistance.py (zonas S/R)
+  ├── Agent Proactive (30 min + out-of-cycle triggers) → ai_agent.py
+  │     └── decide: WAIT / OPEN / HOLD / CLOSE / ADJUST
+  ├── Python Monitor (1 min, zero Claude cost) → monitor.py / agent_monitor.py
+  │     ├── 6 triggers → chama Agent Proactive ou Agent Fast
+  │     └── balance_at_open tracking + profit drawdown guard
+  ├── Agent Fast (trigger-only) → ai_agent.py
+  │     └── decide: CLOSE / ADJUST / HOLD / DISMISS (nunca OPEN)
+  ├── Execution
+  │     ├── EA Bridge (tick-by-tick) → ea_bridge.py ↔ mql5/FlokiBridge.mq5
+  │     └── executor.py (fallback/auxiliar via MT5 API)
+  ├── Deal Resolution → deal_resolver.py (subprocess, MT5 reconnect)
   └── Output
         ├── alerts.py → Discord
         ├── state_writer.py → bot_state.json (Dashboard)
@@ -47,28 +59,80 @@ main.py (Orquestrador)
 
 ---
 
-## 3. O Cérebro Central — 12 Passos de Decisão
+## 3. O Brain (central_brain.py) — Pipeline de Dados (não decide)
 
 **Ficheiro:** `central_brain.py`
 
-| Passo | Descrição |
-|-------|-----------|
-| 1 | Receber dados dos 5 pilares |
-| 2 | Analisar contexto técnico (RSI extremos, divergências MACD ±15pts, Bollinger squeeze) |
-| 3 | Validar ML (concordância ML vs técnico, confiança) |
-| 4 | Avaliar momentum (direção por votação: ADX +DI/-DI, velas, breakout) |
-| 5 | Analisar contexto fundamental (sentimento notícias) |
-| 6 | Analisar calendário económico (fase, bias) |
-| 7 | Identificar cenário de mercado |
-| 8 | Ajustar pesos dinamicamente |
-| 9 | Calcular score final (média ponderada 0-100) |
-| 10 | Aplicar ajuste M5 (micro-ajuste baseado em velas M5) |
-| 11 | Decisão: BUY (≥65), SELL (≤35), HOLD (36-64) |
-| 12 | Calcular confiança (0-100%) |
+O Brain é responsável por **recolher e preparar dados**, mantendo a consistência do pacote que alimenta os agentes:
 
-**Resultado (`BrainResult`):** decision, final_score, confidence, confidence_level, scenario, weights_used, confirmations, alerts, explanation, gpt_validation.
+- Dados do MT5 (rates multi-TF, preços, spread, posições, conta)
+- Indicadores técnicos e features
+- Output do ML ensemble
+- News/macro/sentimento e calendário
+- Zonas de suporte/resistência
 
-**Limiares:** Normal: BUY≥65 / SELL≤35. Lateralização: BUY≥70 / SELL≤30. Confiança mínima: 55% (abaixo = HOLD Forçado).
+O Brain **não faz interpretações finais** (BUY/SELL/HOLD) e **não executa trades**. A decisão é exclusivamente do Agent Proactive.
+
+O output do Brain é consumido por:
+
+- Agent Proactive (decisão principal)
+- Python Monitor (deteta condições e chama agentes)
+- Dashboard (visibilidade e auditoria)
+
+---
+
+## 4. Agent Proactive — Decisor Principal (M30 + triggers)
+
+O Agent Proactive é o componente que toma decisões estratégicas com base no pacote completo de dados.
+
+**Quando corre:**
+
+- A cada 30 minutos (snapshots periódicos)
+- Fora do ciclo quando triggers críticos disparam (ex.: entry conditions met, breakout)
+
+**O que recebe:**
+
+- Dados brutos e contexto do mercado (preço, candles multi-TF, indicadores, ML, news/macro, calendário, S/R)
+- Estado atual do bot (posições abertas, risco, eventos próximos, latências)
+
+**O que decide:**
+
+- `WAIT` (não agir)
+- `OPEN` (abrir BUY/SELL com plano)
+- `HOLD` (manter posição)
+- `CLOSE` (fechar posição)
+- `ADJUST` (ajustar SL/TP/gestão)
+
+---
+
+## 5. Python Monitor — Triggers (1 min, zero Claude cost)
+
+O Monitor corre a cada 1 minuto e avalia **6 triggers**. Dependendo do trigger, chama o agente adequado.
+
+1. Entry condition met → chama **Agent Proactive**
+2. Trade at risk → chama **Agent Fast**
+3. Calendar event → chama **Agent Fast**
+4. Breakout → chama **Agent Proactive**
+5. Session change → chama **Agent Proactive**
+6. Profit drawdown → chama **Agent Fast**
+
+O monitor também mantém tracking para auditoria e proteções (inclui `balance_at_open` e drawdown relativo ao ponto de abertura).
+
+---
+
+## 6. Agent Fast — Gestão de Emergência (trigger-only)
+
+O Agent Fast é chamado apenas por trigger e tem permissões limitadas.
+
+**Quando corre:**
+
+- Apenas quando o Monitor deteta risco/alerta (trade at risk, calendar, profit drawdown, etc.)
+
+**O que pode decidir:**
+
+- `CLOSE` / `ADJUST` / `HOLD` / `DISMISS`
+
+**Limitação crítica:** não pode emitir `OPEN`.
 
 ---
 
@@ -233,19 +297,23 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 **Limites:** Max time 48h, max drawdown 1000 pips (emergency safety net), max daily loss 5%.
 
+**P&L Source of Truth (live):** o P&L primário é apurado por **balance diff** quando o EA fecha posições (tick-by-tick). O Python usa isto como fonte robusta para “o que realmente aconteceu”, mesmo quando a resolução de deals no MT5 API falha temporariamente.
+
+**Deal Resolver (fallback):** um subprocesso (`deal_resolver.py`) faz resolução detalhada de fechos com reconnect ao MT5 quando necessário, para enriquecer histórico (close type, SL/TP/BE/trailing) e reduzir “unknown closures”.
+
 ---
 
-## 12. Monitor de Posições
+## 12. Monitor (Arquitetura Atual)
 
-**Ficheiro:** `monitor.py` — Executa cada 10s com posições abertas.
+O sistema tem dois níveis de monitorização:
 
-1. **Breakeven:** Detecta trigger → move SL para entrada → alerta Discord
-2. **Trailing:** Após breakeven, SL segue preço (só melhora, nunca recua)
-3. **Max Time:** 48h + lucro <5 pips → fecha
-4. **Max Drawdown:** >1000 pips → fecha imediatamente (emergency safety net — SL should trigger first at ~300 pips max)
-5. **Broker Closure:** Detecta posições desaparecidas → consulta deal history (3-level) → classifica (trailing/tp/be/sl) → regista + alerta
+1. **EA Bridge (tick-by-tick)**: breakeven e trailing no próprio MT5 (menor latência, mais precisão).
+2. **Python Monitor (1 min)**: triggers e chamadas ao Agent Fast/Proactive para gestão contextual (eventos, risco, drawdown).
 
-Volatility-aware: COOLING_DOWN usa BE 50 pips, trailing 80/50 pips.
+O Monitor também integra:
+
+- Balance diff para P&L real quando posições fecham no EA
+- Deal resolver para detalhamento quando a API MT5 não devolve informação imediatamente
 
 ---
 
@@ -387,30 +455,29 @@ OOS PF 1.62 > 1.5 target. Sistema validado, não overfitted.
 
 ## 21. Fluxo Completo de um Ciclo
 
-**Análise (5 min):**
-1. Dados H1 do MT5 → indicadores → score técnico
-2. ML ensemble (6 modelos) → score ML
-3. Momentum (ADX, volume, velas, ATR, breakout) → score momentum
-4. News híbrido (GPT headlines + DXY + Yields + VIX) → score news
-5. Calendário económico → score + bias
-6. Volatility Guard (M5) → status
-7. Cérebro Central (12 passos) → BrainResult
-8. GPT Validator → ajuste confiança ±15
-9. Verificar mínimo 55% → HOLD Forçado se abaixo
-10. Gravar SQLite + JSON + Cycle Memory
+**Brain cycle (1 min):**
+1. MT5 data fetch (multi-TF, conta, posições, spread)
+2. Cálculo de indicadores/features + ML + news/macro + calendário + S/R
+3. Persistência (SQLite + JSON) para dashboard e auditoria
 
-**Execução (se BUY/SELL):**
-1. Safety checks (10) → M5 reversal check
-2. Strong reversal → bloqueia. Moderate → conf -15
-3. Calcular SL/TP (ATR) → position sizing → executar MT5
-4. Registar trade + alerta Discord
+**Agent Proactive (30 min + triggers):**
+1. Recebe pacote de dados brutos do Brain + estado do sistema
+2. Decide `WAIT / OPEN / HOLD / CLOSE / ADJUST`
+3. Se `OPEN`: gera plano (direção + entry + SL/TP) e envia para execução
 
-**Monitor (10s):**
-1. Breakeven → Trailing → Max time → Max drawdown
-2. Detectar broker closures → deal history → classificar → registar
+**Python Monitor (1 min):**
+1. Avalia 6 triggers
+2. Entry conditions met / Breakout / Session change → chama Agent Proactive
+3. Trade at risk / Calendar event / Profit drawdown → chama Agent Fast
 
-**Heartbeat (60 min em HOLD):**
-- Full (cenário mudou / score ±8) ou Short (sem mudanças)
+**Agent Fast (trigger-only):**
+1. Decide `CLOSE / ADJUST / HOLD / DISMISS`
+2. Aplica ações de emergência (nunca abre trades)
+
+**Execução:**
+1. Preferencial: EA Bridge (tick-by-tick) aplica SL/TP, breakeven e trailing
+2. P&L: balance diff quando o EA fecha posições
+3. Detalhes: deal resolver para resolver e classificar fechos quando necessário
 
 ---
 
@@ -457,7 +524,11 @@ XAUUSD/
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Cérebro Central (12-step brain) | ✅ Done | 5 pilares + GPT validator |
+| Agent-first architecture (Brain=infra, Agent=decisor) | ✅ Done | Brain prepara dados; Agent Proactive decide |
+| Proactive Analysis (M30 snapshot + triggers) | ✅ Done | Dashboard mostra decisão, reasoning, factors, concerns |
+| Python Monitor triggers (1 min, zero Claude cost) | ✅ Done | 6 triggers chamam Proactive vs Fast |
+| Agent Fast emergency manager | ✅ Done | CLOSE/ADJUST/HOLD/DISMISS (no OPEN) |
+| EA Bridge tick-by-tick management | ✅ Done | BE/Trailing dentro do MT5 |
 | ML Ensemble v3.1 (6 models, 48 features) | ✅ Done | WF AUC ~0.79, 3-year data, 12 WF folds, rank-based calibration |
 | Volatility Guard (2-candle logic) | ✅ Done | EXTREME/COOLING/NORMAL |
 | Smart Pyramid Rule | ✅ Done | Block 2nd pos unless existing ≥0.3% profit |
@@ -504,5 +575,5 @@ Conclusion: No further optimization filters are needed. Focus should shift to mo
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| M5 Trigger (intra-candle early signal) | Medium | Influence analysis, not just re-trigger H1. Deferred until real trade data validates current system. |
-| ML weight floor monitoring | Low | Track losses where ML weight ≤10% due to stacked penalties. No code change yet — monitoring only. |
+| Monitor trigger tuning | Medium | Ajustar thresholds de trigger com base em dados live, sem alterar decisões do agente sem visibilidade no dashboard. |
+| Deal resolver enrichment | Low | Melhorar classificação/metadata de fechos quando MT5 estiver instável. |
