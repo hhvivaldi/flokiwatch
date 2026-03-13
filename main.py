@@ -2381,6 +2381,12 @@ class TradingBot:
             
             recent_decisions = get_recent_proactive_decisions(limit=5)
 
+            last_exec_rej = None
+            try:
+                last_exec_rej = getattr(self, "_last_execution_rejection", None)
+            except Exception:
+                last_exec_rej = None
+
             data_package = build_proactive_data_package(
                 brain_result=brain_result,
                 tech_data=tech_data,
@@ -2403,7 +2409,14 @@ class TradingBot:
                 ema200=ema200,
                 recent_decisions=recent_decisions,
                 trade_history=getattr(self, "closed_trades_today", []) or [],
+                last_execution_result=last_exec_rej,
             )
+
+            try:
+                if last_exec_rej is not None:
+                    self._last_execution_rejection = None
+            except Exception:
+                pass
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -2539,6 +2552,14 @@ class TradingBot:
                             if isinstance(result, dict):
                                 reason = result.get("reason")
                             log.warning(f"PROACTIVE_H1 | Agent execution REJECTED | reason={reason}")
+                            try:
+                                self._last_execution_rejection = {
+                                    "decision": str(agent_result.decision or ""),
+                                    "reason": str(reason or ""),
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                            except Exception:
+                                pass
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
 
