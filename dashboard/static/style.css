@@ -127,6 +127,30 @@
 .glow-red { box-shadow: 0 0 0 1px rgba(239,68,68,0.3), 0 0 40px rgba(239,68,68,0.15); }
 
 /* ================================================================
+   PROACTIVE PANEL DECISION BORDER GLOW
+   ================================================================ */
+
+.proactive-panel-glow-buy {
+  border-color: rgba(34, 197, 94, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.15), 0 0 28px rgba(34,197,94,0.18), 0 8px 32px 0 rgba(0,0,0,0.45);
+}
+
+.proactive-panel-glow-sell {
+  border-color: rgba(239, 68, 68, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.15), 0 0 28px rgba(239,68,68,0.18), 0 8px 32px 0 rgba(0,0,0,0.45);
+}
+
+.proactive-panel-glow-hold {
+  border-color: rgba(234, 179, 8, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(234,179,8,0.12), 0 0 22px rgba(234,179,8,0.14), 0 8px 32px 0 rgba(0,0,0,0.45);
+}
+
+.proactive-panel-glow-wait {
+  border-color: rgba(255,255,255,0.13) !important;
+  box-shadow: 0 8px 32px 0 rgba(0,0,0,0.45);
+}
+
+/* ================================================================
    DECISION GLOW ANIMATIONS
    ================================================================ */
 
@@ -266,6 +290,49 @@
   background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.1) 70%, transparent 100%);
   margin: 4px 0;
   border: none;
+}
+
+/* ================================================================
+   PHASE BADGE GLOW
+   ================================================================ */
+
+.phase-badge-trailing {
+  background: rgba(34,197,94,0.15) !important;
+  color: #4ade80 !important;
+  border-color: rgba(34,197,94,0.45) !important;
+  box-shadow: 0 0 8px rgba(34,197,94,0.35);
+}
+
+.phase-badge-breakeven {
+  background: rgba(251,191,36,0.15) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(251,191,36,0.45) !important;
+  box-shadow: 0 0 8px rgba(251,191,36,0.3);
+}
+
+.phase-badge-open {
+  background: rgba(239,68,68,0.12) !important;
+  color: #f87171 !important;
+  border-color: rgba(239,68,68,0.35) !important;
+}
+
+/* ================================================================
+   ACCOUNT CARDS
+   ================================================================ */
+
+.account-card {
+  background: rgba(17, 24, 39, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(75, 85, 99, 0.55);
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.account-card:hover {
+  border-color: rgba(107,114,128,0.7);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 /* ================================================================

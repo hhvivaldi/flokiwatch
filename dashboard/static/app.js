@@ -293,11 +293,11 @@ function renderPositions(positions) {
     const phase = p.phase || "OPEN";
     let phaseBadge = "";
     if (phase === "TRAILING") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">TRAILING</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-trailing">TRAILING</span>`;
     } else if (phase === "BREAKEVEN") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">BE ACTIVE</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-breakeven">BE ACTIVE</span>`;
     } else {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">OPEN</span>`;
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-open">OPEN</span>`;
     }
 
     // BE distance indicator
@@ -308,10 +308,11 @@ function renderPositions(positions) {
       beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">BE ✓</span>`;
     }
 
+    const dirBorderClass = (p.direction || "").toUpperCase() === "BUY" ? "border-l-4 border-l-green-500" : (p.direction || "").toUpperCase() === "SELL" ? "border-l-4 border-l-red-500" : "";
     container.insertAdjacentHTML(
       "beforeend",
       `
-      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200">
+      <div class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-200 ${dirBorderClass}">
         <div class="flex items-center justify-between mb-2">
           <div class="text-xs font-mono font-medium text-gray-200">
             <span class="text-gray-500 mr-1">#</span>${p.ticket} 
@@ -1292,6 +1293,16 @@ function renderProactiveAnalysis(proactive, positions) {
     else confBarEl.classList.add("conf-high");
   }
 
+  const proactivePanelEl = section.querySelector(".glass-panel");
+  if (proactivePanelEl) {
+    proactivePanelEl.classList.remove("proactive-panel-glow-buy", "proactive-panel-glow-sell", "proactive-panel-glow-hold", "proactive-panel-glow-wait");
+    const dUp = (decision || "").toUpperCase();
+    if (dUp === "OPEN_BUY") proactivePanelEl.classList.add("proactive-panel-glow-buy");
+    else if (dUp === "OPEN_SELL") proactivePanelEl.classList.add("proactive-panel-glow-sell");
+    else if (dUp === "HOLD_TRADE" || dUp === "ADJUST_TRADE" || dUp === "CLOSE_TRADE") proactivePanelEl.classList.add("proactive-panel-glow-hold");
+    else proactivePanelEl.classList.add("proactive-panel-glow-wait");
+  }
+
   // HOLD display from live positions[]
   const holdBlockEl = el("proactive-hold-block");
   const holdSummaryEl = el("proactive-hold-summary");
@@ -1379,8 +1390,8 @@ function renderProactiveAnalysis(proactive, positions) {
       for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        if (i === activeIdx) seg.classList.add("is-active");
-        else seg.classList.remove("is-active");
+        if (i === activeIdx) seg.classList.add("active");
+        else seg.classList.remove("active");
       }
 
       const x = c != null ? (c / 100) : 0.5;
@@ -1430,8 +1441,8 @@ function renderProactiveAnalysis(proactive, positions) {
       for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         if (!seg) continue;
-        if (i <= stepIdx) seg.classList.add("is-filled");
-        else seg.classList.remove("is-filled");
+        if (i <= stepIdx) seg.classList.add("active");
+        else seg.classList.remove("active");
       }
 
       const entrySeg = segs[2];
