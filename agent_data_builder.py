@@ -566,10 +566,6 @@ def format_proactive_xml(data_package: Dict) -> str:
 
     try:
         trade_history = dp.get("trade_history", []) or []
-        try:
-            logger.info(f"PROACTIVE_XML | trade_history has {len(trade_history)} entries")
-        except Exception:
-            pass
         last_trade = trade_history[0] if isinstance(trade_history, list) and trade_history else None
         if isinstance(last_trade, dict):
             direction = last_trade.get("direction")
