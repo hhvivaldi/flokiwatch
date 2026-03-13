@@ -369,8 +369,14 @@ function renderTrades(trades, daily) {
     // Use close_type if available (from monitor), otherwise heuristic fallback for old data
     let displayReason;
     if (t.close_type) {
-      const typeMap = { tp: "Take Profit", trailing: "Trailing Stop", breakeven: "Breakeven", sl: "Stop Loss" };
-      displayReason = typeMap[t.close_type] || t.reason || "";
+      if (t.close_type === "sl") {
+        if (pnl >= beProfitThreshold) displayReason = "Trailing Stop";
+        else if (Math.abs(pnl) < beProfitThreshold) displayReason = "Breakeven";
+        else displayReason = "Stop Loss";
+      } else {
+        const typeMap = { tp: "Take Profit", trailing: "Trailing Stop", breakeven: "Breakeven", sl: "Stop Loss" };
+        displayReason = typeMap[t.close_type] || t.reason || "";
+      }
     } else {
       displayReason = t.reason || "";
       if (displayReason.toLowerCase().includes("stop loss")) {
