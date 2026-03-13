@@ -565,6 +565,22 @@ def format_proactive_xml(data_package: Dict) -> str:
     lines.append("")
 
     try:
+        ler = dp.get("last_execution_result") or {}
+        if isinstance(ler, dict) and ler:
+            lines.append("<last_execution_result>")
+            lines.append(
+                "  <rejected"
+                + f" decision=\"{_xml_attr(ler.get('decision'))}\""
+                + f" reason=\"{_xml_attr(ler.get('reason'))}\""
+                + f" timestamp=\"{_xml_attr(ler.get('timestamp'))}\""
+                + "/>"
+            )
+            lines.append("</last_execution_result>")
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
         trade_history = dp.get("trade_history", []) or []
         last_trade = trade_history[0] if isinstance(trade_history, list) and trade_history else None
         if isinstance(last_trade, dict):
