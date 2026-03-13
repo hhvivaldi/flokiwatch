@@ -515,6 +515,21 @@ class AgentMonitor:
             prev_peak = self.max_profit_seen_points_by_ticket.get(ticket_i)
             if prev_peak is None or current_profit_points > prev_peak:
                 self.max_profit_seen_points_by_ticket[ticket_i] = float(current_profit_points)
+
+            try:
+                now_ts = time.time()
+                last_log_ts = self._last_drawdown_track_log_ts_by_ticket.get(ticket_i) or 0
+                if (now_ts - float(last_log_ts)) >= 60.0:
+                    self._last_drawdown_track_log_ts_by_ticket[ticket_i] = now_ts
+                    peak_for_log = self.max_profit_seen_points_by_ticket.get(ticket_i, current_profit_points)
+                    log.info(
+                        "DRAWDOWN_TRACK | "
+                        f"ticket=#{ticket_i} | peak={float(peak_for_log):.1f} | current={float(current_profit_points):.1f}"
+                    )
+            except Exception:
+                pass
+
+            if prev_peak is None or current_profit_points > prev_peak:
                 continue
 
             peak = float(prev_peak)
