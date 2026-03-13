@@ -160,10 +160,21 @@
 | `proactive_analysis.concerns` | array of strings | `main.py` | `renderProactiveAnalysis()` → `#proactive-concerns` |
 | `proactive_analysis.latency_ms` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-latency` |
 | `proactive_analysis.tokens_used` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-tokens` |
-| `proactive_analysis.entry_conditions` | object \| null | `main.py` | `renderProactiveAnalysis()` → lifecycle bar |
+| `proactive_analysis.entry_conditions` | object \| null | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` + lifecycle bar |
 | `proactive_analysis.trade_plan` | object \| null | `main.py` | `renderProactiveAnalysis()` → trade plan block |
 | `proactive_analysis.adjustment` | object \| null | `main.py` | not directly used |
 | `proactive_analysis.close_reason` | string \| null | `main.py` | not directly used |
+
+### `last_analysis.proactive_analysis.entry_conditions` Object
+
+| Field | Type | Writer | Reader (app.js) |
+|-------|------|--------|-----------------|
+| `entry_conditions.direction` | string | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
+| `entry_conditions.conditions` | array | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
+| `entry_conditions.validity_minutes` | int | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
+| `entry_conditions.preferred_entry` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
+| `entry_conditions.sl` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
+| `entry_conditions.tp` | float | `main.py` | `renderProactiveAnalysis()` → `#proactive-entry-conditions` |
 
 ### `last_analysis.proactive_analysis.trade_plan` Object
 
@@ -358,9 +369,9 @@ The Live column in the History comparison table is filtered to **current system 
 
 ### Overview
 
-The EA Bridge is an **optional** execution mode that separates the Python Brain (analysis) from MT5 execution. When enabled, Python writes signals to a JSON file, and the FlokiBridge EA reads and executes them with tick-by-tick position management.
+The EA Bridge is an execution mode that separates Python (analysis/agent orchestration) from MT5 execution. When enabled, Python writes signals to a JSON file, and the FlokiBridge EA reads and executes them with tick-by-tick position management.
 
-**Status:** `USE_EA_BRIDGE = False` (disabled until full integration testing)
+**Status:** `USE_EA_BRIDGE = True` (active)
 
 ### Architecture
 
@@ -482,6 +493,16 @@ When `USE_EA_BRIDGE = True` but EA is offline (status file > 60s old):
 2. Trade execution uses `executor.py` (direct MT5 API)
 3. Position monitoring uses `monitor.py` (30s intervals)
 4. Dashboard should show: `"EA: OFFLINE (fallback)"`
+
+---
+
+## Monitor Notes (Live Tracking)
+
+- `balance_at_open` is tracked in the monitor layer to enable profit drawdown / balance diff calculations even when trade history details are delayed.
+
+## Deal Resolver Notes
+
+- `deal_resolver.py` runs as a subprocess to resolve closed trade details via MT5 reconnect and fill in secondary metadata when the primary balance diff/P&L source is not enough for classification.
 
 ### Testing Checklist (Before Enabling)
 
