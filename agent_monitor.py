@@ -560,43 +560,138 @@ class AgentMonitor:
         if not isinstance(conditions, list):
             return
 
+        indicator_ctx: Dict[str, Any] = {}
+        try:
+            if self.bot is not None:
+                indicator_ctx = getattr(self.bot, "last_analysis", None) or {}
+        except Exception:
+            indicator_ctx = {}
+
+        indicators = {}
+        try:
+            if isinstance(indicator_ctx, dict):
+                indicators = indicator_ctx.get("indicators") or {}
+        except Exception:
+            indicators = {}
+
+        rsi_value = None
+        try:
+            rsi_obj = indicators.get("rsi") or {}
+            rsi_value = float(rsi_obj.get("value"))
+        except Exception:
+            rsi_value = None
+
+        volume_ratio = None
+        try:
+            vol_obj = indicators.get("volume") or {}
+            volume_ratio = float(vol_obj.get("ratio"))
+        except Exception:
+            volume_ratio = None
+
+        all_met = True
+        primary = None
         for cond in conditions:
             if not isinstance(cond, dict):
                 continue
 
             ctype = str(cond.get("type") or "").strip().lower()
-            level = cond.get("level")
-            desc = str(cond.get("description") or "").strip()
+            if primary is None and ctype in ("price_touch", "price_break"):
+                primary = cond
 
-            try:
-                level_f = float(level)
-            except Exception:
-                continue
-
-            fired = False
             if ctype == "price_touch":
-                fired = abs(price_used - level_f) < 2.0
+                level = cond.get("level")
+                try:
+                    level_f = float(level)
+                except Exception:
+                    all_met = False
+                    break
+                if abs(price_used - level_f) >= 2.0:
+                    all_met = False
+                    break
+
             elif ctype == "price_break":
+                level = cond.get("level")
                 cross_dir = str(cond.get("direction") or "").strip().lower()
-                if self.last_price_used is not None:
-                    if cross_dir == "below":
-                        fired = self.last_price_used >= level_f and price_used < level_f
-                    elif cross_dir == "above":
-                        fired = self.last_price_used <= level_f and price_used > level_f
+                try:
+                    level_f = float(level)
+                except Exception:
+                    all_met = False
+                    break
+                if self.last_price_used is None:
+                    all_met = False
+                    break
+                if cross_dir == "below":
+                    if not (self.last_price_used >= level_f and price_used < level_f):
+                        all_met = False
+                        break
+                elif cross_dir == "above":
+                    if not (self.last_price_used <= level_f and price_used > level_f):
+                        all_met = False
+                        break
+                else:
+                    all_met = False
+                    break
 
-            if fired:
-                key = self._spam_key(direction, cond)
-                if not self._can_fire(key, cooldown_seconds=300):
-                    continue
+            elif ctype == "volume_confirmation":
+                thr = cond.get("threshold")
+                try:
+                    thr_f = float(thr)
+                except Exception:
+                    all_met = False
+                    break
+                if volume_ratio is None:
+                    all_met = False
+                    break
+                if float(volume_ratio) < thr_f:
+                    all_met = False
+                    break
 
-                label = desc or f"{ctype} @ {level_f}"
-                log.info(f"MONITOR | Entry condition met — {direction} {ctype} @ {level_f} | {label}")
+            elif ctype == "rsi_confirmation":
+                level = cond.get("level")
+                cross_dir = str(cond.get("direction") or "").strip().lower()
+                try:
+                    level_f = float(level)
+                except Exception:
+                    all_met = False
+                    break
+                if rsi_value is None:
+                    all_met = False
+                    break
+                if cross_dir == "below":
+                    if not (float(rsi_value) < level_f):
+                        all_met = False
+                        break
+                elif cross_dir == "above":
+                    if not (float(rsi_value) > level_f):
+                        all_met = False
+                        break
+                else:
+                    all_met = False
+                    break
+
+            else:
+                all_met = False
+                break
+
+        if all_met and primary is not None:
+            key = self._spam_key(direction, primary)
+            if self._can_fire(key, cooldown_seconds=300):
+                ctype = str(primary.get("type") or "").strip().lower()
+                lvl = primary.get("level")
+                try:
+                    lvl_f = float(lvl) if lvl is not None else None
+                except Exception:
+                    lvl_f = None
+
+                desc = str(primary.get("description") or "").strip()
+                label = desc or (f"{ctype} @ {lvl_f}" if lvl_f is not None else ctype)
+                log.info(f"MONITOR | Entry condition met — {direction} {ctype} @ {lvl_f} | {label}")
                 self._fire_proactive_out_of_cycle(
                     "ENTRY_CONDITION_MET",
                     {
                         "direction": direction,
                         "condition_type": ctype,
-                        "level": level_f,
+                        "level": lvl_f,
                         "price": price_used,
                         "description": label,
                     },
