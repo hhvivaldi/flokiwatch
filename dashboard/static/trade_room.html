@@ -369,7 +369,7 @@
     <div class="page-header-strip">
       <span class="text-xs font-bold tracking-[0.2em] text-emerald-400 uppercase">TRADE ROOM — FLOKI &amp; REX</span>
       <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
-      <span class="ml-auto text-[9px] font-mono text-gray-600">MOCK DATA · BACKEND CONNECTION PENDING</span>
+      <span id="data-badge" class="ml-auto text-[9px] font-mono text-gray-600">MOCK DATA · BACKEND CONNECTION PENDING</span>
     </div>
 
     <!-- ═══════════════════════════════════════════════
@@ -593,7 +593,9 @@
 
         function dataType(t) {
           var x = (t || '').toString().toLowerCase();
-          if (x === 'trade_result') return 'info';
+          // Normalize API types to the filter tab contract
+          // - trade_result should still be visible in ALL and can be treated as decision/info
+          if (x === 'trade_result') return 'decision';
           return x;
         }
 
@@ -676,6 +678,10 @@
             '</div>';
           }
 
+          if (!html) {
+            feed.innerHTML = '<div class="text-xs font-mono text-gray-600">NO MESSAGES</div>';
+            return;
+          }
           feed.innerHTML = html;
         }
 
@@ -894,6 +900,11 @@
             // Ensure descending order (API is desc); renderer expects desc
             renderFeed();
             updatePanels(latestMessages, res[1]);
+
+            var badge = document.getElementById('data-badge');
+            if (badge) {
+              badge.textContent = 'LIVE DATA';
+            }
           }).catch(function() {
             // silent
           });

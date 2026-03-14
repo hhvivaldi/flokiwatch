@@ -6,6 +6,8 @@ Market opens Sunday 22:00 UTC. Bot should be running on commit 57dfd87.
 
 ## Phase 1: Startup (Sunday 22:00 UTC)
 
+Checklist: restart the dashboard server after any change to dashboard/server.py.
+
 ### 1.1 Clean startup
 - Restart bot: python main.py
 - Verify: "AI Agent initialized: model=claude-sonnet-4-20250514, mode=active, timeout=60s"
