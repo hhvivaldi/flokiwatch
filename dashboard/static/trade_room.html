@@ -506,7 +506,7 @@
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
-                <span class="status-tag">FAST · TRIGGER</span>
+                <span class="status-tag">DEBATE PARTNER</span>
               </div>
               <div class="mt-1.5">
                 <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
@@ -927,8 +927,8 @@
               if (rexPill) {
                 rexPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
                 rexPill.classList.add('pill-standby');
-                if (rexAgree === true) rexPill.textContent = 'AGREE';
-                else if (rexAgree === false) rexPill.textContent = 'DISAGREE';
+                if (rexAgree === true) rexPill.textContent = 'LAST: AGREE';
+                else if (rexAgree === false) rexPill.textContent = 'LAST: DISAGREE';
                 else rexPill.textContent = 'STANDBY';
               }
               if (rexText && rexBar) {
