@@ -889,6 +889,27 @@ class AgentTools:
             except Exception:
                 pass
 
+            # M5 reversal gate (strong blocks, moderate warns)
+            try:
+                from momentum_detector import check_m5_reversal
+
+                m5_check = check_m5_reversal(str(direction or ""))
+                if isinstance(m5_check, dict) and m5_check.get("reversal_detected"):
+                    strength = str(m5_check.get("reversal_strength") or "").lower()
+                    if strength == "strong":
+                        desc = str(m5_check.get("description") or "M5 reversal")
+                        self._log_tool("execute_trade", start, f"{direction} | blocked | m5_reversal_strong | {desc}")
+                        return {
+                            "success": False,
+                            "reason": "M5 reversal detected — strong counter-movement, trade blocked",
+                        }
+                    if strength == "moderate":
+                        desc = str(m5_check.get("description") or "M5 reversal")
+                        log.warning(f"AGENT_TOOL | M5 reversal moderate (allow): {desc}")
+            except Exception:
+                # Fail-open: reversal check must never block execution due to tool errors
+                pass
+
             dir_s = str(direction or "").upper().strip()
             if dir_s not in ("BUY", "SELL"):
                 return {"success": False, "reason": "invalid direction"}

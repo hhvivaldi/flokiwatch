@@ -3402,11 +3402,10 @@ class TradingBot:
             trigger_context = "Brain signaled an actionable condition. Investigate using tools and respond with final decision JSON."
             try:
                 # Provide minimal context (no giant payload). Keep it short.
+                session_name = session_context.get('session_name') if isinstance(session_context, dict) else ''
                 trigger_context = (
-                    f"Reactive analysis. Brain decision={getattr(brain_result, 'decision', None)} "
-                    f"score={getattr(brain_result, 'final_score', None)} conf={getattr(brain_result, 'confidence', None)}. "
-                    f"Session={session_context.get('session_name') if isinstance(session_context, dict) else ''}. "
-                    "Investigate using tools (cached market data) and act if appropriate."
+                    f"Reactive analysis triggered. Session={session_name}. "
+                    "Investigate using tools and respond with final decision JSON."
                 )
             except Exception:
                 pass
