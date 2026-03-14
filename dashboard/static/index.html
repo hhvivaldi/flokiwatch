@@ -243,6 +243,19 @@
               <div id="market-indicators-panel" class="glass-panel border-gray-700/50 rounded-2xl p-5 shadow-lg">
                 <div class="text-xs font-bold tracking-widest-caps text-gray-200 mb-4">MARKET INDICATORS</div>
                 <div id="market-indicators-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+
+                <div class="hidden">
+                  <div id="goldcon"></div>
+                  <div id="goldcon-decision"></div>
+                  <div id="goldcon-score"></div>
+                  <div id="goldcon-conf"></div>
+                  <div id="goldcon-scenario"></div>
+                  <div id="goldcon-blocked"></div>
+                  <div id="signal-segments">
+                    <div></div><div></div><div></div><div></div><div></div><div></div>
+                    <div></div><div></div><div></div><div></div><div></div><div></div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -329,7 +342,7 @@
           <div class="intel-feed-empty text-center py-6">
             <div class="text-gray-600 text-sm">&#9678;</div>
             <div class="text-xs text-gray-500 mt-1">AWAITING FIRST ANALYSIS</div>
-            <div class="text-xs text-gray-600 mt-0.5">Intel data will appear after the first brain cycle</div>
+            <div class="text-xs text-gray-600 mt-0.5">Intel data will appear after the first analysis cycle</div>
           </div>
 
           <!-- Content (hidden until data arrives) -->
