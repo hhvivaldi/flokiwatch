@@ -52,6 +52,211 @@ class AgentTools:
         except Exception:
             return None
 
+    def _safe_int(self, v: Any) -> Optional[int]:
+        try:
+            if v is None:
+                return None
+            return int(v)
+        except Exception:
+            return None
+
+    def _infer_session_from_utc_hour(self, utc_hour: Optional[int]) -> Optional[str]:
+        if utc_hour is None:
+            return None
+        try:
+            h = int(utc_hour) % 24
+        except Exception:
+            return None
+        if 0 <= h <= 6:
+            return "ASIAN"
+        if 7 <= h <= 12:
+            return "LONDON"
+        if 13 <= h <= 20:
+            return "NY"
+        return "OFF"
+
+    def _rsi_bucket(self, rsi: Optional[float]) -> Optional[str]:
+        if rsi is None:
+            return None
+        try:
+            v = float(rsi)
+        except Exception:
+            return None
+        if v < 30:
+            return "<30"
+        if v < 40:
+            return "30-40"
+        if v <= 60:
+            return "40-60"
+        if v <= 70:
+            return "60-70"
+        return ">70"
+
+    def _extract_context_for_patterns(self) -> Dict[str, Any]:
+        dp = self._last_agent_data() or {}
+
+        direction = None
+        session = None
+        rsi = None
+
+        try:
+            direction = dp.get("decision")
+            if isinstance(direction, str) and direction.upper() in ("BUY", "SELL"):
+                direction = direction.upper()
+            else:
+                direction = None
+        except Exception:
+            direction = None
+
+        try:
+            session = dp.get("session_name")
+            if not isinstance(session, str) or not session.strip():
+                session = None
+            else:
+                session = session.strip().upper()
+        except Exception:
+            session = None
+
+        if session is None:
+            try:
+                utc_hour = self._safe_int(dp.get("utc_hour"))
+                session = self._infer_session_from_utc_hour(utc_hour)
+            except Exception:
+                session = None
+
+        try:
+            ind = dp.get("indicators") or {}
+            rsi_blob = ind.get("rsi") or {}
+            rsi = self._safe_float(rsi_blob.get("value"))
+        except Exception:
+            rsi = None
+
+        return {
+            "direction": direction,
+            "session": session,
+            "rsi": rsi,
+            "rsi_bucket": self._rsi_bucket(rsi),
+        }
+
+    def _get_connection(self):
+        import sqlite3
+        import config
+
+        db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass
+        return conn
+
+    def _find_nearest_analysis(self, conn, open_time: str):
+        from datetime import datetime
+
+        if not open_time:
+            return None
+        try:
+            cur = conn.execute(
+                """
+                SELECT timestamp, utc_hour, session_name, rsi_14
+                FROM analyses
+                WHERE timestamp <= ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                (open_time,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            t_trade = datetime.fromisoformat(str(open_time).replace("Z", ""))
+            t_ana = datetime.fromisoformat(str(row["timestamp"]).replace("Z", ""))
+            gap = (t_trade - t_ana).total_seconds()
+            if gap < 0 or gap > 5 * 60:
+                return None
+            return row
+        except Exception:
+            return None
+
+    def _query_similar_losing_trades(self, context: Dict[str, Any], limit: int = 2) -> List[Dict[str, Any]]:
+        direction = str(context.get("direction") or "").upper().strip()
+        session = str(context.get("session") or "").upper().strip()
+        rsi_bucket = context.get("rsi_bucket")
+
+        if direction not in ("BUY", "SELL"):
+            return []
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            cur = conn.execute(
+                """
+                SELECT ticket, direction, profit, open_price, close_price, open_time, close_time, close_reason
+                FROM trades
+                WHERE close_time IS NOT NULL
+                  AND profit IS NOT NULL
+                  AND profit < 0
+                  AND UPPER(direction) = ?
+                ORDER BY close_time DESC
+                LIMIT 50
+                """,
+                (direction,),
+            )
+            candidates = list(cur.fetchall() or [])
+
+            filtered: List[Dict[str, Any]] = []
+            for tr in candidates:
+                try:
+                    open_time = str(tr["open_time"] or "")
+                    a = self._find_nearest_analysis(conn, open_time=open_time)
+
+                    a_session = None
+                    a_rsi = None
+                    if a is not None:
+                        a_session = str(a["session_name"] or "").strip().upper() or None
+                        a_rsi = self._safe_float(a["rsi_14"])
+                        if a_session is None:
+                            a_session = self._infer_session_from_utc_hour(self._safe_int(a["utc_hour"]))
+
+                    if session and a_session and session != a_session:
+                        continue
+
+                    if rsi_bucket and a_rsi is not None:
+                        if self._rsi_bucket(a_rsi) != rsi_bucket:
+                            continue
+
+                    filtered.append(
+                        {
+                            "ticket": int(tr["ticket"] or 0),
+                            "direction": str(tr["direction"] or ""),
+                            "profit": float(tr["profit"] or 0.0),
+                            "open_price": self._safe_float(tr["open_price"]),
+                            "close_price": self._safe_float(tr["close_price"]),
+                            "open_time": open_time,
+                            "close_time": str(tr["close_time"] or ""),
+                            "close_reason": str(tr["close_reason"] or ""),
+                            "session": a_session,
+                            "rsi_14": a_rsi,
+                        }
+                    )
+
+                    if len(filtered) >= int(limit):
+                        break
+                except Exception:
+                    continue
+
+            return filtered
+        except Exception:
+            return []
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
     def _pip_size(self) -> float:
         return 0.1
 
@@ -845,8 +1050,20 @@ class AgentTools:
                 return payload
 
             patterns = payload.get("patterns") if isinstance(payload.get("patterns"), list) else []
-            self._log_tool("get_trade_patterns", start, f"patterns={len(patterns)}")
-            return payload
+
+            context = self._extract_context_for_patterns()
+            counter_examples = self._query_similar_losing_trades(context, limit=2)
+
+            out = dict(payload)
+            out["context"] = context
+            out["counter_examples"] = counter_examples
+
+            self._log_tool(
+                "get_trade_patterns",
+                start,
+                f"patterns={len(patterns)} counter_examples={len(counter_examples)}",
+            )
+            return out
         except Exception as e:
             self._log_tool("get_trade_patterns", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
