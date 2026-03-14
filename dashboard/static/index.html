@@ -224,6 +224,63 @@
 
           <hr class="section-separator" />
           <div class="mt-2 glass-panel-deep rounded-xl p-4 sm:p-5">
+            <div id="goldcon" class="relative glass-panel border-gray-700/50 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500">
+              <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+              
+              <div class="relative z-10 flex flex-col gap-5">
+                <div class="flex flex-wrap items-start gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-xs font-semibold text-gray-400 tracking-[0.2em] uppercase mb-1">FLOKI SIGNAL</div>
+                    <div class="mt-2 transition-colors duration-300" id="goldcon-decision">HOLD</div>
+                    <div id="goldcon-blocked" class="hidden text-xs text-amber-400 mt-2 font-medium"></div>
+                  </div>
+                  <div class="flex items-center gap-4 text-sm bg-black/20 rounded-lg p-3 border border-white/5 backdrop-blur-sm flex-shrink-0">
+                    <div class="flex flex-col">
+                      <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Score</span>
+                      <span id="goldcon-score" class="font-mono text-lg font-semibold text-gray-100">—</span>
+                    </div>
+                    <div class="w-px h-8 bg-gray-700/50"></div>
+                    <div class="flex flex-col">
+                      <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Confidence</span>
+                      <span id="goldcon-conf" class="font-mono text-lg font-semibold text-gray-100">—</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="w-full">
+                  <div id="signal-segments" class="flex gap-1 w-full items-end" style="height:48px">
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                    <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
+                  </div>
+                  <div class="flex justify-between mt-2 text-[10px] font-mono font-medium text-gray-500 px-0.5">
+                    <span>SELL (0)</span>
+                    <span>HOLD (50)</span>
+                    <span>BUY (100)</span>
+                  </div>
+                </div>
+
+                <div class="text-sm text-gray-400 flex items-start gap-2 bg-gray-800/30 rounded-lg p-3 border border-gray-700/30">
+                  <svg class="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <span class="text-xs text-gray-500 uppercase tracking-wider block mb-0.5">Scenario</span>
+                    <span id="goldcon-scenario" class="text-gray-200 font-medium leading-tight">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="text-xs font-semibold text-gray-500 tracking-[0.1em] uppercase mb-3">RECENT TRIGGERS</div>
             <div id="fast-triggers-chips" class="trigger-log">
               <div class="trigger-log-entry">
@@ -243,19 +300,6 @@
               <div id="market-indicators-panel" class="glass-panel border-gray-700/50 rounded-2xl p-5 shadow-lg">
                 <div class="text-xs font-bold tracking-widest-caps text-gray-200 mb-4">MARKET INDICATORS</div>
                 <div id="market-indicators-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-
-                <div class="hidden">
-                  <div id="goldcon"></div>
-                  <div id="goldcon-decision"></div>
-                  <div id="goldcon-score"></div>
-                  <div id="goldcon-conf"></div>
-                  <div id="goldcon-scenario"></div>
-                  <div id="goldcon-blocked"></div>
-                  <div id="signal-segments">
-                    <div></div><div></div><div></div><div></div><div></div><div></div>
-                    <div></div><div></div><div></div><div></div><div></div><div></div>
-                  </div>
-                </div>
               </div>
             </div>
 
