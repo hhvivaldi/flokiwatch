@@ -1,85 +1,119 @@
-# Monday Monitoring Checklist (March 10, 2026)
+# Monday Verification Checklist (March 16, 2026)
 
-Market opens Sunday 22:00 UTC. First trades expected Monday morning.
-
----
-
-## 1. First New Trade — Validate open_price Recording
-
-**What to check:** After first trade opens, confirm `open_price` in `history.db` matches actual MT5 fill price.
-
-**How to verify:**
-```sql
-SELECT ticket, open_price FROM trades ORDER BY open_time DESC LIMIT 1;
-```
-Compare with MT5 terminal actual fill price.
-
-**Validates:** Commit 1478825 (record actual MT5 fill price)
+Market opens Sunday 22:00 UTC. Bot should be running on commit 57dfd87.
 
 ---
 
-## 2. Agent v1.2 First 3 Decisions — Validate MTF Data
+## Phase 1: Startup (Sunday 22:00 UTC)
 
-**What to check:**
-- `d1_direction` and `h4_direction` are NOT "?" (must be "bullish" or "bearish")
-- Strong REJECTs show confidence 70-90, not 25
-- Calendar score mentioned in reasoning when relevant
+### 1.1 Clean startup
+- Restart bot: python main.py
+- Verify: "AI Agent initialized: model=claude-sonnet-4-20250514, mode=active, timeout=60s"
+- Verify: No import errors
+- Verify: DB migrations applied (tool_trace columns)
+- Verify: "Market open" detected (not "Weekend — market closed")
 
-**How to verify:** Check Discord Agent messages or `data/bot_state.json` → `last_analysis.agent_decision`
-
-**Validates:** Agent v1.2 prompt with MTF awareness
-
----
-
-## 3. EA Bridge — Confirm No FALLBACK Events
-
-**What to check:** No FALLBACK events during normal operation.
-
-**Context:** Threshold now 120s, recompile gap ~45s should no longer trigger.
-
-**How to verify:** Check logs for "FALLBACK" keyword.
+### 1.2 First Brain cycle
+- Wait 60 seconds
+- Verify: Brain analysis completes (Tech/News/ML/Momentum/Calendar scores in log)
+- This populates the cache that tools read from
 
 ---
 
-## 4. Agent v1.3 Deployment
+## Phase 2: First Agent Call (within first 30 min)
 
-**Prerequisite:** Items 1 and 2 above MUST be confirmed first.
+### 2.1 Tool use works
+- When PROACTIVE_H1 fires, verify log shows: "AGENT_TOOL | get_current_price | Xms"
+- Verify: Agent calls MULTIPLE tools (not just one)
+- Verify: Agent returns a valid JSON decision (WAIT, OPEN, etc.)
 
-**Action:** After v1.2 first 3 live decisions are confirmed with correct MTF data, deploy v1.3.
+### 2.2 Tool trace logged
+- Search log: Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "AGENT_TOOL" | Select-Object -Last 20
+- Should show sequence of tool calls with latency
 
-**What to verify after deployment:**
-- First REJECT after v1.3 deployment should show:
-  - Market View (direction + description)
-  - Conditions to Approve (2-4 specific conditions)
-  - Invalidation Timeframe (e.g., "3 H1 candles")
-- All three fields visible in both Discord and dashboard Agent Memory section
+### 2.3 Session memory
+- After first Agent call, check: Get-Content -Path .\data\agent_session_memory.json -Raw
+- Should exist and contain session_notes from the Agent
 
-**Commits ready (not yet deployed):**
-- 105e263: agent_memory.py module
-- 5fb4e36: v1.3 REJECT requirements in prompt
-- 6363181: memory integration in ai_agent.py
-- 357a024: agent_memory in state_writer
-- d3d70f0: FIELD_CONTRACT.md updates
-- f095787: renderAgentMemory in app.js
-- 2ecf030: Agent Memory section in index.html
+### 2.4 No errors
+- Search: Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "ERROR|CRITICAL|Traceback" | Select-Object -Last 10
+- Should be empty or only non-critical warnings
 
 ---
 
-## Weekend Summary (March 7-8, 2026)
+## Phase 3: First Trade (when Agent decides OPEN)
 
-**Commits delivered:**
-- 84e6210: Startup log shows dynamic breakeven (50% of SL)
-- 1478825: Record actual MT5 fill price in history.db
-- 273e520: Population B analysis script
-- 105e263 → 2ecf030: Agent v1.3 memory system (7 commits)
+### 3.1 execute_trade tool fires
+- Log shows: "AGENT_TOOL | execute_trade | direction=SELL sl=X tp=Y"
+- Safety checks pass (or fail with clear reason)
+- Trade opens in MT5
 
-**Analysis completed:**
-- Spread/slippage: $11.81 total cost, explains 9.2% of PF gap
-- 33-trade Population B: 9 SUSTAINED losses, 3 SPIKE losses, 2 BE saves
-- Trade 29 gap-through: 45 pips below SL, early Monday Asian session
-- Brain confidence calibration issue logged: 5 trades with 100% confidence had 382-601 pips MAE
+### 3.2 BE/trailing parameters
+- If Agent specified custom BE/trailing, verify in brain_signal.json
+- If not specified, verify defaults calculated from SL distance
 
-**System state:**
-- No changes to trading logic, Brain, or parameters
-- Agent v1.2 in shadow mode
-- EA Bridge operational, FALLBACK threshold 120s
+### 3.3 Watch conditions set
+- After trade opens, check if Agent called set_watch_conditions
+- Verify: data/agent_watch_conditions.json contains the ticket
+
+### 3.4 Balance capture
+- Log shows: "BALANCE_CAPTURE | ticket=#X | balance=$Y"
+
+---
+
+## Phase 4: Position Management
+
+### 4.1 Watch condition evaluation
+- Monitor checks conditions every 1 minute (when market open)
+- If condition triggers: Agent called with WATCH_CONDITION trigger type
+
+### 4.2 Scheduled re-evaluation
+- Every 30 minutes: Agent called with PROACTIVE trigger
+- Agent should call get_open_positions() to check trade status
+
+---
+
+## Phase 5: Trade Close
+
+### 5.1 Position closes (EA trailing/SL/TP)
+- "Position #X disappeared" in log
+- "BALANCE_DIFF | ticket=#X | open=$Y | now=$Z | diff=$W"
+
+### 5.2 Deal resolution
+- "DEAL_REFRESH | Forcing MT5 reconnect for ticket #X"
+- N2.5 today-only search attempts to find deal
+- Deal resolver subprocess if needed
+
+### 5.3 Watch conditions cleared
+- data/agent_watch_conditions.json: ticket removed after close
+
+---
+
+## Diagnostic Commands (run without restarting)
+
+# Tool use evidence
+Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "AGENT_TOOL" | Select-Object -Last 30
+
+# Session memory
+Get-Content -Path .\data\agent_session_memory.json -Raw
+
+# Watch conditions
+Get-Content -Path .\data\agent_watch_conditions.json -Raw
+
+# Errors
+Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "ERROR|Traceback" | Select-Object -Last 10
+
+# Agent decisions
+Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "Agent decision:" | Select-Object -Last 10
+
+# Balance capture
+Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "BALANCE_CAPTURE|BALANCE_DIFF" | Select-Object -Last 10
+
+---
+
+## Rollback Plan
+If critical failures occur:
+- Last stable commit before tool-use: 24c4241 (prompt refinement, old XML architecture)
+- git checkout 24c4241 -- ai_agent.py main.py agent_prompts.py
+- Restart bot
+- This restores the old single-call XML flow
