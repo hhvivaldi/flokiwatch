@@ -23,7 +23,7 @@ import hashlib
 
 # NewsAPI Key - YOU NEED TO CREATE AN ACCOUNT AT newsapi.org AND GET YOUR KEY
 # Free plan: 100 requests/day
-NEWSAPI_KEY = "a9540b84785f4e13b2744c9ed747bb55"
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 
 # Cache settings - update news every 30-60min to save requests
 NEWS_CACHE_MINUTES = 45  # Updates every 45 min (~32 requests/day)
