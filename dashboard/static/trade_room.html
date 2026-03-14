@@ -468,7 +468,9 @@
         <div class="glass-panel-deep rounded-xl p-4 focus-glow-emerald" id="floki-card">
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
-            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar">F</div>
+            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar">
+              <img src="/image/floki-trade-room.png" alt="FLOKI" style="border-radius:50%" />
+            </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm font-black tracking-wider" style="color:#10b981">FLOKI</span>
@@ -498,7 +500,9 @@
         <div class="glass-panel-deep rounded-xl p-4" id="rex-card">
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
-            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">R</div>
+            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">
+              <img src="/image/rex-floki-trade.png" alt="REX" style="border-radius:50%" />
+            </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
@@ -760,7 +764,11 @@
             content = esc(content).replaceAll('\n', '<br>');
 
             html += '<div class="' + rowCls + '" data-type="' + esc(dataType(m.type)) + '">' +
-              '<div class="' + avCls + '">' + (isFloki ? 'F' : 'R') + '</div>' +
+              '<div class="' + avCls + '">' +
+                (isFloki
+                  ? '<img src="/image/floki-trade-room.png" alt="FLOKI" style="border-radius:50%; width: 32px; height: 32px;" />'
+                  : '<img src="/image/rex-floki-trade.png" alt="REX" style="border-radius:50%; width: 32px; height: 32px;" />') +
+              '</div>' +
               '<div class="flex-1 min-w-0">' +
                 '<div class="msg-meta"' + metaStyle + '>' +
                   '<span class="' + nameCls + '">' + esc(author) + '</span>' +
