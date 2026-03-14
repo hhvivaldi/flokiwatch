@@ -834,6 +834,8 @@
 
         function updatePanels(messages, state) {
           try {
+            var marketClosed = (state && state.market && state.market.is_open === false);
+
             var flokiDecision = null;
             var flokiConf = null;
             var flokiTools = [];
@@ -849,8 +851,40 @@
               }
             }
 
-            setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
-            setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), flokiConf);
+            var flokiCard = document.getElementById('floki-card');
+            var rexCard = document.getElementById('rex-card');
+            if (flokiCard) flokiCard.classList.toggle('opacity-60', marketClosed);
+            if (rexCard) rexCard.classList.toggle('opacity-60', marketClosed);
+
+            if (marketClosed) {
+              var flokiPill = document.getElementById('floki-decision-pill');
+              if (flokiPill) {
+                flokiPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
+                flokiPill.classList.add('pill-wait');
+                flokiPill.textContent = 'SLEEPING — market closed';
+              }
+
+              setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), null);
+
+              var rexPillClosed = document.getElementById('rex-opinion-pill');
+              if (rexPillClosed) {
+                rexPillClosed.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
+                rexPillClosed.classList.add('pill-wait');
+                rexPillClosed.textContent = 'SLEEPING';
+              }
+
+              var rexTextClosed = document.getElementById('rex-agree-text');
+              var rexBarClosed = document.getElementById('rex-agree-bar');
+              if (rexTextClosed) rexTextClosed.textContent = '—';
+              if (rexBarClosed) {
+                rexBarClosed.style.width = '0%';
+                rexBarClosed.classList.remove('conf-low','conf-mid','conf-high');
+                rexBarClosed.classList.add('conf-mid');
+              }
+            } else {
+              setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
+              setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), flokiConf);
+            }
 
             var thesisTag = document.getElementById('floki-thesis-tag');
             if (thesisTag) thesisTag.textContent = 'THESIS: ' + (thesis ? thesis : '—');
@@ -867,32 +901,34 @@
               }
             }
 
-            var rexText = document.getElementById('rex-agree-text');
-            var rexBar = document.getElementById('rex-agree-bar');
-            var rexPill = document.getElementById('rex-opinion-pill');
-            if (rexPill) {
-              rexPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-              rexPill.classList.add('pill-standby');
-              if (rexAgree === true) rexPill.textContent = 'AGREE';
-              else if (rexAgree === false) rexPill.textContent = 'DISAGREE';
-              else rexPill.textContent = 'STANDBY';
-            }
-            if (rexText && rexBar) {
-              if (rexAgree === true) {
-                rexText.textContent = 'YES';
-                rexBar.style.width = '100%';
-                rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                rexBar.classList.add('conf-high');
-              } else if (rexAgree === false) {
-                rexText.textContent = 'NO';
-                rexBar.style.width = '100%';
-                rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                rexBar.classList.add('conf-low');
-              } else {
-                rexText.textContent = '—';
-                rexBar.style.width = '0%';
-                rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                rexBar.classList.add('conf-mid');
+            if (!marketClosed) {
+              var rexText = document.getElementById('rex-agree-text');
+              var rexBar = document.getElementById('rex-agree-bar');
+              var rexPill = document.getElementById('rex-opinion-pill');
+              if (rexPill) {
+                rexPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
+                rexPill.classList.add('pill-standby');
+                if (rexAgree === true) rexPill.textContent = 'AGREE';
+                else if (rexAgree === false) rexPill.textContent = 'DISAGREE';
+                else rexPill.textContent = 'STANDBY';
+              }
+              if (rexText && rexBar) {
+                if (rexAgree === true) {
+                  rexText.textContent = 'YES';
+                  rexBar.style.width = '100%';
+                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                  rexBar.classList.add('conf-high');
+                } else if (rexAgree === false) {
+                  rexText.textContent = 'NO';
+                  rexBar.style.width = '100%';
+                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                  rexBar.classList.add('conf-low');
+                } else {
+                  rexText.textContent = '—';
+                  rexBar.style.width = '0%';
+                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                  rexBar.classList.add('conf-mid');
+                }
               }
             }
             var rexConcernsTag = document.getElementById('rex-concerns-tag');

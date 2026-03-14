@@ -653,7 +653,7 @@ function render(state) {
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
-  renderAgentCard(la.agent_decision);
+  renderAgentCard(la.agent_decision, marketClosed);
   renderProactiveAnalysis(la.proactive_analysis, state.positions);
   renderFastTriggers(la.fast_decisions);
   renderAgentMemory(state.agent_memory);
@@ -1119,6 +1119,28 @@ function renderAgentCard(agentDecision) {
   }
 
   card.classList.remove("hidden");
+
+  if (marketClosed === true) {
+    const decisionEl = el("agent-decision");
+    if (decisionEl) {
+      decisionEl.textContent = "SLEEPING";
+      decisionEl.className = "text-2xl font-bold text-gray-500";
+    }
+
+    const confEl = el("agent-confidence");
+    if (confEl) confEl.textContent = "—%";
+
+    const agreeEl = el("agent-agreement");
+    if (agreeEl) {
+      agreeEl.textContent = "—";
+      agreeEl.className = "text-sm font-semibold text-gray-500";
+    }
+
+    const execEl = el("agent-executed");
+    if (execEl) execEl.textContent = "—";
+
+    return;
+  }
 
   const decision = agentDecision.decision || "—";
   const confidence = agentDecision.confidence;
