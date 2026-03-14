@@ -21,7 +21,8 @@ from risk_manager import calculate_breakeven_sl, calculate_trailing_stop
 class PositionMonitor:
     """Monitor and manage open positions"""
     
-    def __init__(self):
+    def __init__(self, bot=None):
+        self.bot = bot
         # Track positions that already hit breakeven
         self.breakeven_hit_tickets = set()
         # Track whether BE was ever activated for each ticket (persists until closure)
@@ -56,6 +57,14 @@ class PositionMonitor:
         actions = []
         positions = get_positions()
         current_tickets = {pos.ticket for pos in positions}
+
+        # Agent-defined watch conditions (checked locally once/min when market is open)
+        try:
+            watch_actions = self._check_agent_watch_conditions(positions, current_tickets)
+            if watch_actions:
+                actions.extend(watch_actions)
+        except Exception as e:
+            log.debug(f"   Monitor: watch conditions error (non-blocking): {e}")
         
         # Detect positions closed by broker (SL/TP hit)
         if self._initialized:
@@ -204,6 +213,211 @@ class PositionMonitor:
                 f"SL: {pos.sl:.2f} | {next_phase}"
             )
         
+        return actions
+
+    def _watch_conditions_path(self) -> str:
+        import os
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _load_watch_conditions(self) -> dict:
+        import json
+        import os
+
+        path = self._watch_conditions_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_watch_conditions(self, payload: dict) -> bool:
+        import json
+        import os
+
+        path = self._watch_conditions_path()
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
+            return True
+        except Exception:
+            return False
+
+    def _check_agent_watch_conditions(self, positions: List[PositionInfo], current_tickets: set) -> List[dict]:
+        from safety_checks import is_market_open
+
+        is_open, _, _ = is_market_open()
+        if not is_open:
+            return []
+
+        watch = self._load_watch_conditions()
+        if not watch:
+            return []
+
+        # Only evaluate once per minute
+        now = datetime.utcnow()
+        try:
+            last_ts = getattr(self, "_last_watch_eval_ts", None)
+            if last_ts and (now - last_ts).total_seconds() < 60:
+                return []
+            setattr(self, "_last_watch_eval_ts", now)
+        except Exception:
+            pass
+
+        # Clear stale tickets that are no longer open
+        try:
+            open_ticket_strs = {str(t) for t in current_tickets}
+            stale_keys = [k for k in list(watch.keys()) if str(k) not in open_ticket_strs]
+            if stale_keys:
+                for k in stale_keys:
+                    try:
+                        del watch[k]
+                    except Exception:
+                        pass
+                self._save_watch_conditions(watch)
+        except Exception:
+            pass
+
+        pos_by_ticket = {p.ticket: p for p in positions}
+        actions: List[dict] = []
+
+        for ticket_str, payload in list(watch.items()):
+            try:
+                t = int(ticket_str)
+            except Exception:
+                continue
+
+            pos = pos_by_ticket.get(t)
+            if pos is None:
+                continue
+
+            conds = payload.get("conditions") if isinstance(payload, dict) else None
+            if not isinstance(conds, list) or not conds:
+                continue
+
+            triggered = None
+            trigger_reason = None
+
+            current_price = float(pos.current_price)
+            pnl = float(pos.profit)
+
+            for c in conds:
+                if not isinstance(c, dict):
+                    continue
+                ctype = str(c.get("type", "")).strip()
+                desc = str(c.get("description", "")).strip()
+
+                if ctype == "price_touch":
+                    try:
+                        lvl = float(c.get("level"))
+                    except Exception:
+                        continue
+                    # Tolerance: 0.5 pips
+                    if abs(current_price - lvl) <= 0.05:
+                        triggered = c
+                        trigger_reason = desc or f"price_touch {lvl}"
+                        break
+
+                elif ctype == "pnl_threshold":
+                    try:
+                        thr = float(c.get("value"))
+                    except Exception:
+                        continue
+                    if (thr < 0 and pnl <= thr) or (thr > 0 and pnl >= thr) or thr == 0:
+                        triggered = c
+                        trigger_reason = desc or f"pnl_threshold {thr}"
+                        break
+
+                elif ctype == "indicator_threshold":
+                    # v1: VIX only, pulled from cached macro if available
+                    ind = str(c.get("indicator", "")).strip().lower()
+                    direction = str(c.get("direction", "")).strip().lower()
+                    try:
+                        lvl = float(c.get("level"))
+                    except Exception:
+                        continue
+                    if ind != "vix" or direction not in ("above", "below"):
+                        continue
+
+                    vix_val = None
+                    try:
+                        vix_val = getattr(getattr(self, "bot", None), "_last_agent_data", {}).get("macro_data", {}).get("vix")
+                    except Exception:
+                        vix_val = None
+                    try:
+                        vix_f = float(vix_val) if vix_val is not None else None
+                    except Exception:
+                        vix_f = None
+                    if vix_f is None:
+                        continue
+
+                    if (direction == "above" and vix_f >= lvl) or (direction == "below" and vix_f <= lvl):
+                        triggered = c
+                        trigger_reason = desc or f"vix {direction} {lvl}"
+                        break
+
+            if not triggered:
+                continue
+
+            # Call Agent with watch-trigger context (non-blocking; ignore failures)
+            try:
+                from ai_agent import agent_decide
+                from agent_tools import AgentTools
+                import safety_checks
+                import risk_manager
+                import asyncio
+
+                bot = getattr(self, "bot", None)
+                if bot is None:
+                    # If no bot reference, just clear the condition
+                    raise RuntimeError("no bot reference")
+
+                trigger_context = (
+                    f"WATCH_CONDITION triggered for ticket {t}: {trigger_reason}. "
+                    f"Position: {pos.direction} open={pos.open_price} current={pos.current_price} "
+                    f"profit=${pos.profit:+.2f} ({pos.profit_pips:+.0f} pips)."
+                )
+
+                tools_obj = AgentTools(
+                    bot,
+                    executor=executor,
+                    safety_checks_module=safety_checks,
+                    risk_manager_module=risk_manager,
+                )
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                _ = loop.run_until_complete(
+                    agent_decide(
+                        trigger_context,
+                        tools_obj,
+                        trigger_type="WATCH_CONDITION",
+                        allow_memory_write=False,
+                    )
+                )
+                loop.close()
+            except Exception as e:
+                log.debug(f"   Monitor: watch trigger agent call failed (ignored): {e}")
+
+            # Clear watch conditions for this ticket after first trigger
+            try:
+                del watch[ticket_str]
+                self._save_watch_conditions(watch)
+            except Exception:
+                pass
+
+            actions.append({"action": "WATCH_TRIGGER", "ticket": t, "reason": trigger_reason})
+
         return actions
     
     def _get_original_sl_pips(self, pos: PositionInfo) -> float:

@@ -797,11 +797,17 @@ class TradingBot:
                     agent = get_agent()
                     log.info(f"AI Agent: ON (mode={agent.get_mode()}, model={config.AI_AGENT_MODEL})")
                 else:
-                    log.info("AI Agent: OFF (initialization failed)")
+                    log.warning("AI Agent: OFF (init failed)")
             except Exception as e:
-                log.warning(f"AI Agent: OFF (error: {e})")
-        else:
-            log.info("AI Agent: OFF")
+                log.warning(f"AI Agent init error (ignored): {e}")
+
+        # Give the PositionMonitor access to this bot instance (for Agent watch-condition triggers)
+        try:
+            from monitor import monitor as _monitor_instance
+            _monitor_instance.bot = self
+        except Exception:
+            pass
+
         log.info(f"Risk/trade: {config.RISK_PER_TRADE}% | Max daily loss: {config.MAX_DAILY_LOSS}%")
         log.info(f"SL: {config.MIN_SL_PIPS}-{config.MAX_SL_PIPS} pips | Breakeven: {int(config.BREAKEVEN_ATR_MULT * 100)}% of SL (dynamic) | Trailing: {int(config.TRAILING_ATR_MULT * 100)}% of SL")
         

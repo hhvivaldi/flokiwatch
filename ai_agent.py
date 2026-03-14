@@ -542,6 +542,22 @@ class AIAgent:
                 },
             },
             {
+                "name": "set_watch_conditions",
+                "description": "Set custom watch conditions for an open position ticket (checked locally each minute when market is open).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket": {"type": "integer"},
+                        "conditions": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                        },
+                    },
+                    "required": ["ticket", "conditions"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "close_trade",
                 "description": "Close a trade by ticket",
                 "input_schema": {

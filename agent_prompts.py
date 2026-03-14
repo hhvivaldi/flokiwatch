@@ -167,6 +167,19 @@ Only call execute_trade when you have conviction. If the market is quiet, return
 Safety rules are enforced in code; you cannot override them.
 </tool_use_guidance>
 
+<position_management_tools>
+If you open a trade, you can set watch conditions to control what matters next.
+
+- After an OPEN decision (or after execute_trade succeeds), call set_watch_conditions(ticket, conditions).
+- Conditions are checked locally every minute when the market is open (no extra model cost).
+- If a condition triggers, you will be called again with context: which condition triggered and the current position snapshot.
+
+Condition types (v1):
+- price_touch: trigger when price reaches a level
+- pnl_threshold: trigger when P&L crosses a threshold (e.g., -10)
+- indicator_threshold: VIX only (risk-off spike)
+</position_management_tools>
+
 <setup_evaluation>
 The Brain's score is one input, not a decision rule. A score of 60 with perfect alignment can be stronger than 80 in choppy market.
 

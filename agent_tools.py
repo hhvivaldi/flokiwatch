@@ -116,6 +116,74 @@ class AgentTools:
             self._log_tool("get_current_price", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    # ---------------------------------------------------------------------
+    # Position management tools
+    # ---------------------------------------------------------------------
+
+    def set_watch_conditions(self, ticket: int, conditions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            try:
+                t = int(ticket)
+            except Exception:
+                return {"success": False, "reason": "invalid ticket"}
+
+            if not isinstance(conditions, list) or not conditions:
+                return {"success": False, "reason": "conditions must be a non-empty list"}
+
+            cleaned: List[Dict[str, Any]] = []
+            for c in conditions:
+                if not isinstance(c, dict):
+                    continue
+                ctype = str(c.get("type", "")).strip()
+                desc = str(c.get("description", "")).strip()
+                if not ctype:
+                    continue
+                if ctype == "price_touch":
+                    lvl = self._safe_float(c.get("level"))
+                    if lvl is None:
+                        continue
+                    cleaned.append({"type": "price_touch", "level": float(lvl), "description": desc})
+                elif ctype == "pnl_threshold":
+                    v = self._safe_float(c.get("value"))
+                    if v is None:
+                        continue
+                    cleaned.append({"type": "pnl_threshold", "value": float(v), "description": desc})
+                elif ctype == "indicator_threshold":
+                    ind = str(c.get("indicator", "")).strip().lower()
+                    direction = str(c.get("direction", "")).strip().lower()
+                    level = self._safe_float(c.get("level"))
+                    if ind != "vix" or level is None or direction not in ("above", "below"):
+                        continue
+                    cleaned.append(
+                        {
+                            "type": "indicator_threshold",
+                            "indicator": "vix",
+                            "level": float(level),
+                            "direction": direction,
+                            "description": desc,
+                        }
+                    )
+
+            if not cleaned:
+                return {"success": False, "reason": "no valid conditions"}
+
+            store = self._load_watch_conditions()
+            store[str(t)] = {
+                "updated_at": datetime.utcnow().isoformat(),
+                "conditions": cleaned,
+            }
+
+            ok = self._write_json_atomic(self._watch_conditions_path(), store)
+            if not ok:
+                return {"success": False, "reason": "persist failed"}
+
+            self._log_tool("set_watch_conditions", start, f"ticket={t} count={len(cleaned)}")
+            return {"success": True, "ticket": t, "count": len(cleaned)}
+        except Exception as e:
+            self._log_tool("set_watch_conditions", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_candles(self, timeframe: str, count: int) -> Dict[str, Any]:
         start = time.time()
         try:
@@ -829,3 +897,32 @@ class AgentTools:
         except Exception as e:
             self._log_tool("write_session_memory", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
+
+    def _write_json_atomic(self, path: str, payload: Any) -> bool:
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
+            return True
+        except Exception:
+            return False
+
+    def _watch_conditions_path(self) -> str:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _load_watch_conditions(self) -> Dict[str, Any]:
+        path = self._watch_conditions_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
