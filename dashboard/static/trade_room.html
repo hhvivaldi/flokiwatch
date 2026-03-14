@@ -578,46 +578,22 @@
           <div class="ctx-row"><span class="ctx-key">10Y</span><span id="ctx-10y" class="ctx-val">—</span></div>
         </div>
 
-        <!-- Pillars block -->
+        <!-- Floki last investigation -->
         <div class="ctx-block">
-          <div class="ctx-label">BRAIN PILLARS</div>
-          <div class="flex flex-col gap-3.5">
-            <div class="flex flex-col gap-1.5">
-              <div class="flex justify-between items-center">
-                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Technical</span>
-                <span id="ctx-tech-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-              </div>
-              <div class="pillar-bar-track"><div id="ctx-tech-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <div class="flex justify-between items-center">
-                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">ML</span>
-                <span id="ctx-ml-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-              </div>
-              <div class="pillar-bar-track"><div id="ctx-ml-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <div class="flex justify-between items-center">
-                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Momentum</span>
-                <span id="ctx-mom-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-              </div>
-              <div class="pillar-bar-track"><div id="ctx-mom-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <div class="flex justify-between items-center">
-                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">News</span>
-                <span id="ctx-news-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-              </div>
-              <div class="pillar-bar-track"><div id="ctx-news-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <div class="flex justify-between items-center">
-                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Calendar</span>
-                <span id="ctx-cal-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-              </div>
-              <div class="pillar-bar-track"><div id="ctx-cal-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-            </div>
-          </div>
+          <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
+          <div id="ctx-investigation" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap break-words">—</div>
+        </div>
+
+        <!-- Top patterns -->
+        <div class="ctx-block">
+          <div class="ctx-label">TOP PATTERNS</div>
+          <div id="ctx-top-patterns" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap">—</div>
+        </div>
+
+        <!-- Watch conditions -->
+        <div class="ctx-block">
+          <div class="ctx-label">WATCH CONDITIONS</div>
+          <div id="ctx-watch-conditions" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap">No active watch conditions</div>
         </div>
 
         <!-- Session block -->
@@ -832,6 +808,30 @@
           else barEl.classList.add('conf-high');
         }
 
+        var cachedTopPatternsText = null;
+        var cachedPatternsUpdated = null;
+
+        function fmtPatternLine(p) {
+          try {
+            if (!p) return '';
+            var name = (p.name || '—').toString();
+            var wr = (p.wr === null || p.wr === undefined) ? null : Number(p.wr);
+            var trades = (p.trades === null || p.trades === undefined) ? null : Number(p.trades);
+            var insight = (p.insight || '').toString();
+
+            var wrText = (wr === null || isNaN(wr)) ? '—' : (Math.round(wr) + '% WR');
+            var nText = (trades === null || isNaN(trades)) ? '' : (' (n=' + Math.round(trades) + ')');
+            var avoidTag = '';
+            if (insight && insight.toLowerCase().indexOf('avoid') === 0) {
+              avoidTag = ' — AVOID';
+            }
+
+            return name + ': ' + wrText + avoidTag + nText;
+          } catch (e) {
+            return '';
+          }
+        }
+
         function updatePanels(messages, state) {
           try {
             var marketClosed = (state && state.market && state.market.is_open === false);
@@ -969,6 +969,38 @@
             if (elM) elM.textContent = String((messages || []).length);
             if (elCalls) elCalls.textContent = String(Math.max(agreements + conflicts, 0));
 
+            // Investigation chain from most recent FLOKI decision message
+            try {
+              var invEl = document.getElementById('ctx-investigation');
+              if (invEl) {
+                var chain = null;
+                for (var z = 0; z < (messages || []).length; z++) {
+                  var m2 = messages[z];
+                  var isFloki = (m2.author || '').toString().toUpperCase() === 'FLOKI';
+                  var isDecision = (m2.type || '').toString().toUpperCase() === 'DECISION';
+                  if (!isFloki || !isDecision) continue;
+                  var toolsUsed = m2.metadata ? m2.metadata.tools_used : null;
+                  if (Array.isArray(toolsUsed) && toolsUsed.length) {
+                    chain = toolsUsed.join(' → ');
+                  }
+                  break;
+                }
+                invEl.textContent = chain || '—';
+              }
+            } catch(e) {}
+
+            // Top patterns (cached between polls)
+            try {
+              var patEl = document.getElementById('ctx-top-patterns');
+              if (patEl) {
+                if (cachedTopPatternsText) {
+                  patEl.textContent = cachedTopPatternsText;
+                } else {
+                  patEl.textContent = '—';
+                }
+              }
+            } catch(e) {}
+
             // Right panel from /api/state
             if (state) {
               var price = (state.account || {}).price || state.price || null;
@@ -999,27 +1031,6 @@
               var wlbeEl = document.getElementById('ctx-wlbe');
               if (wlbeEl) wlbeEl.textContent = wlbe;
 
-              // Pillars if available in last_analysis
-              var la = state.last_analysis || {};
-              function setBar(idBar, idVal, v) {
-                var bar = document.getElementById(idBar);
-                var val = document.getElementById(idVal);
-                var n = null;
-                try { n = (v === null || v === undefined) ? null : Number(v); } catch(e) { n = null; }
-                if (n === null || isNaN(n)) {
-                  if (bar) bar.style.width = '0%';
-                  if (val) val.textContent = '—';
-                  return;
-                }
-                var pct = Math.max(0, Math.min(100, n));
-                if (bar) bar.style.width = pct + '%';
-                if (val) val.textContent = String(Math.round(pct));
-              }
-              setBar('ctx-tech-bar','ctx-tech-val', la.tech_score);
-              setBar('ctx-ml-bar','ctx-ml-val', la.ml_score);
-              setBar('ctx-mom-bar','ctx-mom-val', la.momentum_score);
-              setBar('ctx-news-bar','ctx-news-val', la.news_score);
-              setBar('ctx-cal-bar','ctx-cal-val', la.calendar_score);
             }
           } catch(e) {
             // silent
@@ -1033,10 +1044,28 @@
           });
         }
 
+        function refreshTopPatterns() {
+          return fetchJson('/api/agent-patterns?limit=3').then(function(payload) {
+            if (!payload) return;
+            cachedPatternsUpdated = payload.updated || null;
+            var pats = payload.patterns || [];
+            if (!Array.isArray(pats)) pats = [];
+            var lines = [];
+            for (var i = 0; i < pats.length && lines.length < 3; i++) {
+              var line = fmtPatternLine(pats[i]);
+              if (line) lines.push(line);
+            }
+            cachedTopPatternsText = lines.length ? lines.join('\n') : '—';
+          }).catch(function() {
+            // silent
+          });
+        }
+
         function loadOnce() {
           return Promise.all([
             fetchJson('/api/trade-room?limit=50'),
-            fetchJson('/api/state')
+            fetchJson('/api/state'),
+            refreshTopPatterns(),
           ]).then(function(res) {
             var msgPayload = res[0] || {};
             latestMessages = (msgPayload.messages || []).slice();

@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import hashlib
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,6 +10,13 @@ from typing import Any, Dict, List
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+# Ensure project root is importable when running as `python dashboard/server.py`
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import agent_reflection
 
 try:
     from dotenv import load_dotenv
@@ -192,9 +200,38 @@ def _extract_tools_used(tool_trace: Any) -> List[str]:
     tools = []
     for entry in (tool_trace or []):
         try:
-            name = (entry or {}).get("name")
-            if name:
-                tools.append(str(name))
+            e = entry or {}
+            name = e.get("name")
+            if not name:
+                continue
+
+            rendered = str(name)
+            inp = e.get("input") or {}
+
+            # Enrich key tools with compact args for dashboard visibility
+            try:
+                if name == "get_candles":
+                    tf = inp.get("timeframe") or inp.get("tf")
+                    if tf:
+                        rendered = f"get_candles({tf})"
+                elif name == "get_indicators":
+                    tf = inp.get("timeframe") or inp.get("tf")
+                    if tf:
+                        rendered = f"get_indicators({tf})"
+                elif name == "get_sr_zones":
+                    tf = inp.get("timeframe") or inp.get("tf")
+                    if tf:
+                        rendered = f"get_sr_zones({tf})"
+                elif name == "get_headlines":
+                    rendered = "get_headlines"
+                elif name == "get_macro":
+                    rendered = "get_macro"
+                elif name == "get_current_price":
+                    rendered = "get_current_price"
+            except Exception:
+                rendered = str(name)
+
+            tools.append(rendered)
         except Exception:
             continue
     # preserve order, de-dup
@@ -609,6 +646,73 @@ def trade_room_api(limit: int = 50):
         return JSONResponse({"messages": msgs})
     except Exception:
         return JSONResponse({"messages": []})
+
+
+@app.get("/api/agent-patterns")
+def agent_patterns(limit: int = 3):
+    try:
+        limit = max(1, min(int(limit or 3), 10))
+
+        payload = agent_reflection.read_patterns() or {}
+        if not isinstance(payload, dict):
+            return JSONResponse({"updated": None, "trade_count": 0, "patterns": []})
+
+        patterns = payload.get("patterns")
+        if not isinstance(patterns, list):
+            patterns = []
+
+        def _pf(p: Dict[str, Any]) -> float:
+            try:
+                return float(p.get("pf", 0.0) or 0.0)
+            except Exception:
+                return 0.0
+
+        def _trades(p: Dict[str, Any]) -> int:
+            try:
+                return int(p.get("trades", 0) or 0)
+            except Exception:
+                return 0
+
+        def _is_strong(p: Dict[str, Any]) -> bool:
+            try:
+                return str(p.get("insight") or "").strip().lower() == "strong edge"
+            except Exception:
+                return False
+
+        def _is_avoid(p: Dict[str, Any]) -> bool:
+            try:
+                return str(p.get("insight") or "").strip().lower().startswith("avoid")
+            except Exception:
+                return False
+
+        strong = [p for p in patterns if isinstance(p, dict) and _is_strong(p)]
+        avoid = [p for p in patterns if isinstance(p, dict) and _is_avoid(p)]
+
+        strong.sort(key=lambda p: (_pf(p), _trades(p)), reverse=True)
+        avoid.sort(key=lambda p: (_pf(p), -_trades(p)))
+
+        selected: List[Dict[str, Any]] = []
+        for p in strong:
+            if len(selected) >= limit:
+                break
+            selected.append(p)
+        if len(selected) < limit:
+            for p in avoid:
+                if len(selected) >= limit:
+                    break
+                selected.append(p)
+
+        if not selected:
+            selected = [p for p in patterns if isinstance(p, dict)][:limit]
+
+        out = {
+            "updated": payload.get("updated"),
+            "trade_count": payload.get("trade_count", 0),
+            "patterns": selected,
+        }
+        return JSONResponse(out)
+    except Exception:
+        return JSONResponse({"updated": None, "trade_count": 0, "patterns": []})
 
 
 @app.get("/api/recent-decisions")
