@@ -587,6 +587,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_trade_patterns",
+                "description": "Read discovered statistical patterns from your own trading history (L2 warm memory).",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {

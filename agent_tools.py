@@ -826,6 +826,31 @@ class AgentTools:
             self._log_tool("read_session_memory", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_trade_patterns(self) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            try:
+                from agent_reflection import read_patterns
+            except Exception:
+                self._log_tool("get_trade_patterns", start, "error=import_failed")
+                return {"success": False, "reason": "patterns_unavailable"}
+
+            payload = read_patterns()
+            if not isinstance(payload, dict) or not payload:
+                self._log_tool("get_trade_patterns", start, "error=invalid_payload")
+                return {"success": False, "reason": "patterns_unavailable"}
+
+            if payload.get("success") is False:
+                self._log_tool("get_trade_patterns", start, f"reason={payload.get('reason')}")
+                return payload
+
+            patterns = payload.get("patterns") if isinstance(payload.get("patterns"), list) else []
+            self._log_tool("get_trade_patterns", start, f"patterns={len(patterns)}")
+            return payload
+        except Exception as e:
+            self._log_tool("get_trade_patterns", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def write_session_memory(self, thesis: str, note: str) -> Dict[str, Any]:
         start = time.time()
         try:

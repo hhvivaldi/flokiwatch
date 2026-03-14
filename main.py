@@ -23,6 +23,7 @@ import config
 from logger import log
 from state_writer import write_state, add_closed_trade
 from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision, get_recent_agent_decisions, get_trade_feedback
+from agent_reflection import run_reflection_async
 from alerts import (
     alert_bot_started, alert_bot_stopped, alert_signal_detected,
     alert_safety_block, alert_error, alert_daily_summary, discord,
@@ -158,6 +159,12 @@ class TradingBot:
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
         signal.signal(signal.SIGTERM, self._shutdown_handler)
+
+        # L2 Reflection engine (warm memory)
+        try:
+            run_reflection_async("startup")
+        except Exception:
+            pass
     
     def _shutdown_handler(self, signum, frame):
         """Graceful shutdown handler"""
@@ -3879,6 +3886,13 @@ class TradingBot:
                     close_time=action.get("close_time"),
                     breakeven_activated=action.get("breakeven_activated", False),
                 )
+
+                # Update L2 pattern memory after a confirmed close (non-blocking)
+                if not is_pending:
+                    try:
+                        run_reflection_async("trade_close")
+                    except Exception:
+                        pass
                 
                 # Record for safety checks (cooldown applies even for pending)
                 record_trade_result(profit)
