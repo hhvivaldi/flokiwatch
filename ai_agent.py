@@ -18,6 +18,86 @@ from agent_prompts import get_system_prompt, get_prompt_hash, get_prompt_version
 logger = log
 
 
+def _update_session_memory(session_notes: str, session_context: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        notes_s = str(session_notes or "").strip()
+        if not notes_s:
+            return
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        mem_path = os.path.join(data_dir, "agent_session_memory.json")
+        os.makedirs(data_dir, exist_ok=True)
+
+        now = datetime.now()
+        today = now.date().isoformat()
+
+        payload: Dict[str, Any] = {
+            "session_date": today,
+            "thesis": "",
+            "trades_today": 0,
+            "wins_today": 0,
+            "losses_today": 0,
+            "notes": [],
+            "last_updated": now.isoformat(timespec="seconds"),
+        }
+
+        if os.path.exists(mem_path):
+            try:
+                with open(mem_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    payload.update(existing)
+            except Exception:
+                pass
+
+        if str(payload.get("session_date") or "") != today:
+            try:
+                prev_date = str(payload.get("session_date") or "").strip()
+                if prev_date:
+                    archive_path = os.path.join(data_dir, f"agent_session_memory_{prev_date}.json")
+                    try:
+                        if os.path.exists(mem_path) and not os.path.exists(archive_path):
+                            os.replace(mem_path, archive_path)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            payload = {
+                "session_date": today,
+                "thesis": "",
+                "trades_today": 0,
+                "wins_today": 0,
+                "losses_today": 0,
+                "notes": [],
+                "last_updated": now.isoformat(timespec="seconds"),
+            }
+
+        sc = session_context if isinstance(session_context, dict) else {}
+        try:
+            payload["trades_today"] = int(sc.get("today_trades", payload.get("trades_today", 0)) or 0)
+            payload["wins_today"] = int(sc.get("today_wins", payload.get("wins_today", 0)) or 0)
+            payload["losses_today"] = int(sc.get("today_losses", payload.get("losses_today", 0)) or 0)
+        except Exception:
+            pass
+
+        if not isinstance(payload.get("notes"), list):
+            payload["notes"] = []
+
+        payload["notes"].append({"time": now.strftime("%H:%M"), "note": notes_s})
+        payload["notes"] = payload["notes"][-10:]
+        payload["last_updated"] = now.isoformat(timespec="seconds")
+
+        try:
+            with open(mem_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.debug(f"Session memory update failed (non-blocking): {e}")
+
+
 class AgentDecision(Enum):
     """Possible Agent decisions"""
     OPEN_BUY = "OPEN_BUY"
@@ -40,6 +120,7 @@ class AgentResult:
     concerns: List[str]
     trade_plan: Optional[Dict[str, Any]] = None
     entry_conditions: Optional[Dict[str, Any]] = None
+    session_notes: Optional[str] = None
     raw_response: Optional[str] = None
     prompt_version: str = ""
     prompt_hash: str = ""
@@ -65,6 +146,7 @@ class AgentResult:
             "concerns": self.concerns,
             "trade_plan": self.trade_plan,
             "entry_conditions": self.entry_conditions,
+            "session_notes": self.session_notes,
             "raw_response": self.raw_response,
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
@@ -324,6 +406,20 @@ Maintain consistency with your previous analysis unless market conditions have m
         else:
             header_line = f"The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)"
 
+        session_memory_section = ""
+        try:
+            from agent_data_builder import format_session_memory_xml
+            session_memory_xml = format_session_memory_xml(data_package.get("session_memory"))
+            if session_memory_xml and session_memory_xml.strip() and session_memory_xml.strip() != "<session_memory/>":
+                session_memory_section = f"""
+
+## SESSION MEMORY (Your own notes from today)
+
+{session_memory_xml}
+"""
+        except Exception as e:
+            logger.debug(f"Session memory render failed (non-blocking): {e}")
+
         if trigger_type == "PROACTIVE_H1" and proactive_xml:
             message = proactive_xml
         else:
@@ -331,6 +427,7 @@ Maintain consistency with your previous analysis unless market conditions have m
 
 {header_line}
 {memory_section}
+{session_memory_section}
 Review the complete context below and make your decision.
 
 ```json
@@ -417,6 +514,16 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
             if entry_conditions is not None and not isinstance(entry_conditions, dict):
                 logger.warning("Invalid entry_conditions type (expected dict) — ignoring")
                 entry_conditions = None
+
+            session_notes = None
+            try:
+                sn = parsed.get("session_notes")
+                if sn is not None:
+                    sn_s = str(sn).strip()
+                    if sn_s:
+                        session_notes = sn_s
+            except Exception:
+                session_notes = None
             
             # Parse adjustment and close_reason
             adjustment = parsed.get("adjustment")
@@ -430,6 +537,7 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 concerns=parsed.get("concerns", []),
                 trade_plan=trade_plan,
                 entry_conditions=entry_conditions,
+                session_notes=session_notes,
                 raw_response=content,
                 prompt_version=get_prompt_version(),
                 prompt_hash=get_prompt_hash(),
@@ -530,6 +638,19 @@ async def agent_decide(
     
     # Get Agent decision
     result = await agent.decide(data_package, trigger_type=trigger_type)
+
+    try:
+        if result.session_notes:
+            session_context = None
+            try:
+                session_context = (data_package.get("session") or {}).get("context")
+            except Exception:
+                session_context = None
+            if not session_context:
+                session_context = data_package.get("session")
+            _update_session_memory(result.session_notes, session_context=session_context)
+    except Exception as e:
+        logger.debug(f"Session memory persist failed (non-blocking): {e}")
     
     # Save REJECT to memory (v1.3)
     if allow_memory_write and result.decision == "REJECT":

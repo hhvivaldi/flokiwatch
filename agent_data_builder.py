@@ -5,12 +5,63 @@ Collects raw price data, indicators, Brain analysis, ML predictions,
 news/macro data, positions, and session context.
 """
 
+import json
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 from logger import log
 
 logger = log
+
+
+def load_session_memory(path: str = "data/agent_session_memory.json") -> Optional[Dict[str, Any]]:
+    try:
+        abs_path = os.path.abspath(path)
+        if not os.path.exists(abs_path):
+            return None
+        with open(abs_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else None
+    except Exception as e:
+        logger.debug(f"Session memory load failed (non-blocking): {e}")
+        return None
+
+
+def format_session_memory_xml(memory: Optional[Dict[str, Any]]) -> str:
+    mem = memory if isinstance(memory, dict) else {}
+    if not mem:
+        return "<session_memory/>"
+
+    thesis = mem.get("thesis")
+    trades_today = mem.get("trades_today")
+    wins_today = mem.get("wins_today")
+    losses_today = mem.get("losses_today")
+    notes = mem.get("notes") if isinstance(mem.get("notes"), list) else []
+
+    lines: List[str] = []
+    lines.append("<session_memory>")
+    if thesis is not None:
+        lines.append(f"  <thesis>{_xml_escape(thesis)}</thesis>")
+    if trades_today is not None:
+        lines.append(f"  <trades_today>{_xml_escape(trades_today)}</trades_today>")
+    if wins_today is not None:
+        lines.append(f"  <wins_today>{_xml_escape(wins_today)}</wins_today>")
+    if losses_today is not None:
+        lines.append(f"  <losses_today>{_xml_escape(losses_today)}</losses_today>")
+
+    lines.append("  <notes>")
+    for n in notes[:10]:
+        if not isinstance(n, dict):
+            continue
+        t = n.get("time")
+        note = n.get("note")
+        if note is None:
+            continue
+        lines.append(f"    <note time=\"{_xml_attr(t)}\">{_xml_escape(note)}</note>")
+    lines.append("  </notes>")
+    lines.append("</session_memory>")
+    return "\n".join(lines)
 
 
 def _xml_escape(text: Any) -> str:
@@ -1202,6 +1253,8 @@ def build_data_package(
         Complete data package dict for Agent
     """
     try:
+        session_memory = load_session_memory()
+
         # Get current price value for S/R zone formatting
         price_val = 0
         if current_price:
@@ -1235,6 +1288,7 @@ def build_data_package(
             "delta_context": _format_delta_context(delta_context),
             "portfolio": _format_portfolio(portfolio),
             "regime_context": _format_regime_context(regime_context),
+            "session_memory": session_memory,
         }
         
         return package
@@ -1273,6 +1327,8 @@ def build_proactive_data_package(
     Excludes Brain opinion/scoring and agent_memory_context; includes only raw market context.
     """
     try:
+        session_memory = load_session_memory()
+
         price_val = 0
         if current_price:
             price_val = current_price.get("bid", current_price.get("ask", 0))
@@ -1315,6 +1371,7 @@ def build_proactive_data_package(
             "recent_decisions": recent_decisions or [],
             "trade_history": trade_history or [],
             "last_execution_result": last_execution_result or {},
+            "session_memory": session_memory,
         }
 
         try:
