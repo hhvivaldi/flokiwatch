@@ -17,293 +17,362 @@
       html, body {
         font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background: #0d0d0d;
+        background-image: 
+          radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
+          radial-gradient(circle at 80% 70%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
+        background-attachment: fixed;
       }
       .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
+      /* ── Glassmorphism ──────────────────────── */
+      .glass-panel-deep {
+        background: rgba(18, 18, 18, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 
+          0 4px 24px -1px rgba(0, 0, 0, 0.4),
+          inset 0 1px 1px rgba(255, 255, 255, 0.03);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .glass-panel-deep:hover {
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 
+          0 8px 32px -1px rgba(0, 0, 0, 0.5),
+          inset 0 1px 1px rgba(255, 255, 255, 0.05);
+      }
+
       /* ── Avatar ─────────────────────────────── */
       .agent-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'JetBrains Mono', monospace;
         font-weight: 700;
-        font-size: 15px;
+        font-size: 18px;
         flex-shrink: 0;
         overflow: hidden;
+        position: relative;
+        transition: transform 0.3s ease;
       }
       .agent-avatar img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: 50%;
       }
       .avatar-floki {
-        background: rgba(74, 222, 128, 0.12);
-        border: 1.5px solid rgba(74, 222, 128, 0.4);
-        color: #4ade80;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1.5px solid rgba(16, 185, 129, 0.3);
+        color: #10b981;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
       }
       .avatar-rex {
-        background: rgba(129, 140, 248, 0.12);
-        border: 1.5px solid rgba(129, 140, 248, 0.4);
-        color: #818cf8;
+        background: rgba(99, 102, 241, 0.1);
+        border: 1.5px solid rgba(99, 102, 241, 0.3);
+        color: #6366f1;
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
       }
       .avatar-sm {
-        width: 28px;
-        height: 28px;
-        font-size: 11px;
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+        border-radius: 8px;
       }
+
+      /* ── Pulse Animation ────────────────────── */
+      @keyframes agent-pulse {
+        0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.1); }
+        50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.25); }
+      }
+      @keyframes agent-pulse-rex {
+        0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.1); }
+        50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.25); }
+      }
+      .pulse-active-floki { animation: agent-pulse 3s infinite ease-in-out; }
+      .pulse-active-rex { animation: agent-pulse-rex 3s infinite ease-in-out; }
 
       /* ── Message type badges ─────────────────── */
       .msg-badge {
         display: inline-block;
-        padding: 1px 7px;
-        border-radius: 4px;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 8.5px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         flex-shrink: 0;
       }
-      .badge-analysis { color: #60a5fa; background: #0a1a2a; border: 1px solid rgba(96,165,250,0.25); }
-      .badge-alert    { color: #fb923c; background: #2a1a00; border: 1px solid rgba(251,146,60,0.25); }
-      .badge-decision { color: #4ade80; background: #002a10; border: 1px solid rgba(74,222,128,0.25); }
-      .badge-debate   { color: #f87171; background: #2a0000; border: 1px solid rgba(248,113,113,0.25); }
-      .badge-info     { color: #6b7280; background: #1a1a1a; border: 1px solid rgba(107,114,128,0.2); }
+      .badge-analysis { color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.2); }
+      .badge-alert    { color: #fb923c; background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.2); }
+      .badge-decision { color: #10b981; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
+      .badge-debate   { color: #f87171; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); }
+      .badge-info     { color: #94a3b8; background: rgba(148, 163, 184, 0.05); border: 1px solid rgba(148, 163, 184, 0.1); }
 
       /* ── Decision badge (agent card) ────────── */
       .decision-pill {
         display: inline-block;
-        padding: 2px 8px;
-        border-radius: 9999px;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
+        padding: 3px 10px;
+        border-radius: 7px;
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       }
-      .pill-buy     { color: #4ade80; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3); }
-      .pill-sell    { color: #f87171; background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); }
-      .pill-wait    { color: #9ca3af; background: rgba(156,163,175,0.10); border: 1px solid rgba(156,163,175,0.2); }
-      .pill-hold    { color: #fbbf24; background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.3); }
-      .pill-standby { color: #818cf8; background: rgba(129,140,248,0.10); border: 1px solid rgba(129,140,248,0.25); }
+      .pill-buy     { color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
+      .pill-sell    { color: #ef4444; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); }
+      .pill-wait    { color: #94a3b8; background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.2); }
+      .pill-hold    { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
+      .pill-standby { color: #6366f1; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); }
 
       /* ── Status tag ─────────────────────────── */
       .status-tag {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 1px 6px;
-        border-radius: 4px;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 6px;
         font-size: 9px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
+        font-weight: 700;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        color: #6b7280;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: #94a3b8;
       }
-      .dot-green { width:6px; height:6px; border-radius:50%; background:#4ade80; flex-shrink:0; }
-      .dot-gray  { width:6px; height:6px; border-radius:50%; background:#6b7280; flex-shrink:0; }
+      .dot-green { width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow: 0 0 6px #10b981; }
+      .dot-gray  { width:6px; height:6px; border-radius:50%; background:#475569; }
 
       /* ── Agreement / Conflict banner ────────── */
       .agreement-banner {
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 10px;
-        font-weight: 700;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 11px;
+        font-weight: 800;
         letter-spacing: 0.1em;
         text-transform: uppercase;
+        text-align: center;
+        margin-top: 4px;
       }
-      .banner-agree   { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: #4ade80; }
-      .banner-conflict { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); color: #f87171; }
+      .banner-agree   { background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); color: #10b981; }
+      .banner-conflict { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; }
 
       /* ── Session stats ──────────────────────── */
       .stat-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 4px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       }
       .stat-row:last-child { border-bottom: none; }
-      .stat-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #4b5563; }
-      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #d1d5db; }
+      .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; }
+      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #e2e8f0; }
 
       /* ── Filter tabs ────────────────────────── */
       .filter-tab {
-        padding: 4px 12px;
-        font-size: 9px;
-        font-weight: 700;
+        padding: 6px 14px;
+        font-size: 9.5px;
+        font-weight: 800;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        color: #6b7280;
-        border-bottom: 2px solid transparent;
-        transition: color 0.15s, border-color 0.15s;
-        white-space: nowrap;
+        color: #64748b;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid transparent;
       }
-      .filter-tab:hover { color: #9ca3af; }
-      .filter-tab.active { color: #f9fafb; border-bottom-color: #4ade80; }
+      .filter-tab:hover { color: #94a3b8; background: rgba(255,255,255,0.03); }
+      .filter-tab.active { 
+        color: #f8fafc; 
+        background: rgba(16, 185, 129, 0.1); 
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+      }
 
       /* ── Conversation feed ──────────────────── */
       .feed-scroll {
         overflow-y: auto;
-        max-height: calc(100vh - 260px);
+        max-height: calc(100vh - 240px);
         min-height: 400px;
-        padding-right: 4px;
+        padding-right: 8px;
+        position: relative;
       }
-      .feed-scroll::-webkit-scrollbar { width: 4px; }
+      .feed-scroll::-webkit-scrollbar { width: 5px; }
       .feed-scroll::-webkit-scrollbar-track { background: transparent; }
-      .feed-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+      .feed-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+      
+      /* Activity timeline line */
+      .feed-scroll::before {
+        content: "";
+        position: absolute;
+        left: 20px;
+        top: 20px;
+        bottom: 20px;
+        width: 1px;
+        background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 5%, rgba(255,255,255,0.08) 95%, transparent);
+        pointer-events: none;
+      }
 
       /* ── Time divider ───────────────────────── */
       .time-divider {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin: 14px 0 10px;
+        gap: 12px;
+        margin: 20px 0 16px;
+        position: relative;
+        z-index: 1;
       }
       .time-divider::before,
       .time-divider::after {
         content: "";
         flex: 1;
         height: 1px;
-        background: rgba(255,255,255,0.07);
+        background: rgba(255, 255, 255, 0.05);
       }
       .time-divider span {
         font-size: 9px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
+        font-weight: 700;
+        letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: #374151;
+        color: #475569;
         white-space: nowrap;
         font-family: 'JetBrains Mono', monospace;
+        background: #0d0d0d;
+        padding: 0 8px;
       }
 
       /* ── Message bubble ─────────────────────── */
       .msg-row {
         display: flex;
-        gap: 8px;
-        margin-bottom: 10px;
-        animation: msg-in 0.25s ease-out both;
+        gap: 12px;
+        margin-bottom: 14px;
+        animation: msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        position: relative;
+        z-index: 2;
       }
       .msg-row.floki { flex-direction: row; }
       .msg-row.rex   { flex-direction: row-reverse; }
 
       @keyframes msg-in {
-        from { opacity: 0; transform: translateY(6px); }
-        to   { opacity: 1; transform: translateY(0); }
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
       }
 
       .msg-bubble {
-        max-width: 78%;
-        padding: 8px 11px;
-        border-radius: 10px;
-        font-size: 11.5px;
+        max-width: 82%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 12.5px;
         line-height: 1.6;
-        color: #d1d5db;
+        color: #cbd5e1;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
       }
       .bubble-floki {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.07);
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         border-top-left-radius: 2px;
       }
       .bubble-rex {
-        background: rgba(129,140,248,0.06);
-        border: 1px solid rgba(129,140,248,0.12);
+        background: rgba(49, 46, 129, 0.2);
+        border: 1px solid rgba(99, 102, 241, 0.15);
         border-top-right-radius: 2px;
       }
 
       .msg-meta {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 4px;
+        gap: 8px;
+        margin-bottom: 6px;
       }
-      .msg-name { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
-      .name-floki { color: rgba(74,222,128,0.8); }
-      .name-rex   { color: rgba(129,140,248,0.8); }
-      .msg-time { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #374151; margin-left: auto; }
+      .msg-name { font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
+      .name-floki { color: #10b981; }
+      .name-rex   { color: #818cf8; }
+      .msg-time { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #475569; margin-left: auto; }
 
       /* ── Conflict inline banner ─────────────── */
       .conflict-strip {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin: 6px 0;
-        padding: 6px 12px;
-        border-radius: 6px;
-        background: rgba(248,113,113,0.06);
-        border: 1px solid rgba(248,113,113,0.2);
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
+        gap: 10px;
+        margin: 10px 0 10px 48px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        background: rgba(239, 68, 68, 0.05);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         color: #f87171;
+        box-shadow: 0 2px 10px rgba(239, 68, 68, 0.05);
       }
 
       /* ── Right column blocks ────────────────── */
       .ctx-block {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 10px;
-        padding: 10px 12px;
+        background: rgba(18, 18, 18, 0.6);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       }
       .ctx-label {
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #4b5563;
-        margin-bottom: 7px;
+        color: #475569;
+        margin-bottom: 10px;
       }
       .ctx-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 4px;
-        font-size: 10px;
+        margin-bottom: 6px;
+        font-size: 10.5px;
         font-family: 'JetBrains Mono', monospace;
       }
       .ctx-row:last-child { margin-bottom: 0; }
-      .ctx-key { color: #6b7280; }
-      .ctx-val { color: #d1d5db; font-weight: 600; }
+      .ctx-key { color: #64748b; }
+      .ctx-val { color: #f1f5f9; font-weight: 700; }
 
       .pillar-bar-track {
         flex: 1;
-        height: 4px;
-        background: rgba(255,255,255,0.06);
+        height: 5px;
+        background: rgba(255, 255, 255, 0.04);
         border-radius: 9999px;
         overflow: hidden;
-        margin: 0 6px;
+        margin: 0 8px;
       }
       .pillar-bar-fill {
         height: 100%;
         border-radius: 9999px;
-        background: #4ade80;
-        box-shadow: 0 0 5px rgba(74,222,128,0.5);
+        background: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+        transition: width 1s ease-in-out;
       }
 
       /* ── Page header strip ──────────────────── */
       .page-header-strip {
-        background: rgba(255,255,255,0.025);
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        padding: 7px 24px;
+        background: rgba(18, 18, 18, 0.4);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 10px 24px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
       }
 
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
         display: grid;
-        grid-template-columns: 240px 1fr 200px;
-        gap: 16px;
-        padding: 16px 20px 24px;
-        height: calc(100vh - 88px);
+        grid-template-columns: 260px 1fr 220px;
+        gap: 20px;
+        padding: 20px 24px;
+        height: calc(100vh - 94px);
         box-sizing: border-box;
         overflow: hidden;
       }
@@ -311,11 +380,11 @@
       .col-left, .col-right {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
         overflow-y: auto;
       }
-      .col-left::-webkit-scrollbar, .col-right::-webkit-scrollbar { width: 3px; }
-      .col-left::-webkit-scrollbar-thumb, .col-right::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
+      .col-left::-webkit-scrollbar, .col-right::-webkit-scrollbar { width: 4px; }
+      .col-left::-webkit-scrollbar-thumb, .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
 
       .col-center {
         display: flex;
@@ -324,14 +393,27 @@
         overflow: hidden;
       }
 
+      /* Terminal Focus Glows */
+      .focus-glow-emerald {
+        position: relative;
+      }
+      .focus-glow-emerald::after {
+        content: "";
+        position: absolute;
+        top: -10px; left: -10px; right: -10px; bottom: -10px;
+        background: radial-gradient(circle at center, rgba(16, 185, 129, 0.05), transparent 70%);
+        pointer-events: none;
+        z-index: -1;
+      }
+
       /* ── Responsive fallback (mobile) ───────── */
-      @media (max-width: 900px) {
+      @media (max-width: 1024px) {
         .trade-room-grid {
           grid-template-columns: 1fr;
           height: auto;
           overflow: visible;
         }
-        .feed-scroll { max-height: 520px; }
+        .feed-scroll { max-height: 600px; }
       }
     </style>
   </head>
@@ -369,7 +451,7 @@
     <div class="page-header-strip">
       <span class="text-xs font-bold tracking-[0.2em] text-emerald-400 uppercase">TRADE ROOM — FLOKI &amp; REX</span>
       <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
-      <span id="data-badge" class="ml-auto text-[9px] font-mono text-gray-600">MOCK DATA · BACKEND CONNECTION PENDING</span>
+      <span id="data-badge" class="ml-auto text-[10px] font-bold font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/20 animate-pulse">LIVE DATA</span>
     </div>
 
     <!-- ═══════════════════════════════════════════════
@@ -383,56 +465,60 @@
       <div class="col-left">
 
         <!-- FLOKI card -->
-        <div class="glass-panel-deep rounded-xl p-3" id="floki-card">
-          <div class="flex items-center gap-3 mb-3">
+        <div class="glass-panel-deep rounded-xl p-4 focus-glow-emerald" id="floki-card">
+          <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
-            <div class="agent-avatar avatar-floki" id="avatar-floki" aria-label="FLOKI avatar">F</div>
+            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar">F</div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-bold tracking-wide" style="color:#4ade80">FLOKI</span>
+                <span class="text-sm font-black tracking-wider" style="color:#10b981">FLOKI</span>
                 <span class="status-tag">PROACTIVE · M30</span>
               </div>
-              <div class="mt-1">
+              <div class="mt-1.5">
                 <span id="floki-decision-pill" class="decision-pill pill-wait">WAIT</span>
               </div>
             </div>
           </div>
           <!-- Confidence bar -->
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">CONF</span>
-            <div class="confidence-bar-track flex-1"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
-            <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 shrink-0">—%</span>
+          <div class="flex flex-col gap-1.5 mb-3">
+            <div class="flex justify-between items-center px-0.5">
+              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONFIDENCE</span>
+              <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 font-bold">—%</span>
+            </div>
+            <div class="confidence-bar-track"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
           </div>
           <!-- Status tags -->
-          <div class="flex flex-wrap gap-1.5">
+          <div class="flex flex-wrap gap-2">
             <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
             <span id="floki-thesis-tag" class="status-tag">THESIS: —</span>
           </div>
         </div>
 
         <!-- REX card -->
-        <div class="glass-panel-deep rounded-xl p-3" id="rex-card">
-          <div class="flex items-center gap-3 mb-3">
+        <div class="glass-panel-deep rounded-xl p-4" id="rex-card">
+          <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
             <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">R</div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-bold tracking-wide" style="color:#818cf8">REX</span>
+                <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
                 <span class="status-tag">FAST · TRIGGER</span>
               </div>
-              <div class="mt-1">
+              <div class="mt-1.5">
                 <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
               </div>
             </div>
           </div>
           <!-- Confidence bar -->
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">AGREE</span>
-            <div class="confidence-bar-track flex-1"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
-            <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 shrink-0">—</span>
+          <div class="flex flex-col gap-1.5 mb-3">
+            <div class="flex justify-between items-center px-0.5">
+              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">AGREEMENT</span>
+              <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+            </div>
+            <div class="confidence-bar-track"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
           </div>
           <!-- Status tags -->
-          <div class="flex flex-wrap gap-1.5">
+          <div class="flex flex-wrap gap-2">
             <span class="status-tag"><span class="dot-gray"></span>STANDBY</span>
             <span id="rex-concerns-tag" class="status-tag">CONCERNS: —</span>
           </div>
@@ -478,10 +564,10 @@
       <div class="col-right">
 
         <!-- Price block -->
-        <div class="ctx-block">
+        <div class="ctx-block border-l-4 border-l-white/20">
           <div class="ctx-label">XAU/USD</div>
-          <div id="ctx-price" class="font-mono text-xl font-bold text-gray-100 tracking-tighter">—</div>
-          <div id="ctx-change" class="text-xs font-mono mt-0.5" style="color:#9ca3af">—</div>
+          <div id="ctx-price" class="font-mono text-2xl font-bold text-gray-100 tracking-tighter">—</div>
+          <div id="ctx-change" class="text-[10px] font-mono mt-1 opacity-60">—</div>
         </div>
 
         <!-- Macro block -->
@@ -495,31 +581,41 @@
         <!-- Pillars block -->
         <div class="ctx-block">
           <div class="ctx-label">BRAIN PILLARS</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Technical</span>
+          <div class="flex flex-col gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Technical</span>
+                <span id="ctx-tech-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+              </div>
               <div class="pillar-bar-track"><div id="ctx-tech-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-              <span id="ctx-tech-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">ML</span>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">ML</span>
+                <span id="ctx-ml-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+              </div>
               <div class="pillar-bar-track"><div id="ctx-ml-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-              <span id="ctx-ml-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Momentum</span>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Momentum</span>
+                <span id="ctx-mom-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+              </div>
               <div class="pillar-bar-track"><div id="ctx-mom-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-              <span id="ctx-mom-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">News</span>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">News</span>
+                <span id="ctx-news-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+              </div>
               <div class="pillar-bar-track"><div id="ctx-news-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-              <span id="ctx-news-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Calendar</span>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Calendar</span>
+                <span id="ctx-cal-val" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+              </div>
               <div class="pillar-bar-track"><div id="ctx-cal-bar" class="pillar-bar-fill" style="width:0%"></div></div>
-              <span id="ctx-cal-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
           </div>
         </div>
@@ -527,16 +623,16 @@
         <!-- Session block -->
         <div class="ctx-block">
           <div class="ctx-label">SESSION</div>
-          <div class="ctx-row"><span class="ctx-key">SESSION</span><span id="ctx-session" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">STATE</span><span id="ctx-session" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">P&amp;L</span><span id="ctx-pnl" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span id="ctx-wlbe" class="ctx-val">—</span></div>
         </div>
 
         <!-- Next trigger countdown -->
-        <div class="ctx-block">
+        <div class="ctx-block border-t border-emerald-500/20">
           <div class="ctx-label">NEXT PROACTIVE</div>
-          <div id="ctx-next" class="font-mono text-2xl font-bold text-gray-200 tracking-tighter">—</div>
-          <div class="text-[9px] text-gray-600 mt-1 uppercase tracking-widest font-semibold">M30 SNAPSHOT</div>
+          <div id="proactive-countdown" class="font-mono text-3xl font-bold text-emerald-400 tracking-tighter animate-pulse">—</div>
+          <div class="text-[9px] text-gray-600 mt-1.5 uppercase tracking-widest font-bold">M30 SNAPSHOT</div>
         </div>
 
       </div><!-- /col-right -->
@@ -639,7 +735,7 @@
           var html = '';
 
           if (!list.length) {
-            feed.innerHTML = '<div class="text-xs font-mono text-gray-600">NO MESSAGES</div>';
+            feed.innerHTML = '<div class="text-xs font-mono text-gray-600 p-4">NO MESSAGES IN FEED</div>';
             return;
           }
 
@@ -648,7 +744,9 @@
             if (!shouldShowMessage(m)) continue;
 
             if (m.__kind === 'conflict') {
-              html += '<div class="conflict-strip" data-conflict>' + esc(m.content) + '</div>';
+              html += '<div class="conflict-strip" data-conflict>' + 
+                '<span class="mr-2">⚡</span>' + esc(m.content) + 
+              '</div>';
               continue;
             }
 
@@ -662,15 +760,24 @@
             var metaStyle = isFloki ? '' : ' style="flex-direction:row-reverse"';
             var typeLabel = esc((m.type || '').toString());
 
+            // Add subtle icon to badge
+            var icon = '';
+            var t = typeLabel.toUpperCase();
+            if (t === 'ANALYSIS') icon = '🔍 ';
+            if (t === 'DECISION') icon = '⚡ ';
+            if (t === 'ALERT') icon = '⚠️ ';
+            if (t === 'DEBATE') icon = '💬 ';
+            if (t === 'TRADE_RESULT') icon = '📈 ';
+
             var content = (m.content || '').toString();
             content = esc(content).replaceAll('\n', '<br>');
 
             html += '<div class="' + rowCls + '" data-type="' + esc(dataType(m.type)) + '">' +
               '<div class="' + avCls + '">' + (isFloki ? 'F' : 'R') + '</div>' +
-              '<div>' +
+              '<div class="flex-1 min-w-0">' +
                 '<div class="msg-meta"' + metaStyle + '>' +
                   '<span class="' + nameCls + '">' + esc(author) + '</span>' +
-                  '<span class="msg-badge ' + bCls + '">' + typeLabel + '</span>' +
+                  '<span class="msg-badge ' + bCls + '">' + icon + typeLabel + '</span>' +
                   '<span class="msg-time">' + esc(fmtTime(m.timestamp)) + '</span>' +
                 '</div>' +
                 '<div class="' + bubbleCls + '">' + content + '</div>' +
@@ -679,7 +786,7 @@
           }
 
           if (!html) {
-            feed.innerHTML = '<div class="text-xs font-mono text-gray-600">NO MESSAGES</div>';
+            feed.innerHTML = '<div class="text-xs font-mono text-gray-600 p-4">NO MESSAGES MATCHING FILTER</div>';
             return;
           }
           feed.innerHTML = html;
