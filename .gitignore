@@ -31,6 +31,9 @@ logs/
 # ============================================================================
 data/history.db
 data/bot_state.json
+data/agent_session_memory.json
+data/agent_session_memory_*.json
+data/agent_watch_conditions.json
 data/*.csv
 data/*.txt
 data/*.json
