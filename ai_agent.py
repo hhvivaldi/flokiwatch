@@ -8,6 +8,7 @@ import json
 import asyncio
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Optional, List, Any
@@ -326,10 +327,13 @@ class AIAgent:
         """Initialize the AI Agent"""
         self.client = None
         self.model = None
-        self.timeout = 30
+        self.timeout = 60
         self.enabled = False
         self.mode = "shadow"  # shadow | gate | full
         self._initialized = False
+
+        self.max_tool_calls = 15
+        self.max_tokens = 4096
 
     def initialize(self) -> bool:
         """
@@ -366,8 +370,11 @@ class AIAgent:
             
             # Get config
             self.model = getattr(config, 'AI_AGENT_MODEL', 'claude-sonnet-4-20250514')
-            self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 30)
+            self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 60)
             self.mode = getattr(config, 'AI_AGENT_MODE', 'shadow')
+
+            self.max_tool_calls = int(getattr(config, 'AI_AGENT_MAX_TOOL_CALLS', 15) or 15)
+            self.max_tokens = int(getattr(config, 'AI_AGENT_MAX_TOKENS', 4096) or 4096)
             
             self._initialized = True
             logger.info(f"AI Agent initialized: model={self.model}, mode={self.mode}, timeout={self.timeout}s")
@@ -378,13 +385,14 @@ class AIAgent:
             self.enabled = False
             return False
 
-    async def decide(self, data_package: Dict, trigger_type: str = "SIGNAL") -> AgentResult:
+    async def decide(self, trigger_context: Any, tools: Any, trigger_type: str = "SIGNAL") -> AgentResult:
         """
-        Make a trading decision based on the data package.
-        
+        Make a trading decision based on minimal trigger context.
+
         Args:
-            data_package: Complete market context (built by agent_data_builder)
-            
+            trigger_context: Short message explaining why the Agent was called
+            tools: AgentTools instance (agent_tools.AgentTools)
+
         Returns:
             AgentResult with decision and reasoning
         """
@@ -394,20 +402,27 @@ class AIAgent:
         start_time = datetime.utcnow()
         
         try:
-            # Build the user message with the data package
-            user_message = self._build_user_message(data_package, trigger_type=trigger_type)
-            
-            # Call Claude API with timeout
+            user_message = str(trigger_context or "").strip()
+            if not user_message:
+                user_message = "Scheduled analysis. Decide what to check and whether to act."
+
             response = await asyncio.wait_for(
-                self._call_claude(user_message),
-                timeout=self.timeout
+                self._call_claude_with_tools(user_message, tools=tools),
+                timeout=self.timeout,
             )
             
             # Calculate latency
             latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
-            # Parse the response
             result = self._parse_response(response, latency_ms)
+
+            try:
+                if response.get("tool_trace"):
+                    # Preserve original raw JSON text and append tool trace in a safe way.
+                    # Downstream parsers use JSON extraction from raw_response; keep it intact.
+                    result.raw_response = (result.raw_response or "")
+            except Exception:
+                pass
             
             logger.info(
                 f"Agent decision: {result.decision} (conf={result.confidence}) "
@@ -426,149 +441,323 @@ class AIAgent:
             logger.error(f"Agent error: {e}")
             return self._fallback_result(str(e))
 
-    async def _call_claude(self, user_message: str) -> Dict:
-        """
-        Call the Claude API.
-        
-        Args:
-            user_message: The formatted user message with data package
-            
-        Returns:
-            API response dict
-        """
-        # Run in executor since anthropic client is sync
+    def _tool_schemas(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": "get_current_price",
+                "description": "Get current bid/ask/spread from cached Brain data",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_candles",
+                "description": "Get cached OHLCV candles for a timeframe. Supported: M5, H1, H4, D1. Max count: 50.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string"},
+                        "count": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                    "required": ["timeframe", "count"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_indicators",
+                "description": "Get cached indicator snapshot (RSI, MACD, EMA200, ATR, ADX, Bollinger)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_sr_zones",
+                "description": "Get cached support/resistance zones",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_fibonacci_levels",
+                "description": "Get cached Fibonacci levels and swing high/low",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_headlines",
+                "description": "Get cached news headlines (max 10)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_macro",
+                "description": "Get cached macro snapshot (DXY, VIX, yields, etc.)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_calendar",
+                "description": "Get cached economic calendar phase + next event",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_ml_prediction",
+                "description": "Get cached ML prediction snapshot",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_open_positions",
+                "description": "Get open positions from execution layer",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_trade_history",
+                "description": "Get recent closed trade history (days=1..30)",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 30}},
+                    "required": ["days"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_account_info",
+                "description": "Get account balance/equity/margin/leverage",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "execute_trade",
+                "description": "Execute a trade. Enforces safety and risk rules in code.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "direction": {"type": "string", "enum": ["BUY", "SELL"]},
+                        "sl": {"type": "number"},
+                        "tp": {"type": "number"},
+                    },
+                    "required": ["direction", "sl", "tp"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "close_trade",
+                "description": "Close a trade by ticket",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"ticket": {"type": "integer"}},
+                    "required": ["ticket"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "adjust_trade",
+                "description": "Adjust SL/TP of an open trade",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket": {"type": "integer"},
+                        "new_sl": {"type": "number"},
+                        "new_tp": {"type": "number"},
+                    },
+                    "required": ["ticket", "new_sl", "new_tp"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "read_session_memory",
+                "description": "Read session memory notes (trading journal)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "write_session_memory",
+                "description": "Write session memory (thesis + note)",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "thesis": {"type": "string"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["thesis", "note"],
+                    "additionalProperties": False,
+                },
+            },
+        ]
+
+    def _execute_tool(self, tools: Any, name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            fn = getattr(tools, name, None)
+            if not callable(fn):
+                return {"success": False, "reason": f"unknown tool: {name}"}
+            if tool_input is None:
+                tool_input = {}
+            return fn(**tool_input)
+        except TypeError as e:
+            return {"success": False, "reason": f"invalid tool args: {e}"}
+        except Exception as e:
+            return {"success": False, "reason": f"tool error: {e}"}
+
+    async def _call_claude_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
         loop = asyncio.get_event_loop()
-        
-        def _sync_call():
-            return self.client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                system=get_system_prompt(),
-                messages=[
-                    {"role": "user", "content": user_message}
-                ]
-            )
-        
-        response = await loop.run_in_executor(None, _sync_call)
-        
-        return {
-            "content": response.content[0].text if response.content else "",
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
-            "model": response.model,
-        }
+        start_time = time.time()
+
+        tool_schemas = self._tool_schemas()
+        messages: List[Dict[str, Any]] = [
+            {"role": "user", "content": trigger_context}
+        ]
+
+        total_input_tokens = 0
+        total_output_tokens = 0
+        last_model = self.model
+
+        tool_calls = 0
+        tool_trace: List[Dict[str, Any]] = []
+
+        while True:
+            if (time.time() - start_time) >= float(self.timeout):
+                return {
+                    "content": json.dumps(
+                        {
+                            "decision": "WAIT",
+                            "confidence": 0,
+                            "reasoning": "Timeout during tool loop",
+                            "key_factors": [],
+                            "concerns": ["timeout"],
+                        }
+                    ),
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "model": last_model,
+                    "tool_trace": tool_trace,
+                }
+
+            if tool_calls >= int(self.max_tool_calls):
+                return {
+                    "content": json.dumps(
+                        {
+                            "decision": "WAIT",
+                            "confidence": 0,
+                            "reasoning": "max tool calls reached",
+                            "key_factors": [],
+                            "concerns": ["max_tool_calls_reached"],
+                        }
+                    ),
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "model": last_model,
+                    "tool_trace": tool_trace,
+                }
+
+            def _sync_call():
+                return self.client.messages.create(
+                    model=self.model,
+                    max_tokens=int(self.max_tokens),
+                    system=get_system_prompt(),
+                    tools=tool_schemas,
+                    messages=messages,
+                )
+
+            response = await loop.run_in_executor(None, _sync_call)
+
+            try:
+                total_input_tokens += int(getattr(response.usage, "input_tokens", 0) or 0)
+                total_output_tokens += int(getattr(response.usage, "output_tokens", 0) or 0)
+            except Exception:
+                pass
+
+            try:
+                last_model = getattr(response, "model", last_model)
+            except Exception:
+                pass
+
+            content_blocks = list(getattr(response, "content", []) or [])
+            if not content_blocks:
+                # Treat as terminal failure
+                return {
+                    "content": json.dumps(
+                        {
+                            "decision": "WAIT",
+                            "confidence": 0,
+                            "reasoning": "empty response",
+                            "key_factors": [],
+                            "concerns": ["empty_response"],
+                        }
+                    ),
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "model": last_model,
+                    "tool_trace": tool_trace,
+                }
+
+            tool_uses = []
+            text_parts = []
+            for block in content_blocks:
+                btype = getattr(block, "type", None)
+                if btype == "tool_use":
+                    tool_uses.append(block)
+                elif btype == "text":
+                    t = getattr(block, "text", "")
+                    if t:
+                        text_parts.append(t)
+
+            if text_parts and not tool_uses:
+                return {
+                    "content": "\n".join(text_parts).strip(),
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "model": last_model,
+                    "tool_trace": tool_trace,
+                }
+
+            # Otherwise, execute tool calls and continue loop.
+            if tool_uses:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": getattr(tu, "id", ""),
+                                "name": getattr(tu, "name", ""),
+                                "input": getattr(tu, "input", {}) or {},
+                            }
+                            for tu in tool_uses
+                        ],
+                    }
+                )
+
+                tool_results_blocks = []
+                for tu in tool_uses:
+                    if tool_calls >= int(self.max_tool_calls):
+                        break
+                    tool_calls += 1
+                    name = str(getattr(tu, "name", "") or "").strip()
+                    tid = str(getattr(tu, "id", "") or "").strip()
+                    inp = getattr(tu, "input", {}) or {}
+
+                    t0 = time.time()
+                    result = self._execute_tool(tools, name, inp if isinstance(inp, dict) else {})
+                    dt_ms = int((time.time() - t0) * 1000)
+
+                    tool_trace.append(
+                        {
+                            "name": name,
+                            "input": inp,
+                            "result": result,
+                            "latency_ms": dt_ms,
+                        }
+                    )
+
+                    tool_results_blocks.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tid,
+                            "content": json.dumps(result, ensure_ascii=False, default=str),
+                        }
+                    )
+
+                messages.append({"role": "user", "content": tool_results_blocks})
+                continue
+
+            # If we got here, we had text + tool_uses. Ignore the text and continue tool loop;
+            # the final answer should be text-only.
+            continue
+
 
     def _build_user_message(self, data_package: Dict, trigger_type: str = "SIGNAL") -> str:
-        """
-        Build the user message from the data package.
-        
-        Args:
-            data_package: Complete market context
-            
-        Returns:
-            Formatted user message string
-        """
-        proactive_xml = None
-        if trigger_type == "PROACTIVE_H1":
-            try:
-                from agent_data_builder import format_proactive_xml
-                proactive_xml = format_proactive_xml(data_package)
-            except Exception as e:
-                logger.warning(f"Failed to format proactive XML, falling back to JSON: {e}")
-
-        # Format the data package as readable JSON (default / fallback)
-        formatted_data = json.dumps(data_package, indent=2, default=str)
-        
-        # Get Brain's signal for context
-        brain = data_package.get("brain_analysis", {})
-        brain_decision = brain.get("decision", "HOLD")
-        brain_score = brain.get("score", 50)
-        brain_confidence = brain.get("confidence", 50)
-        
-        # Build memory context section if present
-        memory_section = ""
-        memory_context = data_package.get("agent_memory_context")
-        if memory_context and memory_context.get("has_previous_reject"):
-            all_met = memory_context.get("all_conditions_met", False)
-            conditions_str = "\n".join(memory_context.get("conditions_status", []))
-            time_remaining = memory_context.get("invalidation", {}).get("time_remaining", "unknown")
-            
-            if all_met:
-                memory_section = f"""
-
-## ⚠️ PREVIOUS REJECT CONTEXT — ALL CONDITIONS NOW MET
-
-In your previous cycle, you REJECTED a {memory_context.get('brain_signal_rejected')} signal.
-
-Your market view was: **{memory_context.get('your_market_view', {}).get('direction', 'N/A')}**
-"{memory_context.get('your_market_view', {}).get('description', 'N/A')}"
-
-Your conditions to approve:
-{conditions_str}
-
-**All conditions from your previous REJECT are now met.**
-
-Time remaining before invalidation: {time_remaining}
-
-You should either:
-1. APPROVE the trade (OPEN_BUY or OPEN_SELL) if the setup is now valid
-2. Explain clearly why you are still rejecting despite conditions being met
-"""
-            else:
-                memory_section = f"""
-
-## PREVIOUS REJECT CONTEXT
-
-In your previous cycle, you REJECTED a {memory_context.get('brain_signal_rejected')} signal.
-
-Your market view was: **{memory_context.get('your_market_view', {}).get('direction', 'N/A')}**
-"{memory_context.get('your_market_view', {}).get('description', 'N/A')}"
-
-Your conditions to approve:
-{conditions_str}
-
-Time remaining before invalidation: {time_remaining}
-
-Maintain consistency with your previous analysis unless market conditions have materially changed.
-"""
-        
-        header_line = ""
-        if trigger_type == "PROACTIVE_H1":
-            header_line = "This is your independent H1 market snapshot. Analyze the raw market data below and provide YOUR trading view. What does the price structure tell you? What would YOU trade right now? Respond with OPEN_BUY, OPEN_SELL, or WAIT only."
-        else:
-            header_line = f"The Brain has signaled: **{brain_decision}** (score: {brain_score:.1f}, confidence: {brain_confidence:.0f}%)"
-
-        session_memory_section = ""
-        try:
-            from agent_data_builder import format_session_memory_xml
-            session_memory_xml = format_session_memory_xml(data_package.get("session_memory"))
-            if session_memory_xml and session_memory_xml.strip() and session_memory_xml.strip() != "<session_memory/>":
-                session_memory_section = f"""
-
-## SESSION MEMORY (Your own notes from today)
-
-{session_memory_xml}
-"""
-        except Exception as e:
-            logger.debug(f"Session memory render failed (non-blocking): {e}")
-
-        if trigger_type == "PROACTIVE_H1" and proactive_xml:
-            message = proactive_xml
-        else:
-            message = f"""## CURRENT MARKET DATA
-
-{header_line}
-{memory_section}
-{session_memory_section}
-Review the complete context below and make your decision.
-
-```json
-{formatted_data}
-```
-
-Based on this data, what is your decision? Remember to evaluate the CONTEXT, not just the numbers. Respond with valid JSON."""
-
-        return message
+        # Backward-compatible no-op. Main flow now uses minimal trigger_context.
+        formatted_data = json.dumps(data_package or {}, indent=2, default=str)
+        return f"```json\n{formatted_data}\n```"
 
     def _parse_response(self, response: Dict, latency_ms: int) -> AgentResult:
         """
@@ -742,7 +931,8 @@ def initialize_agent() -> bool:
 
 
 async def agent_decide(
-    data_package: Dict,
+    trigger_context: Any,
+    tools: Any,
     trigger_type: str = "SIGNAL",
     allow_memory_write: bool = True,
 ) -> AgentResult:
@@ -751,26 +941,27 @@ async def agent_decide(
     Handles memory injection and saving.
     
     Args:
-        data_package: Complete market context
+        trigger_context: Minimal context describing why the Agent was called
+        tools: AgentTools instance
         
     Returns:
         AgentResult with decision
     """
     agent = get_agent()
     
-    # Inject memory context into data package (v1.3)
-    if trigger_type != "PROACTIVE_H1":
+    # Inject memory context into trigger_context if trigger_context is a dict (backward compat)
+    if trigger_type != "PROACTIVE_H1" and isinstance(trigger_context, dict):
         try:
             from agent_memory import get_memory_context_for_agent
             memory_context = get_memory_context_for_agent()
             if memory_context:
-                data_package["agent_memory_context"] = memory_context
+                trigger_context["agent_memory_context"] = memory_context
                 logger.debug(f"Injected memory context: all_conditions_met={memory_context.get('all_conditions_met')}")
         except Exception as e:
             logger.warning(f"Failed to inject memory context: {e}")
-    
+
     # Get Agent decision
-    result = await agent.decide(data_package, trigger_type=trigger_type)
+    result = await agent.decide(trigger_context, tools=tools, trigger_type=trigger_type)
 
     try:
         parsed_obj = None
@@ -792,7 +983,8 @@ async def agent_decide(
             parsed_obj = None
 
         if isinstance(parsed_obj, dict):
-            result.checklist_validation = _validate_checklist(parsed_obj, data_package)
+            # Checklist validation is legacy; keep non-blocking.
+            result.checklist_validation = _validate_checklist(parsed_obj, trigger_context if isinstance(trigger_context, dict) else {})
         else:
             logger.warning("AGENT_CHECKLIST | MISSING — could not re-parse raw_response JSON for checklist validation")
     except Exception as e:
@@ -801,12 +993,14 @@ async def agent_decide(
     try:
         if result.session_notes:
             session_context = None
-            try:
-                session_context = (data_package.get("session") or {}).get("context")
-            except Exception:
-                session_context = None
-            if not session_context:
-                session_context = data_package.get("session")
+            session_context = None
+            if isinstance(trigger_context, dict):
+                try:
+                    session_context = (trigger_context.get("session") or {}).get("context")
+                except Exception:
+                    session_context = None
+                if not session_context:
+                    session_context = trigger_context.get("session")
             _update_session_memory(result.session_notes, session_context=session_context)
     except Exception as e:
         logger.debug(f"Session memory persist failed (non-blocking): {e}")
@@ -816,7 +1010,7 @@ async def agent_decide(
         if result.market_view and result.conditions_to_approve:
             try:
                 from agent_memory import save_reject
-                brain = data_package.get("brain_analysis", {})
+                brain = trigger_context.get("brain_analysis", {}) if isinstance(trigger_context, dict) else {}
                 save_reject(
                     brain_signal=brain.get("decision", "UNKNOWN"),
                     brain_score=brain.get("score", 50),
@@ -865,7 +1059,7 @@ async def _test_agent():
     
     # Test without initialization
     print("\n1. Test without initialization:")
-    result = await agent.decide(mock_data)
+    result = await agent.decide("Test trigger", tools=None)
     print(f"   Decision: {result.decision}")
     print(f"   Error: {result.error}")
     
@@ -877,7 +1071,7 @@ async def _test_agent():
     
     if agent.is_enabled():
         print("\n3. Test with real API call:")
-        result = await agent.decide(mock_data)
+        result = await agent.decide("Test trigger", tools=None)
         print(f"   Decision: {result.decision}")
         print(f"   Confidence: {result.confidence}")
         print(f"   Reasoning: {result.reasoning[:100]}...")
