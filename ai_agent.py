@@ -457,6 +457,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_position_events",
+                "description": "Get recent position-management events from the Monitor (breakeven, trailing, forced closes)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "get_candles",
                 "description": "Get cached OHLCV candles for a timeframe. Supported: M5, H1, H4, D1. Max count: 50.",
                 "input_schema": {

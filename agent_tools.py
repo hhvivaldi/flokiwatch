@@ -321,6 +321,33 @@ class AgentTools:
             self._log_tool("get_current_price", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_position_events(self) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            path = self._agent_monitor_events_path()
+            if not os.path.exists(path):
+                self._log_tool("get_position_events", start, "empty")
+                return {"events": []}
+
+            try:
+                import json
+
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                self._log_tool("get_position_events", start, "read_failed")
+                return {"events": []}
+
+            if not isinstance(data, list):
+                data = []
+
+            events = data[-20:]
+            self._log_tool("get_position_events", start, f"count={len(events)}")
+            return {"events": events}
+        except Exception as e:
+            self._log_tool("get_position_events", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def debate_with_rex(
         self,
         my_direction: str,
@@ -1264,6 +1291,12 @@ class AgentTools:
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _agent_monitor_events_path(self) -> str:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_monitor_events.json")
 
     def _load_watch_conditions(self) -> Dict[str, Any]:
         path = self._watch_conditions_path()

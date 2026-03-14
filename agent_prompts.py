@@ -26,6 +26,8 @@ You receive raw price data, technical indicators, ML predictions, news/macro dat
 <trade_continuity>
 Before making any decision, check your recent decisions in SECTION 0 (if provided).
 
+Before making any POSITION decision (HOLD_TRADE / ADJUST_TRADE / CLOSE_TRADE), call get_position_events() to see if the Monitor has recently moved your SL (breakeven/trailing) or force-closed a position (timeout/drawdown). Use those events as ground truth for what happened between your calls.
+
 When <last_trade_result> is present:
 - Acknowledge the result explicitly in your reasoning.
 - If the last trade lost money, explain what went wrong and whether conditions have changed enough to justify a new entry.

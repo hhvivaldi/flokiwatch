@@ -42,6 +42,60 @@ class PositionMonitor:
         self.last_known_sl = {}
         # Track account balance at trade open (captured when ticket is first detected in MT5)
         self.balance_at_open = {}
+
+    def _agent_monitor_events_path(self) -> str:
+        import os
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_monitor_events.json")
+
+    def _load_agent_monitor_events(self) -> List[dict]:
+        import json
+        import os
+
+        path = self._agent_monitor_events_path()
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_agent_monitor_events(self, events: List[dict]) -> bool:
+        import json
+        import os
+
+        path = self._agent_monitor_events_path()
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(events, f, ensure_ascii=False, indent=2)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
+            return True
+        except Exception:
+            return False
+
+    def _append_agent_monitor_event(self, event: str, ticket: int, details: str = "") -> None:
+        try:
+            payload = {
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "event": str(event or "").strip(),
+                "ticket": int(ticket),
+                "details": str(details or "").strip(),
+            }
+
+            events = self._load_agent_monitor_events()
+            events.append(payload)
+            events = events[-20:]
+            self._save_agent_monitor_events(events)
+        except Exception:
+            return
     
     def set_volatility_status(self, status: str):
         """Update volatility status (EXTREME, COOLING_DOWN, NORMAL)"""
@@ -471,6 +525,12 @@ class PositionMonitor:
                 direction=pos.direction,
                 entry_price=pos.open_price,
             )
+
+            self._append_agent_monitor_event(
+                "BREAKEVEN_ACTIVATED",
+                pos.ticket,
+                details=f"SL moved to {breakeven_sl:.2f} (entry) from {pos.sl:.2f} at profit {pos.profit_pips:+.0f} pips",
+            )
             
             return {
                 'action': 'BREAKEVEN',
@@ -534,6 +594,12 @@ class PositionMonitor:
                 entry_price=pos.open_price,
                 profit_pips=pos.profit_pips,
             )
+
+            self._append_agent_monitor_event(
+                "TRAILING_UPDATED",
+                pos.ticket,
+                details=f"SL moved {old_sl:.2f} -> {new_sl:.2f} at profit {pos.profit_pips:+.0f} pips",
+            )
             
             return {
                 'action': 'TRAILING_STOP',
@@ -574,6 +640,12 @@ class PositionMonitor:
                 profit_percent=profit_percent,
                 reason=f"Timeout ({config.MAX_POSITION_HOURS}h)"
             )
+
+            self._append_agent_monitor_event(
+                "TIMEOUT_CLOSE",
+                pos.ticket,
+                details=f"Closed by timeout after {time_open} | profit={pos.profit:+.2f} ({pos.profit_pips:+.0f} pips)",
+            )
             
             # Clean up tracking
             self._cleanup_position(pos.ticket)
@@ -612,6 +684,12 @@ class PositionMonitor:
                 profit=pos.profit,
                 profit_percent=profit_percent,
                 reason="Excessive drawdown"
+            )
+
+            self._append_agent_monitor_event(
+                "DRAWDOWN_CLOSE",
+                pos.ticket,
+                details=f"Closed by drawdown | profit={pos.profit:+.2f} ({pos.profit_pips:+.0f} pips)",
             )
             
             self._cleanup_position(pos.ticket)
