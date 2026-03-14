@@ -543,8 +543,24 @@ class AIAgent:
                 },
             },
             {
+                "name": "debate_with_rex",
+                "description": "Debate with Rex (junior trader) for a second perspective. Max 5 turns per decision (auto-resets after 5 minutes).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "my_direction": {"type": "string"},
+                        "my_reasoning": {"type": "string"},
+                        "my_confidence": {"type": "number"},
+                        "key_data": {},
+                        "rex_previous_response": {},
+                    },
+                    "required": ["my_direction", "my_reasoning", "my_confidence", "key_data"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "set_watch_conditions",
-                "description": "Set custom watch conditions for an open position ticket (checked locally each minute when market is open).",
+                "description": "After opening a trade, set watch conditions that trigger a callback later.",
                 "input_schema": {
                     "type": "object",
                     "properties": {

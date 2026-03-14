@@ -11,31 +11,33 @@ from logger import log
 class RexResult:
     agree: bool
     reasoning: str
-    risk_warning: str
+    concerns: Any
+    suggested_adjustment: str
     raw: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "agree": bool(self.agree),
             "reasoning": str(self.reasoning or "").strip(),
-            "risk_warning": str(self.risk_warning or "").strip(),
+            "concerns": self.concerns if self.concerns is not None else [],
+            "suggested_adjustment": str(self.suggested_adjustment or "").strip(),
         }
 
 
 def _build_prompt(floki_summary: Dict[str, Any]) -> str:
     summary_json = json.dumps(floki_summary or {}, ensure_ascii=False, default=str)
     return (
-        "You are Rex, an experienced Gold (XAU/USD) trader. "
-        "Your colleague Floki just completed a market analysis and wants to execute this trade. "
-        "Review his reasoning and the data. Do you agree with this trade? "
-        "Respond with ONLY valid JSON: {agree: true/false, reasoning: '...', risk_warning: '...'}\n\n"
+        "You are Rex, a junior Gold trader working under Floki (senior, 20 years experience). "
+        "Your job is to CHALLENGE his reasoning and point out risks. You are NOT the decision maker — Floki decides. "
+        "But speak up when you see something wrong. Be specific with data. If Floki makes a good rebuttal, acknowledge it. "
+        "Respond with ONLY valid JSON: {agree: true/false, reasoning: '...', concerns: [...], suggested_adjustment: '...'}\n\n"
         "DATA:\n"
         f"{summary_json}"
     )
 
 
 def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 20) -> Dict[str, Any]:
-    """Validate Floki's intended trade with Rex (GPT-4o).
+    """Ask Rex for a debate response to Floki's intended trade (GPT-4o).
 
     Non-blocking rule: this function must never raise; callers must treat failures as neutral.
 
@@ -44,7 +46,8 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
           "success": True/False,
           "agree": True/False/None,
           "reasoning": str,
-          "risk_warning": str,
+          "concerns": list,
+          "suggested_adjustment": str,
           "latency_ms": int,
           "model": str
         }
@@ -112,14 +115,22 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
         agree_b = bool(agree) if agree is not None else None
 
         reasoning = str(parsed.get("reasoning") or "").strip()
-        risk_warning = str(parsed.get("risk_warning") or "").strip()
+        concerns = parsed.get("concerns")
+        if concerns is None:
+            concerns = []
+        if not isinstance(concerns, list):
+            concerns = [str(concerns)]
+        concerns = [str(c or "").strip() for c in concerns if str(c or "").strip()]
+
+        suggested_adjustment = str(parsed.get("suggested_adjustment") or "").strip()
 
         latency_ms = int((time.time() - start) * 1000)
         return {
             "success": True,
             "agree": agree_b,
             "reasoning": reasoning,
-            "risk_warning": risk_warning,
+            "concerns": concerns,
+            "suggested_adjustment": suggested_adjustment,
             "latency_ms": latency_ms,
             "model": model,
             "raw": content,

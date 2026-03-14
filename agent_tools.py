@@ -321,6 +321,78 @@ class AgentTools:
             self._log_tool("get_current_price", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def debate_with_rex(
+        self,
+        my_direction: str,
+        my_reasoning: str,
+        my_confidence: float,
+        key_data: Any,
+        rex_previous_response: Any = None,
+    ) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            now = time.time()
+            last_ts = getattr(self, "_rex_debate_last_ts", None)
+            if last_ts is None or (now - float(last_ts)) > 300:
+                setattr(self, "_rex_debate_turns", 0)
+            setattr(self, "_rex_debate_last_ts", now)
+
+            turns = int(getattr(self, "_rex_debate_turns", 0) or 0)
+            if turns >= 5:
+                return {"success": False, "reason": "debate_turn_limit"}
+            turns += 1
+            setattr(self, "_rex_debate_turns", turns)
+
+            dir_s = str(my_direction or "").upper().strip()
+            conf_f = self._safe_float(my_confidence)
+            if conf_f is None:
+                conf_f = 0.0
+
+            payload = {
+                "floki": {
+                    "direction": dir_s,
+                    "confidence": conf_f,
+                    "reasoning": str(my_reasoning or "").strip(),
+                    "key_data": key_data,
+                },
+                "rex_previous_response": rex_previous_response,
+                "turn": turns,
+                "turns_max": 5,
+            }
+
+            try:
+                from rex_validator import validate_with_rex
+
+                rex = validate_with_rex(payload, timeout_seconds=20)
+            except Exception as e:
+                self._log_tool("debate_with_rex", start, f"error={e}")
+                return {"success": False, "reason": "rex_unavailable"}
+
+            if not isinstance(rex, dict) or not rex.get("success"):
+                return {"success": False, "reason": rex.get("reason") if isinstance(rex, dict) else "rex_failed"}
+
+            agree = rex.get("agree")
+            reasoning = str(rex.get("reasoning") or "").strip()
+            concerns = rex.get("concerns") if isinstance(rex.get("concerns"), list) else []
+            suggested_adjustment = str(rex.get("suggested_adjustment") or "").strip()
+
+            log.info(
+                f"DEBATE | turn={turns}/5 | Floki: {dir_s} conf:{int(round(conf_f))}% | Rex: {'AGREE' if agree else 'DISAGREE'} — {reasoning[:140]}"
+            )
+
+            self._log_tool("debate_with_rex", start, f"turn={turns} agree={agree}")
+            return {
+                "success": True,
+                "turn": turns,
+                "agree": agree,
+                "reasoning": reasoning,
+                "concerns": concerns,
+                "suggested_adjustment": suggested_adjustment,
+            }
+        except Exception as e:
+            self._log_tool("debate_with_rex", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     # ---------------------------------------------------------------------
     # Position management tools
     # ---------------------------------------------------------------------
@@ -902,104 +974,6 @@ class AgentTools:
 
             # Execute
             try:
-                # Rex validation (second opinion) — non-blocking; only enforces confidence reduction/block if disagree
-                try:
-                    from rex_validator import validate_with_rex
-
-                    rex_enabled = bool(getattr(config, "USE_REX_VALIDATOR", True))
-                    rex_disagree_penalty = int(getattr(config, "REX_DISAGREE_PENALTY", 10) or 10)
-                    rex_block_threshold = int(getattr(config, "REX_BLOCK_THRESHOLD", 55) or 55)
-
-                    # Compact ~2K token summary
-                    dp_ctx = self._last_agent_data() or {}
-                    ind = dp_ctx.get("indicators") or {}
-                    macro = dp_ctx.get("macro") or {}
-                    mtf = dp_ctx.get("mtf_trend") or {}
-                    vol_gate = dp_ctx.get("volume_gate") or {}
-                    sr = dp_ctx.get("sr_zones") or dp_ctx.get("support_resistance") or {}
-
-                    floki_summary = {
-                        "intended_trade": {
-                            "direction": dir_s,
-                            "sl": float(sl_f),
-                            "tp": float(tp_f),
-                            "sl_pips": float(sl_pips),
-                            "risk_percent": float(risk_pct),
-                        },
-                        "price": price,
-                        "session": {
-                            "utc_hour": dp_ctx.get("utc_hour"),
-                            "session_name": dp_ctx.get("session_name"),
-                        },
-                        "brain": {
-                            "decision": dp_ctx.get("decision"),
-                            "final_score": dp_ctx.get("final_score"),
-                            "confidence": dp_ctx.get("confidence"),
-                            "scenario": dp_ctx.get("scenario"),
-                        },
-                        "indicators": {
-                            "rsi": (ind.get("rsi") or {}).get("value"),
-                            "ema200": (ind.get("emas") or {}).get("ema200"),
-                            "macd": ind.get("macd"),
-                            "atr": (ind.get("atr") or {}).get("value"),
-                            "bb_position": (ind.get("bollinger") or {}).get("position_pct"),
-                            "volume_ratio": ind.get("volume_ratio") or (ind.get("volume") or {}).get("ratio"),
-                        },
-                        "mtf": mtf,
-                        "volume_gate": vol_gate,
-                        "macro": {
-                            "dxy": (macro.get("dxy") or {}).get("value"),
-                            "vix": (macro.get("vix") or {}).get("value"),
-                            "yields": macro.get("yields"),
-                        },
-                        "sr": sr if isinstance(sr, dict) else {},
-                        "agent": {
-                            "note": "Rex validation requested before execution.",
-                        },
-                    }
-
-                    if rex_enabled:
-                        rex = validate_with_rex(floki_summary, timeout_seconds=int(getattr(config, "REX_TIMEOUT", 20) or 20))
-                        if isinstance(rex, dict) and rex.get("success"):
-                            agree = rex.get("agree")
-                            log.info(
-                                f"REX_VALIDATION | {'AGREE' if agree else 'DISAGREE'} | reasoning={str(rex.get('reasoning') or '')[:180]}"
-                            )
-
-                            adjusted_conf = None
-                            try:
-                                # Use Agent confidence as baseline for block logic (Feature spec)
-                                base_conf_f = None
-                                if agent_confidence is not None:
-                                    base_conf_f = float(agent_confidence)
-                                if base_conf_f is not None:
-                                    adjusted_conf = int(round(base_conf_f))
-                                    if agree is False:
-                                        adjusted_conf = max(0, adjusted_conf - rex_disagree_penalty)
-                            except Exception:
-                                adjusted_conf = None
-
-                            if agree is False and adjusted_conf is not None and adjusted_conf < rex_block_threshold:
-                                return {
-                                    "success": False,
-                                    "reason": (
-                                        f"Rex disagrees: {str(rex.get('reasoning') or '').strip()} "
-                                        f"Confidence reduced to {adjusted_conf}% (below {rex_block_threshold}% threshold)"
-                                    ),
-                                    "rex": {
-                                        "agree": False,
-                                        "reasoning": rex.get("reasoning"),
-                                        "risk_warning": rex.get("risk_warning"),
-                                        "adjusted_confidence": adjusted_conf,
-                                    },
-                                }
-
-                            setattr(self, "_last_rex_validation", rex)
-                        else:
-                            log.info(f"REX_VALIDATION | SKIP | reason={rex.get('reason') if isinstance(rex, dict) else 'unknown'}")
-                except Exception as e_rex:
-                    log.debug(f"REX_VALIDATION | error (non-blocking): {e_rex}")
-
                 comment = f"Agent-{dir_s}"
                 res = self._executor.execute_trade(
                     direction=dir_s,
@@ -1027,6 +1001,14 @@ class AgentTools:
             fill_price = self._safe_float(getattr(res, "price", None))
             ticket = getattr(res, "ticket", None)
 
+            try:
+                last_ts = getattr(self, "_rex_debate_last_ts", None)
+                turns = int(getattr(self, "_rex_debate_turns", 0) or 0)
+                if last_ts is not None and (time.time() - float(last_ts)) <= 300 and turns > 0:
+                    log.info(f"DEBATE | complete | {turns} turns | outcome=EXECUTE")
+            except Exception:
+                pass
+
             self._log_tool(
                 "execute_trade",
                 start,
@@ -1042,7 +1024,6 @@ class AgentTools:
                 "breakeven_trigger_pips": float(be_pips),
                 "trailing_trigger_pips": float(tr_trig_pips),
                 "trailing_distance_pips": float(tr_dist_pips),
-                "rex": getattr(self, "_last_rex_validation", None),
             }
         except Exception as e:
             self._log_tool("execute_trade", start, f"error={e}")
@@ -1132,6 +1113,10 @@ class AgentTools:
             return {"success": False, "reason": "tool_error"}
 
     def get_trade_patterns(self) -> Dict[str, Any]:
+        """Return learned pattern memory + context + counter-examples.
+
+        This reads the latest patterns JSON produced by the reflection engine.
+        """
         start = time.time()
         try:
             try:
