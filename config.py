@@ -297,7 +297,7 @@ SR_ZONES_JSON_PATH = os.environ.get("SR_ZONES_JSON_PATH", r"C:\Users\Hermano\App
 # GPT HEADLINE ANALYSIS
 # ============================================================================
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-USE_GPT_HEADLINES = bool(OPENAI_API_KEY and OPENAI_API_KEY != "sk-COLOQUE_SUA_KEY_AQUI")
+USE_GPT_HEADLINES = False
 GPT_MODEL = "gpt-4o-mini"               # Model for headline analysis
 GPT_HEADLINE_TIMEOUT = 15               # Timeout in seconds for GPT call
 GPT_HEADLINE_TEMPERATURE = 0.1          # Low = more deterministic

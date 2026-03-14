@@ -2337,54 +2337,17 @@ class TradingBot:
                 if not isinstance(tp, dict):
                     log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
                 else:
-                    entry_price = tp.get("entry_price")
+                    entry_price = tp.get("entry")
                     stop_loss = tp.get("stop_loss")
                     take_profit = tp.get("take_profit")
-
                     if entry_price is None or stop_loss is None or take_profit is None:
                         log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
                     else:
                         exec_direction = "BUY" if agent_result.decision == "OPEN_BUY" else "SELL"
                         log.info(
-                            f"PROACTIVE_H1 | Executing Agent trade | {exec_direction} | "
+                            f"PROACTIVE_H1 | Agent OPEN intent logged (tool executes) | {exec_direction} | "
                             f"SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
-                        result = self.execute_agent_trade(
-                            direction=exec_direction,
-                            sl=stop_loss,
-                            tp=take_profit,
-                            confidence=agent_result.confidence,
-                            trade_plan=tp,
-                            scenario="agent_proactive",
-                        )
-                        if isinstance(result, dict) and result.get("success"):
-                            log.info(
-                                f"PROACTIVE_H1 | Agent execution SUCCESS | ticket={result.get('ticket')} "
-                                f"ea_bridge={result.get('used_ea_bridge')}"
-                            )
-
-                            if result.get("used_ea_bridge") and int(result.get("ticket") or 0) == 0:
-                                try:
-                                    discord.send(
-                                        f"Agent trade signal sent to EA Bridge | {exec_direction} | SL={stop_loss} TP={take_profit}",
-                                        alert_type="success",
-                                        title="Agent Execution",
-                                    )
-                                except Exception:
-                                    pass
-                        else:
-                            reason = None
-                            if isinstance(result, dict):
-                                reason = result.get("reason")
-                            log.warning(f"PROACTIVE_H1 | Agent execution REJECTED | reason={reason}")
-                            try:
-                                self._last_execution_rejection = {
-                                    "decision": str(agent_result.decision or ""),
-                                    "reason": str(reason or ""),
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            except Exception:
-                                pass
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
 
@@ -2734,7 +2697,7 @@ class TradingBot:
             news_score=news_data.get('score', 50),
             current_price=current_price,
         )
-        self.cycle_memory.add(snapshot)
+        # self.cycle_memory.add(snapshot)
         
         # GPT Confidence Validator (disabled in Phase 0 — Agent is validator)
         cycle_history = self.cycle_memory.format_for_gpt()
