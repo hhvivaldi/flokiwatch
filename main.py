@@ -25,12 +25,11 @@ from state_writer import write_state, add_closed_trade
 from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision, get_recent_agent_decisions, get_trade_feedback
 from agent_reflection import run_reflection_async
 from alerts import (
-    alert_bot_started, alert_bot_stopped, alert_signal_detected,
+    alert_bot_started, alert_bot_stopped,
     alert_safety_block, alert_error, alert_daily_summary, discord,
     alert_heartbeat_full,
     alert_market_closed, alert_market_open,
     alert_m5_reversal_block, alert_trade_resolved,
-    alert_brain_decision,
     alert_spread_delay, alert_spread_skip,
     alert_agent_decision,
     alert_proactive_decision,
