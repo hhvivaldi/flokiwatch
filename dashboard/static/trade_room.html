@@ -570,6 +570,17 @@
           <div id="ctx-change" class="text-[10px] font-mono mt-1 opacity-60">—</div>
         </div>
 
+        <!-- Market indicators -->
+        <div class="ctx-block">
+          <div class="ctx-label">MARKET INDICATORS</div>
+          <div class="ctx-row"><span class="ctx-key">RSI</span><span id="ctx-rsi" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">MACD</span><span id="ctx-macd" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">ATR</span><span id="ctx-atr" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">ADX</span><span id="ctx-adx" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">EMA50</span><span id="ctx-ema50" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">Bollinger</span><span id="ctx-bb" class="ctx-val">—</span></div>
+        </div>
+
         <!-- Macro block -->
         <div class="ctx-block">
           <div class="ctx-label">MACRO</div>
@@ -1009,6 +1020,81 @@
               var showPrice = px || (state.account && state.account.price) || (state.market && state.market.price) || null;
               var priceEl = document.getElementById('ctx-price');
               if (priceEl) priceEl.textContent = showPrice !== null && showPrice !== undefined ? String(showPrice) : '—';
+
+              // Market indicators from last_analysis.indicators
+              try {
+                var la = state.last_analysis || {};
+                var ind = la.indicators || {};
+                var currentPrice = la.current_price != null ? Number(la.current_price) : (showPrice != null ? Number(showPrice) : null);
+
+                function fmtNum(v, digits) {
+                  var n = Number(v);
+                  if (!isFinite(n)) return null;
+                  return n.toFixed(digits);
+                }
+
+                function setIndicator(id, text, color) {
+                  var elx = document.getElementById(id);
+                  if (!elx) return;
+                  elx.textContent = text || '—';
+                  elx.style.color = color || '';
+                }
+
+                // RSI
+                var rsi = ind.rsi_14;
+                var rsiText = fmtNum(rsi, 1);
+                var rsiColor = '';
+                if (rsiText !== null) {
+                  var rv = Number(rsi);
+                  if (rv < 20 || rv > 80) rsiColor = '#f87171';
+                  else if (rv < 30 || rv > 70) rsiColor = '#fb923c';
+                  else rsiColor = '#34d399';
+                }
+                setIndicator('ctx-rsi', rsiText, rsiColor);
+
+                // MACD
+                var macd = ind.macd;
+                var macdText = fmtNum(macd, 2);
+                var macdColor = macdText === null ? '' : (Number(macd) >= 0 ? '#34d399' : '#f87171');
+                setIndicator('ctx-macd', macdText, macdColor);
+
+                // ATR
+                var atr = ind.atr_14;
+                var atrText = fmtNum(atr, 1);
+                setIndicator('ctx-atr', atrText === null ? null : (atrText + ' pips'));
+
+                // ADX
+                var adx = ind.adx_14;
+                var adxText = fmtNum(adx, 1);
+                var adxLabel = '';
+                if (adxText !== null) {
+                  var av = Number(adx);
+                  if (av < 20) adxLabel = 'Weak';
+                  else if (av < 25) adxLabel = 'Developing';
+                  else if (av < 40) adxLabel = 'Strong';
+                  else adxLabel = 'Very strong';
+                }
+                setIndicator('ctx-adx', adxText === null ? null : (adxText + (adxLabel ? (' · ' + adxLabel) : '')));
+
+                // EMA50
+                var ema50 = ind.ema_50;
+                var ema50Text = fmtNum(ema50, 2);
+                var emaLabel = '';
+                if (ema50Text !== null && currentPrice !== null && isFinite(currentPrice)) {
+                  emaLabel = currentPrice >= Number(ema50) ? 'Price Above' : 'Price Below';
+                }
+                setIndicator('ctx-ema50', ema50Text === null ? null : (ema50Text + (emaLabel ? (' · ' + emaLabel) : '')));
+
+                // Bollinger position
+                var bbPos = ind.bb_position;
+                var bbText = null;
+                if (bbPos !== null && bbPos !== undefined && isFinite(Number(bbPos))) {
+                  var bp = Number(bbPos);
+                  if (bp <= 1) bp = bp * 100;
+                  bbText = bp.toFixed(0) + '% position';
+                }
+                setIndicator('ctx-bb', bbText);
+              } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
               var sessEl = document.getElementById('ctx-session');
