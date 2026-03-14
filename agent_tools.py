@@ -518,6 +518,23 @@ class AgentTools:
             if not price:
                 return self._no_cache()
 
+            try:
+                import config
+
+                max_spread = float(getattr(config, "MAX_SPREAD_PIPS", 5.0))
+            except Exception:
+                max_spread = 5.0
+
+            try:
+                spread_pips = float(price.get("spread") or 0.0)
+                if spread_pips > max_spread:
+                    return {
+                        "success": False,
+                        "reason": f"spread too high: {spread_pips:.1f} pips > max {max_spread:.1f} pips",
+                    }
+            except Exception:
+                pass
+
             dir_s = str(direction or "").upper().strip()
             if dir_s not in ("BUY", "SELL"):
                 return {"success": False, "reason": "invalid direction"}
