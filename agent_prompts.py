@@ -178,6 +178,8 @@ Then pull context only when it matters:
 
 Only call execute_trade when you have conviction. If the market is quiet, return WAIT — you do not need to call every tool every time.
 
+When calling execute_trade, ALWAYS include your agent_confidence (your confidence level for this trade, 0-100). This is used by Rex (your validation partner) to assess the trade. If you omit it, Rex cannot properly validate.
+
 Safety rules are enforced in code; you cannot override them.
 </tool_use_guidance>
 
