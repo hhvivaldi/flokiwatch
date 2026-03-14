@@ -133,6 +133,319 @@ def _calc_rr(direction: str, open_price: float, sl: float, tp: float) -> Dict[st
         return {"risk": None, "reward": None, "rr": None}
 
 
+def _safe_json_loads(value: Any, default: Any) -> Any:
+    try:
+        if value is None:
+            return default
+        if isinstance(value, (dict, list)):
+            return value
+        s = str(value).strip()
+        if not s:
+            return default
+        return json.loads(s)
+    except Exception:
+        return default
+
+
+def _as_clean_text(v: Any, max_len: int = 2000) -> str:
+    try:
+        if v is None:
+            return ""
+        if isinstance(v, (dict, list)):
+            return json.dumps(v, ensure_ascii=False)
+        s = str(v)
+        if max_len and len(s) > max_len:
+            return s[:max_len]
+        return s
+    except Exception:
+        return ""
+
+
+def _safe_iso_timestamp(ts: Any) -> str:
+    try:
+        if ts is None:
+            return ""
+        s = str(ts).strip()
+        if not s:
+            return ""
+        # Accept ISO strings directly
+        try:
+            datetime.fromisoformat(s.replace("Z", "+00:00"))
+            return s
+        except Exception:
+            return s
+    except Exception:
+        return ""
+
+
+def _read_agent_session_memory() -> Dict[str, Any]:
+    try:
+        p = (APP_DIR / ".." / "data" / "agent_session_memory.json").resolve()
+        if not p.exists():
+            return {}
+        return _safe_json_loads(p.read_text(encoding="utf-8"), default={}) or {}
+    except Exception:
+        return {}
+
+
+def _extract_tools_used(tool_trace: Any) -> List[str]:
+    tools = []
+    for entry in (tool_trace or []):
+        try:
+            name = (entry or {}).get("name")
+            if name:
+                tools.append(str(name))
+        except Exception:
+            continue
+    # preserve order, de-dup
+    seen = set()
+    out = []
+    for t in tools:
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
+
+
+def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
+    if not HISTORY_DB.exists():
+        return []
+
+    limit = max(1, min(int(limit or 50), 200))
+
+    try:
+        conn = _get_history_conn()
+
+        # 1) Latest analyses
+        analyses = []
+        try:
+            rows = conn.execute(
+                "SELECT * FROM agent_proactive_analyses ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            analyses = [dict(r) for r in rows]
+        except Exception:
+            analyses = []
+
+        # 2) Recent closed trades
+        trades = []
+        try:
+            trows = conn.execute(
+                "SELECT ticket, direction, profit, close_reason, open_time, close_time FROM trades WHERE close_time IS NOT NULL ORDER BY close_time DESC LIMIT ?",
+                (min(50, limit),),
+            ).fetchall()
+            trades = [dict(r) for r in trows]
+        except Exception:
+            trades = []
+
+        conn.close()
+
+        session_mem = _read_agent_session_memory()
+        session_thesis = None
+        try:
+            session_thesis = session_mem.get("thesis")
+        except Exception:
+            session_thesis = None
+
+        messages: List[Dict[str, Any]] = []
+
+        # Build from analyses
+        for a in analyses:
+            a_id = a.get("id")
+            ts = _safe_iso_timestamp(a.get("timestamp"))
+            decision = a.get("agent_decision")
+            confidence = a.get("agent_confidence")
+
+            tool_trace = _safe_json_loads(a.get("tool_trace"), default=[])
+            if not isinstance(tool_trace, list):
+                tool_trace = []
+            tools_used = _extract_tools_used(tool_trace)
+
+            reasoning = _as_clean_text(a.get("agent_reasoning"), max_len=3000).strip()
+            factors = _safe_json_loads(a.get("agent_key_factors"), default=[])
+            concerns = _safe_json_loads(a.get("agent_concerns"), default=[])
+
+            if not isinstance(factors, list):
+                factors = []
+            if not isinstance(concerns, list):
+                concerns = []
+
+            factors = [str(x) for x in factors if x is not None][:6]
+            concerns = [str(x) for x in concerns if x is not None][:4]
+
+            # a) FLOKI ANALYSIS
+            analysis_content = reasoning
+            if factors:
+                analysis_content = (analysis_content + "\n\nKEY FACTORS:\n- " + "\n- ".join(factors)).strip()
+
+            if analysis_content:
+                messages.append(
+                    {
+                        "id": f"a:{a_id}:analysis",
+                        "timestamp": ts,
+                        "author": "FLOKI",
+                        "type": "ANALYSIS",
+                        "content": analysis_content[:4000],
+                        "metadata": {
+                            "decision": decision,
+                            "confidence": confidence,
+                            "tools_used": tools_used,
+                            "rex_agrees": None,
+                            "concerns": concerns,
+                            "session_thesis": session_thesis,
+                        },
+                    }
+                )
+
+            # b) Debate tool calls => FLOKI + REX messages
+            debate_idx = 0
+            for entry in tool_trace:
+                try:
+                    if (entry or {}).get("name") != "debate_with_rex":
+                        continue
+
+                    debate_idx += 1
+                    inp = (entry or {}).get("input") or {}
+                    res = (entry or {}).get("result") or {}
+
+                    my_reasoning = _as_clean_text(inp.get("my_reasoning"), max_len=3000).strip()
+                    my_dir = _as_clean_text(inp.get("my_direction"), max_len=50).strip()
+                    my_conf = inp.get("my_confidence")
+                    key_data = _as_clean_text(inp.get("key_data"), max_len=1200).strip()
+
+                    floki_debate = my_reasoning
+                    if my_dir:
+                        floki_debate = (f"DIR: {my_dir}\n" + floki_debate).strip()
+                    if key_data:
+                        floki_debate = (floki_debate + "\n\nKEY DATA:\n" + key_data).strip()
+
+                    rex_agree = res.get("agree")
+                    rex_reasoning = _as_clean_text(res.get("reasoning"), max_len=3000).strip()
+                    rex_concerns = res.get("concerns") or []
+                    if not isinstance(rex_concerns, list):
+                        rex_concerns = []
+                    rex_concerns = [str(x) for x in rex_concerns if x is not None][:6]
+                    rex_adj = _as_clean_text(res.get("suggested_adjustment"), max_len=600).strip()
+
+                    rex_content = rex_reasoning
+                    if rex_concerns:
+                        rex_content = (rex_content + "\n\nCONCERNS:\n- " + "\n- ".join(rex_concerns)).strip()
+                    if rex_adj:
+                        rex_content = (rex_content + "\n\nSUGGESTED ADJUSTMENT:\n" + rex_adj).strip()
+
+                    messages.append(
+                        {
+                            "id": f"a:{a_id}:debate:{debate_idx}:floki",
+                            "timestamp": ts,
+                            "author": "FLOKI",
+                            "type": "DEBATE",
+                            "content": floki_debate[:4000],
+                            "metadata": {
+                                "decision": decision,
+                                "confidence": my_conf,
+                                "tools_used": tools_used,
+                                "rex_agrees": rex_agree,
+                                "session_thesis": session_thesis,
+                            },
+                        }
+                    )
+                    messages.append(
+                        {
+                            "id": f"a:{a_id}:debate:{debate_idx}:rex",
+                            "timestamp": ts,
+                            "author": "REX",
+                            "type": "DEBATE",
+                            "content": rex_content[:4000],
+                            "metadata": {
+                                "rex_agrees": rex_agree,
+                                "concerns": rex_concerns,
+                                "suggested_adjustment": rex_adj,
+                                "session_thesis": session_thesis,
+                            },
+                        }
+                    )
+                except Exception:
+                    continue
+
+            # c) FLOKI DECISION
+            if decision:
+                readable_decision = str(decision).replace("_", " ")
+                conf_text = f" · {confidence}%" if confidence is not None else ""
+                decision_content = f"{readable_decision}{conf_text}".strip()
+
+                messages.append(
+                    {
+                        "id": f"a:{a_id}:decision",
+                        "timestamp": ts,
+                        "author": "FLOKI",
+                        "type": "DECISION",
+                        "content": decision_content[:1000],
+                        "metadata": {
+                            "decision": decision,
+                            "confidence": confidence,
+                            "tools_used": tools_used,
+                            "session_thesis": session_thesis,
+                        },
+                    }
+                )
+
+        # Build from trades
+        for t in trades:
+            close_time = _safe_iso_timestamp(t.get("close_time"))
+            if not close_time:
+                continue
+            ticket = t.get("ticket")
+            direction = t.get("direction")
+            profit = t.get("profit")
+            close_reason = t.get("close_reason")
+
+            pnl = None
+            try:
+                pnl = float(profit) if profit is not None else None
+            except Exception:
+                pnl = None
+
+            pnl_text = "—"
+            if pnl is not None:
+                pnl_text = f"${pnl:+.2f}"
+
+            content = f"CLOSED #{ticket} {direction} PnL {pnl_text} (reason: {close_reason})"
+
+            messages.append(
+                {
+                    "id": f"t:{ticket}:close",
+                    "timestamp": close_time,
+                    "author": "FLOKI",
+                    "type": "TRADE_RESULT",
+                    "content": content[:1000],
+                    "metadata": {
+                        "ticket": ticket,
+                        "direction": direction,
+                        "profit": profit,
+                        "close_reason": close_reason,
+                        "open_time": t.get("open_time"),
+                        "close_time": close_time,
+                        "session_thesis": session_thesis,
+                    },
+                }
+            )
+
+        # Sort by timestamp desc and return top limit
+        def _ts_key(m: Dict[str, Any]) -> str:
+            # ISO string compare works for standard timestamps; fallback to empty
+            return str(m.get("timestamp") or "")
+
+        messages.sort(key=_ts_key, reverse=True)
+        return messages[:limit]
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return []
+
+
 GPT_TRADE_REPORT_SYSTEM_PROMPT = (
     "You are a professional XAUUSD trade analyst. You will receive a CLOSED trade record and a nearby pre-trade system snapshot. "
     "Write an objective, concise post-trade report in ENGLISH ONLY. Base your analysis only on the provided fields. "
@@ -287,6 +600,15 @@ def state():
         payload["_meta"].setdefault("reason", "ok")
 
     return JSONResponse(payload)
+
+
+@app.get("/api/trade-room")
+def trade_room_api(limit: int = 50):
+    try:
+        msgs = _build_trade_room_messages(limit=limit)
+        return JSONResponse({"messages": msgs})
+    except Exception:
+        return JSONResponse({"messages": []})
 
 
 @app.get("/api/recent-decisions")
