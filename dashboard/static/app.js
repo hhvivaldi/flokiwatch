@@ -67,11 +67,215 @@ function toggleBrainReferencePanel() {
   const isHidden = panel.classList.contains("hidden");
   if (isHidden) {
     panel.classList.remove("hidden");
-    btn.textContent = "Hide Brain Reference";
+    btn.textContent = "Hide Market Indicators";
+    try {
+      ensureIndicatorHistoryRunning(true);
+    } catch (e) {
+      // silent
+    }
   } else {
     panel.classList.add("hidden");
-    btn.textContent = "Show Brain Reference";
+    btn.textContent = "Show Market Indicators";
+    try {
+      ensureIndicatorHistoryRunning(false);
+    } catch (e) {
+      // silent
+    }
   }
+}
+
+let indicatorHistory = null;
+let indicatorHistoryLastFetch = 0;
+let indicatorHistoryIntervalId = null;
+
+function fetchJson(url) {
+  return fetch(url, { cache: "no-store" }).then((r) => {
+    if (!r.ok) throw new Error(`http_${r.status}`);
+    return r.json();
+  });
+}
+
+function ensureIndicatorHistoryRunning(shouldRun) {
+  if (!shouldRun) {
+    if (indicatorHistoryIntervalId != null) {
+      clearInterval(indicatorHistoryIntervalId);
+      indicatorHistoryIntervalId = null;
+    }
+    return;
+  }
+
+  if (indicatorHistoryIntervalId != null) return;
+  // Fetch immediately and then refresh periodically while open
+  refreshIndicatorHistory();
+  indicatorHistoryIntervalId = setInterval(() => {
+    try {
+      refreshIndicatorHistory();
+    } catch (e) {
+      // silent
+    }
+  }, 60000);
+}
+
+function refreshIndicatorHistory() {
+  const now = Date.now();
+  if (now - indicatorHistoryLastFetch < 10000) return;
+  indicatorHistoryLastFetch = now;
+
+  fetchJson("/api/indicator-history?hours=6")
+    .then((payload) => {
+      indicatorHistory = payload || null;
+      try {
+        renderMarketIndicatorsPanel(lastStateForProactiveCountdown);
+      } catch (e) {
+        // silent
+      }
+    })
+    .catch(() => {
+      // silent
+    });
+}
+
+function safeNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sparklineSvg(series, opts = {}) {
+  const w = opts.width || 180;
+  const h = opts.height || 28;
+  const stroke = opts.stroke || "rgba(148,163,184,0.9)";
+  const fill = opts.fill || "none";
+  const baseline = opts.baseline || "rgba(148,163,184,0.18)";
+
+  const arr = Array.isArray(series) ? series.map(safeNum).filter((x) => x != null) : [];
+  if (arr.length < 2) {
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><line x1="0" y1="${h - 1}" x2="${w}" y2="${h - 1}" stroke="${baseline}" stroke-width="1" /></svg>`;
+  }
+
+  let min = Math.min(...arr);
+  let max = Math.max(...arr);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"></svg>`;
+  }
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const pad = (max - min) * 0.08;
+  min -= pad;
+  max += pad;
+
+  const n = arr.length;
+  const stepX = w / (n - 1);
+  const pts = arr
+    .map((v, i) => {
+      const x = i * stepX;
+      const t = (v - min) / (max - min);
+      const y = h - t * (h - 2) - 1;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
+      <line x1="0" y1="${h - 1}" x2="${w}" y2="${h - 1}" stroke="${baseline}" stroke-width="1" />
+      <polyline points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  `.trim();
+}
+
+function marketIndicatorRow(label, valueText, sparkHtml, accent) {
+  const color = accent || "rgba(226,232,240,0.9)";
+  return `
+    <div class="flex items-center gap-3 bg-black/20 rounded-lg p-3 border border-white/5">
+      <div class="min-w-[78px] text-[10px] text-gray-500 font-semibold tracking-widest uppercase">${label}</div>
+      <div class="flex-1">${sparkHtml}</div>
+      <div class="font-mono text-xs font-bold" style="color:${color}">${valueText || "—"}</div>
+    </div>
+  `;
+}
+
+function rsiColor(rsi) {
+  const v = safeNum(rsi);
+  if (v == null) return null;
+  if (v < 20 || v > 80) return "#f87171";
+  if (v < 30 || v > 70) return "#fb923c";
+  return "#34d399";
+}
+
+function macdColor(macd) {
+  const v = safeNum(macd);
+  if (v == null) return null;
+  return v >= 0 ? "#34d399" : "#f87171";
+}
+
+function renderMarketIndicatorsPanel(state) {
+  const grid = el("market-indicators-grid");
+  if (!grid) return;
+
+  const la = state?.last_analysis || {};
+  const ind = la?.indicators || {};
+
+  const rsi = safeNum(ind.rsi_14);
+  const macd = safeNum(ind.macd);
+  const adx = safeNum(ind.adx_14);
+  const atr = safeNum(ind.atr_14);
+  const emaDist = safeNum(ind.price_vs_ema50_pct);
+  const volRatio = safeNum(ind.volume_ratio);
+
+  const hist = indicatorHistory || {};
+
+  const rows = [];
+  rows.push(
+    marketIndicatorRow(
+      "RSI",
+      rsi != null ? rsi.toFixed(1) : "—",
+      sparklineSvg(hist.rsi, { stroke: "rgba(52,211,153,0.9)" }),
+      rsiColor(rsi)
+    )
+  );
+  rows.push(
+    marketIndicatorRow(
+      "MACD",
+      macd != null ? macd.toFixed(2) : "—",
+      sparklineSvg(hist.macd, { stroke: "rgba(148,163,184,0.9)" }),
+      macdColor(macd)
+    )
+  );
+  rows.push(
+    marketIndicatorRow(
+      "ADX",
+      adx != null ? adx.toFixed(1) : "—",
+      sparklineSvg(hist.adx, { stroke: "rgba(251,146,60,0.9)" }),
+      null
+    )
+  );
+  rows.push(
+    marketIndicatorRow(
+      "ATR",
+      atr != null ? `${atr.toFixed(1)}p` : "—",
+      sparklineSvg(hist.atr, { stroke: "rgba(99,102,241,0.9)" }),
+      null
+    )
+  );
+  rows.push(
+    marketIndicatorRow(
+      "EMA DIST",
+      emaDist != null ? `${emaDist.toFixed(2)}%` : "—",
+      sparklineSvg(hist.ema_distance, { stroke: "rgba(226,232,240,0.85)" }),
+      null
+    )
+  );
+  rows.push(
+    marketIndicatorRow(
+      "VOL RATIO",
+      volRatio != null ? volRatio.toFixed(2) : "—",
+      sparklineSvg(hist.volume_ratio, { stroke: "rgba(148,163,184,0.85)" }),
+      null
+    )
+  );
+
+  grid.innerHTML = rows.join("");
 }
 
 function toggleProactiveReasoning() {
@@ -644,11 +848,11 @@ function render(state) {
     if (priceLabelEl) priceLabelEl.textContent = "";
   }
 
-  renderPillar("p-tech", la.tech_score);
-  renderPillar("p-ml", la.ml_score);
-  renderPillar("p-mom", la.momentum_score);
-  renderPillar("p-news", la.news_score);
-  renderPillar("p-cal", la.calendar_score);
+  try {
+    renderMarketIndicatorsPanel(state);
+  } catch (e) {
+    // silent
+  }
 
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);

@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from datetime import timedelta
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -646,6 +648,84 @@ def trade_room_api(limit: int = 50):
         return JSONResponse({"messages": msgs})
     except Exception:
         return JSONResponse({"messages": []})
+
+
+@app.get("/api/indicator-history")
+def indicator_history(hours: int = 6):
+    if not HISTORY_DB.exists():
+        return JSONResponse(
+            {
+                "rsi": [],
+                "macd": [],
+                "adx": [],
+                "atr": [],
+                "ema_distance": [],
+                "volume_ratio": [],
+            }
+        )
+
+    try:
+        hrs = int(hours or 6)
+    except Exception:
+        hrs = 6
+    hrs = max(1, min(hrs, 72))
+
+    # Use ISO timestamps stored in DB; SQLite compares lexicographically for ISO8601.
+    cutoff = (datetime.utcnow() - timedelta(hours=hrs)).isoformat(timespec="seconds")
+
+    try:
+        conn = _get_history_conn()
+        q = (
+            "SELECT timestamp, rsi_14, macd, adx_14, atr_14, price_vs_ema50_pct, volume_ratio "
+            "FROM analyses WHERE timestamp >= ? ORDER BY timestamp ASC LIMIT 200"
+        )
+        rows = conn.execute(q, (cutoff,)).fetchall()
+        conn.close()
+
+        out = {
+            "rsi": [],
+            "macd": [],
+            "adx": [],
+            "atr": [],
+            "ema_distance": [],
+            "volume_ratio": [],
+        }
+
+        def _append(key: str, v: Any):
+            try:
+                if v is None:
+                    return
+                n = float(v)
+                if n != n:
+                    return
+                out[key].append(n)
+            except Exception:
+                return
+
+        for r in rows:
+            _append("rsi", r[1])
+            _append("macd", r[2])
+            _append("adx", r[3])
+            _append("atr", r[4])
+            _append("ema_distance", r[5])
+            _append("volume_ratio", r[6])
+
+        return JSONResponse(out)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return JSONResponse(
+            {
+                "rsi": [],
+                "macd": [],
+                "adx": [],
+                "atr": [],
+                "ema_distance": [],
+                "volume_ratio": [],
+            }
+        )
 
 
 @app.get("/api/agent-patterns")
