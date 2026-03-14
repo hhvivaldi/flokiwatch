@@ -533,6 +533,7 @@ class AIAgent:
                         "direction": {"type": "string"},
                         "sl": {"type": "number"},
                         "tp": {"type": "number"},
+                        "agent_confidence": {"type": "number"},
                         "breakeven_trigger_pips": {"type": "number"},
                         "trailing_trigger_pips": {"type": "number"},
                         "trailing_distance_pips": {"type": "number"},

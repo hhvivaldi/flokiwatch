@@ -785,6 +785,7 @@ class AgentTools:
         direction: str,
         sl: float,
         tp: float,
+        agent_confidence: Optional[float] = None,
         breakeven_trigger_pips: Optional[float] = None,
         trailing_trigger_pips: Optional[float] = None,
         trailing_distance_pips: Optional[float] = None,
@@ -967,9 +968,10 @@ class AgentTools:
 
                             adjusted_conf = None
                             try:
-                                # Use cached Brain confidence as baseline for block logic (Feature spec)
-                                base_conf = dp_ctx.get("confidence")
-                                base_conf_f = float(base_conf) if base_conf is not None else None
+                                # Use Agent confidence as baseline for block logic (Feature spec)
+                                base_conf_f = None
+                                if agent_confidence is not None:
+                                    base_conf_f = float(agent_confidence)
                                 if base_conf_f is not None:
                                     adjusted_conf = int(round(base_conf_f))
                                     if agree is False:
