@@ -222,6 +222,11 @@ def format_fast_xml(
     lines.append("</upcoming_events>")
     lines.append("")
 
+    lines.append("<checklist_reminder>")
+    lines.append("Complete your data_checklist with specific values from the data above. Every field is mandatory. Reference at least 8 categories in your reasoning.")
+    lines.append("</checklist_reminder>")
+    lines.append("")
+
     return "\n".join(lines)
 
 

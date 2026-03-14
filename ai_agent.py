@@ -7,6 +7,7 @@ Agent is the decision maker and executor.
 import json
 import asyncio
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Optional, List, Any
@@ -98,6 +99,135 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
         logger.debug(f"Session memory update failed (non-blocking): {e}")
 
 
+def _first_number(text: Any) -> Optional[float]:
+    try:
+        s = str(text or "")
+        m = re.search(r"-?\d+(?:\.\d+)?", s)
+        if not m:
+            return None
+        return float(m.group(0))
+    except Exception:
+        return None
+
+
+def _get_data_value(data_package: Dict[str, Any], key: str) -> Optional[float]:
+    try:
+        dp = data_package or {}
+        ind = dp.get("indicators") or {}
+        macro = dp.get("macro") or {}
+
+        if key == "rsi":
+            return float(((ind.get("rsi") or {}).get("value")))
+        if key == "ema200":
+            emas = ind.get("emas") or {}
+            return float(emas.get("ema200"))
+        if key == "atr":
+            atr = ind.get("atr") or {}
+            return float(atr.get("value"))
+        if key == "dxy":
+            dxy = macro.get("dxy") or {}
+            return float(dxy.get("value"))
+        if key == "vix":
+            vix = macro.get("vix") or {}
+            return float(vix.get("value"))
+        return None
+    except Exception:
+        return None
+
+
+def _validate_checklist(parsed: Dict[str, Any], data_package: Dict[str, Any]) -> Dict[str, Any]:
+    validation: Dict[str, Any] = {
+        "has_checklist": False,
+        "missing_fields": [],
+        "mismatches": {},
+        "reasoning_categories_count": 0,
+        "reasoning_categories": [],
+    }
+
+    checklist = parsed.get("data_checklist")
+    if not isinstance(checklist, dict):
+        logger.warning("AGENT_CHECKLIST | MISSING — agent did not include data_checklist")
+        return validation
+
+    validation["has_checklist"] = True
+
+    required_fields = [
+        "price_action",
+        "ema200",
+        "rsi",
+        "macd",
+        "fibonacci",
+        "atr",
+        "macro",
+        "headlines_summary",
+        "calendar",
+        "sr_zones",
+        "volume",
+        "mtf_trend",
+        "session",
+    ]
+
+    missing: List[str] = []
+    for f in required_fields:
+        v = checklist.get(f)
+        if v is None:
+            missing.append(f)
+            continue
+        vs = str(v).strip()
+        if not vs or vs.lower() in ("n/a", "na", "none", "unknown", "null"):
+            missing.append(f)
+
+    if missing:
+        logger.warning(f"AGENT_CHECKLIST | INCOMPLETE | missing: {', '.join(missing)}")
+    validation["missing_fields"] = missing
+
+    tolerances = {"rsi": 5.0, "ema200": 5.0, "atr": 5.0, "dxy": 1.0, "vix": 2.0}
+    mapping = {"rsi": "rsi", "ema200": "ema200", "atr": "atr", "dxy": "macro", "vix": "macro"}
+
+    mismatches: Dict[str, Any] = {}
+    for k, tol in tolerances.items():
+        agent_field = mapping.get(k)
+        agent_val = _first_number(checklist.get(agent_field))
+        data_val = _get_data_value(data_package, k)
+        if agent_val is None or data_val is None:
+            continue
+        if abs(agent_val - data_val) > tol:
+            mismatches[k] = {"agent": agent_val, "data": data_val, "tolerance": tol}
+            logger.warning(f"AGENT_CHECKLIST | MISMATCH | {k}: agent={agent_val} data={data_val}")
+
+    validation["mismatches"] = mismatches
+
+    reasoning = str(parsed.get("reasoning") or "")
+    category_keywords = {
+        "price_action": ["price", "structure", "higher", "lower", "resistance", "support"],
+        "ema200": ["ema", "ema200"],
+        "rsi": ["rsi"],
+        "macd": ["macd"],
+        "fibonacci": ["fib", "fibonacci", "61.8", "50%", "38.2", "23.6"],
+        "atr": ["atr"],
+        "macro": ["dxy", "vix", "yield", "yields", "10y"],
+        "headlines_summary": ["reuters", "headline", "iran", "tariff", "fed"],
+        "calendar": ["calendar", "event", "cpi", "nfp", "fomc", "pce"],
+        "sr_zones": ["sr", "zone", "touch", "support", "resistance"],
+        "volume": ["volume", "tick"],
+        "mtf_trend": ["d1", "h4", "mtf"],
+        "session": ["session", "asian", "london", "ny"],
+    }
+
+    referenced: List[str] = []
+    r_low = reasoning.lower()
+    for cat, kws in category_keywords.items():
+        if any(kw in r_low for kw in kws):
+            referenced.append(cat)
+
+    validation["reasoning_categories"] = referenced
+    validation["reasoning_categories_count"] = len(referenced)
+    if len(referenced) < 8:
+        logger.warning(f"AGENT_CHECKLIST | SHALLOW | only {len(referenced)}/13 categories referenced in reasoning")
+
+    return validation
+
+
 class AgentDecision(Enum):
     """Possible Agent decisions"""
     OPEN_BUY = "OPEN_BUY"
@@ -121,6 +251,7 @@ class AgentResult:
     trade_plan: Optional[Dict[str, Any]] = None
     entry_conditions: Optional[Dict[str, Any]] = None
     session_notes: Optional[str] = None
+    checklist_validation: Optional[Dict[str, Any]] = None
     raw_response: Optional[str] = None
     prompt_version: str = ""
     prompt_hash: str = ""
@@ -147,6 +278,7 @@ class AgentResult:
             "trade_plan": self.trade_plan,
             "entry_conditions": self.entry_conditions,
             "session_notes": self.session_notes,
+            "checklist_validation": self.checklist_validation,
             "raw_response": self.raw_response,
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
@@ -538,6 +670,7 @@ Based on this data, what is your decision? Remember to evaluate the CONTEXT, not
                 trade_plan=trade_plan,
                 entry_conditions=entry_conditions,
                 session_notes=session_notes,
+                checklist_validation=None,
                 raw_response=content,
                 prompt_version=get_prompt_version(),
                 prompt_hash=get_prompt_hash(),
@@ -638,6 +771,32 @@ async def agent_decide(
     
     # Get Agent decision
     result = await agent.decide(data_package, trigger_type=trigger_type)
+
+    try:
+        parsed_obj = None
+        try:
+            content = result.raw_response or ""
+            json_str = None
+            if "```json" in content:
+                json_str = content.split("```json", 1)[1].split("```", 1)[0].strip()
+            elif "```" in content:
+                json_str = content.split("```", 1)[1].split("```", 1)[0].strip()
+            else:
+                start = content.find("{")
+                end = content.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    json_str = content[start : end + 1].strip()
+            if json_str:
+                parsed_obj = json.loads(json_str)
+        except Exception:
+            parsed_obj = None
+
+        if isinstance(parsed_obj, dict):
+            result.checklist_validation = _validate_checklist(parsed_obj, data_package)
+        else:
+            logger.warning("AGENT_CHECKLIST | MISSING — could not re-parse raw_response JSON for checklist validation")
+    except Exception as e:
+        logger.debug(f"AGENT_CHECKLIST | validation failed (non-blocking): {e}")
 
     try:
         if result.session_notes:
