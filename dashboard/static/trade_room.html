@@ -383,7 +383,7 @@
       <div class="col-left">
 
         <!-- FLOKI card -->
-        <div class="glass-panel-deep rounded-xl p-3">
+        <div class="glass-panel-deep rounded-xl p-3" id="floki-card">
           <div class="flex items-center gap-3 mb-3">
             <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
             <div class="agent-avatar avatar-floki" id="avatar-floki" aria-label="FLOKI avatar">F</div>
@@ -393,25 +393,25 @@
                 <span class="status-tag">PROACTIVE · M30</span>
               </div>
               <div class="mt-1">
-                <span class="decision-pill pill-buy">OPEN BUY</span>
+                <span id="floki-decision-pill" class="decision-pill pill-wait">WAIT</span>
               </div>
             </div>
           </div>
           <!-- Confidence bar -->
           <div class="flex items-center gap-2 mb-2">
             <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">CONF</span>
-            <div class="confidence-bar-track flex-1"><div class="confidence-bar-fill conf-high" style="width:72%"></div></div>
-            <span class="font-mono text-[10px] text-gray-300 shrink-0">72%</span>
+            <div class="confidence-bar-track flex-1"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+            <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 shrink-0">—%</span>
           </div>
           <!-- Status tags -->
           <div class="flex flex-wrap gap-1.5">
             <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
-            <span class="status-tag">LONDON SESSION</span>
+            <span id="floki-thesis-tag" class="status-tag">THESIS: —</span>
           </div>
         </div>
 
         <!-- REX card -->
-        <div class="glass-panel-deep rounded-xl p-3">
+        <div class="glass-panel-deep rounded-xl p-3" id="rex-card">
           <div class="flex items-center gap-3 mb-3">
             <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
             <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">R</div>
@@ -421,35 +421,33 @@
                 <span class="status-tag">FAST · TRIGGER</span>
               </div>
               <div class="mt-1">
-                <span class="decision-pill pill-wait">WAIT</span>
+                <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
               </div>
             </div>
           </div>
           <!-- Confidence bar -->
           <div class="flex items-center gap-2 mb-2">
-            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">CONF</span>
-            <div class="confidence-bar-track flex-1"><div class="confidence-bar-fill conf-mid" style="width:35%"></div></div>
-            <span class="font-mono text-[10px] text-gray-300 shrink-0">35%</span>
+            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">AGREE</span>
+            <div class="confidence-bar-track flex-1"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+            <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 shrink-0">—</span>
           </div>
           <!-- Status tags -->
           <div class="flex flex-wrap gap-1.5">
             <span class="status-tag"><span class="dot-gray"></span>STANDBY</span>
-            <span class="status-tag">MONITORING</span>
+            <span id="rex-concerns-tag" class="status-tag">CONCERNS: —</span>
           </div>
         </div>
 
         <!-- Agreement / Conflict banner -->
-        <div class="agreement-banner banner-conflict">
-          ⚡ CONFLICT — FLOKI vs REX
-        </div>
+        <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
 
         <!-- Session stats -->
         <div class="glass-panel-deep rounded-xl p-3">
           <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
-          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span class="stat-val">3</span></div>
-          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span class="stat-val" style="color:#f87171">1</span></div>
-          <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span class="stat-val">12</span></div>
-          <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span class="stat-val">6</span></div>
+          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
+          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
+          <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
+          <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
         </div>
 
       </div><!-- /col-left -->
@@ -470,202 +468,7 @@
         </div>
 
         <!-- Conversation feed -->
-        <div class="feed-scroll" id="feed">
-
-          <!-- ─── LONDON SESSION divider ─── -->
-          <div class="time-divider" data-divider><span>LONDON SESSION · 09:00 UTC</span></div>
-
-          <!-- 1. FLOKI ANALYSIS -->
-          <div class="msg-row floki" data-type="analysis">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-analysis">ANALYSIS</span>
-                <span class="msg-time">09:14:22</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                Structure breakout confirmed on H1. EMA21 reclaim with MACD cross above signal line. Price holding 3,195 — key demand zone. Bullish setup in play. Brain score 71/100. Sentiment: BUY.
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. REX INFO -->
-          <div class="msg-row rex" data-type="info">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-info">INFO</span>
-                <span class="msg-time">09:14:41</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                Monitoring. ATR within normal range: 18.4 pts. Volume 1.3x average. Spread currently 28 pts — acceptable. No trigger events queued.
-              </div>
-            </div>
-          </div>
-
-          <!-- 3. FLOKI DECISION -->
-          <div class="msg-row floki" data-type="decision">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-decision">DECISION</span>
-                <span class="msg-time">09:15:03</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                <strong class="text-emerald-400">OPEN BUY — 72% confidence.</strong><br>
-                Entry: 3,198.40 &nbsp;|&nbsp; SL: 3,183.20 &nbsp;|&nbsp; TP: 3,221.60<br>
-                R:R 1.58 — within acceptable parameters. Submitting to executor.
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. REX ALERT -->
-          <div class="msg-row rex" data-type="alert">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-alert">ALERT</span>
-                <span class="msg-time">09:15:18</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                ⚠ Spread elevated: 38 pts as of now. Caution on entry timing — spread widening may impact SL integrity on initial move.
-              </div>
-            </div>
-          </div>
-
-          <!-- 5. FLOKI DEBATE -->
-          <div class="msg-row floki" data-type="debate">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-debate">DEBATE</span>
-                <span class="msg-time">09:15:29</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                Spread risk noted but acceptable given structure clarity. R:R 1.58 absorbs the spread cost. Structure is clean — price closed above H1 EMA21 for two consecutive candles. Proceeding with entry.
-              </div>
-            </div>
-          </div>
-
-          <!-- ─── CONFLICT STRIP ─── -->
-          <div class="conflict-strip" data-conflict>
-            ⚡ CONFLICT &nbsp;·&nbsp; FLOKI vs REX &nbsp;—&nbsp; Direction disagreement &nbsp;·&nbsp; 09:15 UTC
-          </div>
-
-          <!-- 6. REX DEBATE -->
-          <div class="msg-row rex" data-type="debate">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-debate">DEBATE</span>
-                <span class="msg-time">09:15:44</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                WAIT — 3,200 is a known H4 resistance level. Breakout not confirmed on my timeframe. Price touched it three times without a clean close above on H4 context. I cannot validate this entry.
-              </div>
-            </div>
-          </div>
-
-          <!-- 7. FLOKI INFO -->
-          <div class="msg-row floki" data-type="info">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-info">INFO</span>
-                <span class="msg-time">09:16:01</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                H4 resistance noted and factored in. Price has now closed above 3,200 on H1 — two candle close confirmation. Brain score 71/100. MTF alignment: D1 bullish, H4 neutral-to-bullish.
-              </div>
-            </div>
-          </div>
-
-          <!-- 8. REX ANALYSIS -->
-          <div class="msg-row rex" data-type="analysis">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-analysis">ANALYSIS</span>
-                <span class="msg-time">09:16:19</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                Rechecking H4 context... spike volume at 3,200 could be a stop-hunt rather than a confirmed breakout. I see a long upper wick on the last H4 candle. Waiting for H4 close confirmation before changing position.
-              </div>
-            </div>
-          </div>
-
-          <!-- 9. FLOKI DECISION -->
-          <div class="msg-row floki" data-type="decision">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-decision">DECISION</span>
-                <span class="msg-time">09:16:33</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                Maintaining <strong class="text-emerald-400">OPEN BUY</strong>. Agent confidence 72%. H1 structure clear, D1 bullish macro context confirmed. Decision submitted to executor. Trade is live.
-              </div>
-            </div>
-          </div>
-
-          <!-- 10. REX INFO -->
-          <div class="msg-row rex" data-type="info">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-info">INFO</span>
-                <span class="msg-time">09:16:50</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                Acknowledged. Position is live. Monitoring SL integrity and volume. Will alert on any adverse spike or spread anomaly. H4 close in 44 minutes.
-              </div>
-            </div>
-          </div>
-
-          <!-- ─── NEW YORK OPEN divider ─── -->
-          <div class="time-divider" data-divider><span>NEW YORK OPEN · 14:30 UTC</span></div>
-
-          <!-- 11. REX ALERT -->
-          <div class="msg-row rex" data-type="alert">
-            <div class="agent-avatar avatar-rex avatar-sm">R</div>
-            <div>
-              <div class="msg-meta" style="flex-direction:row-reverse">
-                <span class="msg-name name-rex">REX</span>
-                <span class="msg-badge badge-alert">ALERT</span>
-                <span class="msg-time">14:31:07</span>
-              </div>
-              <div class="msg-bubble bubble-rex">
-                ⚠ DXY rising: +0.3% on NY open. Headwind for XAU. Watch 3,190 support — a break below invalidates H1 structure. Spread: 31 pts, normalised.
-              </div>
-            </div>
-          </div>
-
-          <!-- 12. FLOKI ANALYSIS -->
-          <div class="msg-row floki" data-type="analysis">
-            <div class="agent-avatar avatar-floki avatar-sm">F</div>
-            <div>
-              <div class="msg-meta">
-                <span class="msg-name name-floki">FLOKI</span>
-                <span class="msg-badge badge-analysis">ANALYSIS</span>
-                <span class="msg-time">14:32:00</span>
-              </div>
-              <div class="msg-bubble bubble-floki">
-                Position holding above entry. DXY move noted — monitoring. Trailing BE mechanism activated at +233 pips. Price at 3,221.70 — within TP range. HOLD signal confirmed.
-              </div>
-            </div>
-          </div>
-
-        </div><!-- /feed-scroll -->
+        <div class="feed-scroll" id="feed"></div><!-- /feed-scroll -->
       </div><!-- /col-center -->
 
 
@@ -677,16 +480,16 @@
         <!-- Price block -->
         <div class="ctx-block">
           <div class="ctx-label">XAU/USD</div>
-          <div class="font-mono text-xl font-bold text-gray-100 tracking-tighter">3,198.40</div>
-          <div class="text-xs font-mono mt-0.5" style="color:#4ade80">+12.40 &nbsp;(+0.39%)</div>
+          <div id="ctx-price" class="font-mono text-xl font-bold text-gray-100 tracking-tighter">—</div>
+          <div id="ctx-change" class="text-xs font-mono mt-0.5" style="color:#9ca3af">—</div>
         </div>
 
         <!-- Macro block -->
         <div class="ctx-block">
           <div class="ctx-label">MACRO</div>
-          <div class="ctx-row"><span class="ctx-key">DXY</span><span class="ctx-val">102.8</span></div>
-          <div class="ctx-row"><span class="ctx-key">VIX</span><span class="ctx-val">18.4</span></div>
-          <div class="ctx-row"><span class="ctx-key">10Y</span><span class="ctx-val">4.31%</span></div>
+          <div class="ctx-row"><span class="ctx-key">DXY</span><span id="ctx-dxy" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">VIX</span><span id="ctx-vix" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">10Y</span><span id="ctx-10y" class="ctx-val">—</span></div>
         </div>
 
         <!-- Pillars block -->
@@ -695,28 +498,28 @@
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Technical</span>
-              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:68%"></div></div>
-              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">68</span>
+              <div class="pillar-bar-track"><div id="ctx-tech-bar" class="pillar-bar-fill" style="width:0%"></div></div>
+              <span id="ctx-tech-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">ML</span>
-              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:71%"></div></div>
-              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">71</span>
+              <div class="pillar-bar-track"><div id="ctx-ml-bar" class="pillar-bar-fill" style="width:0%"></div></div>
+              <span id="ctx-ml-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Momentum</span>
-              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:55%"></div></div>
-              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">55</span>
+              <div class="pillar-bar-track"><div id="ctx-mom-bar" class="pillar-bar-fill" style="width:0%"></div></div>
+              <span id="ctx-mom-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">News</span>
-              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:62%"></div></div>
-              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">62</span>
+              <div class="pillar-bar-track"><div id="ctx-news-bar" class="pillar-bar-fill" style="width:0%"></div></div>
+              <span id="ctx-news-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Calendar</span>
-              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:40%"></div></div>
-              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">40</span>
+              <div class="pillar-bar-track"><div id="ctx-cal-bar" class="pillar-bar-fill" style="width:0%"></div></div>
+              <span id="ctx-cal-val" class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">—</span>
             </div>
           </div>
         </div>
@@ -724,15 +527,15 @@
         <!-- Session block -->
         <div class="ctx-block">
           <div class="ctx-label">SESSION</div>
-          <div class="ctx-row"><span class="ctx-key">SESSION</span><span class="ctx-val">London</span></div>
-          <div class="ctx-row"><span class="ctx-key">P&amp;L</span><span class="ctx-val" style="color:#4ade80">+$47.20</span></div>
-          <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span class="ctx-val">2 / 0 / 1</span></div>
+          <div class="ctx-row"><span class="ctx-key">SESSION</span><span id="ctx-session" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">P&amp;L</span><span id="ctx-pnl" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span id="ctx-wlbe" class="ctx-val">—</span></div>
         </div>
 
         <!-- Next trigger countdown -->
         <div class="ctx-block">
           <div class="ctx-label">NEXT PROACTIVE</div>
-          <div class="font-mono text-2xl font-bold text-gray-200 tracking-tighter">14:32</div>
+          <div id="ctx-next" class="font-mono text-2xl font-bold text-gray-200 tracking-tighter">—</div>
           <div class="text-[9px] text-gray-600 mt-1 uppercase tracking-widest font-semibold">M30 SNAPSHOT</div>
         </div>
 
@@ -742,50 +545,363 @@
 
 
     <!-- ═══════════════════════════════════════════════
-         INLINE SCRIPT — Filter logic only, no fetch
+         INLINE SCRIPT — poll /api/trade-room + /api/state
     ════════════════════════════════════════════════ -->
     <script>
       (function () {
         'use strict';
 
+        var POLL_MS = 30000;
+        var currentFilter = 'all';
+        var latestMessages = [];
+
         var tabs = document.querySelectorAll('.filter-tab');
         var feed = document.getElementById('feed');
 
-        function applyFilter(filter) {
-          var messages   = feed.querySelectorAll('[data-type]');
-          var conflicts  = feed.querySelectorAll('[data-conflict]');
-          var dividers   = feed.querySelectorAll('[data-divider]');
+        function esc(s) {
+          return (s || '').toString()
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+        }
 
-          // Always show dividers
-          dividers.forEach(function(d) { d.style.display = ''; });
+        function fmtTime(ts) {
+          try {
+            if (!ts) return '—';
+            var d = new Date(ts);
+            if (isNaN(d.getTime())) return ts.toString().slice(11, 19) || ts;
+            var hh = String(d.getHours()).padStart(2, '0');
+            var mm = String(d.getMinutes()).padStart(2, '0');
+            var ss = String(d.getSeconds()).padStart(2, '0');
+            return hh + ':' + mm + ':' + ss;
+          } catch (e) {
+            return '—';
+          }
+        }
 
-          if (filter === 'all') {
-            messages.forEach(function(m)  { m.style.display = ''; });
-            conflicts.forEach(function(c) { c.style.display = ''; });
+        function badgeClass(t) {
+          var x = (t || '').toString().toUpperCase();
+          if (x === 'ANALYSIS') return 'badge-analysis';
+          if (x === 'ALERT') return 'badge-alert';
+          if (x === 'DECISION') return 'badge-decision';
+          if (x === 'DEBATE') return 'badge-debate';
+          if (x === 'TRADE_RESULT') return 'badge-info';
+          return 'badge-info';
+        }
+
+        function dataType(t) {
+          var x = (t || '').toString().toLowerCase();
+          if (x === 'trade_result') return 'info';
+          return x;
+        }
+
+        function shouldShowMessage(m) {
+          if (!m) return false;
+          var type = dataType(m.type);
+          if (currentFilter === 'all') return true;
+          if (currentFilter === 'conflict') {
+            if (m.__kind === 'conflict') return true;
+            return type === 'debate';
+          }
+          return type === currentFilter;
+        }
+
+        function buildConflictStrips(msgs) {
+          var out = [];
+          for (var i = 0; i < msgs.length; i++) {
+            out.push(msgs[i]);
+            // Insert conflict strip after REX debate when disagree
+            try {
+              var m = msgs[i];
+              var isDebate = (m.type || '').toString().toUpperCase() === 'DEBATE';
+              var rex = (m.author || '').toString().toUpperCase() === 'REX';
+              var agree = m.metadata ? m.metadata.rex_agrees : null;
+              if (isDebate && rex && agree === false) {
+                out.push({
+                  __kind: 'conflict',
+                  id: 'conflict:' + (m.id || i),
+                  timestamp: m.timestamp,
+                  content: '⚡ CONFLICT · FLOKI vs REX — Direction disagreement · ' + fmtTime(m.timestamp),
+                });
+              }
+            } catch(e) {}
+          }
+          return out;
+        }
+
+        function renderFeed() {
+          if (!feed) return;
+          var list = buildConflictStrips(latestMessages || []);
+          var html = '';
+
+          if (!list.length) {
+            feed.innerHTML = '<div class="text-xs font-mono text-gray-600">NO MESSAGES</div>';
             return;
           }
 
-          if (filter === 'conflict') {
-            // Show debate messages + conflict strips; hide everything else
-            messages.forEach(function(m) {
-              m.style.display = (m.dataset.type === 'debate') ? '' : 'none';
-            });
-            conflicts.forEach(function(c) { c.style.display = ''; });
-            return;
+          for (var i = 0; i < list.length; i++) {
+            var m = list[i];
+            if (!shouldShowMessage(m)) continue;
+
+            if (m.__kind === 'conflict') {
+              html += '<div class="conflict-strip" data-conflict>' + esc(m.content) + '</div>';
+              continue;
+            }
+
+            var author = (m.author || '').toString().toUpperCase();
+            var isFloki = author === 'FLOKI';
+            var rowCls = isFloki ? 'msg-row floki' : 'msg-row rex';
+            var avCls = isFloki ? 'agent-avatar avatar-floki avatar-sm' : 'agent-avatar avatar-rex avatar-sm';
+            var nameCls = isFloki ? 'msg-name name-floki' : 'msg-name name-rex';
+            var bubbleCls = isFloki ? 'msg-bubble bubble-floki' : 'msg-bubble bubble-rex';
+            var bCls = badgeClass(m.type);
+            var metaStyle = isFloki ? '' : ' style="flex-direction:row-reverse"';
+            var typeLabel = esc((m.type || '').toString());
+
+            var content = (m.content || '').toString();
+            content = esc(content).replaceAll('\n', '<br>');
+
+            html += '<div class="' + rowCls + '" data-type="' + esc(dataType(m.type)) + '">' +
+              '<div class="' + avCls + '">' + (isFloki ? 'F' : 'R') + '</div>' +
+              '<div>' +
+                '<div class="msg-meta"' + metaStyle + '>' +
+                  '<span class="' + nameCls + '">' + esc(author) + '</span>' +
+                  '<span class="msg-badge ' + bCls + '">' + typeLabel + '</span>' +
+                  '<span class="msg-time">' + esc(fmtTime(m.timestamp)) + '</span>' +
+                '</div>' +
+                '<div class="' + bubbleCls + '">' + content + '</div>' +
+              '</div>' +
+            '</div>';
           }
 
-          // Any other single-type filter
-          messages.forEach(function(m) {
-            m.style.display = (m.dataset.type === filter) ? '' : 'none';
+          feed.innerHTML = html;
+        }
+
+        function setFilter(f) {
+          currentFilter = f || 'all';
+          tabs.forEach(function(t) {
+            if (t.dataset.filter === currentFilter) t.classList.add('active');
+            else t.classList.remove('active');
           });
-          conflicts.forEach(function(c) { c.style.display = 'none'; });
+          renderFeed();
+        }
+
+        function setDecisionPill(el, decision) {
+          if (!el) return;
+          var d = (decision || '').toString().toUpperCase();
+          el.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
+          if (d === 'OPEN_BUY') el.classList.add('pill-buy');
+          else if (d === 'OPEN_SELL') el.classList.add('pill-sell');
+          else if (d.indexOf('HOLD') >= 0) el.classList.add('pill-hold');
+          else el.classList.add('pill-wait');
+          el.textContent = d ? d.replaceAll('_',' ') : '—';
+        }
+
+        function setConfBar(barEl, textEl, conf) {
+          if (!barEl || !textEl) return;
+          var n = null;
+          try { n = (conf === null || conf === undefined) ? null : Number(conf); } catch(e) { n = null; }
+          if (n === null || isNaN(n)) {
+            barEl.style.width = '0%';
+            textEl.textContent = '—%';
+            barEl.classList.remove('conf-low','conf-mid','conf-high');
+            barEl.classList.add('conf-mid');
+            return;
+          }
+          var pct = Math.max(0, Math.min(100, n));
+          barEl.style.width = pct + '%';
+          textEl.textContent = Math.round(pct) + '%';
+          barEl.classList.remove('conf-low','conf-mid','conf-high');
+          if (pct < 40) barEl.classList.add('conf-low');
+          else if (pct < 70) barEl.classList.add('conf-mid');
+          else barEl.classList.add('conf-high');
+        }
+
+        function updatePanels(messages, state) {
+          try {
+            var flokiDecision = null;
+            var flokiConf = null;
+            var flokiTools = [];
+            var thesis = null;
+            for (var i = 0; i < (messages || []).length; i++) {
+              var m = messages[i];
+              if (!thesis && m && m.metadata && m.metadata.session_thesis) thesis = m.metadata.session_thesis;
+              if ((m.author || '').toString().toUpperCase() === 'FLOKI' && (m.type || '').toString().toUpperCase() === 'DECISION') {
+                flokiDecision = m.metadata ? m.metadata.decision : null;
+                flokiConf = m.metadata ? m.metadata.confidence : null;
+                flokiTools = (m.metadata && m.metadata.tools_used) ? m.metadata.tools_used : [];
+                break;
+              }
+            }
+
+            setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
+            setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), flokiConf);
+
+            var thesisTag = document.getElementById('floki-thesis-tag');
+            if (thesisTag) thesisTag.textContent = 'THESIS: ' + (thesis ? thesis : '—');
+
+            // REX last debate stance
+            var rexAgree = null;
+            var rexConcernsCount = null;
+            for (var j = 0; j < (messages || []).length; j++) {
+              var mr = messages[j];
+              if ((mr.author || '').toString().toUpperCase() === 'REX' && (mr.type || '').toString().toUpperCase() === 'DEBATE') {
+                rexAgree = mr.metadata ? mr.metadata.rex_agrees : null;
+                rexConcernsCount = (mr.metadata && mr.metadata.concerns && mr.metadata.concerns.length) ? mr.metadata.concerns.length : 0;
+                break;
+              }
+            }
+
+            var rexText = document.getElementById('rex-agree-text');
+            var rexBar = document.getElementById('rex-agree-bar');
+            var rexPill = document.getElementById('rex-opinion-pill');
+            if (rexPill) {
+              rexPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
+              rexPill.classList.add('pill-standby');
+              if (rexAgree === true) rexPill.textContent = 'AGREE';
+              else if (rexAgree === false) rexPill.textContent = 'DISAGREE';
+              else rexPill.textContent = 'STANDBY';
+            }
+            if (rexText && rexBar) {
+              if (rexAgree === true) {
+                rexText.textContent = 'YES';
+                rexBar.style.width = '100%';
+                rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                rexBar.classList.add('conf-high');
+              } else if (rexAgree === false) {
+                rexText.textContent = 'NO';
+                rexBar.style.width = '100%';
+                rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                rexBar.classList.add('conf-low');
+              } else {
+                rexText.textContent = '—';
+                rexBar.style.width = '0%';
+                rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                rexBar.classList.add('conf-mid');
+              }
+            }
+            var rexConcernsTag = document.getElementById('rex-concerns-tag');
+            if (rexConcernsTag) rexConcernsTag.textContent = 'CONCERNS: ' + (rexConcernsCount === null ? '—' : String(rexConcernsCount));
+
+            // Agreement/conflict banner + stats
+            var conflicts = 0;
+            var agreements = 0;
+            var debateRex = 0;
+            for (var k = 0; k < (messages || []).length; k++) {
+              var mx = messages[k];
+              if ((mx.type || '').toString().toUpperCase() === 'DEBATE' && (mx.author || '').toString().toUpperCase() === 'REX') {
+                debateRex++;
+                var a = mx.metadata ? mx.metadata.rex_agrees : null;
+                if (a === true) agreements++;
+                if (a === false) conflicts++;
+              }
+            }
+
+            var banner = document.getElementById('agreement-banner');
+            if (banner) {
+              banner.classList.remove('banner-agree','banner-conflict');
+              if (conflicts > 0) {
+                banner.classList.add('banner-conflict');
+                banner.textContent = '⚡ CONFLICT — FLOKI vs REX';
+              } else {
+                banner.classList.add('banner-agree');
+                banner.textContent = '✓ AGREEMENT — FLOKI & REX';
+              }
+            }
+
+            var elA = document.getElementById('stats-agreements');
+            var elC = document.getElementById('stats-conflicts');
+            var elM = document.getElementById('stats-messages');
+            var elCalls = document.getElementById('stats-calls');
+            if (elA) elA.textContent = String(agreements);
+            if (elC) elC.textContent = String(conflicts);
+            if (elM) elM.textContent = String((messages || []).length);
+            if (elCalls) elCalls.textContent = String(Math.max(agreements + conflicts, 0));
+
+            // Right panel from /api/state
+            if (state) {
+              var price = (state.account || {}).price || state.price || null;
+              // real schema: state may have account stats + last_analysis
+              var px = (state.last_analysis && state.last_analysis.price) ? state.last_analysis.price : null;
+              var showPrice = px || (state.account && state.account.price) || (state.market && state.market.price) || null;
+              var priceEl = document.getElementById('ctx-price');
+              if (priceEl) priceEl.textContent = showPrice !== null && showPrice !== undefined ? String(showPrice) : '—';
+
+              var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
+              var sessEl = document.getElementById('ctx-session');
+              if (sessEl) sessEl.textContent = String(sess);
+
+              var pnl = (state.daily_stats && state.daily_stats.pnl !== undefined) ? state.daily_stats.pnl : null;
+              var pnlEl = document.getElementById('ctx-pnl');
+              if (pnlEl) {
+                if (pnl === null || pnl === undefined) pnlEl.textContent = '—';
+                else pnlEl.textContent = (Number(pnl) >= 0 ? '+$' : '-$') + Math.abs(Number(pnl)).toFixed(2);
+              }
+
+              var wlbe = '—';
+              try {
+                var w = state.daily_stats ? (state.daily_stats.wins || 0) : 0;
+                var l = state.daily_stats ? (state.daily_stats.losses || 0) : 0;
+                var be = state.daily_stats ? (state.daily_stats.breakevens || 0) : 0;
+                wlbe = w + ' / ' + l + ' / ' + be;
+              } catch(e) {}
+              var wlbeEl = document.getElementById('ctx-wlbe');
+              if (wlbeEl) wlbeEl.textContent = wlbe;
+
+              // Pillars if available in last_analysis
+              var la = state.last_analysis || {};
+              function setBar(idBar, idVal, v) {
+                var bar = document.getElementById(idBar);
+                var val = document.getElementById(idVal);
+                var n = null;
+                try { n = (v === null || v === undefined) ? null : Number(v); } catch(e) { n = null; }
+                if (n === null || isNaN(n)) {
+                  if (bar) bar.style.width = '0%';
+                  if (val) val.textContent = '—';
+                  return;
+                }
+                var pct = Math.max(0, Math.min(100, n));
+                if (bar) bar.style.width = pct + '%';
+                if (val) val.textContent = String(Math.round(pct));
+              }
+              setBar('ctx-tech-bar','ctx-tech-val', la.tech_score);
+              setBar('ctx-ml-bar','ctx-ml-val', la.ml_score);
+              setBar('ctx-mom-bar','ctx-mom-val', la.momentum_score);
+              setBar('ctx-news-bar','ctx-news-val', la.news_score);
+              setBar('ctx-cal-bar','ctx-cal-val', la.calendar_score);
+            }
+          } catch(e) {
+            // silent
+          }
+        }
+
+        function fetchJson(url) {
+          return fetch(url, { cache: 'no-store' }).then(function(r) {
+            if (!r.ok) throw new Error('http_' + r.status);
+            return r.json();
+          });
+        }
+
+        function loadOnce() {
+          return Promise.all([
+            fetchJson('/api/trade-room?limit=50'),
+            fetchJson('/api/state')
+          ]).then(function(res) {
+            var msgPayload = res[0] || {};
+            latestMessages = (msgPayload.messages || []).slice();
+            // Ensure descending order (API is desc); renderer expects desc
+            renderFeed();
+            updatePanels(latestMessages, res[1]);
+          }).catch(function() {
+            // silent
+          });
         }
 
         tabs.forEach(function(tab) {
           tab.addEventListener('click', function() {
-            tabs.forEach(function(t) { t.classList.remove('active'); });
-            tab.classList.add('active');
-            applyFilter(tab.dataset.filter);
+            setFilter(tab.dataset.filter);
           });
         });
 
@@ -793,16 +909,13 @@
         var hashFilter = 'all';
         try {
           var hash = window.location.hash.replace('#', '');
-          var match = hash.match(/filter=([a-z]+)/);
+          var match = hash.match(/filter=([a-z_]+)/);
           if (match) hashFilter = match[1];
         } catch(e) {}
+        setFilter(hashFilter);
 
-        // Activate correct tab
-        tabs.forEach(function(t) {
-          if (t.dataset.filter === hashFilter) t.classList.add('active');
-          else t.classList.remove('active');
-        });
-        applyFilter(hashFilter);
+        loadOnce();
+        setInterval(loadOnce, POLL_MS);
       })();
     </script>
 
