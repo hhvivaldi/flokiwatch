@@ -1,7 +1,7 @@
 """
 AI AGENT - Claude-based Trading Decision Maker
 The Agent receives market data, Brain analysis, and makes independent trading decisions.
-Phase 1: Shadow Mode - Agent decides but Brain executes.
+Agent is the decision maker and executor.
 """
 
 import json

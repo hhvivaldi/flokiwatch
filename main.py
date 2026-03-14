@@ -3283,7 +3283,7 @@ class TradingBot:
             None,  # agent_data - not used in confluence mode
         )
     
-    def _call_agent_shadow_mode(
+    def _call_agent(
         self,
         brain_result,
         tech_data,
@@ -3299,8 +3299,8 @@ class TradingBot:
         hold_reason: str = None,
     ):
         """
-        Call AI Agent in shadow mode.
-        Agent decides but Brain executes. Both decisions logged for comparison.
+        Call AI Agent.
+        Agent is the decision maker and executor; results are logged for monitoring.
         
         When hold_forced=True, the Brain wanted to trade but confidence was too low.
         The Agent receives the original signal and can decide to AGREE_HOLD or OVERRIDE_OPEN.
@@ -3314,7 +3314,7 @@ class TradingBot:
             return
         
         trigger_type = "HOLD_FORCED" if hold_forced else "SIGNAL"
-        log.info(f"   🤖 Calling AI Agent (shadow mode, trigger={trigger_type})...")
+        log.info(f"   🤖 Calling AI Agent (trigger={trigger_type})...")
         
         # Build session context
         session_context = {
@@ -3679,8 +3679,8 @@ class TradingBot:
             reasoning_short = agent_result.reasoning[:150] + "..." if len(agent_result.reasoning) > 150 else agent_result.reasoning
             log.info(f"   🤖 Reasoning: {reasoning_short}")
         
-        # In shadow mode, Brain executes
-        executed = "BRAIN"
+        # Agent is the executor
+        executed = "AGENT"
         mode = agent.get_mode()
         
         # Record to SQLite (use brain_display for HOLD_FORCED visibility)
