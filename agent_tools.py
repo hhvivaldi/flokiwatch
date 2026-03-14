@@ -507,7 +507,15 @@ class AgentTools:
     # Action tools (execution allowed; safety enforced here)
     # ---------------------------------------------------------------------
 
-    def execute_trade(self, direction: str, sl: float, tp: float) -> Dict[str, Any]:
+    def execute_trade(
+        self,
+        direction: str,
+        sl: float,
+        tp: float,
+        breakeven_trigger_pips: Optional[float] = None,
+        trailing_trigger_pips: Optional[float] = None,
+        trailing_distance_pips: Optional[float] = None,
+    ) -> Dict[str, Any]:
         start = time.time()
         try:
             dp = self._last_agent_data()
@@ -553,6 +561,33 @@ class AgentTools:
 
             if sl_pips < 150 or sl_pips > 800:
                 return {"success": False, "reason": f"sl out of range ({sl_pips:.1f} pips)"}
+
+            # Optional per-trade BE / trailing params (pips) for EA bridge.
+            # Defaults preserve current system behavior: BE=50% SL, Trail trigger=70% SL, Trail distance=70% SL.
+            try:
+                be_pips = self._safe_float(breakeven_trigger_pips)
+                tr_trig_pips = self._safe_float(trailing_trigger_pips)
+                tr_dist_pips = self._safe_float(trailing_distance_pips)
+
+                if be_pips is None:
+                    be_pips = float(sl_pips) * 0.5
+                if tr_trig_pips is None:
+                    tr_trig_pips = float(sl_pips) * 0.7
+                if tr_dist_pips is None:
+                    tr_dist_pips = float(sl_pips) * 0.7
+
+                # Basic sanity bounds (avoid nonsense payloads)
+                for v, name in (
+                    (be_pips, "breakeven_trigger_pips"),
+                    (tr_trig_pips, "trailing_trigger_pips"),
+                    (tr_dist_pips, "trailing_distance_pips"),
+                ):
+                    if v is None or v <= 0:
+                        return {"success": False, "reason": f"invalid {name}"}
+                    if v > 2000:
+                        return {"success": False, "reason": f"{name} too large ({v:.0f} pips)"}
+            except Exception:
+                return {"success": False, "reason": "invalid be/trailing params"}
 
             # Safety checks (max positions, daily loss, market open buffers, etc.)
             acct = self._executor.get_account_info() or {}
@@ -604,6 +639,9 @@ class AgentTools:
                     scenario="agent_tool",
                     risk_amount=float(pos.risk_amount),
                     risk_percent=float(risk_pct),
+                    breakeven_trigger_pips=float(be_pips),
+                    trailing_trigger_pips=float(tr_trig_pips),
+                    trailing_distance_pips=float(tr_dist_pips),
                 )
             except Exception as e_exec:
                 self._log_tool("execute_trade", start, f"{dir_s} | error={e_exec}")
@@ -629,6 +667,9 @@ class AgentTools:
                 "fill_price": fill_price,
                 "sl": float(sl_f),
                 "tp": float(tp_f),
+                "breakeven_trigger_pips": float(be_pips),
+                "trailing_trigger_pips": float(tr_trig_pips),
+                "trailing_distance_pips": float(tr_dist_pips),
             }
         except Exception as e:
             self._log_tool("execute_trade", start, f"error={e}")

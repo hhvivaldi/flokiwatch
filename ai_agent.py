@@ -526,13 +526,16 @@ class AIAgent:
             },
             {
                 "name": "execute_trade",
-                "description": "Execute a trade. Enforces safety and risk rules in code.",
+                "description": "Execute a trade (action). Safety is enforced and may reject.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "direction": {"type": "string", "enum": ["BUY", "SELL"]},
+                        "direction": {"type": "string"},
                         "sl": {"type": "number"},
                         "tp": {"type": "number"},
+                        "breakeven_trigger_pips": {"type": "number"},
+                        "trailing_trigger_pips": {"type": "number"},
+                        "trailing_distance_pips": {"type": "number"},
                     },
                     "required": ["direction", "sl", "tp"],
                     "additionalProperties": False,

@@ -162,6 +162,9 @@ class MT5Executor:
         scenario: Optional[str] = None,
         risk_amount: Optional[float] = None,
         risk_percent: Optional[float] = None,
+        breakeven_trigger_pips: Optional[float] = None,
+        trailing_trigger_pips: Optional[float] = None,
+        trailing_distance_pips: Optional[float] = None,
     ) -> OrderResult:
         """
         Execute a trade.
@@ -230,6 +233,46 @@ class MT5Executor:
             )
         
         bid, ask = prices
+
+        # EA Bridge execution path (preferred when online)
+        if getattr(config, "USE_EA_BRIDGE", False):
+            try:
+                from ea_bridge import is_ea_online, write_signal
+
+                stale_threshold = getattr(config, "EA_STALE_THRESHOLD_SECONDS", 60)
+                if is_ea_online(stale_threshold):
+                    # Determine reference price for SL-distance calculation
+                    ref_price = ask if direction.upper() == "BUY" else bid
+                    sl_pips = abs(ref_price - float(stop_loss)) / 0.1
+
+                    be_pips = float(breakeven_trigger_pips) if breakeven_trigger_pips is not None else float(sl_pips) * 0.5
+                    tr_trig_pips = float(trailing_trigger_pips) if trailing_trigger_pips is not None else float(sl_pips) * 0.7
+                    tr_dist_pips = float(trailing_distance_pips) if trailing_distance_pips is not None else float(sl_pips) * 0.7
+
+                    ok = write_signal(
+                        signal=direction,
+                        sl=float(stop_loss),
+                        tp=float(take_profit),
+                        lot_size=float(lot_size),
+                        confidence=float(confidence) if confidence is not None else 50.0,
+                        breakeven_trigger_pips=be_pips,
+                        trailing_trigger_pips=tr_trig_pips,
+                        trailing_distance_pips=tr_dist_pips,
+                        max_drawdown_pips=float(getattr(config, "MAX_POSITION_DRAWDOWN_PIPS", 1000)),
+                        comment=comment,
+                    )
+
+                    if ok:
+                        return OrderResult(
+                            success=True,
+                            ticket=0,
+                            error_code=None,
+                            error_message=None,
+                            price=ref_price,
+                            volume=lot_size,
+                        )
+            except Exception:
+                pass
         
         # Configure order
         if direction.upper() == "BUY":
