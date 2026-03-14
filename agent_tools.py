@@ -901,6 +901,103 @@ class AgentTools:
 
             # Execute
             try:
+                # Rex validation (second opinion) — non-blocking; only enforces confidence reduction/block if disagree
+                try:
+                    from rex_validator import validate_with_rex
+
+                    rex_enabled = bool(getattr(config, "USE_REX_VALIDATOR", True))
+                    rex_disagree_penalty = int(getattr(config, "REX_DISAGREE_PENALTY", 10) or 10)
+                    rex_block_threshold = int(getattr(config, "REX_BLOCK_THRESHOLD", 55) or 55)
+
+                    # Compact ~2K token summary
+                    dp_ctx = self._last_agent_data() or {}
+                    ind = dp_ctx.get("indicators") or {}
+                    macro = dp_ctx.get("macro") or {}
+                    mtf = dp_ctx.get("mtf_trend") or {}
+                    vol_gate = dp_ctx.get("volume_gate") or {}
+                    sr = dp_ctx.get("sr_zones") or dp_ctx.get("support_resistance") or {}
+
+                    floki_summary = {
+                        "intended_trade": {
+                            "direction": dir_s,
+                            "sl": float(sl_f),
+                            "tp": float(tp_f),
+                            "sl_pips": float(sl_pips),
+                            "risk_percent": float(risk_pct),
+                        },
+                        "price": price,
+                        "session": {
+                            "utc_hour": dp_ctx.get("utc_hour"),
+                            "session_name": dp_ctx.get("session_name"),
+                        },
+                        "brain": {
+                            "decision": dp_ctx.get("decision"),
+                            "final_score": dp_ctx.get("final_score"),
+                            "confidence": dp_ctx.get("confidence"),
+                            "scenario": dp_ctx.get("scenario"),
+                        },
+                        "indicators": {
+                            "rsi": (ind.get("rsi") or {}).get("value"),
+                            "ema200": (ind.get("emas") or {}).get("ema200"),
+                            "macd": ind.get("macd"),
+                            "atr": (ind.get("atr") or {}).get("value"),
+                            "bb_position": (ind.get("bollinger") or {}).get("position_pct"),
+                            "volume_ratio": ind.get("volume_ratio") or (ind.get("volume") or {}).get("ratio"),
+                        },
+                        "mtf": mtf,
+                        "volume_gate": vol_gate,
+                        "macro": {
+                            "dxy": (macro.get("dxy") or {}).get("value"),
+                            "vix": (macro.get("vix") or {}).get("value"),
+                            "yields": macro.get("yields"),
+                        },
+                        "sr": sr if isinstance(sr, dict) else {},
+                        "agent": {
+                            "note": "Rex validation requested before execution.",
+                        },
+                    }
+
+                    if rex_enabled:
+                        rex = validate_with_rex(floki_summary, timeout_seconds=int(getattr(config, "REX_TIMEOUT", 20) or 20))
+                        if isinstance(rex, dict) and rex.get("success"):
+                            agree = rex.get("agree")
+                            log.info(
+                                f"REX_VALIDATION | {'AGREE' if agree else 'DISAGREE'} | reasoning={str(rex.get('reasoning') or '')[:180]}"
+                            )
+
+                            adjusted_conf = None
+                            try:
+                                # Use cached Brain confidence as baseline for block logic (Feature spec)
+                                base_conf = dp_ctx.get("confidence")
+                                base_conf_f = float(base_conf) if base_conf is not None else None
+                                if base_conf_f is not None:
+                                    adjusted_conf = int(round(base_conf_f))
+                                    if agree is False:
+                                        adjusted_conf = max(0, adjusted_conf - rex_disagree_penalty)
+                            except Exception:
+                                adjusted_conf = None
+
+                            if agree is False and adjusted_conf is not None and adjusted_conf < rex_block_threshold:
+                                return {
+                                    "success": False,
+                                    "reason": (
+                                        f"Rex disagrees: {str(rex.get('reasoning') or '').strip()} "
+                                        f"Confidence reduced to {adjusted_conf}% (below {rex_block_threshold}% threshold)"
+                                    ),
+                                    "rex": {
+                                        "agree": False,
+                                        "reasoning": rex.get("reasoning"),
+                                        "risk_warning": rex.get("risk_warning"),
+                                        "adjusted_confidence": adjusted_conf,
+                                    },
+                                }
+
+                            setattr(self, "_last_rex_validation", rex)
+                        else:
+                            log.info(f"REX_VALIDATION | SKIP | reason={rex.get('reason') if isinstance(rex, dict) else 'unknown'}")
+                except Exception as e_rex:
+                    log.debug(f"REX_VALIDATION | error (non-blocking): {e_rex}")
+
                 comment = f"Agent-{dir_s}"
                 res = self._executor.execute_trade(
                     direction=dir_s,
@@ -943,6 +1040,7 @@ class AgentTools:
                 "breakeven_trigger_pips": float(be_pips),
                 "trailing_trigger_pips": float(tr_trig_pips),
                 "trailing_distance_pips": float(tr_dist_pips),
+                "rex": getattr(self, "_last_rex_validation", None),
             }
         except Exception as e:
             self._log_tool("execute_trade", start, f"error={e}")
