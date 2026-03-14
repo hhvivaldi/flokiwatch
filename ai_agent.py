@@ -290,6 +290,12 @@ class AgentResult:
             "error": self.error,
             "timestamp": self.timestamp.isoformat(),
         }
+        try:
+            tool_trace = getattr(self, "tool_trace", None)
+            if tool_trace is not None:
+                result["tool_trace"] = tool_trace
+        except Exception:
+            pass
         if self.market_view:
             result["market_view"] = self.market_view
         if self.conditions_to_approve:
@@ -417,10 +423,12 @@ class AIAgent:
             result = self._parse_response(response, latency_ms)
 
             try:
-                if response.get("tool_trace"):
-                    # Preserve original raw JSON text and append tool trace in a safe way.
-                    # Downstream parsers use JSON extraction from raw_response; keep it intact.
-                    result.raw_response = (result.raw_response or "")
+                tool_trace = response.get("tool_trace")
+                if tool_trace is not None:
+                    try:
+                        setattr(result, "tool_trace", tool_trace)
+                    except Exception:
+                        pass
             except Exception:
                 pass
             

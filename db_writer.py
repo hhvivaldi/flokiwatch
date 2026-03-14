@@ -187,6 +187,7 @@ def init_db() -> None:
                 agent_reasoning TEXT,
                 agent_key_factors TEXT,
                 agent_concerns TEXT,
+                tool_trace TEXT,
                 tp_entry_strategy TEXT,
                 tp_entry_price REAL,
                 tp_entry_rationale TEXT,
@@ -211,6 +212,7 @@ def init_db() -> None:
 
         # Migration: add agent_decisions columns if missing (safe no-op if they already exist)
         agent_decisions_columns_to_add = [
+            ("tool_trace", "TEXT"),
             ("tp_entry_strategy", "TEXT"),
             ("tp_entry_price", "REAL"),
             ("tp_entry_rationale", "TEXT"),
@@ -241,6 +243,7 @@ def init_db() -> None:
                 agent_key_factors TEXT,
                 agent_concerns TEXT,
                 raw_response TEXT,
+                tool_trace TEXT,
                 tp_entry_strategy TEXT,
                 tp_entry_price REAL,
                 tp_entry_rationale TEXT,
@@ -267,6 +270,7 @@ def init_db() -> None:
         # Migration: add agent_proactive_analyses columns if missing (safe no-op if they already exist)
         agent_proactive_columns_to_add = [
             ("raw_response", "TEXT"),
+            ("tool_trace", "TEXT"),
             ("tp_entry_strategy", "TEXT"),
             ("tp_entry_price", "REAL"),
             ("tp_entry_rationale", "TEXT"),
@@ -536,20 +540,28 @@ def record_agent_decision(
         agreement_int = 1 if agreement else 0
 
         tp = agent_result.get("trade_plan") or {}
+
+        tool_trace = agent_result.get("tool_trace")
+        tool_trace_json = None
+        if tool_trace is not None:
+            try:
+                tool_trace_json = json.dumps(tool_trace, ensure_ascii=False, default=str)
+            except Exception:
+                tool_trace_json = None
         
         conn = _get_connection()
         conn.execute(
             """INSERT INTO agent_decisions
                (timestamp, brain_decision, brain_score, brain_confidence,
                 agent_decision, agent_confidence, agent_reasoning,
-                agent_key_factors, agent_concerns,
+                agent_key_factors, agent_concerns, tool_trace,
                 tp_entry_strategy, tp_entry_price, tp_entry_rationale,
                 tp_stop_loss, tp_stop_loss_rationale,
                 tp_take_profit, tp_take_profit_rationale,
                 tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
                 agreement, executed, outcome,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                        ?, ?, ?,
                        ?, ?,
                        ?, ?,
@@ -566,6 +578,7 @@ def record_agent_decision(
                 agent_result.get("reasoning", ""),
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
+                tool_trace_json,
                 tp.get("entry_strategy"),
                 tp.get("entry_price"),
                 tp.get("entry_rationale"),
@@ -605,6 +618,14 @@ def record_agent_proactive_analysis(
         tp = agent_result.get("trade_plan") or {}
         adj = agent_result.get("adjustment") or {}
 
+        tool_trace = agent_result.get("tool_trace")
+        tool_trace_json = None
+        if tool_trace is not None:
+            try:
+                tool_trace_json = json.dumps(tool_trace, ensure_ascii=False, default=str)
+            except Exception:
+                tool_trace_json = None
+
         conn = _get_connection()
         entry_conditions = agent_result.get("entry_conditions")
         if entry_conditions is not None and not isinstance(entry_conditions, dict):
@@ -615,7 +636,7 @@ def record_agent_proactive_analysis(
             """INSERT INTO agent_proactive_analyses
                (timestamp, h1_close_time,
                 agent_decision, agent_confidence, agent_reasoning,
-                agent_key_factors, agent_concerns, raw_response,
+                agent_key_factors, agent_concerns, raw_response, tool_trace,
                 tp_entry_strategy, tp_entry_price, tp_entry_rationale,
                 tp_stop_loss, tp_stop_loss_rationale,
                 tp_take_profit, tp_take_profit_rationale,
@@ -623,7 +644,7 @@ def record_agent_proactive_analysis(
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms,
                 entry_conditions,
                 adjustment_new_sl, adjustment_new_tp, adjustment_reason, close_reason)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
                        ?, ?, ?,
                        ?, ?,
                        ?, ?,
@@ -640,6 +661,7 @@ def record_agent_proactive_analysis(
                 json.dumps(agent_result.get("key_factors", [])),
                 json.dumps(agent_result.get("concerns", [])),
                 agent_result.get("raw_response"),
+                tool_trace_json,
                 tp.get("entry_strategy"),
                 tp.get("entry_price"),
                 tp.get("entry_rationale"),
