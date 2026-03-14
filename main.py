@@ -2206,211 +2206,35 @@ class TradingBot:
         from agent_data_builder import get_session_name
         from db_writer import record_agent_proactive_analysis, get_recent_proactive_decisions
         from ai_agent import agent_decide
-        from agent_data_builder import build_proactive_data_package
+        from agent_tools import AgentTools
+        import safety_checks
+        import risk_manager
 
         agent = get_agent()
         if not agent.is_enabled():
             return
 
-        try:
-            self._analysis_cycle()
-            try:
-                agent_data = getattr(self, "_last_agent_data", None) or agent_data
-            except Exception:
-                pass
-            try:
-                df = getattr(self, "_last_df", None) or df
-            except Exception:
-                pass
-        except Exception as e:
-            log.debug(f"{trigger_type} | Brain refresh before Agent call failed (ignored): {e}")
-
-        if not agent_data or not isinstance(agent_data, dict):
-            return
-
-        log.info(f"{trigger_type} | Calling AI Agent (independent snapshot) | ts: {snapshot_time_iso}")
+        log.info(f"{trigger_type} | Calling AI Agent (tool-driven) | ts: {snapshot_time_iso}")
 
         try:
-            # Reuse the same full payload used by reactive calls
-            brain_result = agent_data.get("brain_result")
-            tech_data = agent_data.get("tech_data")
-            ml_data = agent_data.get("ml_data")
-            momentum_data = agent_data.get("momentum_data")
-            news_data = agent_data.get("news_data")
-            calendar_data = agent_data.get("calendar_data")
-            current_price = agent_data.get("current_price")
-            vol_status = agent_data.get("vol_status")
+            trigger_context = f"{trigger_type} snapshot at {snapshot_time_iso}. Session: {get_session_name(datetime.utcnow().hour)}. "
+            if isinstance(trigger_data, dict) and trigger_data:
+                trigger_context += f"Trigger data: {trigger_data}. "
+            trigger_context += "Investigate using tools and respond with final decision JSON."
 
-            session_context = {
-                "session_name": get_session_name(datetime.utcnow().hour),
-                "hour_utc": datetime.utcnow().hour,
-                "today_trades": self.daily_stats.get("trades", 0),
-                "today_wins": self.daily_stats.get("wins", 0),
-                "today_losses": self.daily_stats.get("losses", 0),
-                "today_pnl": self.daily_stats.get("pnl", 0),
-                "last_5_results": [],
-                "consecutive_losses": 0,
-                "hold_forced": None,
-            }
-
-            h1_candles = []
-            for i in range(max(0, len(df) - 50), len(df)):
-                row = df.iloc[i]
-                tv = 0
-                try:
-                    tv = int(row.get("tick_volume", row.get("volume", 0)) or 0)
-                except Exception:
-                    tv = 0
-                h1_candles.append({
-                    "time": str(row.get("datetime", "")),
-                    "open": float(row["open"]),
-                    "high": float(row["high"]),
-                    "low": float(row["low"]),
-                    "close": float(row["close"]),
-                    "tick_volume": tv,
-                })
-
-            m5_candles = []
-            d1_candles = []
-            h4_candles = []
-            ema200 = None
-            try:
-                import MetaTrader5 as mt5
-                try:
-                    import pandas as pd
-                    h1_rates_ema = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, 1000)
-                    if h1_rates_ema is not None and len(h1_rates_ema) >= 200:
-                        df_ema = pd.DataFrame(h1_rates_ema)
-                        ema_series = df_ema["close"].ewm(span=200, adjust=False).mean()
-                        ema200 = float(ema_series.iloc[-1])
-                except Exception:
-                    ema200 = None
-                m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
-                if m5_rates is not None:
-                    for r in m5_rates:
-                        m5_candles.append({
-                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
-                            "open": float(r["open"]),
-                            "high": float(r["high"]),
-                            "low": float(r["low"]),
-                            "close": float(r["close"]),
-                            "tick_volume": int(r["tick_volume"]),
-                        })
-                d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
-                if d1_rates is not None:
-                    for r in d1_rates:
-                        d1_candles.append({
-                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
-                            "open": float(r["open"]),
-                            "high": float(r["high"]),
-                            "low": float(r["low"]),
-                            "close": float(r["close"]),
-                            "tick_volume": int(r["tick_volume"]),
-                        })
-                h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
-                if h4_rates is not None:
-                    for r in h4_rates:
-                        h4_candles.append({
-                            "time": datetime.fromtimestamp(r["time"], tz=timezone.utc).isoformat(),
-                            "open": float(r["open"]),
-                            "high": float(r["high"]),
-                            "low": float(r["low"]),
-                            "close": float(r["close"]),
-                            "tick_volume": int(r["tick_volume"]),
-                        })
-            except Exception:
-                pass
-
-            price_data = {"bid": current_price, "ask": current_price, "spread": 0}
-            try:
-                tick = executor.get_current_price()
-                if tick:
-                    price_data = {"bid": tick[0], "ask": tick[1], "spread": (tick[1] - tick[0]) / 0.1}
-            except Exception:
-                pass
-
-            positions = []
-            try:
-                if self.executes_trades:
-                    pos_list = executor.get_open_positions()
-                    for p in pos_list[:3]:
-                        positions.append({
-                            "ticket": p.ticket,
-                            "type": "BUY" if p.type == 0 else "SELL",
-                            "price_open": p.price_open,
-                            "price_current": p.price_current,
-                            "profit": p.profit,
-                            "sl": p.sl,
-                            "tp": p.tp,
-                        })
-            except Exception:
-                pass
-
-            sr_zones_for_agent = getattr(self, '_last_sr_zones', []) or []
-            candlestick_patterns_for_agent = getattr(self, '_last_candlestick_patterns', None)
-
-            sr_proximity_data = None
-            try:
-                sr_brain_data = getattr(self, '_last_sr_brain_data', None)
-                if sr_brain_data:
-                    sr_proximity_data = {
-                        "near_strong_zone": sr_brain_data.get("near_strong_zone", False),
-                        "near_zone_info": sr_brain_data.get("near_zone_info"),
-                        "dist_to_nearest_pips": sr_brain_data.get("dist_to_nearest_pips"),
-                    }
-            except Exception:
-                pass
-
-            agent_memory = []
-            trade_feedback = None
-            delta_context = None
-            portfolio_data = None
-            regime_context = None
-            
-            recent_decisions = get_recent_proactive_decisions(limit=5)
-
-            last_exec_rej = None
-            try:
-                last_exec_rej = getattr(self, "_last_execution_rejection", None)
-            except Exception:
-                last_exec_rej = None
-
-            data_package = build_proactive_data_package(
-                brain_result=brain_result,
-                tech_data=tech_data,
-                ml_data=ml_data,
-                momentum_data=momentum_data,
-                news_data=news_data,
-                calendar_data=calendar_data,
-                h1_candles=h1_candles,
-                m5_candles=m5_candles,
-                current_price=price_data,
-                positions=positions,
-                session_context=session_context,
-                volatility_status=vol_status or {},
-                sr_zones=sr_zones_for_agent,
-                candlestick_patterns=candlestick_patterns_for_agent,
-                sr_proximity=sr_proximity_data,
-                d1_candles=d1_candles,
-                h4_candles=h4_candles,
-                trade_feedback=trade_feedback,
-                ema200=ema200,
-                recent_decisions=recent_decisions,
-                trade_history=getattr(self, "closed_trades_today", []) or [],
-                last_execution_result=last_exec_rej,
+            tools_obj = AgentTools(
+                self,
+                executor=executor,
+                safety_checks_module=safety_checks,
+                risk_manager_module=risk_manager,
             )
-
-            try:
-                if last_exec_rej is not None:
-                    self._last_execution_rejection = None
-            except Exception:
-                pass
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             agent_result = loop.run_until_complete(
                 agent_decide(
-                    data_package,
+                    trigger_context,
+                    tools_obj,
                     trigger_type=trigger_type,
                     allow_memory_write=False,
                 )
@@ -3593,53 +3417,39 @@ class TradingBot:
         except Exception as e:
             log.debug(f"Error building regime context: {e}")
         
-        data_package = build_data_package(
-            brain_result=brain_result,
-            tech_data=tech_data,
-            ml_data=ml_data,
-            momentum_data=momentum_data,
-            news_data=news_data,
-            calendar_data=calendar_data,
-            h1_candles=h1_candles,
-            m5_candles=m5_candles,
-            current_price=price_data,
-            positions=positions,
-            session_context=session_context,
-            volatility_status=vol_status or {},
-            sr_zones=sr_zones_for_agent,
-            candlestick_patterns=candlestick_patterns_for_agent,
-            sr_proximity=sr_proximity_data,
-            d1_candles=d1_candles,
-            h4_candles=h4_candles,
-            agent_memory=agent_memory,
-            trade_feedback=trade_feedback,
-            delta_context=delta_context,
-            portfolio=portfolio_data,
-            regime_context=regime_context,
-        )
-
-        try:
-            d1_first = d1_candles[0].get("time") if d1_candles else None
-            d1_last = d1_candles[-1].get("time") if d1_candles else None
-            h4_first = h4_candles[0].get("time") if h4_candles else None
-            h4_last = h4_candles[-1].get("time") if h4_candles else None
-
-            ns = data_package.get("nearest_support")
-            nr = data_package.get("nearest_resistance")
-            log.info(
-                f"   🤖 Agent package: h4_count={len(data_package.get('h4_candles', []))} | "
-                f"nearest_support={ns} | nearest_resistance={nr} | "
-                f"d1_time={d1_first}->{d1_last} | h4_time={h4_first}->{h4_last}"
-            )
-        except Exception as e:
-            log.debug(f"Agent package monitoring log failed (non-blocking): {e}")
-        
-        # Call Agent (async) - use agent_decide() wrapper for memory injection/saving
+        # Call Agent (async) - tool-driven (no XML / no full data package)
         from ai_agent import agent_decide
+        from agent_tools import AgentTools
+        import safety_checks
+        import risk_manager
         try:
+            trigger_context = "Brain signaled an actionable condition. Investigate using tools and respond with final decision JSON."
+            try:
+                # Provide minimal context (no giant payload). Keep it short.
+                trigger_context = (
+                    f"Reactive analysis. Brain decision={getattr(brain_result, 'decision', None)} "
+                    f"score={getattr(brain_result, 'final_score', None)} conf={getattr(brain_result, 'confidence', None)}. "
+                    f"Session={session_context.get('session_name') if isinstance(session_context, dict) else ''}. "
+                    "Investigate using tools (cached market data) and act if appropriate."
+                )
+            except Exception:
+                pass
+
+            tools_obj = AgentTools(
+                self,
+                executor=executor,
+                safety_checks_module=safety_checks,
+                risk_manager_module=risk_manager,
+            )
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            agent_result = loop.run_until_complete(agent_decide(data_package))
+            agent_result = loop.run_until_complete(
+                agent_decide(
+                    trigger_context,
+                    tools_obj,
+                )
+            )
             loop.close()
         except Exception as e:
             log.warning(f"Agent call failed: {e}")
