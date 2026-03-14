@@ -2350,55 +2350,9 @@ class TradingBot:
                         )
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
-
-                thesis_direction = None
-                try:
-                    from db_writer import get_active_trade_from_proactive
-                    active = get_active_trade_from_proactive()
-                    if active and isinstance(active, dict):
-                        d = str(active.get("decision") or "")
-                        if d == "OPEN_BUY":
-                            thesis_direction = "BUY"
-                        elif d == "OPEN_SELL":
-                            thesis_direction = "SELL"
-                except Exception:
-                    thesis_direction = None
-
-                positions_list = []
-                try:
-                    positions_list = get_positions() if self.executes_trades else []
-                except Exception:
-                    positions_list = []
-
-                if not positions_list:
-                    log.warning("PROACTIVE_H1 | CLOSE_TRADE but no open positions — nothing to close")
-                else:
-                    if thesis_direction is None:
-                        dirs = {getattr(p, "direction", None) for p in positions_list}
-                        dirs = {d for d in dirs if d in ("BUY", "SELL")}
-                        if len(dirs) == 1:
-                            thesis_direction = next(iter(dirs))
-
-                    if thesis_direction not in ("BUY", "SELL"):
-                        msg = "CLOSE_TRADE could not infer thesis direction (multiple positions?)"
-                        log.warning(f"PROACTIVE_H1 | {msg}")
-                        try:
-                            alert_error("Agent Close Skipped", msg)
-                        except Exception:
-                            pass
-                    else:
-                        to_close = [p for p in positions_list if getattr(p, "direction", None) == thesis_direction]
-                        if not to_close:
-                            log.warning(f"PROACTIVE_H1 | CLOSE_TRADE but no {thesis_direction} positions — nothing to close")
-                        else:
-                            log.warning(
-                                f"PROACTIVE_H1 | Closing {len(to_close)} {thesis_direction} position(s) per Agent CLOSE_TRADE"
-                            )
-                            for p in to_close:
-                                try:
-                                    self.close_agent_trade(getattr(p, "ticket", 0), close_reason)
-                                except Exception as e:
-                                    log.warning(f"PROACTIVE_H1 | close_agent_trade error (ignored): {e}")
+                log.info(
+                    f"PROACTIVE_H1 | Agent CLOSE intent logged (tool executes) | reason={close_reason} | conf={agent_result.confidence}"
+                )
             elif agent_result.decision == "ADJUST_TRADE":
                 adj = getattr(agent_result, "adjustment", None)
                 if not isinstance(adj, dict):
@@ -2411,63 +2365,9 @@ class TradingBot:
                     if new_sl is None and new_tp is None:
                         log.warning("PROACTIVE_H1 | ADJUST_TRADE without new_sl/new_tp — skipping")
                     else:
-                        thesis_direction = None
-                        try:
-                            from db_writer import get_active_trade_from_proactive
-                            active = get_active_trade_from_proactive()
-                            if active and isinstance(active, dict):
-                                d = str(active.get("decision") or "")
-                                if d == "OPEN_BUY":
-                                    thesis_direction = "BUY"
-                                elif d == "OPEN_SELL":
-                                    thesis_direction = "SELL"
-                        except Exception:
-                            thesis_direction = None
-
-                        positions_list = []
-                        try:
-                            positions_list = get_positions() if self.executes_trades else []
-                        except Exception:
-                            positions_list = []
-
-                        if not positions_list:
-                            log.warning("PROACTIVE_H1 | ADJUST_TRADE but no open positions — nothing to adjust")
-                        else:
-                            if thesis_direction is None:
-                                dirs = {getattr(p, "direction", None) for p in positions_list}
-                                dirs = {d for d in dirs if d in ("BUY", "SELL")}
-                                if len(dirs) == 1:
-                                    thesis_direction = next(iter(dirs))
-
-                            if thesis_direction not in ("BUY", "SELL"):
-                                msg = "ADJUST_TRADE could not infer thesis direction (multiple positions?)"
-                                log.warning(f"PROACTIVE_H1 | {msg}")
-                                try:
-                                    alert_error("Agent Adjust Skipped", msg)
-                                except Exception:
-                                    pass
-                            else:
-                                to_adjust = [
-                                    p for p in positions_list if getattr(p, "direction", None) == thesis_direction
-                                ]
-                                if not to_adjust:
-                                    log.warning(
-                                        f"PROACTIVE_H1 | ADJUST_TRADE but no {thesis_direction} positions — nothing to adjust"
-                                    )
-                                else:
-                                    log.warning(
-                                        f"PROACTIVE_H1 | Adjusting {len(to_adjust)} {thesis_direction} position(s) per Agent ADJUST_TRADE"
-                                    )
-                                    for p in to_adjust:
-                                        try:
-                                            self.adjust_agent_trade(
-                                                ticket=getattr(p, "ticket", 0),
-                                                new_sl=new_sl,
-                                                new_tp=new_tp,
-                                                reason=adj_reason,
-                                            )
-                                        except Exception as e:
-                                            log.warning(f"PROACTIVE_H1 | adjust_agent_trade error (ignored): {e}")
+                        log.info(
+                            f"PROACTIVE_H1 | Agent ADJUST intent logged (tool executes) | new_sl={new_sl} new_tp={new_tp} reason={adj_reason} | conf={agent_result.confidence}"
+                        )
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent execution error (ignored): {e}")
     
