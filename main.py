@@ -792,7 +792,7 @@ class TradingBot:
         log.info(f"Mode: {mode_label}")
         log.info(f"Symbol: {config.SYMBOL} | Timeframe: {config.TIMEFRAME}")
         log.info(f"Analysis: {config.ANALYSIS_INTERVAL_SECONDS}s | Monitor: {config.MONITOR_INTERVAL_SECONDS}s")
-        log.info(f"Central Brain: {'ON' if config.USE_CENTRAL_BRAIN else 'OFF (confluence)'}")
+        log.info(f"Central Scanner: {'ON' if config.USE_CENTRAL_BRAIN else 'OFF (confluence)'}")
         log.info(f"GPT Headlines: {'ON (' + config.GPT_MODEL + ')' if getattr(config, 'USE_GPT_HEADLINES', False) else 'OFF (keywords)'}")
         log.info(f"Min confidence: {config.BRAIN_MIN_CONFIDENCE}%")
         
@@ -1046,10 +1046,10 @@ class TradingBot:
                     decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                         self._brain_analysis(df)
                 except Exception as e:
-                    log.error(f"⚠️ Brain failed! Error: {e}")
+                    log.error(f"⚠️ Scanner failed! Error: {e}")
                     log.error(traceback.format_exc())
                     log.warning("Using confluence as fallback...")
-                    alert_error("Brain Degraded", f"Brain failed: {e}. Using confluence as fallback.")
+                    alert_error("Scanner Degraded", f"Scanner failed: {e}. Using confluence as fallback.")
                     decision, final_score, confidence, direction, tech_score, news_score, ml_score, explanation, agent_data = \
                         self._confluence_analysis(df)
             else:
@@ -1124,7 +1124,7 @@ class TradingBot:
             # alert_signal_detected disabled in Phase 0 (Brain no longer executes trades)
             
             # NOTE: Safety checks and execution must be reconnected under Agent execution (Phase 3)
-            log.info("Brain execution disabled — Agent is sole decision maker")
+            log.info("Scanner execution disabled — Agent is sole decision maker")
             return
 
             
@@ -2387,7 +2387,7 @@ class TradingBot:
         from economic_calendar import get_calendar_data, get_upcoming_events
         from volatility_guard import get_volatility_status
         
-        log.info("   🧠 Mode: CENTRAL BRAIN")
+        log.info("   📊 Mode: CENTRAL SCANNER")
         
         # Detailed technical analysis
         tech_data = analyze_technical_detailed(df)
@@ -2646,9 +2646,9 @@ class TradingBot:
                 self.gpt_stats["confirm"] += 1
         
         # Detailed log
-        log.info(f"   🧠 Scenario: {brain_result.scenario_description}")
-        log.info(f"   🧠 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
-        log.info(f"   🧠 Decision: {brain_result.decision}")
+        log.info(f"   📊 Scenario: {brain_result.scenario_description}")
+        log.info(f"   📊 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
+        log.info(f"   📊 Decision: {brain_result.decision}")
 
         try:
             if brain_result.scenario == "ml_vs_tech_conflito":
