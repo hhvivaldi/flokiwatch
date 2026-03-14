@@ -246,6 +246,11 @@ def history():
     return FileResponse(str(STATIC_DIR / "history.html"))
 
 
+@app.get("/trade-room")
+def trade_room():
+    return FileResponse(str(STATIC_DIR / "trade_room.html"))
+
+
 @app.get("/api/health")
 def health():
     if not STATE_FILE.exists():

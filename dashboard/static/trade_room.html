@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trade Room — FLOKI &amp; REX · FlokiWatch</title>
+    <link rel="icon" type="image/png" href="/image/flokiwatch.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="/static/style.css" />
+
+    <style>
+      html, body {
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: #0d0d0d;
+      }
+      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+      /* ── Avatar ─────────────────────────────── */
+      .agent-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 15px;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+      .agent-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+      }
+      .avatar-floki {
+        background: rgba(74, 222, 128, 0.12);
+        border: 1.5px solid rgba(74, 222, 128, 0.4);
+        color: #4ade80;
+      }
+      .avatar-rex {
+        background: rgba(129, 140, 248, 0.12);
+        border: 1.5px solid rgba(129, 140, 248, 0.4);
+        color: #818cf8;
+      }
+      .avatar-sm {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
+      }
+
+      /* ── Message type badges ─────────────────── */
+      .msg-badge {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        flex-shrink: 0;
+      }
+      .badge-analysis { color: #60a5fa; background: #0a1a2a; border: 1px solid rgba(96,165,250,0.25); }
+      .badge-alert    { color: #fb923c; background: #2a1a00; border: 1px solid rgba(251,146,60,0.25); }
+      .badge-decision { color: #4ade80; background: #002a10; border: 1px solid rgba(74,222,128,0.25); }
+      .badge-debate   { color: #f87171; background: #2a0000; border: 1px solid rgba(248,113,113,0.25); }
+      .badge-info     { color: #6b7280; background: #1a1a1a; border: 1px solid rgba(107,114,128,0.2); }
+
+      /* ── Decision badge (agent card) ────────── */
+      .decision-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .pill-buy     { color: #4ade80; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3); }
+      .pill-sell    { color: #f87171; background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); }
+      .pill-wait    { color: #9ca3af; background: rgba(156,163,175,0.10); border: 1px solid rgba(156,163,175,0.2); }
+      .pill-hold    { color: #fbbf24; background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.3); }
+      .pill-standby { color: #818cf8; background: rgba(129,140,248,0.10); border: 1px solid rgba(129,140,248,0.25); }
+
+      /* ── Status tag ─────────────────────────── */
+      .status-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #6b7280;
+      }
+      .dot-green { width:6px; height:6px; border-radius:50%; background:#4ade80; flex-shrink:0; }
+      .dot-gray  { width:6px; height:6px; border-radius:50%; background:#6b7280; flex-shrink:0; }
+
+      /* ── Agreement / Conflict banner ────────── */
+      .agreement-banner {
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .banner-agree   { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: #4ade80; }
+      .banner-conflict { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); color: #f87171; }
+
+      /* ── Session stats ──────────────────────── */
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+      .stat-row:last-child { border-bottom: none; }
+      .stat-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #4b5563; }
+      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #d1d5db; }
+
+      /* ── Filter tabs ────────────────────────── */
+      .filter-tab {
+        padding: 4px 12px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border-radius: 4px;
+        cursor: pointer;
+        color: #6b7280;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+      }
+      .filter-tab:hover { color: #9ca3af; }
+      .filter-tab.active { color: #f9fafb; border-bottom-color: #4ade80; }
+
+      /* ── Conversation feed ──────────────────── */
+      .feed-scroll {
+        overflow-y: auto;
+        max-height: calc(100vh - 260px);
+        min-height: 400px;
+        padding-right: 4px;
+      }
+      .feed-scroll::-webkit-scrollbar { width: 4px; }
+      .feed-scroll::-webkit-scrollbar-track { background: transparent; }
+      .feed-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+      /* ── Time divider ───────────────────────── */
+      .time-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 14px 0 10px;
+      }
+      .time-divider::before,
+      .time-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: rgba(255,255,255,0.07);
+      }
+      .time-divider span {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #374151;
+        white-space: nowrap;
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      /* ── Message bubble ─────────────────────── */
+      .msg-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        animation: msg-in 0.25s ease-out both;
+      }
+      .msg-row.floki { flex-direction: row; }
+      .msg-row.rex   { flex-direction: row-reverse; }
+
+      @keyframes msg-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .msg-bubble {
+        max-width: 78%;
+        padding: 8px 11px;
+        border-radius: 10px;
+        font-size: 11.5px;
+        line-height: 1.6;
+        color: #d1d5db;
+      }
+      .bubble-floki {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-top-left-radius: 2px;
+      }
+      .bubble-rex {
+        background: rgba(129,140,248,0.06);
+        border: 1px solid rgba(129,140,248,0.12);
+        border-top-right-radius: 2px;
+      }
+
+      .msg-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .msg-name { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+      .name-floki { color: rgba(74,222,128,0.8); }
+      .name-rex   { color: rgba(129,140,248,0.8); }
+      .msg-time { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #374151; margin-left: auto; }
+
+      /* ── Conflict inline banner ─────────────── */
+      .conflict-strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+        padding: 6px 12px;
+        border-radius: 6px;
+        background: rgba(248,113,113,0.06);
+        border: 1px solid rgba(248,113,113,0.2);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #f87171;
+      }
+
+      /* ── Right column blocks ────────────────── */
+      .ctx-block {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      .ctx-label {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #4b5563;
+        margin-bottom: 7px;
+      }
+      .ctx-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .ctx-row:last-child { margin-bottom: 0; }
+      .ctx-key { color: #6b7280; }
+      .ctx-val { color: #d1d5db; font-weight: 600; }
+
+      .pillar-bar-track {
+        flex: 1;
+        height: 4px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 9999px;
+        overflow: hidden;
+        margin: 0 6px;
+      }
+      .pillar-bar-fill {
+        height: 100%;
+        border-radius: 9999px;
+        background: #4ade80;
+        box-shadow: 0 0 5px rgba(74,222,128,0.5);
+      }
+
+      /* ── Page header strip ──────────────────── */
+      .page-header-strip {
+        background: rgba(255,255,255,0.025);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 7px 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ── Columns layout ─────────────────────── */
+      .trade-room-grid {
+        display: grid;
+        grid-template-columns: 240px 1fr 200px;
+        gap: 16px;
+        padding: 16px 20px 24px;
+        height: calc(100vh - 88px);
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .col-left, .col-right {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+      }
+      .col-left::-webkit-scrollbar, .col-right::-webkit-scrollbar { width: 3px; }
+      .col-left::-webkit-scrollbar-thumb, .col-right::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
+
+      .col-center {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      /* ── Responsive fallback (mobile) ───────── */
+      @media (max-width: 900px) {
+        .trade-room-grid {
+          grid-template-columns: 1fr;
+          height: auto;
+          overflow: visible;
+        }
+        .feed-scroll { max-height: 520px; }
+      }
+    </style>
+  </head>
+
+  <body class="bg-[#0d0d0d] text-white">
+
+    <!-- ═══════════════════════════════════════════════
+         TOP NAV BAR (matches existing FlokiWatch nav)
+    ════════════════════════════════════════════════ -->
+    <div class="bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
+      <div class="flex flex-wrap items-center justify-between text-xs gap-2">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">STATUS:</span>
+            <span class="text-gray-500 font-mono">TRADE ROOM VIEW</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <nav class="flex gap-4 sm:gap-5 items-center">
+            <a href="/"            class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">DASHBOARD</a>
+            <a href="/history"     class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">HISTORY</a>
+            <a href="/roadmap"     class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ROADMAP</a>
+            <a href="/trade-room"  class="text-sm font-semibold text-white   hover:text-white   transition-colors duration-200">TRADE ROOM</a>
+            <a href="/about"       class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ABOUT</a>
+          </nav>
+          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon">
+          <span class="hidden sm:inline text-white font-bold tracking-wider text-sm">FLOKIWATCH</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         PAGE HEADER STRIP
+    ════════════════════════════════════════════════ -->
+    <div class="page-header-strip">
+      <span class="text-xs font-bold tracking-[0.2em] text-emerald-400 uppercase">TRADE ROOM — FLOKI &amp; REX</span>
+      <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
+      <span class="ml-auto text-[9px] font-mono text-gray-600">MOCK DATA · BACKEND CONNECTION PENDING</span>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         3-COLUMN BODY
+    ════════════════════════════════════════════════ -->
+    <div class="trade-room-grid">
+
+      <!-- ══════════════════════
+           LEFT — Agent Status
+      ═══════════════════════ -->
+      <div class="col-left">
+
+        <!-- FLOKI card -->
+        <div class="glass-panel-deep rounded-xl p-3">
+          <div class="flex items-center gap-3 mb-3">
+            <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
+            <div class="agent-avatar avatar-floki" id="avatar-floki" aria-label="FLOKI avatar">F</div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-bold tracking-wide" style="color:#4ade80">FLOKI</span>
+                <span class="status-tag">PROACTIVE · M30</span>
+              </div>
+              <div class="mt-1">
+                <span class="decision-pill pill-buy">OPEN BUY</span>
+              </div>
+            </div>
+          </div>
+          <!-- Confidence bar -->
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">CONF</span>
+            <div class="confidence-bar-track flex-1"><div class="confidence-bar-fill conf-high" style="width:72%"></div></div>
+            <span class="font-mono text-[10px] text-gray-300 shrink-0">72%</span>
+          </div>
+          <!-- Status tags -->
+          <div class="flex flex-wrap gap-1.5">
+            <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
+            <span class="status-tag">LONDON SESSION</span>
+          </div>
+        </div>
+
+        <!-- REX card -->
+        <div class="glass-panel-deep rounded-xl p-3">
+          <div class="flex items-center gap-3 mb-3">
+            <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
+            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">R</div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-bold tracking-wide" style="color:#818cf8">REX</span>
+                <span class="status-tag">FAST · TRIGGER</span>
+              </div>
+              <div class="mt-1">
+                <span class="decision-pill pill-wait">WAIT</span>
+              </div>
+            </div>
+          </div>
+          <!-- Confidence bar -->
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[9px] text-gray-500 font-semibold uppercase tracking-widest shrink-0">CONF</span>
+            <div class="confidence-bar-track flex-1"><div class="confidence-bar-fill conf-mid" style="width:35%"></div></div>
+            <span class="font-mono text-[10px] text-gray-300 shrink-0">35%</span>
+          </div>
+          <!-- Status tags -->
+          <div class="flex flex-wrap gap-1.5">
+            <span class="status-tag"><span class="dot-gray"></span>STANDBY</span>
+            <span class="status-tag">MONITORING</span>
+          </div>
+        </div>
+
+        <!-- Agreement / Conflict banner -->
+        <div class="agreement-banner banner-conflict">
+          ⚡ CONFLICT — FLOKI vs REX
+        </div>
+
+        <!-- Session stats -->
+        <div class="glass-panel-deep rounded-xl p-3">
+          <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
+          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span class="stat-val">3</span></div>
+          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span class="stat-val" style="color:#f87171">1</span></div>
+          <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span class="stat-val">12</span></div>
+          <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span class="stat-val">6</span></div>
+        </div>
+
+      </div><!-- /col-left -->
+
+
+      <!-- ══════════════════════
+           CENTER — Feed
+      ═══════════════════════ -->
+      <div class="col-center">
+
+        <!-- Filter tabs -->
+        <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap">
+          <button class="filter-tab active" data-filter="all">ALL</button>
+          <button class="filter-tab" data-filter="decision">DECISIONS</button>
+          <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
+          <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
+          <button class="filter-tab" data-filter="alert">ALERTS</button>
+        </div>
+
+        <!-- Conversation feed -->
+        <div class="feed-scroll" id="feed">
+
+          <!-- ─── LONDON SESSION divider ─── -->
+          <div class="time-divider" data-divider><span>LONDON SESSION · 09:00 UTC</span></div>
+
+          <!-- 1. FLOKI ANALYSIS -->
+          <div class="msg-row floki" data-type="analysis">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-analysis">ANALYSIS</span>
+                <span class="msg-time">09:14:22</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                Structure breakout confirmed on H1. EMA21 reclaim with MACD cross above signal line. Price holding 3,195 — key demand zone. Bullish setup in play. Brain score 71/100. Sentiment: BUY.
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. REX INFO -->
+          <div class="msg-row rex" data-type="info">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-info">INFO</span>
+                <span class="msg-time">09:14:41</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                Monitoring. ATR within normal range: 18.4 pts. Volume 1.3x average. Spread currently 28 pts — acceptable. No trigger events queued.
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. FLOKI DECISION -->
+          <div class="msg-row floki" data-type="decision">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-decision">DECISION</span>
+                <span class="msg-time">09:15:03</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                <strong class="text-emerald-400">OPEN BUY — 72% confidence.</strong><br>
+                Entry: 3,198.40 &nbsp;|&nbsp; SL: 3,183.20 &nbsp;|&nbsp; TP: 3,221.60<br>
+                R:R 1.58 — within acceptable parameters. Submitting to executor.
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. REX ALERT -->
+          <div class="msg-row rex" data-type="alert">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-alert">ALERT</span>
+                <span class="msg-time">09:15:18</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                ⚠ Spread elevated: 38 pts as of now. Caution on entry timing — spread widening may impact SL integrity on initial move.
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. FLOKI DEBATE -->
+          <div class="msg-row floki" data-type="debate">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-debate">DEBATE</span>
+                <span class="msg-time">09:15:29</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                Spread risk noted but acceptable given structure clarity. R:R 1.58 absorbs the spread cost. Structure is clean — price closed above H1 EMA21 for two consecutive candles. Proceeding with entry.
+              </div>
+            </div>
+          </div>
+
+          <!-- ─── CONFLICT STRIP ─── -->
+          <div class="conflict-strip" data-conflict>
+            ⚡ CONFLICT &nbsp;·&nbsp; FLOKI vs REX &nbsp;—&nbsp; Direction disagreement &nbsp;·&nbsp; 09:15 UTC
+          </div>
+
+          <!-- 6. REX DEBATE -->
+          <div class="msg-row rex" data-type="debate">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-debate">DEBATE</span>
+                <span class="msg-time">09:15:44</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                WAIT — 3,200 is a known H4 resistance level. Breakout not confirmed on my timeframe. Price touched it three times without a clean close above on H4 context. I cannot validate this entry.
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. FLOKI INFO -->
+          <div class="msg-row floki" data-type="info">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-info">INFO</span>
+                <span class="msg-time">09:16:01</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                H4 resistance noted and factored in. Price has now closed above 3,200 on H1 — two candle close confirmation. Brain score 71/100. MTF alignment: D1 bullish, H4 neutral-to-bullish.
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. REX ANALYSIS -->
+          <div class="msg-row rex" data-type="analysis">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-analysis">ANALYSIS</span>
+                <span class="msg-time">09:16:19</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                Rechecking H4 context... spike volume at 3,200 could be a stop-hunt rather than a confirmed breakout. I see a long upper wick on the last H4 candle. Waiting for H4 close confirmation before changing position.
+              </div>
+            </div>
+          </div>
+
+          <!-- 9. FLOKI DECISION -->
+          <div class="msg-row floki" data-type="decision">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-decision">DECISION</span>
+                <span class="msg-time">09:16:33</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                Maintaining <strong class="text-emerald-400">OPEN BUY</strong>. Agent confidence 72%. H1 structure clear, D1 bullish macro context confirmed. Decision submitted to executor. Trade is live.
+              </div>
+            </div>
+          </div>
+
+          <!-- 10. REX INFO -->
+          <div class="msg-row rex" data-type="info">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-info">INFO</span>
+                <span class="msg-time">09:16:50</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                Acknowledged. Position is live. Monitoring SL integrity and volume. Will alert on any adverse spike or spread anomaly. H4 close in 44 minutes.
+              </div>
+            </div>
+          </div>
+
+          <!-- ─── NEW YORK OPEN divider ─── -->
+          <div class="time-divider" data-divider><span>NEW YORK OPEN · 14:30 UTC</span></div>
+
+          <!-- 11. REX ALERT -->
+          <div class="msg-row rex" data-type="alert">
+            <div class="agent-avatar avatar-rex avatar-sm">R</div>
+            <div>
+              <div class="msg-meta" style="flex-direction:row-reverse">
+                <span class="msg-name name-rex">REX</span>
+                <span class="msg-badge badge-alert">ALERT</span>
+                <span class="msg-time">14:31:07</span>
+              </div>
+              <div class="msg-bubble bubble-rex">
+                ⚠ DXY rising: +0.3% on NY open. Headwind for XAU. Watch 3,190 support — a break below invalidates H1 structure. Spread: 31 pts, normalised.
+              </div>
+            </div>
+          </div>
+
+          <!-- 12. FLOKI ANALYSIS -->
+          <div class="msg-row floki" data-type="analysis">
+            <div class="agent-avatar avatar-floki avatar-sm">F</div>
+            <div>
+              <div class="msg-meta">
+                <span class="msg-name name-floki">FLOKI</span>
+                <span class="msg-badge badge-analysis">ANALYSIS</span>
+                <span class="msg-time">14:32:00</span>
+              </div>
+              <div class="msg-bubble bubble-floki">
+                Position holding above entry. DXY move noted — monitoring. Trailing BE mechanism activated at +233 pips. Price at 3,221.70 — within TP range. HOLD signal confirmed.
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /feed-scroll -->
+      </div><!-- /col-center -->
+
+
+      <!-- ══════════════════════
+           RIGHT — Market Context
+      ═══════════════════════ -->
+      <div class="col-right">
+
+        <!-- Price block -->
+        <div class="ctx-block">
+          <div class="ctx-label">XAU/USD</div>
+          <div class="font-mono text-xl font-bold text-gray-100 tracking-tighter">3,198.40</div>
+          <div class="text-xs font-mono mt-0.5" style="color:#4ade80">+12.40 &nbsp;(+0.39%)</div>
+        </div>
+
+        <!-- Macro block -->
+        <div class="ctx-block">
+          <div class="ctx-label">MACRO</div>
+          <div class="ctx-row"><span class="ctx-key">DXY</span><span class="ctx-val">102.8</span></div>
+          <div class="ctx-row"><span class="ctx-key">VIX</span><span class="ctx-val">18.4</span></div>
+          <div class="ctx-row"><span class="ctx-key">10Y</span><span class="ctx-val">4.31%</span></div>
+        </div>
+
+        <!-- Pillars block -->
+        <div class="ctx-block">
+          <div class="ctx-label">BRAIN PILLARS</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Technical</span>
+              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:68%"></div></div>
+              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">68</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">ML</span>
+              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:71%"></div></div>
+              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">71</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Momentum</span>
+              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:55%"></div></div>
+              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">55</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">News</span>
+              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:62%"></div></div>
+              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">62</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:9px;color:#6b7280;width:58px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Calendar</span>
+              <div class="pillar-bar-track"><div class="pillar-bar-fill" style="width:40%"></div></div>
+              <span class="font-mono" style="font-size:9px;color:#d1d5db;width:22px;text-align:right">40</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session block -->
+        <div class="ctx-block">
+          <div class="ctx-label">SESSION</div>
+          <div class="ctx-row"><span class="ctx-key">SESSION</span><span class="ctx-val">London</span></div>
+          <div class="ctx-row"><span class="ctx-key">P&amp;L</span><span class="ctx-val" style="color:#4ade80">+$47.20</span></div>
+          <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span class="ctx-val">2 / 0 / 1</span></div>
+        </div>
+
+        <!-- Next trigger countdown -->
+        <div class="ctx-block">
+          <div class="ctx-label">NEXT PROACTIVE</div>
+          <div class="font-mono text-2xl font-bold text-gray-200 tracking-tighter">14:32</div>
+          <div class="text-[9px] text-gray-600 mt-1 uppercase tracking-widest font-semibold">M30 SNAPSHOT</div>
+        </div>
+
+      </div><!-- /col-right -->
+
+    </div><!-- /trade-room-grid -->
+
+
+    <!-- ═══════════════════════════════════════════════
+         INLINE SCRIPT — Filter logic only, no fetch
+    ════════════════════════════════════════════════ -->
+    <script>
+      (function () {
+        'use strict';
+
+        var tabs = document.querySelectorAll('.filter-tab');
+        var feed = document.getElementById('feed');
+
+        function applyFilter(filter) {
+          var messages   = feed.querySelectorAll('[data-type]');
+          var conflicts  = feed.querySelectorAll('[data-conflict]');
+          var dividers   = feed.querySelectorAll('[data-divider]');
+
+          // Always show dividers
+          dividers.forEach(function(d) { d.style.display = ''; });
+
+          if (filter === 'all') {
+            messages.forEach(function(m)  { m.style.display = ''; });
+            conflicts.forEach(function(c) { c.style.display = ''; });
+            return;
+          }
+
+          if (filter === 'conflict') {
+            // Show debate messages + conflict strips; hide everything else
+            messages.forEach(function(m) {
+              m.style.display = (m.dataset.type === 'debate') ? '' : 'none';
+            });
+            conflicts.forEach(function(c) { c.style.display = ''; });
+            return;
+          }
+
+          // Any other single-type filter
+          messages.forEach(function(m) {
+            m.style.display = (m.dataset.type === filter) ? '' : 'none';
+          });
+          conflicts.forEach(function(c) { c.style.display = 'none'; });
+        }
+
+        tabs.forEach(function(tab) {
+          tab.addEventListener('click', function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            tab.classList.add('active');
+            applyFilter(tab.dataset.filter);
+          });
+        });
+
+        // Apply filter from URL hash if present (e.g. #filter=conflict)
+        var hashFilter = 'all';
+        try {
+          var hash = window.location.hash.replace('#', '');
+          var match = hash.match(/filter=([a-z]+)/);
+          if (match) hashFilter = match[1];
+        } catch(e) {}
+
+        // Activate correct tab
+        tabs.forEach(function(t) {
+          if (t.dataset.filter === hashFilter) t.classList.add('active');
+          else t.classList.remove('active');
+        });
+        applyFilter(hashFilter);
+      })();
+    </script>
+
+  </body>
+</html>
