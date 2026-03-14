@@ -889,7 +889,9 @@ class AgentTools:
             except Exception:
                 pass
 
-            # M5 reversal gate (strong blocks, moderate warns)
+            m5_warning = None
+
+            # M5 reversal check (warn only; never block)
             try:
                 from momentum_detector import check_m5_reversal
 
@@ -897,15 +899,13 @@ class AgentTools:
                 if isinstance(m5_check, dict) and m5_check.get("reversal_detected"):
                     strength = str(m5_check.get("reversal_strength") or "").lower()
                     if strength == "strong":
+                        m5_warning = "M5 ALERT: strong counter-movement detected"
                         desc = str(m5_check.get("description") or "M5 reversal")
-                        self._log_tool("execute_trade", start, f"{direction} | blocked | m5_reversal_strong | {desc}")
-                        return {
-                            "success": False,
-                            "reason": "M5 reversal detected — strong counter-movement, trade blocked",
-                        }
-                    if strength == "moderate":
+                        log.warning(f"AGENT_TOOL | {m5_warning} | {desc}")
+                    elif strength == "moderate":
+                        m5_warning = "M5 NOTE: moderate counter-movement"
                         desc = str(m5_check.get("description") or "M5 reversal")
-                        log.warning(f"AGENT_TOOL | M5 reversal moderate (allow): {desc}")
+                        log.warning(f"AGENT_TOOL | {m5_warning} | {desc}")
             except Exception:
                 # Fail-open: reversal check must never block execution due to tool errors
                 pass
@@ -1045,6 +1045,7 @@ class AgentTools:
                 "breakeven_trigger_pips": float(be_pips),
                 "trailing_trigger_pips": float(tr_trig_pips),
                 "trailing_distance_pips": float(tr_dist_pips),
+                "warning": m5_warning,
             }
         except Exception as e:
             self._log_tool("execute_trade", start, f"error={e}")
