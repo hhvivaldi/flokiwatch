@@ -1236,6 +1236,8 @@ function renderProactiveAnalysis(proactive, positions) {
   const section = el("proactive-section");
   if (!section) return;
 
+  const marketClosed = lastStateForProactiveCountdown?.market?.is_open === false;
+
   const hasValid = !!(proactive && proactive.decision);
   if (hasValid) {
     lastGoodProactiveAnalysis = proactive;
@@ -1301,38 +1303,56 @@ function renderProactiveAnalysis(proactive, positions) {
 
   const decisionEl = el("proactive-decision");
   if (decisionEl) {
-    decisionEl.textContent = decisionLabel(decision);
-    decisionEl.style.color = "";
-    const d = (decision || "").toUpperCase();
-    const glowClasses = ["decision-buy", "decision-sell", "decision-hold", "decision-wait", "decision-close", "decision-adjust"];
-    glowClasses.forEach(c => decisionEl.classList.remove(c));
-    if (d === "OPEN_BUY") decisionEl.classList.add("decision-buy");
-    else if (d === "OPEN_SELL") decisionEl.classList.add("decision-sell");
-    else if (d === "HOLD_TRADE") decisionEl.classList.add("decision-hold");
-    else if (d === "CLOSE_TRADE") decisionEl.classList.add("decision-close");
-    else if (d === "ADJUST_TRADE") decisionEl.classList.add("decision-adjust");
-    else decisionEl.classList.add("decision-wait");
+    if (marketClosed) {
+      decisionEl.textContent = "SLEEPING";
+      decisionEl.style.color = "";
+      const glowClasses = ["decision-buy", "decision-sell", "decision-hold", "decision-wait", "decision-close", "decision-adjust"];
+      glowClasses.forEach(c => decisionEl.classList.remove(c));
+      decisionEl.classList.add("decision-wait");
+    } else {
+      decisionEl.textContent = decisionLabel(decision);
+      decisionEl.style.color = "";
+      const d = (decision || "").toUpperCase();
+      const glowClasses = ["decision-buy", "decision-sell", "decision-hold", "decision-wait", "decision-close", "decision-adjust"];
+      glowClasses.forEach(c => decisionEl.classList.remove(c));
+      if (d === "OPEN_BUY") decisionEl.classList.add("decision-buy");
+      else if (d === "OPEN_SELL") decisionEl.classList.add("decision-sell");
+      else if (d === "HOLD_TRADE") decisionEl.classList.add("decision-hold");
+      else if (d === "CLOSE_TRADE") decisionEl.classList.add("decision-close");
+      else if (d === "ADJUST_TRADE") decisionEl.classList.add("decision-adjust");
+      else decisionEl.classList.add("decision-wait");
+    }
   }
 
   const confBarEl = el("proactive-confidence-bar");
   if (confBarEl) {
-    const confNum = Number(confidence);
-    const confSafe = Number.isFinite(confNum) ? Math.max(0, Math.min(100, confNum)) : 0;
-    confBarEl.style.width = `${confSafe}%`;
-    confBarEl.classList.remove("conf-low", "conf-mid", "conf-high");
-    if (confSafe < 55) confBarEl.classList.add("conf-low");
-    else if (confSafe < 70) confBarEl.classList.add("conf-mid");
-    else confBarEl.classList.add("conf-high");
+    if (marketClosed) {
+      confBarEl.style.width = "0%";
+      confBarEl.classList.remove("conf-low", "conf-mid", "conf-high");
+      confBarEl.classList.add("conf-mid");
+    } else {
+      const confNum = Number(confidence);
+      const confSafe = Number.isFinite(confNum) ? Math.max(0, Math.min(100, confNum)) : 0;
+      confBarEl.style.width = `${confSafe}%`;
+      confBarEl.classList.remove("conf-low", "conf-mid", "conf-high");
+      if (confSafe < 55) confBarEl.classList.add("conf-low");
+      else if (confSafe < 70) confBarEl.classList.add("conf-mid");
+      else confBarEl.classList.add("conf-high");
+    }
   }
 
   const proactivePanelEl = section.querySelector(".glass-panel");
   if (proactivePanelEl) {
     proactivePanelEl.classList.remove("proactive-panel-glow-buy", "proactive-panel-glow-sell", "proactive-panel-glow-hold", "proactive-panel-glow-wait");
-    const dUp = (decision || "").toUpperCase();
-    if (dUp === "OPEN_BUY") proactivePanelEl.classList.add("proactive-panel-glow-buy");
-    else if (dUp === "OPEN_SELL") proactivePanelEl.classList.add("proactive-panel-glow-sell");
-    else if (dUp === "HOLD_TRADE" || dUp === "ADJUST_TRADE" || dUp === "CLOSE_TRADE") proactivePanelEl.classList.add("proactive-panel-glow-hold");
-    else proactivePanelEl.classList.add("proactive-panel-glow-wait");
+    if (marketClosed) {
+      proactivePanelEl.classList.add("proactive-panel-glow-wait");
+    } else {
+      const dUp = (decision || "").toUpperCase();
+      if (dUp === "OPEN_BUY") proactivePanelEl.classList.add("proactive-panel-glow-buy");
+      else if (dUp === "OPEN_SELL") proactivePanelEl.classList.add("proactive-panel-glow-sell");
+      else if (dUp === "HOLD_TRADE" || dUp === "ADJUST_TRADE" || dUp === "CLOSE_TRADE") proactivePanelEl.classList.add("proactive-panel-glow-hold");
+      else proactivePanelEl.classList.add("proactive-panel-glow-wait");
+    }
   }
 
   // HOLD display from live positions[]
@@ -1365,7 +1385,8 @@ function renderProactiveAnalysis(proactive, positions) {
 
   const confEl = el("proactive-confidence");
   if (confEl) {
-    confEl.textContent = confidence != null ? `${confidence}%` : "—%";
+    if (marketClosed) confEl.textContent = "—%";
+    else confEl.textContent = confidence != null ? `${confidence}%` : "—%";
   }
 
   try {
