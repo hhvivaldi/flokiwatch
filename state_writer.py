@@ -101,7 +101,6 @@ def write_state(bot_instance: Any) -> None:
         if isinstance(last_analysis, dict):
             # Ensure dashboard never shows stale reactive Agent output
             last_analysis = dict(last_analysis)
-            last_analysis.pop("agent_decision", None)
 
             # Normalize fast decisions to `fast_decisions[]` (last 3, newest-first)
             try:
