@@ -1074,6 +1074,7 @@ class TradingBot:
                     momentum_data = dp.get("momentum_data") if isinstance(dp.get("momentum_data"), dict) else {}
                     news_data = dp.get("news_data") if isinstance(dp.get("news_data"), dict) else {}
                     calendar_data = dp.get("calendar_data") if isinstance(dp.get("calendar_data"), dict) else {}
+                    ml_data = dp.get("ml_data") if isinstance(dp.get("ml_data"), dict) else {}
 
                     # indicators
                     if not isinstance(dp.get("indicators"), dict) or not dp.get("indicators"):
@@ -1140,6 +1141,13 @@ class TradingBot:
                         }
                         dp["macro"] = macro
 
+                    # ml_predictions (AgentTools.get_ml_prediction expects ml/ml_predictions)
+                    if isinstance(ml_data, dict) and ml_data:
+                        if not isinstance(dp.get("ml_predictions"), dict) or not dp.get("ml_predictions"):
+                            dp["ml_predictions"] = ml_data
+                        if not isinstance(dp.get("ml"), dict) or not dp.get("ml"):
+                            dp["ml"] = ml_data
+
                     if not isinstance(dp.get("headlines"), list) or not dp.get("headlines"):
                         # Try common shapes from news provider.
                         headlines = None
@@ -1149,12 +1157,33 @@ class TradingBot:
                             headlines = None
                         if headlines is None:
                             try:
+                                headlines = news_data.get("news_headlines")
+                            except Exception:
+                                headlines = None
+                        if headlines is None:
+                            try:
                                 sentiment = news_data.get("sentiment") if isinstance(news_data.get("sentiment"), dict) else {}
                                 headlines = sentiment.get("headlines")
                             except Exception:
                                 headlines = None
+                        # Hybrid news detailed output does not include headline text; attempt alternate keys if present.
+                        if headlines is None:
+                            try:
+                                components = news_data.get("components") if isinstance(news_data.get("components"), dict) else {}
+                                hcomp = components.get("headlines") if isinstance(components.get("headlines"), dict) else {}
+                                headlines = hcomp.get("headlines")
+                            except Exception:
+                                headlines = None
                         if isinstance(headlines, list):
                             dp["headlines"] = headlines
+                            dp["news_headlines"] = headlines
+                        else:
+                            try:
+                                # Debug visibility only when missing; do not spam INFO.
+                                keys_preview = list(news_data.keys())[:25] if isinstance(news_data, dict) else []
+                                log.debug(f"AGENT_CACHE | headlines missing | news_data keys={keys_preview}")
+                            except Exception:
+                                pass
 
                     # calendar
                     if not isinstance(dp.get("calendar"), dict) or not dp.get("calendar"):
@@ -1187,10 +1216,11 @@ class TradingBot:
                                 dp["sr_zones"] = zones_out
 
                     # candles (for AgentTools.get_candles cache path)
-                    if not isinstance(dp.get("candles"), dict) or not dp.get("candles"):
-                        candles_cache = {}
+                    existing_candles = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                    candles_cache = existing_candles.copy() if isinstance(existing_candles, dict) else {}
 
-                        # H1 from df (already present in memory)
+                    # H1 from df (already present in memory)
+                    if not isinstance(candles_cache.get("H1"), list) or not candles_cache.get("H1"):
                         try:
                             h1_list = []
                             cols = set(getattr(df, "columns", []))
@@ -1234,50 +1264,52 @@ class TradingBot:
                         except Exception:
                             pass
 
-                        # M5/H4/D1 from MT5
-                        try:
-                            import MetaTrader5 as mt5
+                    # M5/H4/D1 from MT5 (backfill individual TFs)
+                    try:
+                        import MetaTrader5 as mt5
 
-                            def _rates_to_candles(rates):
-                                out = []
-                                if rates is None:
-                                    return out
-                                for r in rates:
-                                    try:
-                                        out.append(
-                                            {
-                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
-                                                "open": float(r["open"]),
-                                                "high": float(r["high"]),
-                                                "low": float(r["low"]),
-                                                "close": float(r["close"]),
-                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
-                                            }
-                                        )
-                                    except Exception:
-                                        continue
+                        def _rates_to_candles(rates):
+                            out = []
+                            if rates is None:
                                 return out
+                            for r in rates:
+                                try:
+                                    out.append(
+                                        {
+                                            "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                            "open": float(r["open"]),
+                                            "high": float(r["high"]),
+                                            "low": float(r["low"]),
+                                            "close": float(r["close"]),
+                                            "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                        }
+                                    )
+                                except Exception:
+                                    continue
+                            return out
 
-                            m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
-                            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
-                            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
-
+                        if not isinstance(candles_cache.get("M5"), list) or not candles_cache.get("M5"):
+                            m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
                             m5_list = _rates_to_candles(m5_rates)
                             if m5_list:
                                 candles_cache["M5"] = m5_list
 
+                        if not isinstance(candles_cache.get("H4"), list) or not candles_cache.get("H4"):
+                            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
 
+                        if not isinstance(candles_cache.get("D1"), list) or not candles_cache.get("D1"):
+                            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
-                        except Exception:
-                            pass
+                    except Exception:
+                        pass
 
-                        if candles_cache:
-                            dp["candles"] = candles_cache
+                    if candles_cache:
+                        dp["candles"] = candles_cache
 
                     # fibonacci (simple H1 retracement levels)
                     if not isinstance(dp.get("fibonacci"), dict) or not dp.get("fibonacci"):
