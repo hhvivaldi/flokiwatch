@@ -300,6 +300,22 @@ class AgentTools:
         except Exception:
             pass
 
+    def _log_no_cache(self, name: str, start_t: float, extra: str = "") -> None:
+        try:
+            msg = "no_cache"
+            if extra:
+                msg = f"{msg} | {extra}"
+            self._log_tool(name, start_t, msg)
+        except Exception:
+            pass
+
+    def _log_fail(self, name: str, start_t: float, reason: str) -> None:
+        try:
+            r = str(reason or "").strip()
+            self._log_tool(name, start_t, f"fail | {r}" if r else "fail")
+        except Exception:
+            pass
+
     # ---------------------------------------------------------------------
     # Market data tools (cache-only)
     # ---------------------------------------------------------------------
@@ -309,10 +325,12 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_current_price", start)
                 return self._no_cache()
 
             out = self._extract_price_from_cache(dp)
             if not out:
+                self._log_no_cache("get_current_price", start)
                 return self._no_cache()
 
             self._log_tool("get_current_price", start, f"bid={out.get('bid')} ask={out.get('ask')}")
@@ -493,6 +511,7 @@ class AgentTools:
         try:
             tf = str(timeframe or "").upper().strip()
             if tf not in ("M5", "H1", "H4", "D1"):
+                self._log_fail("get_candles", start, "unsupported timeframe")
                 return {"success": False, "reason": "unsupported timeframe"}
 
             try:
@@ -500,6 +519,7 @@ class AgentTools:
             except Exception:
                 c = 0
             if c <= 0:
+                self._log_fail("get_candles", start, "count must be positive")
                 return {"success": False, "reason": "count must be positive"}
             c = min(c, 50)
 
@@ -521,12 +541,14 @@ class AgentTools:
             if candles is None and tf == "H1":
                 df = self._last_df()
                 if df is None:
+                    self._log_no_cache("get_candles", start, f"{tf} x {c}")
                     return self._no_cache()
                 try:
                     # Expect columns: time, open, high, low, close, tick_volume/volume
                     cols = set(getattr(df, "columns", []))
                     required = {"open", "high", "low", "close"}
                     if not required.issubset(cols):
+                        self._log_fail("get_candles", start, "missing cached df columns")
                         return {"success": False, "reason": "missing cached df columns"}
 
                     tail = df.tail(c)
@@ -561,9 +583,11 @@ class AgentTools:
                         )
                     candles = out_list
                 except Exception:
+                    self._log_fail("get_candles", start, "failed to build candles from cache")
                     return {"success": False, "reason": "failed to build candles from cache"}
 
             if candles is None:
+                self._log_no_cache("get_candles", start, f"{tf} x {c}")
                 return self._no_cache()
 
             candles = candles[-c:]
@@ -578,10 +602,12 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_indicators", start)
                 return self._no_cache()
 
             ind = dp.get("indicators")
             if not isinstance(ind, dict) or not ind:
+                self._log_no_cache("get_indicators", start)
                 return self._no_cache()
 
             # Return a simplified, model-friendly view while preserving numeric values.
@@ -647,6 +673,7 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_sr_zones", start)
                 return self._no_cache()
 
             sr = dp.get("sr_zones") or dp.get("support_resistance")
@@ -656,6 +683,7 @@ class AgentTools:
                 zones = sr
 
             if not isinstance(zones, list) or not zones:
+                self._log_no_cache("get_sr_zones", start)
                 return self._no_cache()
 
             self._log_tool("get_sr_zones", start, f"zones={len(zones)}")
@@ -669,14 +697,17 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
             fib = dp.get("fibonacci") or dp.get("fib")
             if not isinstance(fib, dict) or not fib:
+                self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
             levels = fib.get("levels") if isinstance(fib.get("levels"), dict) else fib.get("levels")
             if not isinstance(levels, dict) or not levels:
+                self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
             out = {
@@ -699,6 +730,7 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_headlines", start)
                 return self._no_cache()
 
             news = dp.get("headlines") or dp.get("news") or dp.get("news_headlines")
@@ -708,6 +740,7 @@ class AgentTools:
                 headlines = news
 
             if not isinstance(headlines, list):
+                self._log_no_cache("get_headlines", start)
                 return self._no_cache()
 
             out = {"headlines": headlines[:10], "count": min(len(headlines), 10)}
@@ -722,10 +755,12 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_macro", start)
                 return self._no_cache()
 
             macro = dp.get("macro")
             if not isinstance(macro, dict) or not macro:
+                self._log_no_cache("get_macro", start)
                 return self._no_cache()
 
             self._log_tool("get_macro", start)
@@ -739,10 +774,12 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_calendar", start)
                 return self._no_cache()
 
             cal = dp.get("calendar") or dp.get("economic_calendar")
             if not isinstance(cal, dict) or not cal:
+                self._log_no_cache("get_calendar", start)
                 return self._no_cache()
 
             self._log_tool("get_calendar", start)
@@ -756,10 +793,12 @@ class AgentTools:
         try:
             dp = self._last_agent_data()
             if not dp:
+                self._log_no_cache("get_ml_prediction", start)
                 return self._no_cache()
 
             ml = dp.get("ml") or dp.get("ml_prediction") or dp.get("ml_predictions")
             if not isinstance(ml, dict) or not ml:
+                self._log_no_cache("get_ml_prediction", start)
                 return self._no_cache()
 
             self._log_tool("get_ml_prediction", start)
