@@ -1279,6 +1279,29 @@ class TradingBot:
                         if candles_cache:
                             dp["candles"] = candles_cache
 
+                    # fibonacci (simple H1 retracement levels)
+                    if not isinstance(dp.get("fibonacci"), dict) or not dp.get("fibonacci"):
+                        try:
+                            lookback = 20
+                            if len(df) >= 2:
+                                tail = df.tail(lookback)
+                                swing_high = float(tail["high"].max())
+                                swing_low = float(tail["low"].min())
+                                rng = swing_high - swing_low
+                                if rng > 0:
+                                    dp["fibonacci"] = {
+                                        "swing_high": swing_high,
+                                        "swing_low": swing_low,
+                                        "levels": {
+                                            "23.6": swing_high - (rng * 0.236),
+                                            "38.2": swing_high - (rng * 0.382),
+                                            "50.0": swing_high - (rng * 0.500),
+                                            "61.8": swing_high - (rng * 0.618),
+                                        },
+                                    }
+                        except Exception:
+                            pass
+
                     # current_price: convert float to expected bid/ask dict shape
                     cp = dp.get("current_price")
                     if not isinstance(cp, dict):
