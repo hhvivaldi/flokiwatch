@@ -2520,12 +2520,14 @@ class TradingBot:
         log.info(f"{trigger_type} | Calling AI Agent (tool-driven) | ts: {snapshot_time_iso}")
 
         try:
-            # Ensure M5 candles exist in cached agent_data for tool-driven investigation (non-blocking)
+            # Ensure M5/H4/D1 candles exist in cached agent_data for tool-driven investigation (non-blocking)
             try:
                 dp = agent_data if isinstance(agent_data, dict) else None
                 if dp is not None:
                     cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
                     have_m5 = isinstance(cds.get("M5"), list) and bool(cds.get("M5"))
+                    have_h4 = isinstance(cds.get("H4"), list) and bool(cds.get("H4"))
+                    have_d1 = isinstance(cds.get("D1"), list) and bool(cds.get("D1"))
                     if not have_m5:
                         try:
                             import MetaTrader5 as mt5
@@ -2553,6 +2555,106 @@ class TradingBot:
                                 dp["candles"] = cds
                         except Exception:
                             pass
+
+                    if not have_h4:
+                        try:
+                            import MetaTrader5 as mt5
+
+                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
+                            h4_list = []
+                            if rates is not None:
+                                for r in rates:
+                                    try:
+                                        h4_list.append(
+                                            {
+                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                                "open": float(r["open"]),
+                                                "high": float(r["high"]),
+                                                "low": float(r["low"]),
+                                                "close": float(r["close"]),
+                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                            }
+                                        )
+                                    except Exception:
+                                        continue
+                            if h4_list:
+                                cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                                cds = cds.copy() if isinstance(cds, dict) else {}
+                                cds["H4"] = h4_list
+                                dp["candles"] = cds
+                        except Exception:
+                            pass
+
+                    if not have_d1:
+                        try:
+                            import MetaTrader5 as mt5
+
+                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+                            d1_list = []
+                            if rates is not None:
+                                for r in rates:
+                                    try:
+                                        d1_list.append(
+                                            {
+                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                                "open": float(r["open"]),
+                                                "high": float(r["high"]),
+                                                "low": float(r["low"]),
+                                                "close": float(r["close"]),
+                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                            }
+                                        )
+                                    except Exception:
+                                        continue
+                            if d1_list:
+                                cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                                cds = cds.copy() if isinstance(cds, dict) else {}
+                                cds["D1"] = d1_list
+                                dp["candles"] = cds
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # Ensure headlines exist for tool-driven investigation (non-blocking)
+            try:
+                dp = agent_data if isinstance(agent_data, dict) else None
+                if dp is not None:
+                    existing = dp.get("headlines") or dp.get("news_headlines")
+                    have = isinstance(existing, list) and bool(existing)
+                    if not have:
+                        headlines_out = None
+                        try:
+                            from news_score_hybrid import get_hybrid_score_cached
+
+                            cached = get_hybrid_score_cached()
+                            result = cached.get("result", {})
+                            comps = result.get("components", {}) if isinstance(result.get("components", {}), dict) else {}
+                            raw = comps.get("headlines", {}).get("details", [])
+                            if isinstance(raw, list) and raw:
+                                titles = []
+                                for h in raw[:10]:
+                                    try:
+                                        t = h.get("title") if isinstance(h, dict) else None
+                                        if isinstance(t, str) and t.strip():
+                                            titles.append(t.strip())
+                                    except Exception:
+                                        continue
+                                if titles:
+                                    headlines_out = titles
+                        except Exception:
+                            headlines_out = None
+
+                        if isinstance(headlines_out, list) and headlines_out:
+                            dp["headlines"] = headlines_out
+                            dp["news_headlines"] = headlines_out
+                        else:
+                            try:
+                                news_data = dp.get("news_data") if isinstance(dp.get("news_data"), dict) else {}
+                                keys_preview = list(news_data.keys())[:25] if isinstance(news_data, dict) else []
+                                log.debug(f"AGENT_CACHE | headlines missing (proactive) | news_data keys={keys_preview}")
+                            except Exception:
+                                pass
             except Exception:
                 pass
 
