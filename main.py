@@ -1061,6 +1061,149 @@ class TradingBot:
             except Exception:
                 pass
 
+            # ------------------------------------------------------------
+            # AGENT TOOL CACHE BRIDGE (non-blocking)
+            # The Scanner returns agent_data with keys like tech_data/news_data/calendar_data,
+            # while AgentTools expects dp['indicators'], dp['macro'], dp['calendar'], etc.
+            # Enrich the cached dict in-place so tool-driven Agent investigations have data.
+            # ------------------------------------------------------------
+            try:
+                dp = agent_data if isinstance(agent_data, dict) else None
+                if dp is not None:
+                    tech_data = dp.get("tech_data") if isinstance(dp.get("tech_data"), dict) else {}
+                    momentum_data = dp.get("momentum_data") if isinstance(dp.get("momentum_data"), dict) else {}
+                    news_data = dp.get("news_data") if isinstance(dp.get("news_data"), dict) else {}
+                    calendar_data = dp.get("calendar_data") if isinstance(dp.get("calendar_data"), dict) else {}
+
+                    # indicators
+                    if not isinstance(dp.get("indicators"), dict) or not dp.get("indicators"):
+                        indicators = {}
+                        try:
+                            indicators["rsi"] = tech_data.get("rsi") if isinstance(tech_data.get("rsi"), dict) else {}
+                        except Exception:
+                            indicators["rsi"] = {}
+                        try:
+                            macd = tech_data.get("macd") if isinstance(tech_data.get("macd"), dict) else {}
+                            indicators["macd"] = {
+                                "value": macd.get("macd") if macd else None,
+                                "signal": macd.get("signal") if macd else None,
+                                "histogram": macd.get("histogram") if macd else None,
+                            }
+                        except Exception:
+                            indicators["macd"] = {}
+                        try:
+                            ema = tech_data.get("ema") if isinstance(tech_data.get("ema"), dict) else {}
+                            indicators["emas"] = {
+                                "ema200": ema.get("ema200"),
+                            }
+                        except Exception:
+                            indicators["emas"] = {}
+                        try:
+                            atr_block = (momentum_data.get("atr") if isinstance(momentum_data.get("atr"), dict) else {})
+                            atr_val = atr_block.get("atr_value") if "atr_value" in atr_block else atr_block.get("atr_current")
+                            indicators["atr"] = {"value": atr_val}
+                        except Exception:
+                            indicators["atr"] = {}
+                        try:
+                            adx_block = (momentum_data.get("adx") if isinstance(momentum_data.get("adx"), dict) else {})
+                            indicators["adx"] = {
+                                "value": adx_block.get("adx_value"),
+                                "plus_di": adx_block.get("plus_di"),
+                                "minus_di": adx_block.get("minus_di"),
+                            }
+                        except Exception:
+                            indicators["adx"] = {}
+                        try:
+                            bb = tech_data.get("bollinger") if isinstance(tech_data.get("bollinger"), dict) else {}
+                            indicators["bollinger"] = {
+                                "upper": bb.get("upper"),
+                                "middle": bb.get("middle"),
+                                "lower": bb.get("lower"),
+                                "position_pct": bb.get("position_pct"),
+                            }
+                        except Exception:
+                            indicators["bollinger"] = {}
+                        dp["indicators"] = indicators
+
+                    # macro + headlines
+                    if not isinstance(dp.get("macro"), dict) or not dp.get("macro"):
+                        macro = {
+                            "score": news_data.get("score"),
+                            "dxy": news_data.get("dxy"),
+                            "yields": news_data.get("yields"),
+                            "vix": news_data.get("vix"),
+                            "sentiment": news_data.get("sentiment"),
+                            "high_impact_news_soon": news_data.get("high_impact_news_soon"),
+                            "geopolitical_risk": news_data.get("geopolitical_risk"),
+                            "anomalies": news_data.get("anomalies"),
+                            "calendar": calendar_data,
+                        }
+                        dp["macro"] = macro
+
+                    if not isinstance(dp.get("headlines"), list) or not dp.get("headlines"):
+                        # Try common shapes from news provider.
+                        headlines = None
+                        try:
+                            headlines = news_data.get("headlines")
+                        except Exception:
+                            headlines = None
+                        if headlines is None:
+                            try:
+                                sentiment = news_data.get("sentiment") if isinstance(news_data.get("sentiment"), dict) else {}
+                                headlines = sentiment.get("headlines")
+                            except Exception:
+                                headlines = None
+                        if isinstance(headlines, list):
+                            dp["headlines"] = headlines
+
+                    # calendar
+                    if not isinstance(dp.get("calendar"), dict) or not dp.get("calendar"):
+                        if isinstance(calendar_data, dict) and calendar_data:
+                            dp["calendar"] = calendar_data
+
+                    # sr_zones: use cached zones already computed this cycle
+                    if not isinstance(dp.get("sr_zones"), list) or not dp.get("sr_zones"):
+                        sr_zones = getattr(self, "_last_sr_zones", None)
+                        if isinstance(sr_zones, list) and sr_zones:
+                            zones_out = []
+                            for z in sr_zones:
+                                try:
+                                    zones_out.append(
+                                        {
+                                            "timeframe": getattr(z, "timeframe", None),
+                                            "zone_type": getattr(z, "zone_type", None),
+                                            "price_low": getattr(z, "price_low", None),
+                                            "price_high": getattr(z, "price_high", None),
+                                            "midpoint": getattr(z, "midpoint", None),
+                                            "touches": getattr(z, "touches", None),
+                                            "strength": getattr(z, "strength", None),
+                                            "confluence": getattr(z, "confluence", None),
+                                            "age_bars": getattr(z, "age_bars", None),
+                                        }
+                                    )
+                                except Exception:
+                                    continue
+                            if zones_out:
+                                dp["sr_zones"] = zones_out
+
+                    # current_price: convert float to expected bid/ask dict shape
+                    cp = dp.get("current_price")
+                    if not isinstance(cp, dict):
+                        try:
+                            price_f = float(cp) if cp is not None else None
+                        except Exception:
+                            price_f = None
+                        if price_f is not None:
+                            dp["current_price"] = {
+                                "bid": price_f,
+                                "ask": price_f,
+                                "spread": 0.0,
+                                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                            }
+            except Exception:
+                # Never block trading loop due to cache enrichment
+                pass
+
             # ================================================================
             # PROACTIVE AI AGENT (H1 snapshot) — shadow mode, diagnostic only
             # Runs once per closed H1 candle when market is open.
