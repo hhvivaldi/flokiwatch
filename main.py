@@ -1186,6 +1186,99 @@ class TradingBot:
                             if zones_out:
                                 dp["sr_zones"] = zones_out
 
+                    # candles (for AgentTools.get_candles cache path)
+                    if not isinstance(dp.get("candles"), dict) or not dp.get("candles"):
+                        candles_cache = {}
+
+                        # H1 from df (already present in memory)
+                        try:
+                            h1_list = []
+                            cols = set(getattr(df, "columns", []))
+                            for i in range(max(0, len(df) - 50), len(df)):
+                                row = df.iloc[i]
+                                t = None
+                                if "time" in cols:
+                                    try:
+                                        t = row.get("time")
+                                        t = t.isoformat() if hasattr(t, "isoformat") else str(t)
+                                    except Exception:
+                                        t = None
+                                elif "datetime" in cols:
+                                    try:
+                                        t = row.get("datetime")
+                                        t = t.isoformat() if hasattr(t, "isoformat") else str(t)
+                                    except Exception:
+                                        t = str(row.get("datetime", ""))
+
+                                vol = 0.0
+                                try:
+                                    if "tick_volume" in cols:
+                                        vol = float(row.get("tick_volume") or 0.0)
+                                    elif "volume" in cols:
+                                        vol = float(row.get("volume") or 0.0)
+                                except Exception:
+                                    vol = 0.0
+
+                                h1_list.append(
+                                    {
+                                        "time": t,
+                                        "open": float(row["open"]),
+                                        "high": float(row["high"]),
+                                        "low": float(row["low"]),
+                                        "close": float(row["close"]),
+                                        "volume": vol,
+                                    }
+                                )
+                            if h1_list:
+                                candles_cache["H1"] = h1_list
+                        except Exception:
+                            pass
+
+                        # M5/H4/D1 from MT5
+                        try:
+                            import MetaTrader5 as mt5
+
+                            def _rates_to_candles(rates):
+                                out = []
+                                if rates is None:
+                                    return out
+                                for r in rates:
+                                    try:
+                                        out.append(
+                                            {
+                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                                "open": float(r["open"]),
+                                                "high": float(r["high"]),
+                                                "low": float(r["low"]),
+                                                "close": float(r["close"]),
+                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                            }
+                                        )
+                                    except Exception:
+                                        continue
+                                return out
+
+                            m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
+                            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
+                            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+
+                            m5_list = _rates_to_candles(m5_rates)
+                            if m5_list:
+                                candles_cache["M5"] = m5_list
+
+                            h4_list = _rates_to_candles(h4_rates)
+                            if h4_list:
+                                candles_cache["H4"] = h4_list
+
+                            d1_list = _rates_to_candles(d1_rates)
+                            if d1_list:
+                                candles_cache["D1"] = d1_list
+                        except Exception:
+                            pass
+
+                        if candles_cache:
+                            dp["candles"] = candles_cache
+
                     # current_price: convert float to expected bid/ask dict shape
                     cp = dp.get("current_price")
                     if not isinstance(cp, dict):
