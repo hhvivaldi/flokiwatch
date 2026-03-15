@@ -798,7 +798,14 @@ class PositionMonitor:
                 )
 
                 if not is_pending:
-                    _record_synthetic_agent_close(profit_balance if profit_balance is not None else profit)
+                    try:
+                        self._append_agent_monitor_event(
+                            event="BROKER_CLOSE",
+                            ticket=ticket,
+                            details=f"reason={reason} | profit=${profit:+.2f} | close_price={close_price:.2f}",
+                        )
+                    except Exception:
+                        pass
                 
                 # Determine close_type for dynamic cooldown
                 had_trailing = ticket in self.trailing_sl
@@ -855,7 +862,14 @@ class PositionMonitor:
                 )
 
                 if not is_pending:
-                    _record_synthetic_agent_close(profit_balance if profit_balance is not None else profit)
+                    try:
+                        self._append_agent_monitor_event(
+                            event="BROKER_CLOSE",
+                            ticket=ticket,
+                            details=f"reason=details_unavailable | profit=${profit:+.2f}",
+                        )
+                    except Exception:
+                        pass
                 
                 actions.append({
                     'action': 'BROKER_CLOSE',
