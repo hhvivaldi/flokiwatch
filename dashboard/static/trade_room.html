@@ -1022,10 +1022,13 @@
 
             // Right panel from /api/state
             if (state) {
-              var price = (state.account || {}).price || state.price || null;
-              // real schema: state may have account stats + last_analysis
-              var px = (state.last_analysis && state.last_analysis.price) ? state.last_analysis.price : null;
-              var showPrice = px || (state.account && state.account.price) || (state.market && state.market.price) || null;
+              // NOTE: authoritative state paths:
+              // - Price: state.last_analysis.current_price (fallback: state.last_known_price)
+              // - Macro: state.last_analysis.intel_feed.macro.{dxy|vix|yields}
+              // - Indicators: state.last_analysis.indicators.*
+              var showPrice = (state.last_analysis && state.last_analysis.current_price != null)
+                ? state.last_analysis.current_price
+                : (state.last_known_price != null ? state.last_known_price : null);
               var priceEl = document.getElementById('ctx-price');
               if (priceEl) priceEl.textContent = showPrice !== null && showPrice !== undefined ? String(showPrice) : '—';
 
@@ -1095,13 +1098,48 @@
 
                 // Bollinger position
                 var bbPos = ind.bb_position;
+                // Backwards-compatible fallbacks
+                if ((bbPos === null || bbPos === undefined) && ind.bollinger_position != null) bbPos = ind.bollinger_position;
+                if ((bbPos === null || bbPos === undefined) && la.bb_position != null) bbPos = la.bb_position;
                 var bbText = null;
-                if (bbPos !== null && bbPos !== undefined && isFinite(Number(bbPos))) {
-                  var bp = Number(bbPos);
-                  if (bp <= 1) bp = bp * 100;
-                  bbText = bp.toFixed(0) + '% position';
+                if (bbPos !== null && bbPos !== undefined) {
+                  if (isFinite(Number(bbPos))) {
+                    var bp = Number(bbPos);
+                    if (bp <= 1) bp = bp * 100;
+                    bbText = bp.toFixed(0) + '% position';
+                  } else {
+                    var bbs = String(bbPos || '').toLowerCase();
+                    // Common labels from technical_analyzer / tech_data
+                    if (bbs.includes('inferior') || bbs.includes('lower')) bbText = '10% position';
+                    else if (bbs.includes('superior') || bbs.includes('upper')) bbText = '90% position';
+                    else if (bbs.includes('meio') || bbs.includes('middle') || bbs.includes('mid')) bbText = '50% position';
+                    else bbText = String(bbPos);
+                  }
                 }
                 setIndicator('ctx-bb', bbText);
+              } catch(e) {}
+
+              // Macro from last_analysis.intel_feed.macro
+              try {
+                var la2 = state.last_analysis || {};
+                var intel = la2.intel_feed || {};
+                var macro = intel.macro || {};
+                var dxy = macro.dxy || {};
+                var vix = macro.vix || {};
+                var yields = macro.yields || {};
+
+                var dxyVal = (dxy.value != null) ? Number(dxy.value) : null;
+                var vixVal = (vix.value != null) ? Number(vix.value) : null;
+                var y10Val = (yields.value != null) ? Number(yields.value) : null;
+
+                var dxyEl = document.getElementById('ctx-dxy');
+                if (dxyEl) dxyEl.textContent = (dxyVal != null && isFinite(dxyVal)) ? dxyVal.toFixed(2) : '—';
+
+                var vixEl = document.getElementById('ctx-vix');
+                if (vixEl) vixEl.textContent = (vixVal != null && isFinite(vixVal)) ? vixVal.toFixed(2) : '—';
+
+                var y10El = document.getElementById('ctx-10y');
+                if (y10El) y10El.textContent = (y10Val != null && isFinite(y10Val)) ? y10Val.toFixed(2) + '%' : '—';
               } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
