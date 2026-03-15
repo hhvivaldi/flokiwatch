@@ -2520,6 +2520,42 @@ class TradingBot:
         log.info(f"{trigger_type} | Calling AI Agent (tool-driven) | ts: {snapshot_time_iso}")
 
         try:
+            # Ensure M5 candles exist in cached agent_data for tool-driven investigation (non-blocking)
+            try:
+                dp = agent_data if isinstance(agent_data, dict) else None
+                if dp is not None:
+                    cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                    have_m5 = isinstance(cds.get("M5"), list) and bool(cds.get("M5"))
+                    if not have_m5:
+                        try:
+                            import MetaTrader5 as mt5
+
+                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
+                            m5_list = []
+                            if rates is not None:
+                                for r in rates:
+                                    try:
+                                        m5_list.append(
+                                            {
+                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                                "open": float(r["open"]),
+                                                "high": float(r["high"]),
+                                                "low": float(r["low"]),
+                                                "close": float(r["close"]),
+                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                            }
+                                        )
+                                    except Exception:
+                                        continue
+                            if m5_list:
+                                cds = cds.copy() if isinstance(cds, dict) else {}
+                                cds["M5"] = m5_list
+                                dp["candles"] = cds
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
             trigger_context = f"{trigger_type} snapshot at {snapshot_time_iso}. Session: {get_session_name(datetime.utcnow().hour)}. "
             if isinstance(trigger_data, dict) and trigger_data:
                 trigger_context += f"Trigger data: {trigger_data}. "

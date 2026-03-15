@@ -347,4 +347,5 @@ EA_STATUS_JSON_PATH = os.environ.get("EA_STATUS_JSON_PATH", r"C:\Users\Hermano\A
 USE_AI_AGENT = True                       # True = enable AI Agent, False = Brain-only mode
 AI_AGENT_MODE = "active"                  # shadow = Agent decides but Brain executes | gate = Agent controls entry | full = Agent controls all
 AI_AGENT_MODEL = "claude-sonnet-4-20250514"  # Claude model to use
-AI_AGENT_TIMEOUT = 60                     # Timeout in seconds for API calls
+AI_AGENT_TIMEOUT = 120                    # Timeout in seconds for API calls
+AI_AGENT_MAX_TOOL_CALLS = 25              # Max tool calls per decision (investigation + debate + execution)
