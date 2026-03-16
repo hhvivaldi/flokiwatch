@@ -2849,7 +2849,7 @@ class TradingBot:
                 if not isinstance(tp, dict):
                     log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
                 else:
-                    entry_price = tp.get("entry")
+                    entry_price = tp.get("entry") or tp.get("entry_price")
                     stop_loss = tp.get("stop_loss")
                     take_profit = tp.get("take_profit")
                     if entry_price is None or stop_loss is None or take_profit is None:
