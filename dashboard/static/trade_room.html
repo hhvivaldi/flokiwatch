@@ -534,6 +534,35 @@
           </div>
         </div>
 
+        <!-- SIMBA card -->
+        <div class="glass-panel-deep rounded-xl p-4" id="simba-card">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="agent-avatar avatar-rex" id="avatar-simba" aria-label="SIMBA avatar" data-agent="simba" data-rotate-ms="60000">
+              <span>SI</span>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SIMBA</span>
+                <span class="status-tag">WATCHDOG</span>
+              </div>
+              <div class="mt-1.5">
+                <span id="simba-status-pill" class="decision-pill pill-standby">OFF</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5 mb-3">
+            <div class="flex justify-between items-center px-0.5">
+              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONDITIONS</span>
+              <span id="simba-conditions-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+            </div>
+            <div class="confidence-bar-track"><div id="simba-conditions-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span id="simba-mode-tag" class="status-tag"><span class="dot-gray"></span>OFF</span>
+            <span id="simba-summary-tag" class="status-tag">—</span>
+          </div>
+        </div>
+
         <!-- Agreement / Conflict banner -->
         <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
 
@@ -839,17 +868,8 @@
             feed.innerHTML = '<div class="text-xs font-mono text-gray-600 p-4">NO MESSAGES MATCHING FILTER</div>';
             return;
           }
-          feed.innerHTML = html;
-        }
 
-        // Init avatar videos
-        try {
-          rotateAvatarsOnce();
-          setInterval(function () {
-            try { rotateAvatarsOnce(); } catch(e) {}
-          }, AVATAR_ROTATE_MS);
-        } catch (e) {
-          // silent
+          feed.innerHTML = html;
         }
 
         function setFilter(f) {
@@ -870,6 +890,57 @@
           else if (d.indexOf('HOLD') >= 0) el.classList.add('pill-hold');
           else el.classList.add('pill-wait');
           el.textContent = d ? d.replaceAll('_',' ') : '—';
+        }
+
+        function renderSimbaFromState(state) {
+          try {
+            var pill = document.getElementById('simba-status-pill');
+            var condText = document.getElementById('simba-conditions-text');
+            var condBar = document.getElementById('simba-conditions-bar');
+            var modeTag = document.getElementById('simba-mode-tag');
+            var summaryTag = document.getElementById('simba-summary-tag');
+
+            if (!pill || !condText || !condBar || !modeTag || !summaryTag) return;
+
+            var last = (state && state.last_analysis) ? state.last_analysis : {};
+            var simba = last.simba || null;
+
+            if (!simba || !simba.decision) {
+              pill.textContent = 'OFF';
+              pill.className = 'decision-pill pill-standby';
+              condText.textContent = '—';
+              condBar.style.width = '0%';
+              modeTag.innerHTML = '<span class="dot-gray"></span>OFF';
+              summaryTag.textContent = '—';
+              return;
+            }
+
+            var decision = (simba.decision || '').toString().toUpperCase();
+            var checked = parseInt(simba.checked_count || 0, 10);
+            var met = parseInt(simba.met_count || 0, 10);
+            if (isNaN(checked)) checked = 0;
+            if (isNaN(met)) met = 0;
+            var pct = 0;
+            if (checked > 0) pct = Math.max(0, Math.min(100, Math.round((met / checked) * 100)));
+
+            condText.textContent = met + '/' + checked + ' met';
+            condBar.style.width = pct + '%';
+
+            var summary = (simba.summary || '').toString();
+            summaryTag.textContent = summary ? summary : '—';
+
+            if (decision === 'WAKE') {
+              pill.textContent = 'ALERT';
+              pill.className = 'decision-pill pill-hold';
+              modeTag.innerHTML = '<span class="dot-green"></span>ALERT';
+            } else {
+              pill.textContent = 'MONITOR';
+              pill.className = 'decision-pill pill-wait';
+              modeTag.innerHTML = '<span class="dot-gray"></span>MONITORING';
+            }
+          } catch (e) {
+            // silent
+          }
         }
 
         function setConfBar(barEl, textEl, conf) {
@@ -937,8 +1008,14 @@
 
             var flokiCard = document.getElementById('floki-card');
             var rexCard = document.getElementById('rex-card');
+            var simbaCard = document.getElementById('simba-card');
             if (flokiCard) flokiCard.classList.toggle('opacity-60', marketClosed);
             if (rexCard) rexCard.classList.toggle('opacity-60', marketClosed);
+            if (simbaCard) simbaCard.classList.toggle('opacity-60', marketClosed);
+
+            try {
+              renderSimbaFromState(state);
+            } catch (e) {}
 
             if (marketClosed) {
               var flokiPill = document.getElementById('floki-decision-pill');
