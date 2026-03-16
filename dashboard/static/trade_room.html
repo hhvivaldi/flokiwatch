@@ -762,6 +762,16 @@
             if (t === 'TRADE_RESULT') icon = '📈 ';
 
             var content = (m.content || '').toString();
+            // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
+            try {
+              var cut = content.length;
+              var kd = content.indexOf('KEY DATA:');
+              if (kd >= 0 && kd < cut) cut = kd;
+              var kf = content.indexOf('KEY FACTORS:');
+              if (kf >= 0 && kf < cut) cut = kf;
+              if (cut !== content.length) content = content.slice(0, cut);
+              content = content.replace(/\s+$/g, '');
+            } catch (e) {}
             content = esc(content).replaceAll('\n', '<br>');
 
             html += '<div class="' + rowCls + '" data-type="' + esc(dataType(m.type)) + '">' +
