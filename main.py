@@ -1302,12 +1302,6 @@ class TradingBot:
                             have_m5 = False
                         if not have_m5:
                             m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | M5 backfill attempt | rates={type(m5_rates).__name__} len={len(m5_rates) if m5_rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
                             m5_list = _rates_to_candles(m5_rates)
                             if m5_list:
                                 candles_cache["M5"] = m5_list
@@ -1318,12 +1312,6 @@ class TradingBot:
                             have_h4 = False
                         if not have_h4:
                             h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | H4 backfill attempt | rates={type(h4_rates).__name__} len={len(h4_rates) if h4_rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
@@ -1334,12 +1322,6 @@ class TradingBot:
                             have_d1 = False
                         if not have_d1:
                             d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | D1 backfill attempt | rates={type(d1_rates).__name__} len={len(d1_rates) if d1_rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
@@ -2801,20 +2783,6 @@ class TradingBot:
                         self._last_agent_data = agent_data
                     except Exception:
                         pass
-            except Exception:
-                pass
-
-            try:
-                keys = []
-                try:
-                    cds = agent_data.get("candles", {}) if isinstance(agent_data, dict) else {}
-                    if isinstance(cds, dict):
-                        keys = list(cds.keys())
-                    else:
-                        keys = []
-                except Exception:
-                    keys = []
-                log.info(f"AGENT_CACHE | pre-decide check | candles_keys={keys}")
             except Exception:
                 pass
 
