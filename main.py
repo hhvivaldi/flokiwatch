@@ -1290,18 +1290,36 @@ class TradingBot:
 
                         if not isinstance(candles_cache.get("M5"), list) or not candles_cache.get("M5"):
                             m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | M5 backfill attempt | rates={type(m5_rates).__name__} len={len(m5_rates) if m5_rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             m5_list = _rates_to_candles(m5_rates)
                             if m5_list:
                                 candles_cache["M5"] = m5_list
 
                         if not isinstance(candles_cache.get("H4"), list) or not candles_cache.get("H4"):
                             h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | H4 backfill attempt | rates={type(h4_rates).__name__} len={len(h4_rates) if h4_rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
 
                         if not isinstance(candles_cache.get("D1"), list) or not candles_cache.get("D1"):
                             d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | D1 backfill attempt | rates={type(d1_rates).__name__} len={len(d1_rates) if d1_rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
@@ -2533,6 +2551,12 @@ class TradingBot:
                             import MetaTrader5 as mt5
 
                             rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | M5 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             m5_list = []
                             if rates is not None:
                                 for r in rates:
@@ -2561,6 +2585,12 @@ class TradingBot:
                             import MetaTrader5 as mt5
 
                             rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | H4 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             h4_list = []
                             if rates is not None:
                                 for r in rates:
@@ -2590,6 +2620,12 @@ class TradingBot:
                             import MetaTrader5 as mt5
 
                             rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | D1 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
+                                )
+                            except Exception:
+                                pass
                             d1_list = []
                             if rates is not None:
                                 for r in rates:
