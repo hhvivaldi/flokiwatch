@@ -88,6 +88,17 @@
 | `last_analysis.original_decision` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
 | `last_analysis.hold_reason` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
 
+### `last_analysis.simba` Object (Simba Watcher)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `last_analysis.simba.decision` | string (`"SLEEP"` \| `"WAKE"`) | `main.py` | `dashboard/static/trade_room.html` → Simba card |
+| `last_analysis.simba.triggered` | array | `main.py` | Trade Room Simba card |
+| `last_analysis.simba.checked_count` | int | `main.py` | Trade Room Simba card |
+| `last_analysis.simba.met_count` | int | `main.py` | Trade Room Simba card |
+| `last_analysis.simba.summary` | string | `main.py` | Trade Room Simba card |
+| `last_analysis.simba.timestamp` | string (ISO) | `main.py` | Trade Room Simba card |
+
 ### `last_analysis.intel_feed` Object (OSINT)
 
 | Field | Type | Writer | Reader (app.js) |
@@ -475,6 +486,17 @@ The following elements have been added to the dashboard:
 |------------|-------------|-------------|
 | `ea-bridge-status` | `state.ea_bridge.enabled/online` | Shows "OFF", "ONLINE", or "FALLBACK" |
 | `ea-spread` | `state.ea_bridge.spread_pips` | Real-time spread from EA (e.g., "3.2p") |
+
+### Trade Room (dashboard/static/trade_room.html)
+
+| Element ID | Data Source | Description |
+|------------|-------------|-------------|
+| `simba-card` | `state.last_analysis.simba` | Container card for Simba |
+| `simba-status-pill` | `state.last_analysis.simba.decision` | Shows OFF/MONITOR/ALERT |
+| `simba-conditions-text` | `state.last_analysis.simba.met_count/checked_count` | Displays conditions met vs checked |
+| `simba-conditions-bar` | derived from met/checked | Progress bar for met ratio |
+| `simba-mode-tag` | derived from decision | OFF/MONITORING/ALERT tag |
+| `simba-summary-tag` | `state.last_analysis.simba.summary` | Human summary of why Simba chose sleep/wake |
 
 **Note:** `position-phase` (OPEN/BREAKEVEN/TRAILING) is deferred until EA Bridge is enabled for live trading.
 
