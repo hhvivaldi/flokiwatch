@@ -44,6 +44,12 @@ if _dotenv_available:
 
 STATE_FILE = Path(os.environ.get("DASHBOARD_STATE_FILE", str(APP_DIR / ".." / "data" / "bot_state.json"))).resolve()
 HISTORY_DB = Path(os.environ.get("HISTORY_DB_PATH", str(APP_DIR / ".." / "data" / "history.db"))).resolve()
+WATCH_CONDITIONS_FILE = Path(
+    os.environ.get(
+        "AGENT_WATCH_CONDITIONS_FILE",
+        str(APP_DIR / ".." / "data" / "agent_watch_conditions.json"),
+    )
+).resolve()
 OFFLINE_AFTER_SECONDS = int(os.environ.get("DASHBOARD_OFFLINE_AFTER_SECONDS", "60"))
 
 
@@ -648,6 +654,19 @@ def trade_room_api(limit: int = 50):
         return JSONResponse({"messages": msgs})
     except Exception:
         return JSONResponse({"messages": []})
+
+
+@app.get("/api/agent-watch-conditions")
+def agent_watch_conditions():
+    try:
+        if not WATCH_CONDITIONS_FILE.exists():
+            return JSONResponse({"updated_at": None, "watch_conditions": {}})
+        payload = _safe_json_loads(WATCH_CONDITIONS_FILE.read_text(encoding="utf-8"), default={})
+        if not isinstance(payload, dict):
+            payload = {}
+        return JSONResponse(payload)
+    except Exception:
+        return JSONResponse({"updated_at": None, "watch_conditions": {}})
 
 
 @app.get("/api/indicator-history")

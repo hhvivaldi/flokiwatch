@@ -1282,6 +1282,62 @@
               var wlbeEl = document.getElementById('ctx-wlbe');
               if (wlbeEl) wlbeEl.textContent = wlbe;
 
+              // Watch conditions (served from backend; rendered for active ticket)
+              try {
+                var wcEl = document.getElementById('ctx-watch-conditions');
+                if (wcEl) {
+                  var activeTicket = null;
+                  try {
+                    var pos = state.positions;
+                    if (Array.isArray(pos) && pos.length) {
+                      var t0 = pos[0] && pos[0].ticket;
+                      if (t0 !== null && t0 !== undefined && isFinite(Number(t0))) activeTicket = String(Number(t0));
+                    }
+                  } catch(e) {
+                    activeTicket = null;
+                  }
+
+                  if (!activeTicket) {
+                    wcEl.textContent = 'No active watch conditions';
+                  } else {
+                    wcEl.textContent = 'Loading...';
+                    fetchJson('/api/agent-watch-conditions').then(function(payload) {
+                      try {
+                        var all = payload || {};
+                        var block = all[activeTicket] || null;
+                        if (!block || !Array.isArray(block.conditions) || !block.conditions.length) {
+                          wcEl.textContent = 'No active watch conditions';
+                          return;
+                        }
+                        var lines = [];
+                        for (var i = 0; i < block.conditions.length; i++) {
+                          var c = block.conditions[i] || {};
+                          var t = (c.type || '').toString();
+                          var desc = (c.description || '').toString();
+                          var lvl = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level).toFixed(2) : null;
+                          var val = (c.value !== null && c.value !== undefined && isFinite(Number(c.value))) ? String(Number(c.value)) : null;
+                          var detail = '';
+                          if (lvl !== null) detail = 'level=' + lvl;
+                          else if (val !== null) detail = 'value=' + val;
+                          var head = t ? t : 'condition';
+                          var parts = [];
+                          if (detail) parts.push(detail);
+                          if (desc) parts.push(desc);
+                          lines.push('- ' + head + (parts.length ? ' | ' + parts.join(' | ') : ''));
+                        }
+                        wcEl.textContent = lines.join('\n');
+                      } catch(e) {
+                        wcEl.textContent = 'No active watch conditions';
+                      }
+                    }).catch(function() {
+                      wcEl.textContent = 'No active watch conditions';
+                    });
+                  }
+                }
+              } catch(e) {
+                // silent
+              }
+
             }
           } catch(e) {
             // silent
