@@ -2769,6 +2769,8 @@ class TradingBot:
                         scanner_data["indicators"] = dp.get("indicators")
                         scanner_data["patterns"] = dp.get("patterns")
                         scanner_data["macro"] = dp.get("macro")
+                        scanner_data["volume"] = dp.get("volume") or dp.get("tick_volume") or dp.get("last_h1_volume")
+                        scanner_data["candlestick_patterns"] = dp.get("candlestick_patterns")
                         scanner_data["timestamp"] = h1_close_time_iso
                     except Exception:
                         scanner_data = {"timestamp": h1_close_time_iso}
