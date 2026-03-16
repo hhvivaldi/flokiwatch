@@ -57,7 +57,9 @@ def _rex_system_prompt() -> str:
         "NEVER respond with generic concerns. Every concern must reference specific data.\n\n"
         "Speak naturally. Do NOT use headers like 'CONCERNS:' or bullet point lists. "
         "Talk like you're standing next to Floki at the trading desk. "
-        "End your response with one word on its own line: AGREE or DISAGREE.\n"
+        "End your response with one word on its own line: AGREE or DISAGREE.\n\n"
+        "FORMATTING REMINDER: Do NOT use headers like 'CONCERNS:' or 'SUGGESTED ADJUSTMENT:'. Do NOT use bullet points or numbered lists. "
+        "Write everything as flowing conversation paragraphs. The ONLY formatting allowed is your final line which must be just: AGREE or DISAGREE"
     )
 
 
