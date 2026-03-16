@@ -1368,26 +1368,90 @@ class TradingBot:
                     except Exception:
                         pass
 
-                    # fibonacci (simple H1 retracement levels)
+                    # fibonacci (multi-timeframe retracement levels: H1/H4/D1)
                     if not isinstance(dp.get("fibonacci"), dict) or not dp.get("fibonacci"):
                         try:
-                            lookback = 20
-                            if len(df) >= 2:
-                                tail = df.tail(lookback)
-                                swing_high = float(tail["high"].max())
-                                swing_low = float(tail["low"].min())
-                                rng = swing_high - swing_low
-                                if rng > 0:
-                                    dp["fibonacci"] = {
-                                        "swing_high": swing_high,
-                                        "swing_low": swing_low,
-                                        "levels": {
-                                            "23.6": swing_high - (rng * 0.236),
-                                            "38.2": swing_high - (rng * 0.382),
-                                            "50.0": swing_high - (rng * 0.500),
-                                            "61.8": swing_high - (rng * 0.618),
-                                        },
-                                    }
+                            def _compute_fib_from_high_low(swing_high_f: float, swing_low_f: float) -> dict:
+                                rng_f = swing_high_f - swing_low_f
+                                if rng_f <= 0:
+                                    return {}
+                                return {
+                                    "swing_high": swing_high_f,
+                                    "swing_low": swing_low_f,
+                                    "levels": {
+                                        "23.6": swing_high_f - (rng_f * 0.236),
+                                        "38.2": swing_high_f - (rng_f * 0.382),
+                                        "50.0": swing_high_f - (rng_f * 0.500),
+                                        "61.8": swing_high_f - (rng_f * 0.618),
+                                    },
+                                }
+
+                            fib_out = {}
+
+                            # H1: last 20 candles from df
+                            try:
+                                lookback = 20
+                                if len(df) >= 2:
+                                    tail = df.tail(lookback)
+                                    sh = float(tail["high"].max())
+                                    sl = float(tail["low"].min())
+                                    h1_fib = _compute_fib_from_high_low(sh, sl)
+                                    if h1_fib:
+                                        fib_out["H1"] = h1_fib
+                            except Exception:
+                                pass
+
+                            # H4/D1: from cached candles in dp["candles"]
+                            try:
+                                candles_dp = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                            except Exception:
+                                candles_dp = {}
+
+                            def _tf_swing(candles_list):
+                                if not isinstance(candles_list, list) or len(candles_list) < 2:
+                                    return None
+                                hi = None
+                                lo = None
+                                for c in candles_list:
+                                    if not isinstance(c, dict):
+                                        continue
+                                    try:
+                                        ch = c.get("high") if c.get("high") is not None else c.get("h")
+                                        cl = c.get("low") if c.get("low") is not None else c.get("l")
+                                        if ch is None or cl is None:
+                                            continue
+                                        ch_f = float(ch)
+                                        cl_f = float(cl)
+                                    except Exception:
+                                        continue
+                                    if hi is None or ch_f > hi:
+                                        hi = ch_f
+                                    if lo is None or cl_f < lo:
+                                        lo = cl_f
+                                if hi is None or lo is None:
+                                    return None
+                                return hi, lo
+
+                            try:
+                                h4_swing = _tf_swing(candles_dp.get("H4"))
+                                if h4_swing:
+                                    h4_fib = _compute_fib_from_high_low(h4_swing[0], h4_swing[1])
+                                    if h4_fib:
+                                        fib_out["H4"] = h4_fib
+                            except Exception:
+                                pass
+
+                            try:
+                                d1_swing = _tf_swing(candles_dp.get("D1"))
+                                if d1_swing:
+                                    d1_fib = _compute_fib_from_high_low(d1_swing[0], d1_swing[1])
+                                    if d1_fib:
+                                        fib_out["D1"] = d1_fib
+                            except Exception:
+                                pass
+
+                            if fib_out:
+                                dp["fibonacci"] = fib_out
                         except Exception:
                             pass
 

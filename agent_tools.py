@@ -705,17 +705,43 @@ class AgentTools:
                 self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
+            # Multi-timeframe structure expected:
+            # {"H1": {"swing_high":..., "swing_low":..., "levels": {...}}, "H4": {...}, "D1": {...}}
+            # Only available timeframes are included.
+            if any(tf in fib for tf in ("H1", "H4", "D1")):
+                out = {}
+                for tf in ("H1", "H4", "D1"):
+                    v = fib.get(tf)
+                    if not isinstance(v, dict) or not v:
+                        continue
+                    levels = v.get("levels")
+                    if not isinstance(levels, dict) or not levels:
+                        continue
+                    out[tf] = {
+                        "levels": levels,
+                        "swing_high": v.get("swing_high"),
+                        "swing_low": v.get("swing_low"),
+                    }
+                if not out:
+                    self._log_no_cache("get_fibonacci_levels", start)
+                    return self._no_cache()
+                self._log_tool("get_fibonacci_levels", start, f"tfs={','.join(out.keys())}")
+                return out
+
+            # Backward-compatible: single timeframe structure
             levels = fib.get("levels") if isinstance(fib.get("levels"), dict) else fib.get("levels")
             if not isinstance(levels, dict) or not levels:
                 self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
             out = {
-                "levels": levels,
-                "swing_high": fib.get("swing_high"),
-                "swing_low": fib.get("swing_low"),
+                "H1": {
+                    "levels": levels,
+                    "swing_high": fib.get("swing_high"),
+                    "swing_low": fib.get("swing_low"),
+                }
             }
-            self._log_tool("get_fibonacci_levels", start)
+            self._log_tool("get_fibonacci_levels", start, "tfs=H1")
             return out
         except Exception as e:
             self._log_tool("get_fibonacci_levels", start, f"error={e}")
