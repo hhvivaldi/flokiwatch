@@ -1185,11 +1185,6 @@ class TradingBot:
                             except Exception:
                                 pass
 
-                    try:
-                        log.info(f"AGENT_CACHE | candles_cache keys after backfill | keys={list(candles_cache.keys())}")
-                    except Exception:
-                        pass
-
                     # calendar
                     if not isinstance(dp.get("calendar"), dict) or not dp.get("calendar"):
                         if isinstance(calendar_data, dict) and calendar_data:
@@ -1279,6 +1274,14 @@ class TradingBot:
                                 return out
                             for r in rates:
                                 try:
+                                    tv = 0.0
+                                    try:
+                                        tv = float(r["tick_volume"])
+                                    except Exception:
+                                        try:
+                                            tv = float(r["real_volume"])
+                                        except Exception:
+                                            tv = 0.0
                                     out.append(
                                         {
                                             "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
@@ -1286,7 +1289,7 @@ class TradingBot:
                                             "high": float(r["high"]),
                                             "low": float(r["low"]),
                                             "close": float(r["close"]),
-                                            "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                            "volume": tv,
                                         }
                                     )
                                 except Exception:
@@ -1308,12 +1311,6 @@ class TradingBot:
                             m5_list = _rates_to_candles(m5_rates)
                             if m5_list:
                                 candles_cache["M5"] = m5_list
-                            try:
-                                log.info(
-                                    f"BRIDGE_DEBUG | M5 | rates_ok={m5_rates is not None} | list_len={len(m5_list)} | stored={'M5' in candles_cache}"
-                                )
-                            except Exception:
-                                pass
 
                         try:
                             have_h4 = isinstance(candles_cache.get("H4"), list) and bool(candles_cache.get("H4"))
@@ -1330,12 +1327,6 @@ class TradingBot:
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
-                            try:
-                                log.info(
-                                    f"BRIDGE_DEBUG | H4 | rates_ok={h4_rates is not None} | list_len={len(h4_list)} | stored={'H4' in candles_cache}"
-                                )
-                            except Exception:
-                                pass
 
                         try:
                             have_d1 = isinstance(candles_cache.get("D1"), list) and bool(candles_cache.get("D1"))
@@ -1352,17 +1343,6 @@ class TradingBot:
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
-                            try:
-                                log.info(
-                                    f"BRIDGE_DEBUG | D1 | rates_ok={d1_rates is not None} | list_len={len(d1_list)} | stored={'D1' in candles_cache}"
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    try:
-                        log.info(f"BRIDGE_DEBUG | final candles_cache keys = {list(candles_cache.keys())}")
                     except Exception:
                         pass
 
@@ -1385,12 +1365,6 @@ class TradingBot:
                     try:
                         if isinstance(dp.get("candles"), dict):
                             self._cached_candles = dict(dp.get("candles") or {})
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | cached_candles snapshot | keys={list((self._cached_candles or {}).keys())}"
-                                )
-                            except Exception:
-                                pass
                     except Exception:
                         pass
 
@@ -2761,13 +2735,6 @@ class TradingBot:
                     agent_data["candles"] = dict(cached)
                     try:
                         self._last_agent_data = agent_data
-                    except Exception:
-                        pass
-
-                    try:
-                        log.info(
-                            f"AGENT_CACHE | injected cached_candles (proactive) | keys={list(cached.keys())}"
-                        )
                     except Exception:
                         pass
             except Exception:
