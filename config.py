@@ -312,6 +312,14 @@ GPT_CONFIDENCE_MAX_ADJUSTMENT = 15      # Maximum confidence adjustment (±)
 GPT_CONFIDENCE_CACHE_THRESHOLD = 5      # Only re-call GPT if pillar changed ≥5 pts or scenario changed
 
 # ============================================================================
+# SIMBA WATCHER (Floki sleep gating)
+# ============================================================================
+SIMBA_MODEL = os.environ.get("SIMBA_MODEL", "gpt-4o-mini")
+SIMBA_TIMEOUT_SECONDS = int(os.environ.get("SIMBA_TIMEOUT_SECONDS", "10") or "10")
+SIMBA_POLL_MINUTES = int(os.environ.get("SIMBA_POLL_MINUTES", "60") or "60")
+SIMBA_MAX_SLEEP_DEFAULT_MINUTES = int(os.environ.get("SIMBA_MAX_SLEEP_DEFAULT_MINUTES", "120") or "120")
+
+# ============================================================================
 # MULTI-TF TREND CONFIRMATION
 # ============================================================================
 MTF_TREND_ENABLED = True                 # Enable Multi-TF trend check
