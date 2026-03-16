@@ -625,6 +625,7 @@ class AIAgent:
                     "required": ["thesis", "note"],
                     "additionalProperties": False,
                 },
+                "cache_control": {"type": "ephemeral"},
             },
         ]
 
@@ -696,7 +697,7 @@ class AIAgent:
                 return self.client.messages.create(
                     model=self.model,
                     max_tokens=int(self.max_tokens),
-                    system=get_system_prompt(),
+                    system=[{"type": "text", "text": get_system_prompt(), "cache_control": {"type": "ephemeral"}}],
                     tools=tool_schemas,
                     messages=messages,
                 )
