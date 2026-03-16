@@ -2713,6 +2713,17 @@ class TradingBot:
                 risk_manager_module=risk_manager,
             )
 
+            try:
+                keys = []
+                try:
+                    cds = agent_data.get("candles", {}) if isinstance(agent_data, dict) else {}
+                    keys = list(cds.keys()) if isinstance(cds, dict) else []
+                except Exception:
+                    keys = []
+                log.info(f"AGENT_CACHE | pre-decide check | candles_keys={keys}")
+            except Exception:
+                pass
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             agent_result = loop.run_until_complete(
