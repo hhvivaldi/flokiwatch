@@ -2542,7 +2542,11 @@ class TradingBot:
             try:
                 dp = agent_data if isinstance(agent_data, dict) else None
                 if dp is not None:
-                    cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                    cds = dp.setdefault("candles", {})
+                    if not isinstance(cds, dict):
+                        cds = {}
+                        dp["candles"] = cds
+
                     have_m5 = isinstance(cds.get("M5"), list) and bool(cds.get("M5"))
                     have_h4 = isinstance(cds.get("H4"), list) and bool(cds.get("H4"))
                     have_d1 = isinstance(cds.get("D1"), list) and bool(cds.get("D1"))
@@ -2574,9 +2578,10 @@ class TradingBot:
                                     except Exception:
                                         continue
                             if m5_list:
-                                cds = cds.copy() if isinstance(cds, dict) else {}
-                                cds["M5"] = m5_list
-                                dp["candles"] = cds
+                                try:
+                                    cds["M5"] = m5_list
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
 
@@ -2608,10 +2613,10 @@ class TradingBot:
                                     except Exception:
                                         continue
                             if h4_list:
-                                cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                                cds = cds.copy() if isinstance(cds, dict) else {}
-                                cds["H4"] = h4_list
-                                dp["candles"] = cds
+                                try:
+                                    cds["H4"] = h4_list
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
 
@@ -2643,10 +2648,10 @@ class TradingBot:
                                     except Exception:
                                         continue
                             if d1_list:
-                                cds = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                                cds = cds.copy() if isinstance(cds, dict) else {}
-                                cds["D1"] = d1_list
-                                dp["candles"] = cds
+                                try:
+                                    cds["D1"] = d1_list
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
             except Exception:
