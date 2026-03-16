@@ -273,6 +273,17 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
         except Exception:
             analyses = []
 
+        # 1b) Agent events (Simba feed messages)
+        events = []
+        try:
+            erows = conn.execute(
+                "SELECT * FROM agent_events ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            events = [dict(r) for r in erows]
+        except Exception:
+            events = []
+
         # 2) Recent closed trades
         trades = []
         try:
@@ -294,6 +305,34 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
             session_thesis = None
 
         messages: List[Dict[str, Any]] = []
+
+        # Build from events
+        for ev in events:
+            try:
+                ev_id = ev.get("id")
+                ts = _safe_iso_timestamp(ev.get("timestamp"))
+                et = str(ev.get("event_type") or "").strip().upper()
+                author = str(ev.get("author") or "SIMBA").strip().upper() or "SIMBA"
+                content = _as_clean_text(ev.get("content"), max_len=4000).strip()
+                payload = _safe_json_loads(ev.get("payload_json"), default={})
+                if not isinstance(payload, dict):
+                    payload = {}
+
+                if not ts or not content:
+                    continue
+
+                messages.append(
+                    {
+                        "id": f"e:{ev_id}",
+                        "timestamp": ts,
+                        "author": author,
+                        "type": et or "EVENT",
+                        "content": content[:4000],
+                        "metadata": payload,
+                    }
+                )
+            except Exception:
+                continue
 
         # Build from analyses
         for a in analyses:

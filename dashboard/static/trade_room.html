@@ -816,23 +816,34 @@
             }
 
             var author = (m.author || '').toString().toUpperCase();
-            var isFloki = author === 'FLOKI';
-            var rowCls = isFloki ? 'msg-row floki' : 'msg-row rex';
-            var avCls = isFloki ? 'agent-avatar avatar-floki avatar-sm' : 'agent-avatar avatar-rex avatar-sm';
-            var nameCls = isFloki ? 'msg-name name-floki' : 'msg-name name-rex';
-            var bubbleCls = isFloki ? 'msg-bubble bubble-floki' : 'msg-bubble bubble-rex';
-            var bCls = badgeClass(m.type);
-            var metaStyle = isFloki ? '' : ' style="flex-direction:row-reverse"';
-            var typeLabel = esc((m.type || '').toString());
+            var type = (m.type || '').toString().toUpperCase();
 
-            // Add subtle icon to badge
-            var icon = '';
-            var t = typeLabel.toUpperCase();
-            if (t === 'ANALYSIS') icon = '🔍 ';
-            if (t === 'DECISION') icon = '⚡ ';
-            if (t === 'ALERT') icon = '⚠️ ';
-            if (t === 'DEBATE') icon = '💬 ';
-            if (t === 'TRADE_RESULT') icon = '📈 ';
+            var isFloki = author === 'FLOKI';
+            var isRex = author === 'REX';
+            var isSimba = author === 'SIMBA';
+
+            // Allow Simba events to display as feed messages.
+            if (!isFloki && !isRex && !isSimba) {
+              // Unknown author: keep existing behavior (skip)
+              continue;
+            }
+
+            var sideCls = isRex ? 'msg-row msg-left' : 'msg-row msg-right';
+            var bubbleCls = isRex ? 'msg-bubble bubble-rex' : 'msg-bubble bubble-floki';
+            var nameCls = isRex ? 'name-rex' : 'name-floki';
+
+            if (isSimba) {
+              sideCls = 'msg-row msg-left';
+              bubbleCls = 'msg-bubble bubble-rex';
+              nameCls = 'name-rex';
+            }
+
+            var avatarClass = isRex ? 'avatar-rex' : 'avatar-floki';
+            var avatarText = isRex ? 'RX' : 'FL';
+            if (isSimba) {
+              avatarClass = 'avatar-rex';
+              avatarText = 'SI';
+            }
 
             var content = (m.content || '').toString();
             // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
@@ -847,16 +858,13 @@
             } catch (e) {}
             content = esc(content).replaceAll('\n', '<br>');
 
-            html += '<div class="' + rowCls + '" data-type="' + esc(dataType(m.type)) + '">' +
-              '<div class="' + avCls + '">' +
-                (isFloki
-                  ? '<img src="/image/floki-trade-room.png" alt="FLOKI" style="border-radius:50%; width: 32px; height: 32px;" />'
-                  : '<img src="/image/rex-floki-trade.png" alt="REX" style="border-radius:50%; width: 32px; height: 32px;" />') +
+            html += '<div class="' + sideCls + '">' +
+              '<div class="msg-avatar ' + avatarClass + '">' +
+                '<span>' + avatarText + '</span>' +
               '</div>' +
-              '<div class="flex-1 min-w-0">' +
-                '<div class="msg-meta"' + metaStyle + '>' +
-                  '<span class="' + nameCls + '">' + esc(author) + '</span>' +
-                  '<span class="msg-badge ' + bCls + '">' + icon + typeLabel + '</span>' +
+              '<div class="msg-col">' +
+                '<div class="msg-meta">' +
+                  '<span class="msg-author ' + nameCls + '">' + esc(author) + '</span>' +
                   '<span class="msg-time">' + esc(fmtTime(m.timestamp)) + '</span>' +
                 '</div>' +
                 '<div class="' + bubbleCls + '">' + content + '</div>' +

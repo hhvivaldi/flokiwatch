@@ -2808,6 +2808,36 @@ class TradingBot:
                 except Exception:
                     pass
 
+                try:
+                    from db_writer import record_agent_event
+
+                    decision_s = str(simba_result.get("decision") or "").strip().upper()
+                    checked_i = simba_result.get("checked_count")
+                    met_i = simba_result.get("met_count")
+                    try:
+                        checked_i = int(checked_i)
+                    except Exception:
+                        checked_i = 0
+                    try:
+                        met_i = int(met_i)
+                    except Exception:
+                        met_i = 0
+                    summary_s = str(simba_result.get("summary") or "").strip()
+
+                    if decision_s == "WAKE":
+                        content = f"ALERT! {summary_s}. Waking Floki now."
+                    else:
+                        content = f"Check complete. {met_i}/{checked_i} conditions met. {summary_s}. Next check in 30 min."
+
+                    record_agent_event(
+                        "SIMBA_CHECK",
+                        content,
+                        payload={"simba": simba_result, "h1_close_time": h1_close_time_iso},
+                        author="SIMBA",
+                    )
+                except Exception:
+                    pass
+
                 if str(simba_result.get("decision") or "").upper() != "WAKE":
                     log.info("PROACTIVE_H1 | Simba says SLEEP — skipping Floki")
                     return

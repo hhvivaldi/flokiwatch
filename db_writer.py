@@ -267,6 +267,17 @@ def init_db() -> None:
             )
         """)
 
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS agent_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                author TEXT,
+                content TEXT,
+                payload_json TEXT
+            )"""
+        )
+
         # Migration: add agent_proactive_analyses columns if missing (safe no-op if they already exist)
         agent_proactive_columns_to_add = [
             ("raw_response", "TEXT"),
@@ -301,6 +312,40 @@ def init_db() -> None:
         log.warning("SQLite history DB initialized: " + db_abs_path)
     except Exception as e:
         log.debug(f"db_writer: failed to initialize DB: {e}")
+
+
+def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str, Any]] = None, author: str = "SIMBA") -> None:
+    """Record an agent event (e.g., Simba feed messages) into history DB.
+
+    Must never throw outward.
+    """
+    try:
+        import json
+
+        et = str(event_type or "").strip().upper()
+        if not et:
+            return
+
+        content_s = str(content or "").strip()
+        if not content_s:
+            return
+
+        payload_json = None
+        if payload is not None:
+            try:
+                payload_json = json.dumps(payload, ensure_ascii=False, default=str)
+            except Exception:
+                payload_json = None
+
+        conn = _get_connection()
+        conn.execute(
+            "INSERT INTO agent_events (timestamp, event_type, author, content, payload_json) VALUES (?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(), et, str(author or "SIMBA"), content_s[:4000], payload_json),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to record agent event: {e}")
 
 
 def record_analysis(last_analysis: Dict[str, Any]) -> None:

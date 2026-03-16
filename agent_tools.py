@@ -799,6 +799,65 @@ class AgentTools:
             if not ok:
                 return {"success": False, "reason": "persist failed"}
 
+            try:
+                from db_writer import record_agent_event
+
+                def _fmt_minutes(m: int) -> str:
+                    try:
+                        m_i = int(m)
+                    except Exception:
+                        m_i = 0
+                    if m_i <= 0:
+                        return "0 minutes"
+                    if m_i % 60 == 0:
+                        h = int(m_i / 60)
+                        return f"{h} hour" if h == 1 else f"{h} hours"
+                    return f"{m_i} minutes"
+
+                parts = []
+                for c in cleaned[:6]:
+                    try:
+                        ctype = str(c.get("type") or "").strip()
+                        desc_s = str(c.get("description") or "").strip()
+                        if ctype in ("price_above", "price_below"):
+                            lvl = c.get("level")
+                            direction = "above" if ctype == "price_above" else "below"
+                            seg = f"price {direction} {lvl}"
+                            if desc_s:
+                                seg += f" ({desc_s})"
+                            parts.append(seg)
+                        elif ctype == "h1_volume_above":
+                            thr = c.get("threshold")
+                            seg = f"H1 volume above {thr}"
+                            if desc_s:
+                                seg += f" ({desc_s})"
+                            parts.append(seg)
+                        elif ctype == "scanner_pattern":
+                            pat = c.get("pattern")
+                            seg = f"pattern {pat}"
+                            if desc_s:
+                                seg += f" ({desc_s})"
+                            parts.append(seg)
+                        elif ctype in ("indicator_above", "indicator_below"):
+                            ind = c.get("indicator")
+                            thr = c.get("threshold")
+                            direction = "above" if ctype == "indicator_above" else "below"
+                            seg = f"{ind} {direction} {thr}"
+                            if desc_s:
+                                seg += f" ({desc_s})"
+                            parts.append(seg)
+                    except Exception:
+                        continue
+
+                monitoring = " and ".join(parts) if parts else f"{len(cleaned)} condition(s)"
+                content = (
+                    f"Got it boss. Monitoring: {monitoring}. "
+                    f"Max sleep: {_fmt_minutes(msm)}."
+                )
+                record_agent_event("SIMBA_ACK", content, payload=payload, author="SIMBA")
+            except Exception:
+                pass
+
             self._log_tool("set_wake_conditions", start, f"count={len(cleaned)} max_sleep_minutes={msm}")
             return {"success": True, "count": len(cleaned), "max_sleep_minutes": msm}
         except Exception as e:
