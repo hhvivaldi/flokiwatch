@@ -727,6 +727,84 @@ class AgentTools:
             self._log_tool("set_watch_conditions", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def set_wake_conditions(self, max_sleep_minutes: int, conditions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            try:
+                msm = int(max_sleep_minutes)
+            except Exception:
+                return {"success": False, "reason": "invalid max_sleep_minutes"}
+
+            if msm <= 0:
+                return {"success": False, "reason": "max_sleep_minutes must be positive"}
+
+            if not isinstance(conditions, list) or not conditions:
+                return {"success": False, "reason": "conditions must be a non-empty list"}
+
+            allowed_types = {
+                "price_above",
+                "price_below",
+                "h1_volume_above",
+                "scanner_pattern",
+                "indicator_above",
+                "indicator_below",
+            }
+
+            cleaned: List[Dict[str, Any]] = []
+            for idx, c in enumerate(conditions, start=1):
+                if not isinstance(c, dict):
+                    continue
+
+                ctype = str(c.get("type", "")).strip()
+                if not ctype or ctype not in allowed_types:
+                    continue
+
+                desc = str(c.get("description", "")).strip()
+                cid = str(c.get("id") or "").strip() or f"c{idx}"
+
+                if ctype in ("price_above", "price_below"):
+                    lvl = self._safe_float(c.get("level"))
+                    if lvl is None:
+                        continue
+                    cleaned.append({"id": cid, "type": ctype, "level": float(lvl), "description": desc})
+                elif ctype == "h1_volume_above":
+                    thr = self._safe_float(c.get("threshold"))
+                    if thr is None:
+                        continue
+                    cleaned.append({"id": cid, "type": ctype, "threshold": float(thr), "description": desc})
+                elif ctype == "scanner_pattern":
+                    pat = str(c.get("pattern") or "").strip()
+                    if not pat:
+                        continue
+                    cleaned.append({"id": cid, "type": ctype, "pattern": pat, "description": desc})
+                elif ctype in ("indicator_above", "indicator_below"):
+                    ind = str(c.get("indicator") or "").strip().lower()
+                    thr = self._safe_float(c.get("threshold"))
+                    if not ind or thr is None:
+                        continue
+                    cleaned.append({"id": cid, "type": ctype, "indicator": ind, "threshold": float(thr), "description": desc})
+
+            if not cleaned:
+                return {"success": False, "reason": "no valid conditions"}
+
+            now_iso = datetime.utcnow().isoformat()
+            payload = {
+                "updated_at": now_iso,
+                "sleep_started_at": now_iso,
+                "max_sleep_minutes": msm,
+                "conditions": cleaned,
+            }
+
+            ok = self._write_json_atomic(self._wake_conditions_path(), payload)
+            if not ok:
+                return {"success": False, "reason": "persist failed"}
+
+            self._log_tool("set_wake_conditions", start, f"count={len(cleaned)} max_sleep_minutes={msm}")
+            return {"success": True, "count": len(cleaned), "max_sleep_minutes": msm}
+        except Exception as e:
+            self._log_tool("set_wake_conditions", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_candles(self, timeframe: str, count: int) -> Dict[str, Any]:
         start = time.time()
         try:
@@ -1577,6 +1655,12 @@ class AgentTools:
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _wake_conditions_path(self) -> str:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_wake_conditions.json")
 
     def _agent_monitor_events_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))

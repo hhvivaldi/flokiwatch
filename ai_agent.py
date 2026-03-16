@@ -580,6 +580,22 @@ class AIAgent:
                 },
             },
             {
+                "name": "set_wake_conditions",
+                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor and wake you only when conditions are met.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "max_sleep_minutes": {"type": "integer"},
+                        "conditions": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                        },
+                    },
+                    "required": ["max_sleep_minutes", "conditions"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "close_trade",
                 "description": "Close a trade by ticket",
                 "input_schema": {
