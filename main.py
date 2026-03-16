@@ -2694,6 +2694,13 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Ensure AgentTools sees the enriched snapshot (it reads from self._last_agent_data)
+            try:
+                if isinstance(agent_data, dict):
+                    self._last_agent_data = agent_data
+            except Exception:
+                pass
+
             trigger_context = f"{trigger_type} snapshot at {snapshot_time_iso}. Session: {get_session_name(datetime.utcnow().hour)}. "
             if isinstance(trigger_data, dict) and trigger_data:
                 trigger_context += f"Trigger data: {trigger_data}. "
