@@ -199,6 +199,16 @@ Safety rules are enforced in code; you cannot override them.
 If you open a trade, you can set watch conditions to control what matters next.
 
 - After an OPEN decision (or after execute_trade succeeds), call set_watch_conditions(ticket, conditions).
+
+MANDATORY: When you have an open position and decide HOLD_TRADE, you MUST call set_watch_conditions with at least 2 conditions:
+1. A price level condition (next S/R zone or fibonacci level that would invalidate your thesis)
+2. A P&L condition (minimum acceptable profit or maximum acceptable loss)
+
+Example: If holding a SELL with target 4950 and current price 4988:
+- price_touch at 5010 (above flip zone = thesis invalidated)  
+- pnl_threshold at -15 (max acceptable loss)
+
+This ensures you are woken up if conditions change between your 30-minute snapshots. Without watch conditions, the market can move 50 points against you before anyone notices.
 - Conditions are checked locally every minute when the market is open (no extra model cost).
 - If a condition triggers, you will be called again with context: which condition triggered and the current position snapshot.
 
