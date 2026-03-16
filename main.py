@@ -1185,6 +1185,11 @@ class TradingBot:
                             except Exception:
                                 pass
 
+                    try:
+                        log.info(f"AGENT_CACHE | candles_cache keys after backfill | keys={list(candles_cache.keys())}")
+                    except Exception:
+                        pass
+
                     # calendar
                     if not isinstance(dp.get("calendar"), dict) or not dp.get("calendar"):
                         if isinstance(calendar_data, dict) and calendar_data:
@@ -1288,7 +1293,11 @@ class TradingBot:
                                     continue
                             return out
 
-                        if not isinstance(candles_cache.get("M5"), list) or not candles_cache.get("M5"):
+                        try:
+                            have_m5 = isinstance(candles_cache.get("M5"), list) and bool(candles_cache.get("M5"))
+                        except Exception:
+                            have_m5 = False
+                        if not have_m5:
                             m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
                             try:
                                 log.info(
@@ -1299,8 +1308,18 @@ class TradingBot:
                             m5_list = _rates_to_candles(m5_rates)
                             if m5_list:
                                 candles_cache["M5"] = m5_list
+                            try:
+                                log.info(
+                                    f"BRIDGE_DEBUG | M5 | rates_ok={m5_rates is not None} | list_len={len(m5_list)} | stored={'M5' in candles_cache}"
+                                )
+                            except Exception:
+                                pass
 
-                        if not isinstance(candles_cache.get("H4"), list) or not candles_cache.get("H4"):
+                        try:
+                            have_h4 = isinstance(candles_cache.get("H4"), list) and bool(candles_cache.get("H4"))
+                        except Exception:
+                            have_h4 = False
+                        if not have_h4:
                             h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
                             try:
                                 log.info(
@@ -1311,8 +1330,18 @@ class TradingBot:
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
+                            try:
+                                log.info(
+                                    f"BRIDGE_DEBUG | H4 | rates_ok={h4_rates is not None} | list_len={len(h4_list)} | stored={'H4' in candles_cache}"
+                                )
+                            except Exception:
+                                pass
 
-                        if not isinstance(candles_cache.get("D1"), list) or not candles_cache.get("D1"):
+                        try:
+                            have_d1 = isinstance(candles_cache.get("D1"), list) and bool(candles_cache.get("D1"))
+                        except Exception:
+                            have_d1 = False
+                        if not have_d1:
                             d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
                             try:
                                 log.info(
@@ -1323,6 +1352,17 @@ class TradingBot:
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
+                            try:
+                                log.info(
+                                    f"BRIDGE_DEBUG | D1 | rates_ok={d1_rates is not None} | list_len={len(d1_list)} | stored={'D1' in candles_cache}"
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    try:
+                        log.info(f"BRIDGE_DEBUG | final candles_cache keys = {list(candles_cache.keys())}")
                     except Exception:
                         pass
 
@@ -1340,6 +1380,19 @@ class TradingBot:
                                 dp["candles"] = candles_cache
                             except Exception:
                                 pass
+
+                    # Snapshot candles separately for proactive Agent calls (avoid MT5 calls/reference issues)
+                    try:
+                        if isinstance(dp.get("candles"), dict):
+                            self._cached_candles = dict(dp.get("candles") or {})
+                            try:
+                                log.info(
+                                    f"AGENT_CACHE | cached_candles snapshot | keys={list((self._cached_candles or {}).keys())}"
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
 
                     # fibonacci (simple H1 retracement levels)
                     if not isinstance(dp.get("fibonacci"), dict) or not dp.get("fibonacci"):
@@ -2701,116 +2754,23 @@ class TradingBot:
                 risk_manager_module=risk_manager,
             )
 
-            # FORCE candles into agent_data (bypass all reference issues)
+            # Inject last analysis-cycle candles snapshot (avoid MT5 calls in proactive context)
             try:
-                import MetaTrader5 as mt5
-
-                forced_candles = {}
-
-                try:
-                    log.info(f"FORCE_CANDLES_DEBUG | enter | agent_data_id={id(agent_data)}")
-                except Exception:
-                    pass
-
-                # H1 from df
-                try:
-                    if df is not None and len(df) > 0:
-                        h1 = []
-                        cols = set(getattr(df, "columns", []))
-                        for i in range(max(0, len(df) - 50), len(df)):
-                            row = df.iloc[i]
-                            t = ""
-                            if "time" in cols:
-                                try:
-                                    tv = row.get("time")
-                                    t = tv.isoformat() if hasattr(tv, "isoformat") else str(tv)
-                                except Exception:
-                                    t = str(row.get("time", ""))
-                            elif "datetime" in cols:
-                                try:
-                                    tv = row.get("datetime")
-                                    t = tv.isoformat() if hasattr(tv, "isoformat") else str(tv)
-                                except Exception:
-                                    t = str(row.get("datetime", ""))
-
-                            vol = 0.0
-                            try:
-                                if "tick_volume" in cols:
-                                    vol = float(row.get("tick_volume", 0) or 0)
-                                elif "volume" in cols:
-                                    vol = float(row.get("volume", 0) or 0)
-                            except Exception:
-                                vol = 0.0
-
-                            h1.append(
-                                {
-                                    "time": t,
-                                    "open": float(row["open"]),
-                                    "high": float(row["high"]),
-                                    "low": float(row["low"]),
-                                    "close": float(row["close"]),
-                                    "volume": vol,
-                                }
-                            )
-                        if h1:
-                            forced_candles["H1"] = h1
-                except Exception:
-                    pass
-
-                # M5/H4/D1 from MT5
-                for tf_name, tf_const, count in (
-                    ("M5", mt5.TIMEFRAME_M5, 20),
-                    ("H4", mt5.TIMEFRAME_H4, 20),
-                    ("D1", mt5.TIMEFRAME_D1, 10),
-                ):
-                    try:
-                        rates = mt5.copy_rates_from_pos(config.SYMBOL, tf_const, 0, count)
-                        if rates is None or len(rates) == 0:
-                            continue
-                        candles = []
-                        for r in rates:
-                            try:
-                                candles.append(
-                                    {
-                                        "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
-                                        "open": float(r["open"]),
-                                        "high": float(r["high"]),
-                                        "low": float(r["low"]),
-                                        "close": float(r["close"]),
-                                        "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
-                                    }
-                                )
-                            except Exception:
-                                continue
-                        if candles:
-                            forced_candles[tf_name] = candles
-                    except Exception:
-                        continue
-
-                try:
-                    log.info(f"FORCE_CANDLES_DEBUG | built | keys={list(forced_candles.keys())}")
-                except Exception:
-                    pass
-
-                if isinstance(agent_data, dict):
-                    agent_data["candles"] = forced_candles
+                cached = getattr(self, "_cached_candles", None)
+                if isinstance(agent_data, dict) and isinstance(cached, dict) and cached:
+                    agent_data["candles"] = dict(cached)
                     try:
                         self._last_agent_data = agent_data
                     except Exception:
                         pass
 
                     try:
-                        cds_dbg = agent_data.get("candles") if isinstance(agent_data.get("candles"), dict) else {}
                         log.info(
-                            f"FORCE_CANDLES_DEBUG | assigned | candles_id={id(cds_dbg)} | keys={list(cds_dbg.keys()) if isinstance(cds_dbg, dict) else []}"
+                            f"AGENT_CACHE | injected cached_candles (proactive) | keys={list(cached.keys())}"
                         )
                     except Exception:
                         pass
-            except Exception as e:
-                try:
-                    log.info(f"FORCE_CANDLES_DEBUG | error | {e}")
-                except Exception:
-                    pass
+            except Exception:
                 pass
 
             try:
