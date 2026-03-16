@@ -2640,161 +2640,6 @@ class TradingBot:
         log.info(f"{trigger_type} | Calling AI Agent (tool-driven) | ts: {snapshot_time_iso}")
 
         try:
-            # Ensure M5/H4/D1 candles exist in cached agent_data for tool-driven investigation (non-blocking)
-            try:
-                dp = agent_data if isinstance(agent_data, dict) else None
-                if dp is not None:
-                    cds = dp.setdefault("candles", {})
-                    if not isinstance(cds, dict):
-                        cds = {}
-                        dp["candles"] = cds
-                        try:
-                            _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                            log.info(
-                                f"CANDLES_DEBUG | step=init_reset | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
-                            )
-                        except Exception:
-                            pass
-
-                    try:
-                        _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                        log.info(
-                            f"CANDLES_DEBUG | step=init_ok | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
-                        )
-                    except Exception:
-                        pass
-
-                    have_m5 = isinstance(cds.get("M5"), list) and bool(cds.get("M5"))
-                    have_h4 = isinstance(cds.get("H4"), list) and bool(cds.get("H4"))
-                    have_d1 = isinstance(cds.get("D1"), list) and bool(cds.get("D1"))
-                    if not have_m5:
-                        try:
-                            import MetaTrader5 as mt5
-
-                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 20)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | M5 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
-                            m5_list = []
-                            if rates is not None:
-                                for r in rates:
-                                    try:
-                                        m5_list.append(
-                                            {
-                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
-                                                "open": float(r["open"]),
-                                                "high": float(r["high"]),
-                                                "low": float(r["low"]),
-                                                "close": float(r["close"]),
-                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
-                                            }
-                                        )
-                                    except Exception:
-                                        continue
-                            if m5_list:
-                                try:
-                                    cds["M5"] = m5_list
-                                except Exception:
-                                    pass
-                                try:
-                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                                    log.info(
-                                        f"CANDLES_DEBUG | step=after_set_M5 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
-                                    )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
-                    if not have_h4:
-                        try:
-                            import MetaTrader5 as mt5
-
-                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | H4 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
-                            h4_list = []
-                            if rates is not None:
-                                for r in rates:
-                                    try:
-                                        h4_list.append(
-                                            {
-                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
-                                                "open": float(r["open"]),
-                                                "high": float(r["high"]),
-                                                "low": float(r["low"]),
-                                                "close": float(r["close"]),
-                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
-                                            }
-                                        )
-                                    except Exception:
-                                        continue
-                            if h4_list:
-                                try:
-                                    cds["H4"] = h4_list
-                                except Exception:
-                                    pass
-                                try:
-                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                                    log.info(
-                                        f"CANDLES_DEBUG | step=after_set_H4 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
-                                    )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
-                    if not have_d1:
-                        try:
-                            import MetaTrader5 as mt5
-
-                            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
-                            try:
-                                log.info(
-                                    f"AGENT_CACHE | D1 backfill attempt | rates={type(rates).__name__} len={len(rates) if rates is not None else 'None'}"
-                                )
-                            except Exception:
-                                pass
-                            d1_list = []
-                            if rates is not None:
-                                for r in rates:
-                                    try:
-                                        d1_list.append(
-                                            {
-                                                "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
-                                                "open": float(r["open"]),
-                                                "high": float(r["high"]),
-                                                "low": float(r["low"]),
-                                                "close": float(r["close"]),
-                                                "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
-                                            }
-                                        )
-                                    except Exception:
-                                        continue
-                            if d1_list:
-                                try:
-                                    cds["D1"] = d1_list
-                                except Exception:
-                                    pass
-                                try:
-                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
-                                    log.info(
-                                        f"CANDLES_DEBUG | step=after_set_D1 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
-                                    )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
             # Ensure headlines exist for tool-driven investigation (non-blocking)
             try:
                 dp = agent_data if isinstance(agent_data, dict) else None
@@ -2855,6 +2700,118 @@ class TradingBot:
                 safety_checks_module=safety_checks,
                 risk_manager_module=risk_manager,
             )
+
+            # FORCE candles into agent_data (bypass all reference issues)
+            try:
+                import MetaTrader5 as mt5
+
+                forced_candles = {}
+
+                try:
+                    log.info(f"FORCE_CANDLES_DEBUG | enter | agent_data_id={id(agent_data)}")
+                except Exception:
+                    pass
+
+                # H1 from df
+                try:
+                    if df is not None and len(df) > 0:
+                        h1 = []
+                        cols = set(getattr(df, "columns", []))
+                        for i in range(max(0, len(df) - 50), len(df)):
+                            row = df.iloc[i]
+                            t = ""
+                            if "time" in cols:
+                                try:
+                                    tv = row.get("time")
+                                    t = tv.isoformat() if hasattr(tv, "isoformat") else str(tv)
+                                except Exception:
+                                    t = str(row.get("time", ""))
+                            elif "datetime" in cols:
+                                try:
+                                    tv = row.get("datetime")
+                                    t = tv.isoformat() if hasattr(tv, "isoformat") else str(tv)
+                                except Exception:
+                                    t = str(row.get("datetime", ""))
+
+                            vol = 0.0
+                            try:
+                                if "tick_volume" in cols:
+                                    vol = float(row.get("tick_volume", 0) or 0)
+                                elif "volume" in cols:
+                                    vol = float(row.get("volume", 0) or 0)
+                            except Exception:
+                                vol = 0.0
+
+                            h1.append(
+                                {
+                                    "time": t,
+                                    "open": float(row["open"]),
+                                    "high": float(row["high"]),
+                                    "low": float(row["low"]),
+                                    "close": float(row["close"]),
+                                    "volume": vol,
+                                }
+                            )
+                        if h1:
+                            forced_candles["H1"] = h1
+                except Exception:
+                    pass
+
+                # M5/H4/D1 from MT5
+                for tf_name, tf_const, count in (
+                    ("M5", mt5.TIMEFRAME_M5, 20),
+                    ("H4", mt5.TIMEFRAME_H4, 20),
+                    ("D1", mt5.TIMEFRAME_D1, 10),
+                ):
+                    try:
+                        rates = mt5.copy_rates_from_pos(config.SYMBOL, tf_const, 0, count)
+                        if rates is None or len(rates) == 0:
+                            continue
+                        candles = []
+                        for r in rates:
+                            try:
+                                candles.append(
+                                    {
+                                        "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                        "open": float(r["open"]),
+                                        "high": float(r["high"]),
+                                        "low": float(r["low"]),
+                                        "close": float(r["close"]),
+                                        "volume": float(r.get("tick_volume", r.get("real_volume", 0)) or 0.0),
+                                    }
+                                )
+                            except Exception:
+                                continue
+                        if candles:
+                            forced_candles[tf_name] = candles
+                    except Exception:
+                        continue
+
+                try:
+                    log.info(f"FORCE_CANDLES_DEBUG | built | keys={list(forced_candles.keys())}")
+                except Exception:
+                    pass
+
+                if isinstance(agent_data, dict):
+                    agent_data["candles"] = forced_candles
+                    try:
+                        self._last_agent_data = agent_data
+                    except Exception:
+                        pass
+
+                    try:
+                        cds_dbg = agent_data.get("candles") if isinstance(agent_data.get("candles"), dict) else {}
+                        log.info(
+                            f"FORCE_CANDLES_DEBUG | assigned | candles_id={id(cds_dbg)} | keys={list(cds_dbg.keys()) if isinstance(cds_dbg, dict) else []}"
+                        )
+                    except Exception:
+                        pass
+            except Exception as e:
+                try:
+                    log.info(f"FORCE_CANDLES_DEBUG | error | {e}")
+                except Exception:
+                    pass
+                pass
 
             try:
                 keys = []
