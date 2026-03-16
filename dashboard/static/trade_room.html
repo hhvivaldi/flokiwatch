@@ -641,6 +641,7 @@
         var POLL_MS = 30000;
         var currentFilter = 'all';
         var latestMessages = [];
+        var prevCtxPrice = null;
 
         var tabs = document.querySelectorAll('.filter-tab');
         var feed = document.getElementById('feed');
@@ -1030,7 +1031,61 @@
                 ? state.last_analysis.current_price
                 : (state.last_known_price != null ? state.last_known_price : null);
               var priceEl = document.getElementById('ctx-price');
-              if (priceEl) priceEl.textContent = showPrice !== null && showPrice !== undefined ? String(showPrice) : '—';
+              var nShowPrice = (showPrice !== null && showPrice !== undefined) ? Number(showPrice) : NaN;
+              var showPriceText = isFinite(nShowPrice) ? nShowPrice.toFixed(2) : '—';
+              if (priceEl) priceEl.textContent = showPriceText;
+
+              // Change line: prefer previous close fields if present, else compare with previous polled price
+              try {
+                var changeEl = document.getElementById('ctx-change');
+                if (changeEl) {
+                  var la0 = state.last_analysis || {};
+
+                  var prevClose = null;
+                  var prevCandidates = [
+                    la0.previous_close,
+                    la0.prev_close,
+                    la0.last_close,
+                    la0.close,
+                    la0.h1_close,
+                    la0.h1_previous_close,
+                    la0.h1_prev_close
+                  ];
+                  for (var pc = 0; pc < prevCandidates.length; pc++) {
+                    var cand = prevCandidates[pc];
+                    var nn = Number(cand);
+                    if (cand !== null && cand !== undefined && isFinite(nn)) { prevClose = nn; break; }
+                  }
+
+                  var base = (prevClose !== null) ? prevClose : prevCtxPrice;
+                  if (!isFinite(nShowPrice) || base === null || base === undefined || !isFinite(Number(base)) || Number(base) === 0) {
+                    changeEl.textContent = '—';
+                    changeEl.style.color = '';
+                  } else {
+                    var b = Number(base);
+                    var delta = nShowPrice - b;
+                    var pct = (delta / b) * 100;
+
+                    if (!isFinite(delta) || !isFinite(pct) || delta === 0) {
+                      changeEl.textContent = '—';
+                      changeEl.style.color = '';
+                    } else {
+                      var up = delta > 0;
+                      var arrow = up ? '▲' : '▼';
+                      var color = up ? '#34d399' : '#f87171';
+                      var signDelta = up ? '+' : '-';
+                      var absDelta = Math.abs(delta);
+                      var absPct = Math.abs(pct);
+                      changeEl.textContent = arrow + ' ' + signDelta + absDelta.toFixed(2) + ' (' + signDelta + absPct.toFixed(2) + '%)';
+                      changeEl.style.color = color;
+                    }
+                  }
+                }
+              } catch (e) {
+                // silent
+              }
+
+              if (isFinite(nShowPrice)) prevCtxPrice = nShowPrice;
 
               // Market indicators from last_analysis.indicators
               try {
