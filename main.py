@@ -2682,6 +2682,125 @@ class TradingBot:
                 log.info("PROACTIVE_H1 | skipped — analysis already running")
                 return
 
+            use_simba = False
+            try:
+                positions = []
+                if self.executes_trades:
+                    try:
+                        positions = executor.get_open_positions() or []
+                    except Exception:
+                        positions = []
+
+                if positions:
+                    use_simba = False
+                else:
+                    from agent_tools import AgentTools
+
+                    tools_obj = AgentTools(
+                        self,
+                        executor=executor,
+                        safety_checks_module=None,
+                        risk_manager_module=None,
+                    )
+                    wake_path = None
+                    try:
+                        wake_path = tools_obj._wake_conditions_path()
+                    except Exception:
+                        wake_path = None
+
+                    if wake_path and os.path.exists(wake_path):
+                        try:
+                            with open(wake_path, "r", encoding="utf-8") as f:
+                                wake_conditions = json.load(f)
+                        except Exception:
+                            wake_conditions = {}
+
+                        if isinstance(wake_conditions, dict) and wake_conditions.get("conditions"):
+                            max_sleep = wake_conditions.get("max_sleep_minutes")
+                            try:
+                                max_sleep_i = int(max_sleep)
+                            except Exception:
+                                max_sleep_i = 0
+
+                            started_at = wake_conditions.get("sleep_started_at")
+                            expired = True
+                            try:
+                                if started_at and max_sleep_i > 0:
+                                    from datetime import datetime, timezone
+
+                                    st = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+                                    if st.tzinfo is None:
+                                        st = st.replace(tzinfo=timezone.utc)
+                                    elapsed_min = (datetime.now(timezone.utc) - st).total_seconds() / 60.0
+                                    expired = elapsed_min >= float(max_sleep_i)
+                            except Exception:
+                                expired = True
+
+                            if not expired and max_sleep_i > 0:
+                                use_simba = True
+            except Exception:
+                use_simba = False
+
+            if use_simba:
+                simba_result = None
+                try:
+                    from simba_watcher import SimbaWatcher
+
+                    tools_obj = None
+                    try:
+                        from agent_tools import AgentTools
+
+                        tools_obj = AgentTools(
+                            self,
+                            executor=executor,
+                            safety_checks_module=None,
+                            risk_manager_module=None,
+                        )
+                        wake_path = tools_obj._wake_conditions_path()
+                        with open(wake_path, "r", encoding="utf-8") as f:
+                            wake_conditions = json.load(f)
+                    except Exception:
+                        wake_conditions = {}
+
+                    scanner_data = {}
+                    try:
+                        dp = agent_data if isinstance(agent_data, dict) else {}
+                        scanner_data["current_price"] = dp.get("current_price")
+                        scanner_data["indicators"] = dp.get("indicators")
+                        scanner_data["patterns"] = dp.get("patterns")
+                        scanner_data["macro"] = dp.get("macro")
+                        scanner_data["timestamp"] = h1_close_time_iso
+                    except Exception:
+                        scanner_data = {"timestamp": h1_close_time_iso}
+
+                    simba = SimbaWatcher(timeout_seconds=10)
+                    simba_result = simba.check_conditions(scanner_data, wake_conditions)
+                except Exception as e:
+                    try:
+                        log.debug(f"PROACTIVE_H1 | Simba error (non-blocking): {e}")
+                    except Exception:
+                        pass
+                    simba_result = {"decision": "WAKE", "triggered": [], "checked_count": 0, "met_count": 0, "summary": "fallback — simba_failed"}
+
+                try:
+                    if self.last_analysis and isinstance(self.last_analysis, dict):
+                        self.last_analysis["simba"] = {
+                            "decision": simba_result.get("decision"),
+                            "triggered": simba_result.get("triggered") if isinstance(simba_result.get("triggered"), list) else [],
+                            "checked_count": simba_result.get("checked_count"),
+                            "met_count": simba_result.get("met_count"),
+                            "summary": simba_result.get("summary"),
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                except Exception:
+                    pass
+
+                if str(simba_result.get("decision") or "").upper() != "WAKE":
+                    log.info("PROACTIVE_H1 | Simba says SLEEP — skipping Floki")
+                    return
+
+                log.info(f"PROACTIVE_H1 | Simba says WAKE — calling Floki | {simba_result.get('summary')}")
+
             self._call_agent_proactive_snapshot(
                 trigger_type="PROACTIVE_H1",
                 snapshot_time_iso=h1_close_time_iso,
