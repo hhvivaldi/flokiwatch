@@ -2878,20 +2878,29 @@ class TradingBot:
         try:
             if agent_result.decision in ("OPEN_BUY", "OPEN_SELL"):
                 tp = getattr(agent_result, "trade_plan", None)
-                if not isinstance(tp, dict):
-                    log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
-                else:
+                entry_price = None
+                stop_loss = None
+                take_profit = None
+
+                if isinstance(tp, dict):
                     entry_price = tp.get("entry") or tp.get("entry_price")
                     stop_loss = tp.get("stop_loss")
                     take_profit = tp.get("take_profit")
-                    if entry_price is None or stop_loss is None or take_profit is None:
-                        log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
-                    else:
-                        exec_direction = "BUY" if agent_result.decision == "OPEN_BUY" else "SELL"
-                        log.info(
-                            f"PROACTIVE_H1 | Agent OPEN intent logged (tool executes) | {exec_direction} | "
-                            f"SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
-                        )
+
+                if entry_price is None or stop_loss is None or take_profit is None:
+                    ec = getattr(agent_result, "entry_conditions", None)
+                    if isinstance(ec, dict):
+                        entry_price = entry_price or ec.get("preferred_entry") or ec.get("entry")
+                        stop_loss = stop_loss or ec.get("sl") or ec.get("stop_loss")
+                        take_profit = take_profit or ec.get("tp") or ec.get("take_profit")
+
+                if entry_price is None or stop_loss is None or take_profit is None:
+                    log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
+                else:
+                    exec_direction = "BUY" if agent_result.decision == "OPEN_BUY" else "SELL"
+                    log.info(
+                        f"PROACTIVE_H1 | Agent OPEN intent logged (tool executes) | {exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
+                    )
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
                 log.info(
