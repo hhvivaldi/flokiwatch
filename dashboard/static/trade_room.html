@@ -44,8 +44,8 @@
 
       /* ── Avatar ─────────────────────────────── */
       .agent-avatar {
-        width: 48px;
-        height: 48px;
+        width: 72px;
+        height: 72px;
         border-radius: 14px;
         display: flex;
         align-items: center;
@@ -62,6 +62,12 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+      }
+      .agent-avatar video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
       }
       .avatar-floki {
         background: rgba(16, 185, 129, 0.1);
@@ -468,8 +474,8 @@
         <div class="glass-panel-deep rounded-xl p-4 focus-glow-emerald" id="floki-card">
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
-            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar">
-              <img src="/image/floki-trade-room.png" alt="FLOKI" style="border-radius:50%" />
+            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar" data-agent="floki" data-rotate-ms="60000">
+              <video id="avatar-floki-video" autoplay muted loop playsinline preload="metadata"></video>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -500,8 +506,8 @@
         <div class="glass-panel-deep rounded-xl p-4" id="rex-card">
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
-            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar">
-              <img src="/image/rex-floki-trade.png" alt="REX" style="border-radius:50%" />
+            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar" data-agent="rex" data-rotate-ms="60000">
+              <video id="avatar-rex-video" autoplay muted loop playsinline preload="metadata"></video>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -643,8 +649,46 @@
         var latestMessages = [];
         var prevCtxPrice = null;
 
+        var AVATAR_ROTATE_MS = 60000;
+        var FLOKI_AVATAR_VIDEOS = [
+          '/image/flokimove1.mp4',
+          '/image/flokimove2.mp4'
+        ];
+        var REX_AVATAR_VIDEOS = [
+          '/image/rexmove1.mp4',
+          '/image/rexmove2.mp4',
+          '/image/rexmove3.mp4'
+        ];
+
         var tabs = document.querySelectorAll('.filter-tab');
         var feed = document.getElementById('feed');
+
+        function pickRandom(arr) {
+          if (!Array.isArray(arr) || !arr.length) return null;
+          return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function setAvatarVideo(videoEl, src) {
+          try {
+            if (!videoEl || !src) return;
+            if (videoEl.getAttribute('data-src') === src) return;
+            videoEl.setAttribute('data-src', src);
+            videoEl.src = src;
+            try { videoEl.load(); } catch(e) {}
+            var p = null;
+            try { p = videoEl.play(); } catch(e) {}
+            if (p && typeof p.catch === 'function') {
+              p.catch(function(){});
+            }
+          } catch (e) {
+            // silent
+          }
+        }
+
+        function rotateAvatarsOnce() {
+          setAvatarVideo(document.getElementById('avatar-floki-video'), pickRandom(FLOKI_AVATAR_VIDEOS));
+          setAvatarVideo(document.getElementById('avatar-rex-video'), pickRandom(REX_AVATAR_VIDEOS));
+        }
 
         function esc(s) {
           return (s || '').toString()
@@ -796,6 +840,16 @@
             return;
           }
           feed.innerHTML = html;
+        }
+
+        // Init avatar videos
+        try {
+          rotateAvatarsOnce();
+          setInterval(function () {
+            try { rotateAvatarsOnce(); } catch(e) {}
+          }, AVATAR_ROTATE_MS);
+        } catch (e) {
+          // silent
         }
 
         function setFilter(f) {
