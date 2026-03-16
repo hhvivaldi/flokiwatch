@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -27,12 +28,95 @@ class RexResult:
 def _build_prompt(floki_summary: Dict[str, Any]) -> str:
     summary_json = json.dumps(floki_summary or {}, ensure_ascii=False, default=str)
     return (
-        "You are Rex, a junior Gold trader working under Floki (senior, 20 years experience). "
-        "Your job is to CHALLENGE his reasoning and point out risks. You are NOT the decision maker — Floki decides. "
-        "But speak up when you see something wrong. Be specific with data. If Floki makes a good rebuttal, acknowledge it. "
-        "Respond with ONLY valid JSON: {agree: true/false, reasoning: '...', concerns: [...], suggested_adjustment: '...'}\n\n"
-        "DATA:\n"
+        "You have access to the same market data as Floki. USE IT. Reference specific levels, indicators, timeframes.\n\n"
+        "NEVER respond with generic concerns. Every concern must reference specific data.\n\n"
+        "Respond naturally in 2-4 sentences. Then list 1-3 specific concerns with data. Then suggest ONE specific adjustment if needed. "
+        "End with a clear AGREE or DISAGREE on its own line.\n\n"
+        "CONTEXT (JSON):\n"
         f"{summary_json}"
+    )
+
+
+def _rex_system_prompt() -> str:
+    return (
+        "You are Rex, a 28-year-old junior gold trader with 5 years of experience. "
+        "You work under Floki, a senior trader with 20 years of experience. "
+        "Your job is to challenge his reasoning and protect the team from bad trades.\n\n"
+        "Your personality:\n"
+        "- You're sharp, direct, and not afraid to push back on Floki even though he's senior\n"
+        "- You speak naturally like a real trader — ask questions, use specific numbers, point to specific candles or levels\n"
+        "- When Floki makes a good rebuttal with data, you acknowledge it honestly — don't repeat the same concern\n"
+        "- You focus on RISK — what could go wrong, what Floki might be missing\n"
+        "- You're NOT a decision maker. Floki decides. But you make damn sure he's thought it through\n"
+        "- You have access to the same market data as Floki. USE IT. Reference specific levels, indicators, timeframes.\n\n"
+        "NEVER respond with generic concerns. Every concern must reference specific data.\n\n"
+        "Format:\n"
+        "- 2-4 natural sentences\n"
+        "- Then 1-3 specific concerns with data\n"
+        "- Then ONE specific adjustment if needed\n"
+        "- End with AGREE or DISAGREE on its own line\n"
+    )
+
+
+def _parse_rex_response(text: str) -> RexResult:
+    raw = str(text or "").strip()
+    if not raw:
+        return RexResult(agree=False, reasoning="", concerns=[], suggested_adjustment="", raw=text)
+
+    m = re.search(r"\b(AGREE|DISAGREE)\b\s*[\.!\)]*\s*$", raw, flags=re.IGNORECASE)
+    if m:
+        agree = m.group(1).strip().upper() == "AGREE"
+        body = raw[: m.start()].strip()
+    else:
+        agree = False
+        body = raw
+
+    concerns = []
+    try:
+        lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+        idx = None
+        for i, ln in enumerate(lines):
+            if ln.lower().startswith("concerns"):
+                idx = i
+                break
+        if idx is not None:
+            after = lines[idx + 1 :]
+            for ln in after:
+                if ln.lower().startswith("adjust") or ln.lower().startswith("suggest"):
+                    break
+                s = re.sub(r"^[-*\d\.\)]+\s*", "", ln).strip()
+                if s:
+                    concerns.append(s)
+                if len(concerns) >= 3:
+                    break
+        else:
+            for ln in lines:
+                if re.match(r"^\d+[\.)]\s+", ln) or ln.startswith("-") or ln.startswith("*"):
+                    s = re.sub(r"^[-*\d\.\)]+\s*", "", ln).strip()
+                    if s:
+                        concerns.append(s)
+                if len(concerns) >= 3:
+                    break
+    except Exception:
+        concerns = []
+
+    suggested_adjustment = ""
+    try:
+        mm = re.search(
+            r"(?im)^(?:adjustment|suggested\s*adjustment|suggestion|adjust):\s*(.+?)\s*$",
+            body,
+        )
+        if mm:
+            suggested_adjustment = str(mm.group(1) or "").strip()
+    except Exception:
+        suggested_adjustment = ""
+
+    return RexResult(
+        agree=agree,
+        reasoning=body,
+        concerns=concerns,
+        suggested_adjustment=suggested_adjustment,
+        raw=raw,
     )
 
 
@@ -73,7 +157,7 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "You are Rex."},
+                    {"role": "system", "content": _rex_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
@@ -92,45 +176,15 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
         if not content:
             return {"success": False, "reason": "empty_response"}
 
-        parsed = None
-        try:
-            parsed = json.loads(content)
-        except Exception:
-            try:
-                # Try to salvage JSON substring
-                s = str(content)
-                i = s.find("{")
-                j = s.rfind("}")
-                if i != -1 and j != -1 and j > i:
-                    parsed = json.loads(s[i : j + 1])
-            except Exception:
-                parsed = None
-
-        if not isinstance(parsed, dict):
-            return {"success": False, "reason": "invalid_json"}
-
-        agree = parsed.get("agree")
-        if isinstance(agree, str):
-            agree = agree.strip().lower() in ("true", "yes", "1")
-        agree_b = bool(agree) if agree is not None else None
-
-        reasoning = str(parsed.get("reasoning") or "").strip()
-        concerns = parsed.get("concerns")
-        if concerns is None:
-            concerns = []
-        if not isinstance(concerns, list):
-            concerns = [str(concerns)]
-        concerns = [str(c or "").strip() for c in concerns if str(c or "").strip()]
-
-        suggested_adjustment = str(parsed.get("suggested_adjustment") or "").strip()
+        parsed = _parse_rex_response(content)
 
         latency_ms = int((time.time() - start) * 1000)
         return {
             "success": True,
-            "agree": agree_b,
-            "reasoning": reasoning,
-            "concerns": concerns,
-            "suggested_adjustment": suggested_adjustment,
+            "agree": bool(parsed.agree),
+            "reasoning": str(parsed.reasoning or "").strip(),
+            "concerns": parsed.concerns if isinstance(parsed.concerns, list) else [],
+            "suggested_adjustment": str(parsed.suggested_adjustment or "").strip(),
             "latency_ms": latency_ms,
             "model": model,
             "raw": content,

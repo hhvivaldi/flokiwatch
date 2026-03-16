@@ -2,7 +2,7 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
 
@@ -34,6 +34,93 @@ class AgentTools:
             return dp if isinstance(dp, dict) and dp else None
         except Exception:
             return None
+
+    def _nearest_sr_zones(self, zones: List[Dict[str, Any]], mid_price: float, limit: int = 5) -> List[Dict[str, Any]]:
+        try:
+            def zone_center(z: Dict[str, Any]) -> Optional[float]:
+                a = self._safe_float(z.get("low"))
+                b = self._safe_float(z.get("high"))
+                if a is not None and b is not None:
+                    return (a + b) / 2.0
+                c = self._safe_float(z.get("level"))
+                if c is not None:
+                    return c
+                c = self._safe_float(z.get("price"))
+                if c is not None:
+                    return c
+                return None
+
+            scored: List[Tuple[float, Dict[str, Any]]] = []
+            for z in zones:
+                if not isinstance(z, dict):
+                    continue
+                c = zone_center(z)
+                if c is None:
+                    continue
+                scored.append((abs(float(c) - float(mid_price)), z))
+            scored.sort(key=lambda x: x[0])
+            return [z for _, z in scored[: max(1, int(limit))]]
+        except Exception:
+            return zones[: max(1, int(limit))] if isinstance(zones, list) else []
+
+    def _extract_ema50_ema200(self, dp: Dict[str, Any]) -> Dict[str, Any]:
+        out = {"ema50": None, "ema200": None}
+        try:
+            ind = dp.get("indicators") or {}
+            emas = ind.get("emas") or {}
+            if isinstance(emas, dict):
+                out["ema50"] = self._safe_float(emas.get("ema50"))
+                out["ema200"] = self._safe_float(emas.get("ema200"))
+        except Exception:
+            return out
+        return out
+
+    def _extract_recent_candles_for_rex(self, dp: Dict[str, Any]) -> Dict[str, Any]:
+        out = {"H1_last5": [], "M5_last3": [], "volume_context": {"H1_last": None, "M5_last3": []}}
+        try:
+            cds = dp.get("candles") or {}
+            if isinstance(cds, dict):
+                h1 = cds.get("H1")
+                m5 = cds.get("M5")
+                if isinstance(h1, list) and h1:
+                    out["H1_last5"] = h1[-5:]
+                if isinstance(m5, list) and m5:
+                    out["M5_last3"] = m5[-3:]
+        except Exception:
+            pass
+
+        try:
+            if not out["H1_last5"]:
+                built = self.get_candles("H1", 5)
+                if isinstance(built, dict) and isinstance(built.get("candles"), list):
+                    out["H1_last5"] = built.get("candles")[-5:]
+        except Exception:
+            pass
+
+        try:
+            if not out["M5_last3"]:
+                built = self.get_candles("M5", 3)
+                if isinstance(built, dict) and isinstance(built.get("candles"), list):
+                    out["M5_last3"] = built.get("candles")[-3:]
+        except Exception:
+            pass
+
+        try:
+            if isinstance(out.get("H1_last5"), list) and out["H1_last5"]:
+                out["volume_context"]["H1_last"] = out["H1_last5"][-1].get("volume")
+        except Exception:
+            pass
+
+        try:
+            vols = []
+            for c in out.get("M5_last3") or []:
+                if isinstance(c, dict):
+                    vols.append(c.get("volume"))
+            out["volume_context"]["M5_last3"] = vols
+        except Exception:
+            pass
+
+        return out
 
     def _last_df(self) -> Any:
         try:
@@ -380,6 +467,7 @@ class AgentTools:
             last_ts = getattr(self, "_rex_debate_last_ts", None)
             if last_ts is None or (now - float(last_ts)) > 300:
                 setattr(self, "_rex_debate_turns", 0)
+                setattr(self, "_rex_debate_history", [])
             setattr(self, "_rex_debate_last_ts", now)
 
             turns = int(getattr(self, "_rex_debate_turns", 0) or 0)
@@ -388,10 +476,113 @@ class AgentTools:
             turns += 1
             setattr(self, "_rex_debate_turns", turns)
 
+            history = getattr(self, "_rex_debate_history", None)
+            if not isinstance(history, list):
+                history = []
+
             dir_s = str(my_direction or "").upper().strip()
             conf_f = self._safe_float(my_confidence)
             if conf_f is None:
                 conf_f = 0.0
+
+            dp = self._last_agent_data() or {}
+            price = self._extract_price_from_cache(dp) or {}
+            mid = None
+            try:
+                b = self._safe_float(price.get("bid"))
+                a = self._safe_float(price.get("ask"))
+                if b is not None and a is not None:
+                    mid = (b + a) / 2.0
+            except Exception:
+                mid = None
+
+            indicators = {}
+            try:
+                indicators = self.get_indicators()
+                if not isinstance(indicators, dict):
+                    indicators = {}
+            except Exception:
+                indicators = {}
+
+            ema_blob = self._extract_ema50_ema200(dp)
+            if ema_blob.get("ema50") is not None:
+                indicators["ema50"] = ema_blob.get("ema50")
+            if indicators.get("ema200") is None:
+                indicators["ema200"] = ema_blob.get("ema200")
+
+            sr_nearest = []
+            try:
+                sr = self.get_sr_zones()
+                zones = sr.get("zones") if isinstance(sr, dict) else None
+                if isinstance(zones, list) and zones:
+                    if mid is not None:
+                        sr_nearest = self._nearest_sr_zones(zones, mid, limit=5)
+                    else:
+                        sr_nearest = zones[:5]
+            except Exception:
+                sr_nearest = []
+
+            fib = {}
+            try:
+                fib = self.get_fibonacci_levels()
+                if not isinstance(fib, dict):
+                    fib = {}
+            except Exception:
+                fib = {}
+
+            macro = {}
+            try:
+                macro = self.get_macro()
+                if not isinstance(macro, dict):
+                    macro = {}
+            except Exception:
+                macro = {}
+
+            headlines = []
+            try:
+                h = self.get_headlines()
+                hh = h.get("headlines") if isinstance(h, dict) else None
+                if isinstance(hh, list):
+                    headlines = hh[:3]
+            except Exception:
+                headlines = []
+
+            candles_blob = self._extract_recent_candles_for_rex(dp)
+
+            session_name = None
+            try:
+                session_name = dp.get("session_name")
+                if isinstance(session_name, str):
+                    session_name = session_name.strip().upper() or None
+            except Exception:
+                session_name = None
+            if session_name is None:
+                try:
+                    session_name = self._infer_session_from_utc_hour(self._safe_int(dp.get("utc_hour")))
+                except Exception:
+                    session_name = None
+
+            patterns_context = self._extract_context_for_patterns()
+            similar_losses: List[Dict[str, Any]] = []
+            try:
+                similar_losses = self._query_similar_losing_trades(patterns_context, limit=3)
+            except Exception:
+                similar_losses = []
+
+            debate_history_lines: List[str] = []
+            try:
+                for t in history[-5:]:
+                    if not isinstance(t, dict):
+                        continue
+                    tn = t.get("turn")
+                    ftxt = str(t.get("floki") or "").strip()
+                    rtxt = str(t.get("rex") or "").strip()
+                    if ftxt:
+                        debate_history_lines.append(f"Turn {tn}: Floki: {ftxt}")
+                    if rtxt:
+                        debate_history_lines.append(f"Turn {tn}: Rex: {rtxt}")
+            except Exception:
+                debate_history_lines = []
 
             payload = {
                 "floki": {
@@ -401,6 +592,23 @@ class AgentTools:
                     "key_data": key_data,
                 },
                 "rex_previous_response": rex_previous_response,
+                "market_context": {
+                    "current_price": price or None,
+                    "session_name": session_name,
+                    "indicators": indicators,
+                    "sr_zones_nearest": sr_nearest,
+                    "fibonacci": fib,
+                    "candles": {
+                        "H1_last5": candles_blob.get("H1_last5"),
+                        "M5_last3": candles_blob.get("M5_last3"),
+                    },
+                    "volume_context": candles_blob.get("volume_context"),
+                    "macro": macro,
+                    "headlines_top3": headlines,
+                    "trade_patterns_top3": (patterns_context or {}),
+                    "similar_losing_trades_top3": similar_losses,
+                },
+                "debate_history": "\n".join(debate_history_lines).strip(),
                 "turn": turns,
                 "turns_max": 5,
             }
@@ -420,6 +628,19 @@ class AgentTools:
             reasoning = str(rex.get("reasoning") or "").strip()
             concerns = rex.get("concerns") if isinstance(rex.get("concerns"), list) else []
             suggested_adjustment = str(rex.get("suggested_adjustment") or "").strip()
+
+            try:
+                history.append(
+                    {
+                        "turn": turns,
+                        "floki": str(my_reasoning or "").strip(),
+                        "rex": reasoning,
+                        "agree": bool(agree),
+                    }
+                )
+                setattr(self, "_rex_debate_history", history[-10:])
+            except Exception:
+                pass
 
             log.info(
                 f"DEBATE | turn={turns}/5 | Floki: {dir_s} conf:{int(round(conf_f))}% | Rex: {'AGREE' if agree else 'DISAGREE'} — {reasoning[:140]}"
