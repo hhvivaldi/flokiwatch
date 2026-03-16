@@ -1327,7 +1327,19 @@ class TradingBot:
                         pass
 
                     if candles_cache:
-                        dp["candles"] = candles_cache
+                        try:
+                            tgt = dp.setdefault("candles", {})
+                            if not isinstance(tgt, dict):
+                                tgt = {}
+                                dp["candles"] = tgt
+                            # Merge to avoid overwriting other TFs populated elsewhere.
+                            tgt.update(candles_cache)
+                        except Exception:
+                            # Fallback to replacement if merge fails for any reason.
+                            try:
+                                dp["candles"] = candles_cache
+                            except Exception:
+                                pass
 
                     # fibonacci (simple H1 retracement levels)
                     if not isinstance(dp.get("fibonacci"), dict) or not dp.get("fibonacci"):
@@ -2300,6 +2312,80 @@ class TradingBot:
             except Exception:
                 upcoming_events = []
 
+            def _fast_note(action: str, ticket: Optional[int] = None, details: str = ""):
+                try:
+                    ttxt = f" ticket={ticket}" if ticket is not None else ""
+                    log.info(f"AGENT_FAST | {action}{ttxt} | {details}")
+                except Exception:
+                    pass
+
+                try:
+                    # Persist for proactive agent visibility (monitor feed)
+                    self._append_agent_monitor_event(
+                        event=f"FAST_{action}",
+                        ticket=ticket,
+                        details=details or "",
+                    )
+                except Exception:
+                    pass
+
+                try:
+                    # Persist to session memory so AgentTools.read_session_memory can surface it
+                    import json
+                    import os
+                    from datetime import datetime
+
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    data_dir = os.path.join(base_dir, "data")
+                    os.makedirs(data_dir, exist_ok=True)
+                    mem_path = os.path.join(data_dir, "agent_session_memory.json")
+
+                    now = datetime.now()
+                    today = now.date().isoformat()
+                    msg = f"FAST_AGENT {action}{ttxt}. {details}".strip()
+
+                    payload = {
+                        "session_date": today,
+                        "thesis": "",
+                        "trades_today": 0,
+                        "wins_today": 0,
+                        "losses_today": 0,
+                        "notes": [],
+                        "last_updated": now.isoformat(timespec="seconds"),
+                    }
+
+                    if os.path.exists(mem_path):
+                        try:
+                            with open(mem_path, "r", encoding="utf-8") as f:
+                                existing = json.load(f)
+                            if isinstance(existing, dict):
+                                payload.update(existing)
+                        except Exception:
+                            pass
+
+                    if str(payload.get("session_date") or "") != today:
+                        payload = {
+                            "session_date": today,
+                            "thesis": "",
+                            "trades_today": 0,
+                            "wins_today": 0,
+                            "losses_today": 0,
+                            "notes": [],
+                            "last_updated": now.isoformat(timespec="seconds"),
+                        }
+
+                    if not isinstance(payload.get("notes"), list):
+                        payload["notes"] = []
+                    if msg:
+                        payload["notes"].append({"time": now.strftime("%H:%M"), "note": msg})
+                        payload["notes"] = payload["notes"][-10:]
+                    payload["last_updated"] = now.isoformat(timespec="seconds")
+
+                    with open(mem_path, "w", encoding="utf-8") as f:
+                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+
             price_payload = {"bid": bid, "ask": ask, "spread": spread}
 
             atr_points = 10.0
@@ -2446,6 +2532,14 @@ class TradingBot:
                         self.close_agent_trade(int(t), reason_txt or f"fast_{trigger_type}")
                     except Exception:
                         pass
+                    try:
+                        _fast_note(
+                            "CLOSE",
+                            ticket=int(t) if t is not None else None,
+                            details=f"trigger={trigger_type} | reason={reason_txt}".strip(),
+                        )
+                    except Exception:
+                        pass
                 result = {"success": True, "closed": tickets}
             elif exec_type == "ADJUST":
                 new_sl = exec_payload.get("new_sl")
@@ -2461,6 +2555,14 @@ class TradingBot:
                 for t in tickets:
                     try:
                         self.adjust_agent_trade(int(t), new_sl=new_sl, new_tp=new_tp, reason=reason_txt or f"fast_{trigger_type}")
+                    except Exception:
+                        pass
+                    try:
+                        _fast_note(
+                            "ADJUST",
+                            ticket=int(t) if t is not None else None,
+                            details=f"trigger={trigger_type} | new_sl={new_sl} new_tp={new_tp} | reason={reason_txt}".strip(),
+                        )
                     except Exception:
                         pass
                 result = {"success": True, "adjusted": tickets}
@@ -2546,6 +2648,21 @@ class TradingBot:
                     if not isinstance(cds, dict):
                         cds = {}
                         dp["candles"] = cds
+                        try:
+                            _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                            log.info(
+                                f"CANDLES_DEBUG | step=init_reset | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
+                            )
+                        except Exception:
+                            pass
+
+                    try:
+                        _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                        log.info(
+                            f"CANDLES_DEBUG | step=init_ok | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
+                        )
+                    except Exception:
+                        pass
 
                     have_m5 = isinstance(cds.get("M5"), list) and bool(cds.get("M5"))
                     have_h4 = isinstance(cds.get("H4"), list) and bool(cds.get("H4"))
@@ -2580,6 +2697,13 @@ class TradingBot:
                             if m5_list:
                                 try:
                                     cds["M5"] = m5_list
+                                except Exception:
+                                    pass
+                                try:
+                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                                    log.info(
+                                        f"CANDLES_DEBUG | step=after_set_M5 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
+                                    )
                                 except Exception:
                                     pass
                         except Exception:
@@ -2617,6 +2741,13 @@ class TradingBot:
                                     cds["H4"] = h4_list
                                 except Exception:
                                     pass
+                                try:
+                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                                    log.info(
+                                        f"CANDLES_DEBUG | step=after_set_H4 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
+                                    )
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
 
@@ -2650,6 +2781,13 @@ class TradingBot:
                             if d1_list:
                                 try:
                                     cds["D1"] = d1_list
+                                except Exception:
+                                    pass
+                                try:
+                                    _c = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                                    log.info(
+                                        f"CANDLES_DEBUG | step=after_set_D1 | id={id(_c)} | keys={list(_c.keys()) if isinstance(_c, dict) else []}"
+                                    )
                                 except Exception:
                                     pass
                         except Exception:
@@ -2722,7 +2860,10 @@ class TradingBot:
                 keys = []
                 try:
                     cds = agent_data.get("candles", {}) if isinstance(agent_data, dict) else {}
-                    keys = list(cds.keys()) if isinstance(cds, dict) else []
+                    if isinstance(cds, dict):
+                        keys = list(cds.keys())
+                    else:
+                        keys = []
                 except Exception:
                     keys = []
                 log.info(f"AGENT_CACHE | pre-decide check | candles_keys={keys}")
