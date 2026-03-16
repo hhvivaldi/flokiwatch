@@ -2771,6 +2771,17 @@ class TradingBot:
                         scanner_data["macro"] = dp.get("macro")
                         scanner_data["volume"] = dp.get("volume") or dp.get("tick_volume") or dp.get("last_h1_volume")
                         scanner_data["candlestick_patterns"] = dp.get("candlestick_patterns")
+                        try:
+                            candles = dp.get("candles", {})
+                            h1_candles = candles.get("H1") if isinstance(candles, dict) else None
+                            if isinstance(h1_candles, list) and len(h1_candles) > 0:
+                                last_h1 = h1_candles[-1]
+                                if isinstance(last_h1, dict):
+                                    scanner_data["last_h1_tick_volume"] = int(last_h1.get("volume", last_h1.get("tick_volume", 0)) or 0)
+                                else:
+                                    scanner_data["last_h1_tick_volume"] = int(last_h1["volume"])
+                        except Exception:
+                            pass
                         scanner_data["timestamp"] = h1_close_time_iso
                     except Exception:
                         scanner_data = {"timestamp": h1_close_time_iso}
