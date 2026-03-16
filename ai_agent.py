@@ -1065,8 +1065,9 @@ async def agent_decide(
             parsed_obj = None
 
         if isinstance(parsed_obj, dict):
-            # Checklist validation is legacy; keep non-blocking.
-            result.checklist_validation = _validate_checklist(parsed_obj, trigger_context if isinstance(trigger_context, dict) else {})
+            # disabled — incompatible with tool-use architecture
+            # result.checklist_validation = _validate_checklist(parsed_obj, trigger_context if isinstance(trigger_context, dict) else {})
+            pass
         else:
             logger.warning("AGENT_CHECKLIST | MISSING — could not re-parse raw_response JSON for checklist validation")
     except Exception as e:
