@@ -711,6 +711,17 @@ class AIAgent:
                 pass
 
             try:
+                usage = getattr(response, "usage", None)
+                cache_created = getattr(usage, "cache_created", None)
+                cache_read = getattr(usage, "cache_read", None)
+                if cache_created is not None or cache_read is not None:
+                    log.info(
+                        f"AGENT_CACHE_USAGE | model={getattr(response, 'model', None)} | cache_created={cache_created} | cache_read={cache_read}"
+                    )
+            except Exception:
+                pass
+
+            try:
                 last_model = getattr(response, "model", last_model)
             except Exception:
                 pass
