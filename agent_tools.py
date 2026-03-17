@@ -630,6 +630,31 @@ class AgentTools:
             suggested_adjustment = str(rex.get("suggested_adjustment") or "").strip()
 
             try:
+                from db_writer import record_agent_event
+
+                floki_text = str(my_reasoning or "").strip()
+                if dir_s:
+                    floki_text = (f"{dir_s}: " + floki_text).strip()
+                if floki_text:
+                    record_agent_event(
+                        "DEBATE",
+                        floki_text[:4000],
+                        payload={"turn": turns},
+                        author="FLOKI",
+                    )
+
+                rex_text = str(reasoning or "").strip()
+                if rex_text:
+                    record_agent_event(
+                        "DEBATE",
+                        rex_text[:4000],
+                        payload={"turn": turns, "agree": bool(agree)},
+                        author="REX",
+                    )
+            except Exception:
+                pass
+
+            try:
                 history.append(
                     {
                         "turn": turns,

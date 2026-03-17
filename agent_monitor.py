@@ -241,8 +241,52 @@ class AgentMonitor:
         if not isinstance(dp, dict) or not dp:
             return
 
+        price_mid = None
+        try:
+            cp = dp.get("current_price")
+            if isinstance(cp, dict):
+                b = self._safe_float(cp.get("bid"))
+                a = self._safe_float(cp.get("ask"))
+                if b is not None and a is not None:
+                    price_mid = (b + a) / 2.0
+                elif b is not None:
+                    price_mid = b
+                elif a is not None:
+                    price_mid = a
+            elif cp is not None:
+                price_mid = self._safe_float(cp)
+        except Exception:
+            price_mid = None
+
+        if price_mid is None:
+            try:
+                price_mid = self._safe_float(dp.get("price"))
+            except Exception:
+                price_mid = None
+
+        if price_mid is None:
+            try:
+                tick = dp.get("tick")
+                if isinstance(tick, dict):
+                    price_mid = self._safe_float(tick.get("mid"))
+            except Exception:
+                price_mid = None
+
+        if price_mid is None:
+            try:
+                from executor import executor
+
+                px = executor.get_current_price()
+                if px and isinstance(px, (list, tuple)) and len(px) >= 2:
+                    b = self._safe_float(px[0])
+                    a = self._safe_float(px[1])
+                    if b is not None and a is not None:
+                        price_mid = (b + a) / 2.0
+            except Exception:
+                price_mid = None
+
         scanner_data: Dict[str, Any] = {
-            "current_price": dp.get("current_price"),
+            "current_price": price_mid,
             "indicators": dp.get("indicators"),
             "patterns": dp.get("patterns"),
             "volume": dp.get("volume") or dp.get("tick_volume") or dp.get("last_h1_volume"),
