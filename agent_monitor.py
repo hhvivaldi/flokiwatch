@@ -19,6 +19,10 @@ class AgentMonitor:
         self.recent_prices: List[Tuple[float, float]] = []
         self.session_last_trigger_date: Dict[str, str] = {}
         self._simba_template_idx: int = 0
+        self._last_simba_summary_ts: float = 0.0
+        self._simba_5m_high: Optional[float] = None
+        self._simba_5m_low: Optional[float] = None
+        self._simba_5m_first_price: Optional[float] = None
 
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
@@ -226,12 +230,13 @@ class AgentMonitor:
 
     def _check_simba_wake_conditions(self) -> None:
         wake_conditions = self._load_wake_conditions()
-        if not wake_conditions:
+        bot = getattr(self, "bot", None)
+        if bot is None:
             return
 
         conditions = wake_conditions.get("conditions") if isinstance(wake_conditions, dict) else None
-        if not isinstance(conditions, list) or not conditions:
-            return
+        if not isinstance(conditions, list):
+            conditions = []
 
         conditions_fingerprint = None
         try:
@@ -242,10 +247,6 @@ class AgentMonitor:
             conditions_fingerprint = hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
         except Exception:
             conditions_fingerprint = None
-
-        bot = getattr(self, "bot", None)
-        if bot is None:
-            return
 
         dp = getattr(bot, "_last_agent_data", None)
         if not isinstance(dp, dict) or not dp:
@@ -273,6 +274,17 @@ class AgentMonitor:
                 price_mid = self._safe_float(dp.get("price"))
             except Exception:
                 price_mid = None
+
+        if isinstance(price_mid, (int, float)):
+            try:
+                if self._simba_5m_high is None or float(price_mid) > float(self._simba_5m_high):
+                    self._simba_5m_high = float(price_mid)
+                if self._simba_5m_low is None or float(price_mid) < float(self._simba_5m_low):
+                    self._simba_5m_low = float(price_mid)
+                if self._simba_5m_first_price is None:
+                    self._simba_5m_first_price = float(price_mid)
+            except Exception:
+                pass
 
         in_cooldown = False
         cooldown_minutes = 30
@@ -381,11 +393,50 @@ class AgentMonitor:
         raw_wake = bool(expired or triggered_ids)
         decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
 
+        simba_state_decision = "MONITORING"
+        try:
+            if decision == "WAKE":
+                simba_state_decision = "ALERT"
+            elif isinstance(conditions, list) and len(conditions) > 0:
+                simba_state_decision = "WATCHING"
+            else:
+                simba_state_decision = "MONITORING"
+        except Exception:
+            simba_state_decision = "MONITORING"
+
+        summary_emitted = False
         try:
             from db_writer import record_agent_event
 
             price_f = self._safe_float(scanner_data.get("current_price"))
             price_str = f"{price_f:.2f}" if isinstance(price_f, (int, float)) else "n/a"
+
+            now_ts = time.time()
+            emit_summary = False
+            try:
+                if decision == "WAKE" or raw_wake or in_cooldown:
+                    emit_summary = False
+                else:
+                    emit_summary = (now_ts - float(self._last_simba_summary_ts or 0.0)) >= 300.0
+            except Exception:
+                emit_summary = False
+
+            nearest_levels = []
+            try:
+                if isinstance(price_f, (int, float)) and isinstance(conditions, list) and conditions:
+                    for i, c in enumerate(conditions, start=1):
+                        if not isinstance(c, dict):
+                            continue
+                        level = self._safe_float(c.get("level"))
+                        if level is None:
+                            continue
+                        cid = str(c.get("id") or f"c{i}").strip() or f"c{i}"
+                        distance = abs(float(price_f) - float(level))
+                        nearest_levels.append({"id": cid, "level": level, "distance": distance, "type": c.get("type")})
+                    nearest_levels.sort(key=lambda x: x.get("distance") if isinstance(x, dict) else 1e18)
+                    nearest_levels = nearest_levels[:3]
+            except Exception:
+                nearest_levels = []
 
             if decision == "WAKE" and expired:
                 hours = 0.0
@@ -410,12 +461,16 @@ class AgentMonitor:
                         "expired": True,
                         "elapsed_min": elapsed_min,
                         "price": price_f,
+                        "range_low": self._simba_5m_low,
+                        "range_high": self._simba_5m_high,
+                        "nearest_levels": nearest_levels,
                         "cooldown": in_cooldown,
                         "cooldown_minutes": cooldown_minutes,
                         "cooldown_fingerprint": conditions_fingerprint,
                     },
                     author="SIMBA",
                 )
+                summary_emitted = True
             elif decision == "WAKE" and triggered_ids:
                 first = None
                 try:
@@ -461,12 +516,16 @@ class AgentMonitor:
                         "expired": False,
                         "triggered": triggered_ids,
                         "price": price_f,
+                        "range_low": self._simba_5m_low,
+                        "range_high": self._simba_5m_high,
+                        "nearest_levels": nearest_levels,
                         "cooldown": in_cooldown,
                         "cooldown_minutes": cooldown_minutes,
                         "cooldown_fingerprint": conditions_fingerprint,
                     },
                     author="SIMBA",
                 )
+                summary_emitted = True
             elif raw_wake and in_cooldown:
                 next_hhmm = ""
                 try:
@@ -488,6 +547,9 @@ class AgentMonitor:
                         "expired": bool(expired),
                         "triggered": triggered_ids,
                         "price": price_f,
+                        "range_low": self._simba_5m_low,
+                        "range_high": self._simba_5m_high,
+                        "nearest_levels": nearest_levels,
                         "cooldown": True,
                         "cooldown_minutes": cooldown_minutes,
                         "cooldown_remaining_min": mins_remaining,
@@ -496,33 +558,151 @@ class AgentMonitor:
                     },
                     author="SIMBA",
                 )
+                summary_emitted = True
             else:
-                checked = 0
-                try:
-                    checked = int(simba_result.get("checked_count")) if isinstance(simba_result, dict) else len(conditions)
-                except Exception:
-                    checked = len(conditions)
+                if emit_summary:
+                    checked = 0
+                    met = 0
+                    try:
+                        checked = int(simba_result.get("checked_count")) if isinstance(simba_result, dict) else len(conditions)
+                    except Exception:
+                        checked = len(conditions)
+                    try:
+                        met = int(simba_result.get("met_count")) if isinstance(simba_result, dict) else 0
+                    except Exception:
+                        met = 0
 
-                msg = self._next_simba_template(
-                    [
-                        "All quiet, Boss. Price chilling at {price}, {checked}/{total} conditions nowhere close. I'll keep watching.",
-                        "Nothing cooking. {price} — still between your lines. Back in 1 min.",
-                    ]
-                ).format(price=price_str, checked=int(checked), total=int(len(conditions)))
+                    rng_low = self._simba_5m_low
+                    rng_high = self._simba_5m_high
+                    rng_txt = ""
+                    try:
+                        if isinstance(rng_low, (int, float)) and isinstance(rng_high, (int, float)):
+                            rng_txt = f"{float(rng_low):.2f}-{float(rng_high):.2f}"
+                    except Exception:
+                        rng_txt = ""
 
-                record_agent_event(
-                    "SIMBA_CHECK",
-                    msg,
-                    payload={
-                        "simba": simba_result,
-                        "expired": False,
-                        "price": price_f,
-                        "cooldown": in_cooldown,
-                        "cooldown_minutes": cooldown_minutes,
-                        "cooldown_fingerprint": conditions_fingerprint,
-                    },
-                    author="SIMBA",
-                )
+                    trend = "steady"
+                    try:
+                        first_px = self._simba_5m_first_price
+                        if isinstance(first_px, (int, float)) and isinstance(price_f, (int, float)):
+                            delta = float(price_f) - float(first_px)
+                            if abs(delta) < 0.01:
+                                trend = "steady"
+                            elif delta > 0:
+                                trend = "up"
+                            else:
+                                trend = "down"
+                    except Exception:
+                        trend = "steady"
+
+                    if not conditions:
+                        msg = self._next_simba_template(
+                            [
+                                "No watch orders from Floki. Price at {price}. Just keeping an eye on things.",
+                                "Boss left me no watch list. {price} right now — I'm still on patrol.",
+                            ]
+                        ).format(price=price_str)
+                    else:
+                        near_txt = ""
+                        try:
+                            if nearest_levels:
+                                parts = []
+                                for x in nearest_levels:
+                                    lvl = x.get("level")
+                                    dist = x.get("distance")
+                                    if isinstance(lvl, (int, float)) and isinstance(dist, (int, float)):
+                                        parts.append(f"{float(lvl):.2f} ({float(dist):.1f} away)")
+                                if parts:
+                                    near_txt = "; nearest: " + ", ".join(parts)
+                        except Exception:
+                            near_txt = ""
+
+                        msg = self._next_simba_template(
+                            [
+                                "5-min check-in: price {price} (range {range_txt}). {met}/{checked} conditions met. Trend {trend}{near}.",
+                                "Quick patrol report: {price} (last 5m {range_txt}). Hits: {met}/{checked}. Drift {trend}{near}.",
+                            ]
+                        ).format(
+                            price=price_str,
+                            range_txt=(rng_txt or "n/a"),
+                            met=int(met),
+                            checked=int(checked),
+                            trend=str(trend),
+                            near=str(near_txt),
+                        )
+
+                    record_agent_event(
+                        "SIMBA_CHECK",
+                        msg,
+                        payload={
+                            "simba": simba_result,
+                            "expired": False,
+                            "price": price_f,
+                            "range_low": rng_low,
+                            "range_high": rng_high,
+                            "checked_count": checked,
+                            "met_count": met,
+                            "trend": trend,
+                            "nearest_levels": nearest_levels,
+                            "cooldown": in_cooldown,
+                            "cooldown_minutes": cooldown_minutes,
+                            "cooldown_fingerprint": conditions_fingerprint,
+                            "summary_5m": True,
+                        },
+                        author="SIMBA",
+                    )
+                    summary_emitted = True
+                    try:
+                        self._last_simba_summary_ts = float(now_ts)
+                        self._simba_5m_high = float(price_f) if isinstance(price_f, (int, float)) else None
+                        self._simba_5m_low = float(price_f) if isinstance(price_f, (int, float)) else None
+                        self._simba_5m_first_price = float(price_f) if isinstance(price_f, (int, float)) else None
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        try:
+            price_f = self._safe_float(scanner_data.get("current_price"))
+            checked = 0
+            met = 0
+            try:
+                checked = int(simba_result.get("checked_count")) if isinstance(simba_result, dict) else len(conditions)
+            except Exception:
+                checked = len(conditions)
+            try:
+                met = int(simba_result.get("met_count")) if isinstance(simba_result, dict) else (len(triggered_ids) if decision == "WAKE" else 0)
+            except Exception:
+                met = 0
+
+            summary = None
+            try:
+                if isinstance(simba_result, dict):
+                    summary = simba_result.get("summary")
+            except Exception:
+                summary = None
+
+            if decision == "WAKE":
+                summary_txt = "ALERT"
+            elif not conditions:
+                summary_txt = "No watch orders."
+            else:
+                summary_txt = "Watching levels."
+            if isinstance(summary, str) and summary.strip():
+                summary_txt = summary.strip()[:240]
+
+            if not hasattr(bot, "last_analysis") or not isinstance(getattr(bot, "last_analysis", None), dict):
+                bot.last_analysis = {}
+            bot.last_analysis["simba"] = {
+                "decision": simba_state_decision,
+                "checked_count": int(checked),
+                "met_count": int(met),
+                "summary": summary_txt,
+                "timestamp": datetime.utcnow().isoformat(),
+                "price": price_f,
+                "cooldown": bool(in_cooldown),
+                "has_conditions": bool(conditions),
+            }
         except Exception:
             pass
 
