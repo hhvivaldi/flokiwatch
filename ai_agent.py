@@ -539,9 +539,6 @@ class AIAgent:
                         "sl": {"type": "number"},
                         "tp": {"type": "number"},
                         "agent_confidence": {"type": "number"},
-                        "breakeven_trigger_pips": {"type": "number"},
-                        "trailing_trigger_pips": {"type": "number"},
-                        "trailing_distance_pips": {"type": "number"},
                     },
                     "required": ["direction", "sl", "tp"],
                     "additionalProperties": False,
@@ -892,17 +889,6 @@ class AIAgent:
                 logger.warning("Invalid trade_plan type (expected dict) — ignoring")
                 trade_plan = None
             if isinstance(trade_plan, dict):
-                # Optional trade management fields (Commit 2)
-                for k in ("breakeven_trigger", "trailing_trigger", "trailing_distance"):
-                    v = trade_plan.get(k)
-                    if v is None:
-                        continue
-                    try:
-                        trade_plan[k] = float(v)
-                    except Exception:
-                        logger.warning(f"Invalid trade_plan.{k} (expected number or null) — ignoring")
-                        trade_plan[k] = None
-
                 mm = trade_plan.get("management_mode")
                 if mm is None:
                     pass

@@ -162,9 +162,6 @@ class MT5Executor:
         scenario: Optional[str] = None,
         risk_amount: Optional[float] = None,
         risk_percent: Optional[float] = None,
-        breakeven_trigger_pips: Optional[float] = None,
-        trailing_trigger_pips: Optional[float] = None,
-        trailing_distance_pips: Optional[float] = None,
     ) -> OrderResult:
         """
         Execute a trade.
@@ -245,9 +242,9 @@ class MT5Executor:
                     ref_price = ask if direction.upper() == "BUY" else bid
                     sl_pips = abs(ref_price - float(stop_loss)) / 0.1
 
-                    be_pips = float(breakeven_trigger_pips) if breakeven_trigger_pips is not None else float(sl_pips) * 0.5
-                    tr_trig_pips = float(trailing_trigger_pips) if trailing_trigger_pips is not None else float(sl_pips) * 0.7
-                    tr_dist_pips = float(trailing_distance_pips) if trailing_distance_pips is not None else float(sl_pips) * 0.7
+                    be_pips = float(sl_pips) * 0.5
+                    tr_trig_pips = float(sl_pips) * 0.7
+                    tr_dist_pips = float(sl_pips) * 0.7
 
                     ok = write_signal(
                         signal=direction,
