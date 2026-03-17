@@ -154,10 +154,46 @@ class TradingBot:
         self._proactive_lock = threading.Lock()
         self._last_agent_data = None
         self._last_df = None
+        self._skip_initial_proactive_h1 = False
         
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
         signal.signal(signal.SIGTERM, self._shutdown_handler)
+
+    def _get_last_proactive_analysis_timestamp_iso(self) -> Optional[str]:
+        try:
+            from db_writer import get_last_agent_proactive_timestamp
+
+            ts = get_last_agent_proactive_timestamp()
+            if isinstance(ts, str) and ts.strip():
+                return ts.strip()
+        except Exception:
+            pass
+
+        try:
+            la = self.last_analysis if isinstance(self.last_analysis, dict) else {}
+            pa = la.get("proactive_analysis") if isinstance(la.get("proactive_analysis"), dict) else {}
+            ts = pa.get("timestamp")
+            if isinstance(ts, str) and ts.strip():
+                return ts.strip()
+        except Exception:
+            pass
+
+        return None
+
+    def _parse_iso_datetime(self, iso_str: str) -> Optional[datetime]:
+        if not isinstance(iso_str, str) or not iso_str.strip():
+            return None
+        s = iso_str.strip()
+        try:
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+        except Exception:
+            pass
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
 
         # L2 Reflection engine (warm memory)
         try:
@@ -775,6 +811,33 @@ class TradingBot:
 
         self._load_persisted_state()
         init_db()
+
+        try:
+            threshold_min = int(getattr(config, "STARTUP_SKIP_THRESHOLD_MINUTES", 30) or 30)
+            last_ts_iso = self._get_last_proactive_analysis_timestamp_iso()
+            last_dt = self._parse_iso_datetime(last_ts_iso) if last_ts_iso else None
+            if last_dt is not None:
+                if last_dt.tzinfo is not None:
+                    now_dt = datetime.now(timezone.utc)
+                    last_dt = last_dt.astimezone(timezone.utc)
+                else:
+                    now_dt = datetime.now()
+
+                delta_min = (now_dt - last_dt).total_seconds() / 60.0
+                if delta_min >= 0 and delta_min < float(threshold_min):
+                    self._skip_initial_proactive_h1 = True
+                    log.info(
+                        f"STARTUP | Skipping initial Floki call — last analysis was {int(delta_min)}m ago (threshold: {threshold_min}m)"
+                    )
+
+                    try:
+                        last_closed_h1_iso = self._get_last_closed_h1_time_iso()
+                        if last_closed_h1_iso:
+                            self._last_proactive_h1_close_time = last_closed_h1_iso
+                    except Exception:
+                        pass
+        except Exception as e:
+            log.debug(f"STARTUP | skip proactive check error (ignored): {e}")
         
         log.info("")
         log.info("=" * 60)
@@ -1463,16 +1526,19 @@ class TradingBot:
                 try:
                     market_open, _, _ = is_market_open()
                     if market_open:
-                        last_closed_h1_iso = self._get_last_closed_h1_time_iso()
-                        if last_closed_h1_iso:
-                            prev_iso = getattr(self, '_last_proactive_h1_close_time', None)
-                            if prev_iso != last_closed_h1_iso:
-                                self._call_agent_proactive_h1_snapshot(
-                                    h1_close_time_iso=last_closed_h1_iso,
-                                    agent_data=agent_data,
-                                    df=df,
-                                )
-                                self._last_proactive_h1_close_time = last_closed_h1_iso
+                        if getattr(self, "_skip_initial_proactive_h1", False):
+                            self._skip_initial_proactive_h1 = False
+                        else:
+                            last_closed_h1_iso = self._get_last_closed_h1_time_iso()
+                            if last_closed_h1_iso:
+                                prev_iso = getattr(self, '_last_proactive_h1_close_time', None)
+                                if prev_iso != last_closed_h1_iso:
+                                    self._call_agent_proactive_h1_snapshot(
+                                        h1_close_time_iso=last_closed_h1_iso,
+                                        agent_data=agent_data,
+                                        df=df,
+                                    )
+                                    self._last_proactive_h1_close_time = last_closed_h1_iso
                 except Exception as e:
                     log.warning(f"PROACTIVE_H1 | error (non-blocking): {e}")
             

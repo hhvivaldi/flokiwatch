@@ -772,6 +772,28 @@ def get_recent_proactive_decisions(limit: int = 5) -> List[Dict[str, Any]]:
         return []
 
 
+def get_last_agent_proactive_timestamp() -> Optional[str]:
+    """Return the most recent proactive analysis timestamp (ISO string) or None."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT timestamp
+               FROM agent_proactive_analyses
+               ORDER BY id DESC
+               LIMIT 1"""
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        ts = row[0]
+        return ts if isinstance(ts, str) and ts.strip() else None
+    except Exception as e:
+        log.debug(f"db_writer: failed to get last proactive timestamp: {e}")
+        return None
+
+
 def get_active_trade_from_proactive() -> Optional[Dict[str, Any]]:
     """Return the last OPEN decision if it has not been followed by a CLOSE_TRADE; else None."""
     try:
