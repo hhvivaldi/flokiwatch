@@ -2963,6 +2963,33 @@ class TradingBot:
         try:
             if getattr(config, "SHADOW_MODEL_ENABLED", False):
                 dp_snapshot = dict(agent_data) if isinstance(agent_data, dict) else {}
+
+                try:
+                    pos_out = []
+                    try:
+                        open_pos = executor.get_open_positions() or []
+                    except Exception:
+                        open_pos = []
+
+                    for p in open_pos:
+                        try:
+                            pos_out.append(
+                                {
+                                    "ticket": int(getattr(p, "ticket", 0)),
+                                    "direction": str(getattr(p, "direction", "")),
+                                    "open_price": float(getattr(p, "open_price", 0.0)),
+                                    "profit": float(getattr(p, "profit", 0.0)),
+                                    "sl": float(getattr(p, "sl", 0.0)),
+                                    "tp": float(getattr(p, "tp", 0.0)),
+                                    "volume": float(getattr(p, "volume", 0.0)),
+                                }
+                            )
+                        except Exception:
+                            continue
+
+                    dp_snapshot["positions"] = pos_out
+                except Exception:
+                    pass
                 th = threading.Thread(
                     target=_shadow_worker,
                     args=(dp_snapshot, agent_result),
