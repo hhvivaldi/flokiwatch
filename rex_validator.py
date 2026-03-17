@@ -179,7 +179,6 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
                 config={
                     "temperature": 0.2,
                     "max_output_tokens": 450,
-                    "timeout": timeout_seconds,
                 },
             )
         except Exception as e:

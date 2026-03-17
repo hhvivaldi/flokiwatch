@@ -63,11 +63,10 @@ class SimbaWatcher:
             try:
                 resp = client.models.generate_content(
                     model=self.model,
-                    contents=full_prompt,
+                    contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
                     config={
                         "response_mime_type": "application/json",
                         "temperature": 0,
-                        "timeout": self.timeout_seconds,
                     },
                 )
             except Exception as e:
