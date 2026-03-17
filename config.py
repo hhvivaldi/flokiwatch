@@ -320,6 +320,11 @@ SIMBA_POLL_MINUTES = int(os.environ.get("SIMBA_POLL_MINUTES", "60") or "60")
 SIMBA_MAX_SLEEP_DEFAULT_MINUTES = int(os.environ.get("SIMBA_MAX_SLEEP_DEFAULT_MINUTES", "120") or "120")
 
 # ============================================================================
+# REX VALIDATOR (debate partner)
+# ============================================================================
+REX_MODEL = os.environ.get("REX_MODEL", "gemini-2.5-flash")
+
+# ============================================================================
 # MULTI-TF TREND CONFIRMATION
 # ============================================================================
 MTF_TREND_ENABLED = True                 # Enable Multi-TF trend check
