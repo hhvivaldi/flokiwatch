@@ -363,6 +363,7 @@ class AgentMonitor:
         watch_payload = None
         try:
             from executor import executor
+            import os
 
             positions = []
             try:
@@ -370,11 +371,58 @@ class AgentMonitor:
             except Exception:
                 positions = []
 
+            try:
+                path_dbg = self._watch_conditions_path()
+                exists_dbg = os.path.exists(path_dbg)
+                pos_tickets_dbg = []
+                for p in positions:
+                    try:
+                        t = p.get("ticket") if isinstance(p, dict) else getattr(p, "ticket", None)
+                        if t is not None:
+                            pos_tickets_dbg.append(int(t))
+                    except Exception:
+                        continue
+                log.warning(
+                    "SIMBA_DEBUG | watch_store | "
+                    f"path={path_dbg} exists={exists_dbg} open_tickets={pos_tickets_dbg}"
+                )
+            except Exception:
+                pass
+
             watch_store = {}
             try:
                 watch_store = self._load_watch_conditions()
             except Exception:
                 watch_store = {}
+
+            try:
+                if isinstance(watch_store, dict):
+                    keys_dbg = list(watch_store.keys())
+                    key_preview = keys_dbg[:10]
+                    log.warning(
+                        "SIMBA_DEBUG | watch_store_loaded | "
+                        f"ticket_keys={key_preview} total_keys={len(keys_dbg)}"
+                    )
+
+                    # summarize conditions per ticket
+                    for k in key_preview[:5]:
+                        payload = watch_store.get(k) if isinstance(watch_store, dict) else None
+                        conds = payload.get("conditions") if isinstance(payload, dict) else None
+                        if not isinstance(conds, list):
+                            conds = []
+                        types = []
+                        for c in conds:
+                            try:
+                                if isinstance(c, dict):
+                                    types.append(str(c.get("type") or "").strip() or "?")
+                            except Exception:
+                                continue
+                        log.warning(
+                            "SIMBA_DEBUG | watch_ticket | "
+                            f"ticket={k} cond_count={len(conds)} types={types}"
+                        )
+            except Exception:
+                pass
 
             if isinstance(watch_store, dict) and positions:
                 pos_by_ticket = {}
@@ -394,6 +442,11 @@ class AgentMonitor:
                     pos = pos_by_ticket.get(t)
                     if pos is None:
                         continue
+
+                    try:
+                        log.warning(f"SIMBA_DEBUG | watch_eval | matching_ticket={t} found_open_pos=yes")
+                    except Exception:
+                        pass
 
                     conds = payload.get("conditions") if isinstance(payload, dict) else None
                     if not isinstance(conds, list) or not conds:
