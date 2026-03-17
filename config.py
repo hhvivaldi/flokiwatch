@@ -314,7 +314,6 @@ GPT_CONFIDENCE_CACHE_THRESHOLD = 5      # Only re-call GPT if pillar changed ≥
 # ============================================================================
 # SIMBA WATCHER (Floki sleep gating)
 # ============================================================================
-SIMBA_MODEL = os.environ.get("SIMBA_MODEL", "gemini-2.5-flash-lite")
 SIMBA_TIMEOUT_SECONDS = int(os.environ.get("SIMBA_TIMEOUT_SECONDS", "10") or "10")
 SIMBA_POLL_MINUTES = int(os.environ.get("SIMBA_POLL_MINUTES", "60") or "60")
 SIMBA_MAX_SLEEP_DEFAULT_MINUTES = int(os.environ.get("SIMBA_MAX_SLEEP_DEFAULT_MINUTES", "120") or "120")

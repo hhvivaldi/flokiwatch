@@ -31,20 +31,6 @@ class SimbaResult:
 
 class SimbaWatcher:
     def __init__(self, *, model: Optional[str] = None, timeout_seconds: int = 10):
-        cfg_model = None
-        try:
-            import config
-
-            cfg_model = getattr(config, "SIMBA_MODEL", None)
-        except Exception:
-            cfg_model = None
-
-        self.model = (
-            model
-            or (str(cfg_model).strip() if cfg_model else "")
-            or os.environ.get("SIMBA_MODEL", "gpt-4o-mini").strip()
-            or "gpt-4o-mini"
-        )
         try:
             self.timeout_seconds = int(timeout_seconds)
         except Exception:
@@ -59,54 +45,10 @@ class SimbaWatcher:
         start = time.time()
 
         try:
-            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-            if not api_key:
-                return self._wake_fallback(start, "GEMINI_API_KEY not set")
-
-            try:
-                from google import genai
-
-                client = genai.Client(api_key=api_key)
-            except Exception as e:
-                return self._wake_fallback(start, f"google_genai_client_unavailable: {e}")
-
-            prompt = self._build_prompt(scanner_data, wake_conditions)
-            full_prompt = f"{self._system_prompt()}\n\n{prompt}"
-
-            try:
-                resp = client.models.generate_content(
-                    model=self.model,
-                    contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
-                    config={
-                        "response_mime_type": "application/json",
-                        "temperature": 0,
-                    },
-                )
-            except Exception as e:
-                return self._wake_fallback(start, f"gemini_request_failed: {e}")
-
-            content = None
-            try:
-                content = resp.text
-            except Exception:
-                content = None
-
-            if not content:
-                return self._wake_fallback(start, "empty_response")
-
-            try:
-                parsed = json.loads(content)
-            except Exception as e:
-                return self._wake_fallback(start, f"invalid_json: {e}")
-
-            normalized = self._normalize_result(parsed)
-            if normalized is None:
-                return self._wake_fallback(start, "invalid_schema")
-
+            result = self._evaluate(scanner_data or {}, wake_conditions or {})
             latency_ms = int((time.time() - start) * 1000)
-            normalized["model"] = self.model
-            normalized["latency_ms"] = latency_ms
-            return normalized
+            result["latency_ms"] = latency_ms
+            return result
         except Exception as e:
             try:
                 log.debug(f"simba_watcher: unexpected error (non-blocking): {e}")
@@ -122,101 +64,127 @@ class SimbaWatcher:
             "checked_count": 0,
             "met_count": 0,
             "summary": f"fallback — {reason}",
-            "model": self.model,
             "latency_ms": latency_ms,
         }
 
-    def _system_prompt(self) -> str:
-        return (
-            "You are Simba, Floki's personal assistant and watchdog. Floki is a senior gold trader who sleeps between market analysis sessions. "
-            "Before sleeping, Floki gives you a checklist of conditions to monitor. Your job is to check those conditions against the latest market data and decide whether to wake Floki up.\n\n"
-            "Your team:\n"
-            "- Floki (your boss): senior trader, makes all trading decisions. You work for him.\n"
-            "- Rex: Floki's debate partner. You don't interact with Rex.\n"
-            "- You (Simba): the assistant. You monitor, you report, you wake the boss when needed.\n\n"
-            "Your job is simple:\n"
-            "1. Read the market data you receive (price, indicators, volume, patterns)\n"
-            "2. Compare each condition Floki gave you against the data\n"
-            "3. If ANY condition is met: WAKE (Floki needs to see this)\n"
-            "4. If NONE are met: SLEEP (let Floki rest)\n\n"
-            "CRITICAL STRICTNESS RULES (MUST FOLLOW):\n"
-            "- A condition is ONLY 'met' when the current value is actually PAST the exact threshold.\n"
-            "- 'close to', 'near', 'approaching', 'almost', or 'about to break' does NOT count as met.\n"
-            "- Use strict inequalities (no equality):\n"
-            "  - price_above X: met ONLY if price > X (example: 5021.99 is NOT met for 5022)\n"
-            "  - price_below X: met ONLY if price < X (example: 5010.01 is NOT met for 5010)\n"
-            "  - h1_volume_above X: met ONLY if volume > X (example: 9999 is NOT met for 10000)\n"
-            "- Before returning WAKE, VERIFY every condition you list in triggered is actually past its threshold.\n"
-            "  - If any listed trigger is not actually met, remove it.\n"
-            "  - If after verification no triggers remain, decision MUST be SLEEP.\n\n"
-            "When writing your summary, be SPECIFIC with actual numbers. Reference the exact thresholds Floki set and the current values.\n\n"
-            "Example summary for SLEEP:\n"
-            "'All quiet boss. Price at 5010 — still between your levels (below 5015, above 4987). No patterns detected. Next check in 30 min.'\n\n"
-            "Example summary for WAKE:\n"
-            "'Boss, heads up! Price hit 5025 — broke above your 5015 level. Time to take a look.'\n\n"
-            "Rules:\n"
-            "- Always mention current price in your summary\n"
-            "- Always reference Floki's specific thresholds vs current values\n"
-            "- Be brief but specific — numbers matter\n"
-            "- You do NOT analyze markets, you do NOT give trade advice\n"
-            "- You ONLY check the checklist and report\n\n"
-            "Return strict JSON with keys: decision, triggered, checked_count, met_count, summary.\n"
-            "decision: SLEEP or WAKE\n"
-            "triggered: array of condition ids that are met\n"
-            "checked_count: total conditions checked\n"
-            "met_count: how many are met\n"
-            "summary: your report to Floki (specific, with numbers)"
+    def _evaluate(self, scanner_data: Dict[str, Any], wake_conditions: Dict[str, Any]) -> Dict[str, Any]:
+        conditions = wake_conditions.get("conditions") if isinstance(wake_conditions, dict) else None
+        if not isinstance(conditions, list) or not conditions:
+            return {
+                "decision": "SLEEP",
+                "triggered": [],
+                "checked_count": 0,
+                "met_count": 0,
+                "summary": "no conditions",
+            }
+
+        current_price = self._safe_float(scanner_data.get("current_price"))
+
+        indicators = scanner_data.get("indicators")
+        if not isinstance(indicators, dict):
+            indicators = {}
+
+        patterns = scanner_data.get("patterns")
+        if not isinstance(patterns, dict):
+            patterns = {}
+
+        current_rsi = self._safe_float(
+            scanner_data.get("current_rsi")
+            if scanner_data.get("current_rsi") is not None
+            else indicators.get("rsi")
         )
-
-    def _build_prompt(self, scanner_data: Dict[str, Any], wake_conditions: Dict[str, Any]) -> str:
-        scanner_json = json.dumps(scanner_data or {}, ensure_ascii=False, default=str)
-        wc_json = json.dumps(wake_conditions or {}, ensure_ascii=False, default=str)
-        return (
-            "Evaluate wake conditions against scanner data. If ANY condition is met, decision=WAKE. "
-            "If none are met, decision=SLEEP.\n\n"
-            "SCANNER_DATA (JSON):\n"
-            f"{scanner_json}\n\n"
-            "WAKE_CONDITIONS (JSON):\n"
-            f"{wc_json}"
+        current_adx = self._safe_float(
+            scanner_data.get("current_adx")
+            if scanner_data.get("current_adx") is not None
+            else indicators.get("adx")
         )
+        current_volume = self._safe_float(scanner_data.get("current_volume") or scanner_data.get("volume"))
+        h1_volume = self._safe_float(scanner_data.get("h1_volume") or scanner_data.get("last_h1_tick_volume"))
 
-    def _normalize_result(self, data: Any) -> Optional[Dict[str, Any]]:
-        if not isinstance(data, dict):
-            return None
-
-        decision = str(data.get("decision") or "").strip().upper()
-        if decision not in ("SLEEP", "WAKE"):
-            return None
-
-        triggered_raw = data.get("triggered")
         triggered: List[str] = []
-        if isinstance(triggered_raw, list):
-            for x in triggered_raw:
-                s = str(x or "").strip()
-                if s:
-                    triggered.append(s)
-        triggered = triggered[:10]
+        checked = 0
+        met = 0
 
-        checked_count = data.get("checked_count")
-        met_count = data.get("met_count")
-        try:
-            checked_i = int(checked_count)
-        except Exception:
-            checked_i = 0
-        try:
-            met_i = int(met_count)
-        except Exception:
-            met_i = 0
+        for idx, c in enumerate(conditions, start=1):
+            if not isinstance(c, dict):
+                continue
+            checked += 1
+            ctype = str(c.get("type") or "").strip()
+            cid = str(c.get("id") or f"c{idx}").strip() or f"c{idx}"
 
-        summary = data.get("summary")
-        summary_s = str(summary or "").strip()
-        if not summary_s:
-            summary_s = "condition check complete"
+            is_met = False
+
+            if ctype == "price_above":
+                lvl = self._safe_float(c.get("level") if c.get("level") is not None else c.get("value"))
+                if current_price is not None and lvl is not None:
+                    is_met = current_price > lvl
+            elif ctype == "price_below":
+                lvl = self._safe_float(c.get("level") if c.get("level") is not None else c.get("value"))
+                if current_price is not None and lvl is not None:
+                    is_met = current_price < lvl
+            elif ctype == "h1_volume_above":
+                thr = self._safe_float(c.get("threshold") if c.get("threshold") is not None else c.get("value"))
+                if h1_volume is not None and thr is not None:
+                    is_met = h1_volume > thr
+            elif ctype == "indicator_above":
+                ind = str(c.get("indicator") or "").strip().lower()
+                thr = self._safe_float(c.get("threshold") if c.get("threshold") is not None else c.get("value"))
+                cur = self._safe_float(indicators.get(ind)) if ind else None
+                if cur is not None and thr is not None:
+                    is_met = cur > thr
+            elif ctype == "indicator_below":
+                ind = str(c.get("indicator") or "").strip().lower()
+                thr = self._safe_float(c.get("threshold") if c.get("threshold") is not None else c.get("value"))
+                cur = self._safe_float(indicators.get(ind)) if ind else None
+                if cur is not None and thr is not None:
+                    is_met = cur < thr
+            elif ctype == "scanner_pattern":
+                pat = str(c.get("pattern") or "").strip()
+                if pat:
+                    is_met = bool(patterns.get(pat))
+            elif ctype == "rsi_above":
+                lvl = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                if current_rsi is not None and lvl is not None:
+                    is_met = current_rsi > lvl
+            elif ctype == "rsi_below":
+                lvl = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                if current_rsi is not None and lvl is not None:
+                    is_met = current_rsi < lvl
+            elif ctype == "volume_above":
+                thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                if current_volume is not None and thr is not None:
+                    is_met = current_volume > thr
+            elif ctype == "adx_above":
+                thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                if current_adx is not None and thr is not None:
+                    is_met = current_adx > thr
+            else:
+                is_met = False
+
+            if is_met:
+                met += 1
+                triggered.append(cid)
+
+        decision = "WAKE" if triggered else "SLEEP"
+        price_str = f"{current_price:.2f}" if isinstance(current_price, (int, float)) else "n/a"
+        summary = (
+            f"met {met}/{checked} | price={price_str}"
+            if decision == "WAKE"
+            else f"0/{checked} met | price={price_str}"
+        )
 
         return {
             "decision": decision,
-            "triggered": triggered,
-            "checked_count": max(0, checked_i),
-            "met_count": max(0, met_i),
-            "summary": summary_s[:240],
+            "triggered": triggered[:10],
+            "checked_count": max(0, int(checked)),
+            "met_count": max(0, int(met)),
+            "summary": str(summary)[:240],
         }
+
+    def _safe_float(self, x: Any) -> Optional[float]:
+        try:
+            if x is None:
+                return None
+            return float(x)
+        except Exception:
+            return None

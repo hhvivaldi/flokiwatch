@@ -18,6 +18,7 @@ class AgentMonitor:
         self._last_drawdown_track_log_ts_by_ticket: Dict[int, float] = {}
         self.recent_prices: List[Tuple[float, float]] = []
         self.session_last_trigger_date: Dict[str, str] = {}
+        self._simba_template_idx: int = 0
 
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
@@ -96,6 +97,11 @@ class AgentMonitor:
                 log.debug(f"AGENT_MONITOR | profit-drawdown error (ignored): {e}")
 
             try:
+                self._check_simba_wake_conditions()
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | simba error (ignored): {e}")
+
+            try:
                 latest = self._load_latest_entry_conditions()
                 if not latest:
                     return
@@ -115,6 +121,304 @@ class AgentMonitor:
                 log.debug(f"AGENT_MONITOR | entry-conditions error (ignored): {e}")
         except Exception as e:
             log.debug(f"AGENT_MONITOR | check error (ignored): {e}")
+
+    def _wake_conditions_path(self) -> str:
+        import os
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_wake_conditions.json")
+
+    def _load_wake_conditions(self) -> Dict[str, Any]:
+        import json
+        import os
+
+        path = self._wake_conditions_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_wake_conditions(self, payload: Dict[str, Any]) -> bool:
+        import json
+        import os
+
+        path = self._wake_conditions_path()
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
+            return True
+        except Exception:
+            return False
+
+    def _safe_float(self, x: Any) -> Optional[float]:
+        try:
+            if x is None:
+                return None
+            return float(x)
+        except Exception:
+            return None
+
+    def _next_simba_template(self, templates: List[str]) -> str:
+        if not templates:
+            return ""
+        try:
+            idx = int(self._simba_template_idx) % len(templates)
+        except Exception:
+            idx = 0
+        self._simba_template_idx += 1
+        return templates[idx]
+
+    def _format_condition_for_message(self, cond: Dict[str, Any], idx: int, scanner_data: Dict[str, Any]) -> Dict[str, Any]:
+        ctype = str(cond.get("type") or "").strip()
+        desc = str(cond.get("description") or "").strip()
+
+        current_price = self._safe_float(scanner_data.get("current_price"))
+        indicators = scanner_data.get("indicators") if isinstance(scanner_data.get("indicators"), dict) else {}
+        current_rsi = self._safe_float(scanner_data.get("current_rsi") if scanner_data.get("current_rsi") is not None else indicators.get("rsi"))
+        current_adx = self._safe_float(scanner_data.get("current_adx") if scanner_data.get("current_adx") is not None else indicators.get("adx"))
+        current_volume = self._safe_float(scanner_data.get("current_volume") or scanner_data.get("volume"))
+        h1_volume = self._safe_float(scanner_data.get("h1_volume") or scanner_data.get("last_h1_tick_volume"))
+
+        threshold = None
+        current_value = None
+        level = None
+
+        if ctype in ("price_above", "price_below"):
+            threshold = self._safe_float(cond.get("level") if cond.get("level") is not None else cond.get("value"))
+            current_value = current_price
+            level = threshold
+        elif ctype == "h1_volume_above":
+            threshold = self._safe_float(cond.get("threshold") if cond.get("threshold") is not None else cond.get("value"))
+            current_value = h1_volume
+        elif ctype in ("indicator_above", "indicator_below"):
+            threshold = self._safe_float(cond.get("threshold") if cond.get("threshold") is not None else cond.get("value"))
+            ind = str(cond.get("indicator") or "").strip().lower()
+            current_value = self._safe_float(indicators.get(ind)) if ind else None
+        elif ctype in ("rsi_above", "rsi_below"):
+            threshold = self._safe_float(cond.get("value") if cond.get("value") is not None else cond.get("threshold"))
+            current_value = current_rsi
+        elif ctype == "volume_above":
+            threshold = self._safe_float(cond.get("value") if cond.get("value") is not None else cond.get("threshold"))
+            current_value = current_volume
+        elif ctype == "adx_above":
+            threshold = self._safe_float(cond.get("value") if cond.get("value") is not None else cond.get("threshold"))
+            current_value = current_adx
+
+        return {
+            "n": idx,
+            "type": ctype,
+            "condition_description": desc or ctype,
+            "threshold": threshold,
+            "level": level,
+            "current_value": current_value,
+            "current_price": current_price,
+        }
+
+    def _check_simba_wake_conditions(self) -> None:
+        wake_conditions = self._load_wake_conditions()
+        if not wake_conditions:
+            return
+
+        conditions = wake_conditions.get("conditions") if isinstance(wake_conditions, dict) else None
+        if not isinstance(conditions, list) or not conditions:
+            return
+
+        bot = getattr(self, "bot", None)
+        if bot is None:
+            return
+
+        dp = getattr(bot, "_last_agent_data", None)
+        if not isinstance(dp, dict) or not dp:
+            return
+
+        scanner_data: Dict[str, Any] = {
+            "current_price": dp.get("current_price"),
+            "indicators": dp.get("indicators"),
+            "patterns": dp.get("patterns"),
+            "volume": dp.get("volume") or dp.get("tick_volume") or dp.get("last_h1_volume"),
+        }
+        try:
+            candles = dp.get("candles")
+            if isinstance(candles, dict):
+                h1_candles = candles.get("H1")
+                if isinstance(h1_candles, list) and h1_candles:
+                    last_h1 = h1_candles[-1]
+                    if isinstance(last_h1, dict):
+                        scanner_data["last_h1_tick_volume"] = int(last_h1.get("volume", last_h1.get("tick_volume", 0)) or 0)
+        except Exception:
+            pass
+
+        expired = False
+        elapsed_min = None
+        try:
+            max_sleep = wake_conditions.get("max_sleep_minutes")
+            max_sleep_i = int(max_sleep) if max_sleep is not None else 0
+        except Exception:
+            max_sleep_i = 0
+
+        try:
+            started_at = wake_conditions.get("sleep_started_at")
+            if started_at and max_sleep_i > 0:
+                from datetime import timezone
+
+                st = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+                if st.tzinfo is None:
+                    st = st.replace(tzinfo=timezone.utc)
+                elapsed_min = (datetime.now(timezone.utc) - st).total_seconds() / 60.0
+                expired = elapsed_min >= float(max_sleep_i)
+        except Exception:
+            expired = False
+
+        simba_result = None
+        triggered_ids: List[str] = []
+        if not expired:
+            try:
+                from simba_watcher import SimbaWatcher
+
+                simba = SimbaWatcher(timeout_seconds=10)
+                simba_result = simba.check_conditions(scanner_data, wake_conditions)
+                if isinstance(simba_result, dict):
+                    trig = simba_result.get("triggered")
+                    if isinstance(trig, list):
+                        triggered_ids = [str(x) for x in trig if str(x).strip()]
+            except Exception:
+                simba_result = None
+                triggered_ids = []
+
+        decision = "WAKE" if (expired or triggered_ids) else "SLEEP"
+
+        try:
+            from db_writer import record_agent_event
+
+            price_f = self._safe_float(scanner_data.get("current_price"))
+            price_str = f"{price_f:.2f}" if isinstance(price_f, (int, float)) else "n/a"
+
+            if decision == "WAKE" and expired:
+                hours = 0.0
+                try:
+                    if elapsed_min is not None:
+                        hours = float(elapsed_min) / 60.0
+                except Exception:
+                    hours = 0.0
+
+                msg = self._next_simba_template(
+                    [
+                        "Boss, it's been {hours}h since Floki last looked. Nothing triggered but figured he should take a fresh look anyway.",
+                        "Yo Boss, {hours}h of silence. No triggers hit but dragging Floki out of bed for a check.",
+                    ]
+                ).format(hours=f"{hours:.1f}")
+
+                record_agent_event(
+                    "SIMBA_CHECK",
+                    msg,
+                    payload={"simba": simba_result, "expired": True, "elapsed_min": elapsed_min, "price": price_f},
+                    author="SIMBA",
+                )
+            elif decision == "WAKE" and triggered_ids:
+                first = None
+                try:
+                    by_id = {}
+                    for i, c in enumerate(conditions, start=1):
+                        if not isinstance(c, dict):
+                            continue
+                        cid = str(c.get("id") or f"c{i}").strip() or f"c{i}"
+                        by_id[cid] = (i, c)
+                    t0 = triggered_ids[0]
+                    if t0 in by_id:
+                        n, cond = by_id[t0]
+                        first = self._format_condition_for_message(cond, n, scanner_data)
+                except Exception:
+                    first = None
+
+                if first and first.get("type") in ("price_above", "price_below") and first.get("level") is not None and first.get("current_price") is not None:
+                    msg = self._next_simba_template(
+                        [
+                            "Boss, heads up! Price just punched through {level} — sitting at {current_price} now. That's your condition #{n}. Floki, you're up!",
+                        ]
+                    ).format(
+                        level=f"{float(first.get('level')):.2f}",
+                        current_price=f"{float(first.get('current_price')):.2f}",
+                        n=int(first.get("n") or 1),
+                    )
+                else:
+                    msg = self._next_simba_template(
+                        [
+                            "Oi Boss! {condition_description} just triggered ({current_value} vs your {threshold}). Time to wake the big guy.",
+                        ]
+                    ).format(
+                        condition_description=str((first or {}).get("condition_description") or "a condition"),
+                        current_value=str((first or {}).get("current_value") if (first or {}).get("current_value") is not None else "n/a"),
+                        threshold=str((first or {}).get("threshold") if (first or {}).get("threshold") is not None else "n/a"),
+                    )
+
+                record_agent_event(
+                    "SIMBA_CHECK",
+                    msg,
+                    payload={"simba": simba_result, "expired": False, "triggered": triggered_ids, "price": price_f},
+                    author="SIMBA",
+                )
+            else:
+                checked = 0
+                try:
+                    checked = int(simba_result.get("checked_count")) if isinstance(simba_result, dict) else len(conditions)
+                except Exception:
+                    checked = len(conditions)
+
+                msg = self._next_simba_template(
+                    [
+                        "All quiet, Boss. Price chilling at {price}, {checked}/{total} conditions nowhere close. I'll keep watching.",
+                        "Nothing cooking. {price} — still between your lines. Back in 1 min.",
+                    ]
+                ).format(price=price_str, checked=int(checked), total=int(len(conditions)))
+
+                record_agent_event(
+                    "SIMBA_CHECK",
+                    msg,
+                    payload={"simba": simba_result, "expired": False, "price": price_f},
+                    author="SIMBA",
+                )
+        except Exception:
+            pass
+
+        if decision != "WAKE":
+            return
+
+        try:
+            wake_conditions["sleep_started_at"] = datetime.utcnow().isoformat()
+            self._save_wake_conditions(wake_conditions)
+        except Exception:
+            pass
+
+        try:
+            df = getattr(bot, "_last_df", None)
+            snapshot_time_iso = datetime.utcnow().isoformat()
+            trigger_data = {
+                "expired": bool(expired),
+                "triggered": triggered_ids,
+                "simba": simba_result,
+            }
+            bot._call_agent_proactive_snapshot(
+                trigger_type="SIMBA_WAKE",
+                snapshot_time_iso=snapshot_time_iso,
+                agent_data=dp,
+                df=df,
+                trigger_data=trigger_data,
+            )
+        except Exception as e:
+            try:
+                log.debug(f"AGENT_MONITOR | simba wake call failed (ignored): {e}")
+            except Exception:
+                pass
 
     def _get_active_trade(self) -> Optional[Dict[str, Any]]:
         try:
