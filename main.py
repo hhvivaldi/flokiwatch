@@ -2921,14 +2921,14 @@ class TradingBot:
                 try:
                     claude_reasoning = str(getattr(floki_result, "reasoning", "") or "").strip()
                     if claude_reasoning:
-                        log.info(f"SHADOW_CLAUDE | {claude_reasoning[:300]}")
+                        log.info(f"SHADOW_CLAUDE | {claude_reasoning[:1000]}")
                 except Exception:
                     pass
 
                 try:
                     local_reasoning = str(local.get("reasoning") or "").strip()
                     if local_reasoning:
-                        log.info(f"SHADOW_LOCAL | {local_reasoning[:300]}")
+                        log.info(f"SHADOW_LOCAL | {local_reasoning[:1000]}")
                 except Exception:
                     pass
 
