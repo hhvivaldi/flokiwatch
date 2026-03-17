@@ -374,21 +374,30 @@ class AgentMonitor:
         except Exception:
             expired = False
 
-        simba_result = None
         triggered_ids: List[str] = []
+        checked_count = 0
+        met_count = 0
         if not expired:
             try:
-                from simba_watcher import SimbaWatcher
-
-                simba = SimbaWatcher(timeout_seconds=10)
-                simba_result = simba.check_conditions(scanner_data, wake_conditions)
-                if isinstance(simba_result, dict):
-                    trig = simba_result.get("triggered")
-                    if isinstance(trig, list):
-                        triggered_ids = [str(x) for x in trig if str(x).strip()]
+                triggered_ids, checked_count, met_count = self._evaluate_wake_conditions(
+                    conditions,
+                    scanner_data,
+                    wake_conditions,
+                )
             except Exception:
-                simba_result = None
                 triggered_ids = []
+                checked_count = 0
+                met_count = 0
+
+        simba_result: Dict[str, Any] = {
+            "decision": "WAKE" if triggered_ids else "SLEEP",
+            "triggered": triggered_ids,
+            "checked_count": int(checked_count),
+            "met_count": int(met_count),
+            "summary": "python_eval",
+            "model": "python",
+            "latency_ms": 0,
+        }
 
         raw_wake = bool(expired or triggered_ids)
         decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
@@ -748,6 +757,150 @@ class AgentMonitor:
                 log.debug(f"AGENT_MONITOR | simba wake call failed (ignored): {e}")
             except Exception:
                 pass
+
+    def _evaluate_wake_conditions(
+        self,
+        conditions: List[Dict[str, Any]],
+        scanner_data: Dict[str, Any],
+        wake_conditions: Dict[str, Any],
+    ) -> Tuple[List[str], int, int]:
+        triggered: List[str] = []
+        checked = 0
+        met = 0
+
+        price = self._safe_float(scanner_data.get("current_price"))
+        indicators = scanner_data.get("indicators") if isinstance(scanner_data.get("indicators"), dict) else {}
+        patterns = scanner_data.get("patterns")
+        volume = self._safe_float(scanner_data.get("volume"))
+        last_h1_vol = self._safe_float(scanner_data.get("last_h1_tick_volume"))
+
+        tol_default = None
+        try:
+            tol_default = float(wake_conditions.get("price_touch_tolerance") or 1.0)
+        except Exception:
+            tol_default = 1.0
+
+        for idx, c in enumerate(conditions or [], start=1):
+            if not isinstance(c, dict):
+                continue
+
+            ctype = str(c.get("type") or "").strip()
+            cid = str(c.get("id") or "").strip() or f"c{idx}"
+            if not ctype:
+                continue
+
+            checked += 1
+
+            try:
+                if ctype == "price_above":
+                    level = self._safe_float(c.get("level"))
+                    if level is None or price is None:
+                        continue
+                    if float(price) > float(level):
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "price_below":
+                    level = self._safe_float(c.get("level"))
+                    if level is None or price is None:
+                        continue
+                    if float(price) < float(level):
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "price_touch":
+                    level = self._safe_float(c.get("level"))
+                    if level is None or price is None:
+                        continue
+
+                    tol = tol_default
+                    try:
+                        if c.get("tolerance") is not None:
+                            tol = float(c.get("tolerance"))
+                    except Exception:
+                        tol = tol_default
+
+                    if abs(float(price) - float(level)) <= float(tol):
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "h1_volume_above":
+                    thr = self._safe_float(c.get("threshold"))
+                    if thr is None:
+                        continue
+                    v = last_h1_vol if last_h1_vol is not None else volume
+                    if v is None:
+                        continue
+                    if float(v) > float(thr):
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "scanner_pattern":
+                    target = str(c.get("pattern") or "").strip().lower()
+                    if not target:
+                        continue
+
+                    found = False
+                    if isinstance(patterns, list):
+                        for p in patterns:
+                            try:
+                                name = str((p or {}).get("name") if isinstance(p, dict) else p).strip().lower()
+                                if name and target in name:
+                                    found = True
+                                    break
+                            except Exception:
+                                continue
+                    elif isinstance(patterns, dict):
+                        try:
+                            for k in patterns.keys():
+                                if target in str(k).lower():
+                                    found = True
+                                    break
+                        except Exception:
+                            found = False
+
+                    if found:
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype in ("indicator_above", "indicator_below"):
+                    ind = str(c.get("indicator") or "").strip().lower()
+                    thr = self._safe_float(c.get("threshold"))
+                    if not ind or thr is None:
+                        continue
+
+                    cur = None
+                    try:
+                        raw = indicators.get(ind)
+                        if isinstance(raw, dict):
+                            cur = self._safe_float(raw.get("value"))
+                        else:
+                            cur = self._safe_float(raw)
+                    except Exception:
+                        cur = None
+                    if cur is None:
+                        continue
+
+                    if ctype == "indicator_above" and float(cur) > float(thr):
+                        met += 1
+                        triggered.append(cid)
+                    elif ctype == "indicator_below" and float(cur) < float(thr):
+                        met += 1
+                        triggered.append(cid)
+
+                else:
+                    try:
+                        log.warning(f"SIMBA | unrecognized wake condition type: {ctype} (id={cid})")
+                    except Exception:
+                        pass
+            except Exception as e:
+                try:
+                    log.debug(f"SIMBA | condition eval error (ignored) | id={cid} type={ctype}: {e}")
+                except Exception:
+                    pass
+                continue
+
+        return triggered, checked, met
 
     def _get_active_trade(self) -> Optional[Dict[str, Any]]:
         try:

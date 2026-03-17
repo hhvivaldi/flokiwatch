@@ -769,6 +769,7 @@ class AgentTools:
             allowed_types = {
                 "price_above",
                 "price_below",
+                "price_touch",
                 "h1_volume_above",
                 "scanner_pattern",
                 "indicator_above",
@@ -787,7 +788,7 @@ class AgentTools:
                 desc = str(c.get("description", "")).strip()
                 cid = str(c.get("id") or "").strip() or f"c{idx}"
 
-                if ctype in ("price_above", "price_below"):
+                if ctype in ("price_above", "price_below", "price_touch"):
                     lvl = self._safe_float(c.get("level"))
                     if lvl is None:
                         continue
