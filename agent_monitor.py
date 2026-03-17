@@ -719,6 +719,24 @@ class AgentMonitor:
                     except Exception:
                         met = 0
 
+                    watch_checked = 0
+                    watch_met = 1 if (watch_trigger is not None) else 0
+                    try:
+                        watch_store = self._load_watch_conditions()
+                        if isinstance(watch_store, dict):
+                            for _, payload in watch_store.items():
+                                conds = payload.get("conditions") if isinstance(payload, dict) else None
+                                if isinstance(conds, list):
+                                    watch_checked += len(conds)
+                    except Exception:
+                        watch_checked = 0
+
+                    try:
+                        checked = int(checked) + int(watch_checked)
+                        met = int(met) + int(watch_met)
+                    except Exception:
+                        pass
+
                     rng_low = self._simba_5m_low
                     rng_high = self._simba_5m_high
                     rng_txt = ""
