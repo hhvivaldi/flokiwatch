@@ -63,6 +63,10 @@
         height: 100%;
         object-fit: cover;
       }
+
+      .agent-avatar img.avatar-img {
+        display: block;
+      }
       .agent-avatar video {
         width: 100%;
         height: 100%;
@@ -262,6 +266,23 @@
       }
       .msg-row.floki { flex-direction: row; }
       .msg-row.rex   { flex-direction: row-reverse; }
+
+      .msg-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        overflow: hidden;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        background: rgba(255,255,255,0.03);
+      }
+      .msg-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
 
       @keyframes msg-in {
         from { opacity: 0; transform: translateY(10px) scale(0.98); }
@@ -475,7 +496,7 @@
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
             <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar" data-agent="floki" data-rotate-ms="60000">
-              <video id="avatar-floki-video" autoplay muted loop playsinline preload="metadata"></video>
+              <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -507,7 +528,7 @@
           <div class="flex items-center gap-4 mb-4">
             <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
             <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar" data-agent="rex" data-rotate-ms="60000">
-              <video id="avatar-rex-video" autoplay muted loop playsinline preload="metadata"></video>
+              <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -538,7 +559,7 @@
         <div class="glass-panel-deep rounded-xl p-4" id="simba-card">
           <div class="flex items-center gap-4 mb-4">
             <div class="agent-avatar avatar-rex" id="avatar-simba" aria-label="SIMBA avatar" data-agent="simba" data-rotate-ms="60000">
-              <span>SI</span>
+              <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -679,44 +700,54 @@
         var prevCtxPrice = null;
 
         var AVATAR_ROTATE_MS = 60000;
-        var FLOKI_AVATAR_VIDEOS = [
-          '/image/flokimove1.mp4',
-          '/image/flokimove2.mp4'
-        ];
-        var REX_AVATAR_VIDEOS = [
-          '/image/rexmove1.mp4',
-          '/image/rexmove2.mp4',
-          '/image/rexmove3.mp4'
-        ];
+        var CARD_AVATAR_GIFS = {
+          floki: ['/image/floki-video-trade-room.gif', '/image/floki-video-trade-room-2.gif'],
+          rex: ['/image/rex-video-trade-room.gif', '/image/rex-video-trade-room-2.gif'],
+          simba: ['/image/simba-video-trade-room.gif', '/image/simba-video-trade-room-2.gif'],
+        };
 
         var tabs = document.querySelectorAll('.filter-tab');
         var feed = document.getElementById('feed');
 
-        function pickRandom(arr) {
-          if (!Array.isArray(arr) || !arr.length) return null;
-          return arr[Math.floor(Math.random() * arr.length)];
-        }
-
-        function setAvatarVideo(videoEl, src) {
+        function rotateCardAvatar(imgEl, agentKey) {
           try {
-            if (!videoEl || !src) return;
-            if (videoEl.getAttribute('data-src') === src) return;
-            videoEl.setAttribute('data-src', src);
-            videoEl.src = src;
-            try { videoEl.load(); } catch(e) {}
-            var p = null;
-            try { p = videoEl.play(); } catch(e) {}
-            if (p && typeof p.catch === 'function') {
-              p.catch(function(){});
-            }
+            if (!imgEl || !agentKey) return;
+            var variants = CARD_AVATAR_GIFS[agentKey];
+            if (!Array.isArray(variants) || variants.length < 2) return;
+
+            var cur = imgEl.getAttribute('data-variant') || '1';
+            var next = (cur === '1') ? '2' : '1';
+            imgEl.setAttribute('data-variant', next);
+            imgEl.src = (next === '1') ? variants[0] : variants[1];
           } catch (e) {
             // silent
           }
         }
 
-        function rotateAvatarsOnce() {
-          setAvatarVideo(document.getElementById('avatar-floki-video'), pickRandom(FLOKI_AVATAR_VIDEOS));
-          setAvatarVideo(document.getElementById('avatar-rex-video'), pickRandom(REX_AVATAR_VIDEOS));
+        function initCardAvatarRotation() {
+          try {
+            var ids = [
+              { id: 'avatar-floki-img', key: 'floki' },
+              { id: 'avatar-rex-img', key: 'rex' },
+              { id: 'avatar-simba-img', key: 'simba' },
+            ];
+
+            ids.forEach(function (x) {
+              var el = document.getElementById(x.id);
+              if (!el) return;
+              var ms = AVATAR_ROTATE_MS;
+              try {
+                var wrap = el.closest('.agent-avatar');
+                var d = wrap ? wrap.getAttribute('data-rotate-ms') : null;
+                var parsed = d ? parseInt(d, 10) : null;
+                if (parsed && !isNaN(parsed) && parsed > 0) ms = parsed;
+              } catch(e) {}
+
+              setInterval(function () { rotateCardAvatar(el, x.key); }, ms);
+            });
+          } catch(e) {
+            // silent
+          }
         }
 
         function esc(s) {
@@ -845,6 +876,11 @@
               avatarText = 'SI';
             }
 
+            var avatarImg = null;
+            if (isFloki) avatarImg = '/image/floki-trade-room.png';
+            else if (isRex) avatarImg = '/image/rex-trade-room.png';
+            else if (isSimba) avatarImg = '/image/simba-trade-room.png';
+
             var content = (m.content || '').toString();
             // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
             try {
@@ -859,8 +895,8 @@
             content = esc(content).replaceAll('\n', '<br>');
 
             html += '<div class="' + sideCls + '">' +
-              '<div class="msg-avatar ' + avatarClass + '">' +
-                '<span>' + avatarText + '</span>' +
+              '<div class="msg-avatar" aria-label="' + esc(author) + ' avatar">' +
+                '<img alt="' + esc(author) + '" src="' + esc(avatarImg) + '" />' +
               '</div>' +
               '<div class="msg-col">' +
                 '<div class="msg-meta">' +
@@ -973,6 +1009,8 @@
 
         var cachedTopPatternsText = null;
         var cachedPatternsUpdated = null;
+
+        initCardAvatarRotation();
 
         function fmtPatternLine(p) {
           try {
