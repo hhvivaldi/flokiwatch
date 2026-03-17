@@ -48,6 +48,8 @@ from executor import (
 from monitor import monitor_positions, get_positions_summary, close_all_positions
 from technical_analyzer import get_mt5_data, calculate_indicators, calculate_technical_score, get_atr_value
 
+from shadow_model import call_shadow_model
+
 
 # ============================================================================
 # NEWS CACHE (avoid excessive requests)
@@ -2864,6 +2866,98 @@ class TradingBot:
             alert_proactive_decision(agent_result)
         except Exception as e:
             log.debug(f"{trigger_type} | Discord alert error (ignored): {e}")
+
+        def _shadow_worker(data_snapshot: dict, floki_result) -> None:
+            try:
+                if not getattr(config, "SHADOW_MODEL_ENABLED", False):
+                    return
+
+                floki_decision = str(getattr(floki_result, "decision", "") or "").strip().upper()
+                floki_conf = getattr(floki_result, "confidence", None)
+                try:
+                    floki_conf_i = int(round(float(floki_conf))) if floki_conf is not None else None
+                except Exception:
+                    floki_conf_i = None
+
+                local = call_shadow_model(data_snapshot, floki_decision={})
+                err = local.get("error")
+                if err:
+                    log.info(f"SHADOW | Trigger={trigger_type} | Local unavailable — {err}")
+                    try:
+                        from db_writer import record_agent_event
+
+                        record_agent_event(
+                            "SHADOW",
+                            f"Trigger={trigger_type} | Local unavailable — {err}"[:4000],
+                            payload={
+                                "trigger": trigger_type,
+                                "timestamp": snapshot_time_iso,
+                                "error": err,
+                                "latency_ms": local.get("latency_ms"),
+                            },
+                            author="SHADOW",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+                local_decision = str(local.get("decision") or "").strip().upper() or None
+                local_conf = local.get("confidence")
+                try:
+                    local_conf_i = int(round(float(local_conf))) if local_conf is not None else None
+                except Exception:
+                    local_conf_i = None
+
+                match = "MATCH" if (local_decision and local_decision == floki_decision) else "DIVERGE"
+
+                floki_conf_s = f"{floki_conf_i}%" if floki_conf_i is not None else "—%"
+                local_conf_s = f"{local_conf_i}%" if local_conf_i is not None else "—%"
+
+                log.info(
+                    f"SHADOW | Trigger={trigger_type} | Claude: {floki_decision} ({floki_conf_s}) | "
+                    f"Local: {local_decision} ({local_conf_s}) | {match}"
+                )
+
+                try:
+                    from db_writer import record_agent_event
+
+                    record_agent_event(
+                        "SHADOW",
+                        f"Claude: {floki_decision} ({floki_conf_s}) | Local: {local_decision} ({local_conf_s}) | {match}"[:4000],
+                        payload={
+                            "trigger": trigger_type,
+                            "timestamp": snapshot_time_iso,
+                            "match": match,
+                            "claude": {"decision": floki_decision, "confidence": floki_conf_i},
+                            "local": {
+                                "decision": local_decision,
+                                "confidence": local_conf_i,
+                                "latency_ms": local.get("latency_ms"),
+                                "error": None,
+                            },
+                        },
+                        author="SHADOW",
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    log.info(f"SHADOW | Trigger={trigger_type} | Local unavailable — {e}")
+                except Exception:
+                    pass
+
+        try:
+            if getattr(config, "SHADOW_MODEL_ENABLED", False):
+                dp_snapshot = dict(agent_data) if isinstance(agent_data, dict) else {}
+                th = threading.Thread(
+                    target=_shadow_worker,
+                    args=(dp_snapshot, agent_result),
+                    daemon=True,
+                    name="shadow-model",
+                )
+                th.start()
+        except Exception:
+            pass
 
         try:
             # Persist to SQLite
