@@ -161,6 +161,23 @@ class PositionMonitor:
                         )
                 except Exception as e:
                     log.debug(f"   Monitor: balance capture error (non-blocking): {e}")
+
+                # Remap Agent watch conditions from placeholder ticket=0 to real MT5 ticket on first sight
+                try:
+                    watch = self._load_watch_conditions()
+                    if isinstance(watch, dict) and "0" in watch and str(pos.ticket) not in watch:
+                        payload0 = watch.get("0")
+                        conds0 = payload0.get("conditions") if isinstance(payload0, dict) else None
+                        if isinstance(conds0, list) and conds0:
+                            watch[str(pos.ticket)] = payload0
+                            try:
+                                del watch["0"]
+                            except Exception:
+                                pass
+                            self._save_watch_conditions(watch)
+                            log.info(f"WATCH_REMAP | 0 -> #{pos.ticket} | count={len(conds0)}")
+                except Exception as e:
+                    log.debug(f"   Monitor: watch remap error (non-blocking): {e}")
                 
                 # Update DB with actual MT5 fill price (EA Bridge path records ticket=0 initially)
                 try:
