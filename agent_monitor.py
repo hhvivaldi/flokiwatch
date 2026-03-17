@@ -353,6 +353,121 @@ class AgentMonitor:
         except Exception:
             pass
 
+        # ------------------------------------------------------------
+        # WATCH CONDITIONS (open-trade protection): agent_watch_conditions.json
+        # ------------------------------------------------------------
+        watch_trigger = None
+        watch_ticket = None
+        watch_reason = None
+        watch_cond_type = None
+        watch_payload = None
+        try:
+            from executor import executor
+
+            positions = []
+            try:
+                positions = executor.get_open_positions() or []
+            except Exception:
+                positions = []
+
+            watch_store = {}
+            try:
+                watch_store = self._load_watch_conditions()
+            except Exception:
+                watch_store = {}
+
+            if isinstance(watch_store, dict) and positions:
+                pos_by_ticket = {}
+                for p in positions:
+                    try:
+                        t = p.get("ticket") if isinstance(p, dict) else getattr(p, "ticket", None)
+                        if t is not None:
+                            pos_by_ticket[int(t)] = p
+                    except Exception:
+                        continue
+
+                for ticket_str, payload in list(watch_store.items()):
+                    try:
+                        t = int(ticket_str)
+                    except Exception:
+                        continue
+                    pos = pos_by_ticket.get(t)
+                    if pos is None:
+                        continue
+
+                    conds = payload.get("conditions") if isinstance(payload, dict) else None
+                    if not isinstance(conds, list) or not conds:
+                        continue
+
+                    trig = self._evaluate_watch_conditions_for_position(pos, conds, scanner_data)
+                    if trig:
+                        watch_trigger = trig
+                        watch_ticket = t
+                        watch_payload = payload if isinstance(payload, dict) else None
+                        watch_cond_type = str(trig.get("type") or "").strip()
+                        watch_reason = str(trig.get("description") or "").strip() or watch_cond_type
+                        break
+        except Exception:
+            watch_trigger = None
+
+        if watch_trigger is not None and watch_ticket is not None:
+            try:
+                from db_writer import record_agent_event
+
+                msg = self._next_simba_template(
+                    [
+                        "Boss, trade alert! {reason}. Floki should take a look.",
+                        "Yo Boss — trade alert: {reason}. Might wanna peek at this.",
+                    ]
+                ).format(reason=str(watch_reason or "watch condition triggered")[:240])
+
+                record_agent_event(
+                    "SIMBA_CHECK",
+                    msg,
+                    payload={
+                        "watch": {
+                            "ticket": watch_ticket,
+                            "trigger": watch_trigger,
+                            "store": watch_payload,
+                        },
+                        "price": self._safe_float(scanner_data.get("current_price")),
+                    },
+                    author="SIMBA",
+                )
+            except Exception:
+                pass
+
+            # Clear watch conditions for this ticket after trigger
+            try:
+                store2 = self._load_watch_conditions()
+                if isinstance(store2, dict):
+                    store2.pop(str(watch_ticket), None)
+                    self._save_watch_conditions(store2)
+            except Exception:
+                pass
+
+            try:
+                df = getattr(bot, "_last_df", None)
+                snapshot_time_iso = datetime.utcnow().isoformat()
+                trigger_data = {
+                    "ticket": int(watch_ticket),
+                    "watch_condition": watch_trigger,
+                    "watch_reason": watch_reason,
+                    "watch_type": watch_cond_type,
+                }
+                bot._call_agent_proactive_snapshot(
+                    trigger_type="SIMBA_WATCH",
+                    snapshot_time_iso=snapshot_time_iso,
+                    agent_data=dp,
+                    df=df,
+                    trigger_data=trigger_data,
+                )
+            except Exception as e:
+                try:
+                    log.debug(f"AGENT_MONITOR | simba watch call failed (ignored): {e}")
+                except Exception:
+                    pass
+
         expired = False
         elapsed_min = None
         try:
@@ -901,6 +1016,123 @@ class AgentMonitor:
                 continue
 
         return triggered, checked, met
+
+    def _watch_conditions_path(self) -> str:
+        import os
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _load_watch_conditions(self) -> dict:
+        import json
+        import os
+
+        path = self._watch_conditions_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_watch_conditions(self, payload: dict) -> bool:
+        import json
+        import os
+
+        path = self._watch_conditions_path()
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
+            return True
+        except Exception:
+            return False
+
+    def _evaluate_watch_conditions_for_position(
+        self,
+        pos: Any,
+        conditions: List[Dict[str, Any]],
+        scanner_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        # `pos` may be PositionInfo or dict depending on executor.
+        current_price = None
+        pnl_dollars = None
+        try:
+            if isinstance(pos, dict):
+                current_price = self._safe_float(pos.get("current_price"))
+                pnl_dollars = self._safe_float(pos.get("profit"))
+            else:
+                current_price = self._safe_float(getattr(pos, "current_price", None))
+                pnl_dollars = self._safe_float(getattr(pos, "profit", None))
+        except Exception:
+            current_price = None
+            pnl_dollars = None
+
+        if current_price is None:
+            current_price = self._safe_float(scanner_data.get("current_price"))
+
+        tol_default = 0.05
+        try:
+            tol_default = float(0.05)
+        except Exception:
+            tol_default = 0.05
+
+        macro = {}
+        try:
+            bot = getattr(self, "bot", None)
+            dp = getattr(bot, "_last_agent_data", None) if bot is not None else None
+            macro = dp.get("macro_data") if isinstance(dp, dict) else {}
+            if not isinstance(macro, dict):
+                macro = {}
+        except Exception:
+            macro = {}
+
+        for c in conditions or []:
+            if not isinstance(c, dict):
+                continue
+            ctype = str(c.get("type") or "").strip()
+            if not ctype:
+                continue
+
+            if ctype == "price_touch":
+                lvl = self._safe_float(c.get("level"))
+                if lvl is None or current_price is None:
+                    continue
+                if abs(float(current_price) - float(lvl)) <= float(tol_default):
+                    return c
+
+            if ctype == "pnl_threshold":
+                thr = self._safe_float(c.get("value"))
+                if thr is None or pnl_dollars is None:
+                    continue
+                if (thr < 0 and float(pnl_dollars) <= float(thr)) or (thr > 0 and float(pnl_dollars) >= float(thr)) or thr == 0:
+                    return c
+
+            if ctype == "indicator_threshold":
+                ind = str(c.get("indicator") or "").strip().lower()
+                direction = str(c.get("direction") or "").strip().lower()
+                lvl = self._safe_float(c.get("level"))
+                if ind != "vix" or lvl is None or direction not in ("above", "below"):
+                    continue
+                vix_val = self._safe_float(macro.get("vix"))
+                if vix_val is None:
+                    continue
+                if (direction == "above" and float(vix_val) >= float(lvl)) or (direction == "below" and float(vix_val) <= float(lvl)):
+                    return c
+
+            try:
+                log.warning(f"SIMBA | unrecognized watch condition type: {ctype}")
+            except Exception:
+                pass
+
+        return None
 
     def _get_active_trade(self) -> Optional[Dict[str, Any]]:
         try:
