@@ -156,10 +156,6 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
     """
     start = time.time()
     try:
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
-            return {"success": False, "reason": "GEMINI_API_KEY not set"}
-
         cfg_model = None
         try:
             import config
@@ -170,9 +166,60 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
 
         model = (
             (str(cfg_model).strip() if cfg_model else "")
-            or os.environ.get("REX_MODEL", "gemini-2.5-flash").strip()
-            or "gemini-2.5-flash"
+            or os.environ.get("REX_MODEL", "gpt-4o").strip()
+            or "gpt-4o"
         )
+
+        prompt = _build_prompt(floki_summary)
+        full_prompt = f"{_rex_system_prompt()}\n\n{prompt}"
+
+        model_l = str(model or "").strip().lower()
+        use_gemini = model_l.startswith("gemini")
+
+        if not use_gemini:
+            api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+            if not api_key:
+                return {"success": False, "reason": "OPENAI_API_KEY not set"}
+
+            try:
+                from openai import OpenAI
+
+                client = OpenAI(api_key=api_key)
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=450,
+                    timeout=timeout_seconds,
+                )
+            except Exception as e:
+                return {"success": False, "reason": f"openai_request_failed: {e}"}
+
+            content = None
+            try:
+                content = resp.choices[0].message.content
+            except Exception:
+                content = None
+
+            if not content:
+                return {"success": False, "reason": "empty_response"}
+
+            parsed = _parse_rex_response(content)
+            latency_ms = int((time.time() - start) * 1000)
+            return {
+                "success": True,
+                "agree": bool(parsed.agree),
+                "reasoning": str(parsed.reasoning or "").strip(),
+                "concerns": parsed.concerns if isinstance(parsed.concerns, list) else [],
+                "suggested_adjustment": str(parsed.suggested_adjustment or "").strip(),
+                "latency_ms": latency_ms,
+                "model": model,
+                "raw": content,
+            }
+
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            return {"success": False, "reason": "GEMINI_API_KEY not set"}
 
         try:
             from google import genai
@@ -180,9 +227,6 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
             client = genai.Client(api_key=api_key)
         except Exception as e:
             return {"success": False, "reason": f"google_genai_client_unavailable: {e}"}
-
-        prompt = _build_prompt(floki_summary)
-        full_prompt = f"{_rex_system_prompt()}\n\n{prompt}"
 
         try:
             resp = client.models.generate_content(

@@ -321,7 +321,7 @@ SIMBA_MAX_SLEEP_DEFAULT_MINUTES = int(os.environ.get("SIMBA_MAX_SLEEP_DEFAULT_MI
 # ============================================================================
 # REX VALIDATOR (debate partner)
 # ============================================================================
-REX_MODEL = os.environ.get("REX_MODEL", "gemini-2.5-flash")
+REX_MODEL = os.environ.get("REX_MODEL", "gpt-4o")
 
 # ============================================================================
 # MULTI-TF TREND CONFIRMATION

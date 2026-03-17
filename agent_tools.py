@@ -463,17 +463,6 @@ class AgentTools:
     ) -> Dict[str, Any]:
         start = time.time()
         try:
-            dir_s = str(my_direction or "").upper().strip()
-            allowed_prefixes = ("OPEN_", "CLOSE_")
-            if not any(dir_s.startswith(p) for p in allowed_prefixes):
-                self._log_tool("debate_with_rex", start, f"blocked dir={dir_s}")
-                return {
-                    "success": False,
-                    "reason": "blocked_for_decision",
-                    "allowed": ["OPEN_*", "CLOSE_*"] ,
-                    "received": dir_s,
-                }
-
             now = time.time()
             last_ts = getattr(self, "_rex_debate_last_ts", None)
             if last_ts is None or (now - float(last_ts)) > 300:
@@ -491,6 +480,7 @@ class AgentTools:
             if not isinstance(history, list):
                 history = []
 
+            dir_s = str(my_direction or "").upper().strip()
             conf_f = self._safe_float(my_confidence)
             if conf_f is None:
                 conf_f = 0.0
