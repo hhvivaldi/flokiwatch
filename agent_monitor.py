@@ -361,33 +361,15 @@ class AgentMonitor:
         watch_reason = None
         watch_cond_type = None
         watch_payload = None
+        watch_active = False
         try:
             from executor import executor
-            import os
 
             positions = []
             try:
                 positions = executor.get_open_positions() or []
             except Exception:
                 positions = []
-
-            try:
-                path_dbg = self._watch_conditions_path()
-                exists_dbg = os.path.exists(path_dbg)
-                pos_tickets_dbg = []
-                for p in positions:
-                    try:
-                        t = p.get("ticket") if isinstance(p, dict) else getattr(p, "ticket", None)
-                        if t is not None:
-                            pos_tickets_dbg.append(int(t))
-                    except Exception:
-                        continue
-                log.warning(
-                    "SIMBA_DEBUG | watch_store | "
-                    f"path={path_dbg} exists={exists_dbg} open_tickets={pos_tickets_dbg}"
-                )
-            except Exception:
-                pass
 
             watch_store = {}
             try:
@@ -396,33 +378,24 @@ class AgentMonitor:
                 watch_store = {}
 
             try:
-                if isinstance(watch_store, dict):
-                    keys_dbg = list(watch_store.keys())
-                    key_preview = keys_dbg[:10]
-                    log.warning(
-                        "SIMBA_DEBUG | watch_store_loaded | "
-                        f"ticket_keys={key_preview} total_keys={len(keys_dbg)}"
-                    )
-
-                    # summarize conditions per ticket
-                    for k in key_preview[:5]:
-                        payload = watch_store.get(k) if isinstance(watch_store, dict) else None
+                if isinstance(watch_store, dict) and positions:
+                    pos_ticket_set = set()
+                    for p in positions:
+                        try:
+                            t = p.get("ticket") if isinstance(p, dict) else getattr(p, "ticket", None)
+                            if t is not None:
+                                pos_ticket_set.add(str(int(t)))
+                        except Exception:
+                            continue
+                    for k, payload in watch_store.items():
+                        if str(k) not in pos_ticket_set:
+                            continue
                         conds = payload.get("conditions") if isinstance(payload, dict) else None
-                        if not isinstance(conds, list):
-                            conds = []
-                        types = []
-                        for c in conds:
-                            try:
-                                if isinstance(c, dict):
-                                    types.append(str(c.get("type") or "").strip() or "?")
-                            except Exception:
-                                continue
-                        log.warning(
-                            "SIMBA_DEBUG | watch_ticket | "
-                            f"ticket={k} cond_count={len(conds)} types={types}"
-                        )
+                        if isinstance(conds, list) and conds:
+                            watch_active = True
+                            break
             except Exception:
-                pass
+                watch_active = False
 
             if isinstance(watch_store, dict) and positions:
                 pos_by_ticket = {}
@@ -442,11 +415,6 @@ class AgentMonitor:
                     pos = pos_by_ticket.get(t)
                     if pos is None:
                         continue
-
-                    try:
-                        log.warning(f"SIMBA_DEBUG | watch_eval | matching_ticket={t} found_open_pos=yes")
-                    except Exception:
-                        pass
 
                     conds = payload.get("conditions") if isinstance(payload, dict) else None
                     if not isinstance(conds, list) or not conds:
@@ -570,11 +538,13 @@ class AgentMonitor:
         raw_wake = bool(expired or triggered_ids)
         decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
 
+        any_orders_active = bool(conditions) or bool(watch_active)
+
         simba_state_decision = "MONITORING"
         try:
             if decision == "WAKE":
                 simba_state_decision = "ALERT"
-            elif isinstance(conditions, list) and len(conditions) > 0:
+            elif bool(conditions) or bool(watch_active):
                 simba_state_decision = "WATCHING"
             else:
                 simba_state_decision = "MONITORING"
@@ -772,7 +742,9 @@ class AgentMonitor:
                     except Exception:
                         trend = "steady"
 
-                    if not conditions:
+                    any_orders_or_watch_active = bool(any_orders_active) or bool(watch_active)
+
+                    if not any_orders_or_watch_active:
                         msg = self._next_simba_template(
                             [
                                 "No watch orders from Floki. Price at {price}. Just keeping an eye on things.",
@@ -861,7 +833,7 @@ class AgentMonitor:
 
             if decision == "WAKE":
                 summary_txt = "ALERT"
-            elif not conditions:
+            elif not any_orders_active:
                 summary_txt = "No watch orders."
             else:
                 summary_txt = "Watching levels."
@@ -878,7 +850,7 @@ class AgentMonitor:
                 "timestamp": datetime.utcnow().isoformat(),
                 "price": price_f,
                 "cooldown": bool(in_cooldown),
-                "has_conditions": bool(conditions),
+                "has_conditions": bool(any_orders_active),
             }
         except Exception:
             pass
