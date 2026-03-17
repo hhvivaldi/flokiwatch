@@ -46,36 +46,36 @@ class SimbaWatcher:
         start = time.time()
 
         try:
-            api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
             if not api_key:
-                return self._wake_fallback(start, "OPENAI_API_KEY not set")
+                return self._wake_fallback(start, "GEMINI_API_KEY not set")
 
             try:
-                from openai import OpenAI
+                from google import genai
 
-                client = OpenAI(api_key=api_key)
+                client = genai.Client(api_key=api_key)
             except Exception as e:
-                return self._wake_fallback(start, f"openai_client_unavailable: {e}")
+                return self._wake_fallback(start, f"google_genai_client_unavailable: {e}")
 
             prompt = self._build_prompt(scanner_data, wake_conditions)
+            full_prompt = f"{self._system_prompt()}\n\n{prompt}"
 
             try:
-                resp = client.chat.completions.create(
+                resp = client.models.generate_content(
                     model=self.model,
-                    messages=[
-                        {"role": "system", "content": self._system_prompt()},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0,
-                    response_format={"type": "json_object"},
-                    timeout=self.timeout_seconds,
+                    contents=full_prompt,
+                    config={
+                        "response_mime_type": "application/json",
+                        "temperature": 0,
+                        "timeout": self.timeout_seconds,
+                    },
                 )
             except Exception as e:
-                return self._wake_fallback(start, f"openai_request_failed: {e}")
+                return self._wake_fallback(start, f"gemini_request_failed: {e}")
 
             content = None
             try:
-                content = resp.choices[0].message.content
+                content = resp.text
             except Exception:
                 content = None
 
