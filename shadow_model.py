@@ -337,6 +337,31 @@ def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
             else:
                 lines.append(f"- {str(ev)}")
 
+    if positions:
+        lines.append("\nIMPORTANT CONTEXT: You currently have the following open position(s):")
+        for p in positions[:5]:
+            if not isinstance(p, dict):
+                continue
+            ticket = p.get("ticket")
+            direction = p.get("direction") or p.get("type")
+            entry = p.get("open_price") or p.get("entry")
+            pnl = p.get("profit")
+            sl = p.get("sl")
+            tp = p.get("tp")
+            lines.append(
+                f"- #{ticket} {direction} entry={_fmt_num(entry, 2)} pnl={_fmt_num(pnl, 2)} sl={_fmt_num(sl, 2)} tp={_fmt_num(tp, 2)}"
+            )
+        lines.append("Your decision must be one of:")
+        lines.append("- HOLD_TRADE: keep the position open")
+        lines.append("- CLOSE_TRADE: close the position now")
+        lines.append("- ADJUST_TRADE: modify SL or TP")
+        lines.append("Do NOT respond with WAIT or OPEN when you have an open position. WAIT and OPEN are only valid when you have NO open positions.")
+    else:
+        lines.append("\nYou have no open positions. Your decision must be one of:")
+        lines.append("- WAIT: do nothing")
+        lines.append("- OPEN_BUY: open a buy position")
+        lines.append("- OPEN_SELL: open a sell position")
+
     return "\n".join(lines).strip()
 
 

@@ -2919,6 +2919,20 @@ class TradingBot:
                 )
 
                 try:
+                    claude_reasoning = str(getattr(floki_result, "reasoning", "") or "").strip()
+                    if claude_reasoning:
+                        log.info(f"SHADOW_CLAUDE | {claude_reasoning[:300]}")
+                except Exception:
+                    pass
+
+                try:
+                    local_reasoning = str(local.get("reasoning") or "").strip()
+                    if local_reasoning:
+                        log.info(f"SHADOW_LOCAL | {local_reasoning[:300]}")
+                except Exception:
+                    pass
+
+                try:
                     from db_writer import record_agent_event
 
                     record_agent_event(
