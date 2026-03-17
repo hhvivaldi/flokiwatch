@@ -48,11 +48,29 @@ def _safe_int(v: Any) -> Optional[int]:
         return None
 
 
+def _strip_code_fences(text: str) -> str:
+    try:
+        if not isinstance(text, str):
+            return ""
+        s = text.strip()
+        if "```" not in s:
+            return s
+        # Extract the first fenced block if present; otherwise remove backticks.
+        m = re.search(r"```(?:json)?\s*(.*?)\s*```", s, flags=re.DOTALL | re.IGNORECASE)
+        if m:
+            return (m.group(1) or "").strip()
+        return s.replace("```", "").strip()
+    except Exception:
+        return "" if text is None else str(text)
+
+
 def _first_json_object(text: str) -> Optional[Dict[str, Any]]:
     if not isinstance(text, str) or not text.strip():
         return None
 
-    s = text.strip()
+    s = _strip_code_fences(text)
+    if not s:
+        return None
 
     # Fast path: pure JSON
     try:
@@ -61,15 +79,34 @@ def _first_json_object(text: str) -> Optional[Dict[str, Any]]:
     except Exception:
         pass
 
-    # Extract first {...} block (best effort)
+    # Extract a plausible JSON object by scanning brace pairs (best effort)
     try:
-        start = s.find("{")
-        end = s.rfind("}")
-        if start == -1 or end == -1 or end <= start:
+        starts = [i for i, ch in enumerate(s) if ch == "{"]
+        ends = [i for i, ch in enumerate(s) if ch == "}"]
+        if not starts or not ends:
             return None
-        candidate = s[start : end + 1]
-        obj = json.loads(candidate)
-        return obj if isinstance(obj, dict) else None
+
+        # Try smaller objects first (more likely to be the decision JSON)
+        candidates: List[str] = []
+        for i in starts:
+            for j in ends:
+                if j <= i:
+                    continue
+                # Limit candidate size to avoid huge captures
+                if (j - i) > 8000:
+                    continue
+                candidates.append(s[i : j + 1])
+
+        candidates.sort(key=len)
+        for cand in candidates[:200]:
+            try:
+                obj = json.loads(cand)
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                continue
+
+        return None
     except Exception:
         return None
 
