@@ -2849,6 +2849,35 @@ class TradingBot:
             pass
 
         try:
+            from db_writer import record_agent_event
+
+            d = str(getattr(agent_result, "decision", "") or "").strip()
+            conf = getattr(agent_result, "confidence", None)
+            reasoning = str(getattr(agent_result, "reasoning", "") or "").strip()
+
+            conf_s = ""
+            try:
+                if conf is not None:
+                    conf_s = f" ({int(round(float(conf)))}%)"
+            except Exception:
+                conf_s = ""
+
+            reason_s = reasoning
+            if len(reason_s) > 380:
+                reason_s = reason_s[:380].rstrip() + "..."
+
+            content = f"{d}{conf_s}. {reason_s}".strip()
+            if content:
+                record_agent_event(
+                    "FLOKI_DECISION",
+                    content[:4000],
+                    payload={"trigger": trigger_type, "timestamp": snapshot_time_iso},
+                    author="FLOKI",
+                )
+        except Exception:
+            pass
+
+        try:
             if agent_result.decision in ("OPEN_BUY", "OPEN_SELL"):
                 tp = getattr(agent_result, "trade_plan", None)
                 entry_price = None

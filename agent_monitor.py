@@ -233,6 +233,16 @@ class AgentMonitor:
         if not isinstance(conditions, list) or not conditions:
             return
 
+        conditions_fingerprint = None
+        try:
+            import json
+            import hashlib
+
+            canon = json.dumps(conditions, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+            conditions_fingerprint = hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
+        except Exception:
+            conditions_fingerprint = None
+
         bot = getattr(self, "bot", None)
         if bot is None:
             return
@@ -263,6 +273,35 @@ class AgentMonitor:
                 price_mid = self._safe_float(dp.get("price"))
             except Exception:
                 price_mid = None
+
+        in_cooldown = False
+        cooldown_minutes = 30
+        mins_remaining = None
+        next_eligible_iso = None
+        try:
+            from datetime import timezone, timedelta
+
+            cw = wake_conditions if isinstance(wake_conditions, dict) else {}
+            try:
+                cooldown_minutes = int(cw.get("cooldown_minutes") or 30)
+            except Exception:
+                cooldown_minutes = 30
+
+            last_wake_at = cw.get("last_wake_at")
+            last_fp = str(cw.get("cooldown_fingerprint") or "").strip() or None
+            if last_wake_at and cooldown_minutes > 0 and conditions_fingerprint and last_fp == conditions_fingerprint:
+                lw = datetime.fromisoformat(str(last_wake_at).replace("Z", "+00:00"))
+                if lw.tzinfo is None:
+                    lw = lw.replace(tzinfo=timezone.utc)
+                now_utc = datetime.now(timezone.utc)
+                elapsed = (now_utc - lw).total_seconds() / 60.0
+                if elapsed < float(cooldown_minutes):
+                    in_cooldown = True
+                    mins_remaining = int(max(0, round(float(cooldown_minutes) - elapsed)))
+                    next_eligible = lw + timedelta(minutes=int(cooldown_minutes))
+                    next_eligible_iso = next_eligible.isoformat()
+        except Exception:
+            in_cooldown = False
 
         if price_mid is None:
             try:
@@ -339,7 +378,8 @@ class AgentMonitor:
                 simba_result = None
                 triggered_ids = []
 
-        decision = "WAKE" if (expired or triggered_ids) else "SLEEP"
+        raw_wake = bool(expired or triggered_ids)
+        decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
 
         try:
             from db_writer import record_agent_event
@@ -365,7 +405,15 @@ class AgentMonitor:
                 record_agent_event(
                     "SIMBA_CHECK",
                     msg,
-                    payload={"simba": simba_result, "expired": True, "elapsed_min": elapsed_min, "price": price_f},
+                    payload={
+                        "simba": simba_result,
+                        "expired": True,
+                        "elapsed_min": elapsed_min,
+                        "price": price_f,
+                        "cooldown": in_cooldown,
+                        "cooldown_minutes": cooldown_minutes,
+                        "cooldown_fingerprint": conditions_fingerprint,
+                    },
                     author="SIMBA",
                 )
             elif decision == "WAKE" and triggered_ids:
@@ -408,7 +456,44 @@ class AgentMonitor:
                 record_agent_event(
                     "SIMBA_CHECK",
                     msg,
-                    payload={"simba": simba_result, "expired": False, "triggered": triggered_ids, "price": price_f},
+                    payload={
+                        "simba": simba_result,
+                        "expired": False,
+                        "triggered": triggered_ids,
+                        "price": price_f,
+                        "cooldown": in_cooldown,
+                        "cooldown_minutes": cooldown_minutes,
+                        "cooldown_fingerprint": conditions_fingerprint,
+                    },
+                    author="SIMBA",
+                )
+            elif raw_wake and in_cooldown:
+                next_hhmm = ""
+                try:
+                    if next_eligible_iso:
+                        next_hhmm = str(next_eligible_iso)[11:16]
+                except Exception:
+                    next_hhmm = ""
+
+                msg = (
+                    f"Cooldown active ({mins_remaining} min remaining). Conditions unchanged since last wake. "
+                    f"Next wake eligible at {next_hhmm}."
+                ).strip()
+
+                record_agent_event(
+                    "SIMBA_CHECK",
+                    msg,
+                    payload={
+                        "simba": simba_result,
+                        "expired": bool(expired),
+                        "triggered": triggered_ids,
+                        "price": price_f,
+                        "cooldown": True,
+                        "cooldown_minutes": cooldown_minutes,
+                        "cooldown_remaining_min": mins_remaining,
+                        "next_eligible_at": next_eligible_iso,
+                        "cooldown_fingerprint": conditions_fingerprint,
+                    },
                     author="SIMBA",
                 )
             else:
@@ -428,7 +513,14 @@ class AgentMonitor:
                 record_agent_event(
                     "SIMBA_CHECK",
                     msg,
-                    payload={"simba": simba_result, "expired": False, "price": price_f},
+                    payload={
+                        "simba": simba_result,
+                        "expired": False,
+                        "price": price_f,
+                        "cooldown": in_cooldown,
+                        "cooldown_minutes": cooldown_minutes,
+                        "cooldown_fingerprint": conditions_fingerprint,
+                    },
                     author="SIMBA",
                 )
         except Exception:
@@ -439,6 +531,19 @@ class AgentMonitor:
 
         try:
             wake_conditions["sleep_started_at"] = datetime.utcnow().isoformat()
+            wake_conditions["last_wake_at"] = datetime.utcnow().isoformat()
+            if conditions_fingerprint:
+                wake_conditions["cooldown_fingerprint"] = conditions_fingerprint
+
+            try:
+                wake_conditions["cooldown_minutes"] = int(wake_conditions.get("cooldown_minutes") or 30)
+            except Exception:
+                wake_conditions["cooldown_minutes"] = 30
+
+            try:
+                wake_conditions["conditions"] = []
+            except Exception:
+                pass
             self._save_wake_conditions(wake_conditions)
         except Exception:
             pass
