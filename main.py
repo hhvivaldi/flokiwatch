@@ -824,7 +824,12 @@ class TradingBot:
                     now_dt = datetime.now()
 
                 delta_min = (now_dt - last_dt).total_seconds() / 60.0
-                if delta_min >= 0 and delta_min < float(threshold_min):
+                skip = bool(delta_min >= 0 and delta_min < float(threshold_min))
+                log.info(
+                    f"STARTUP | last_proactive_ts={last_ts_iso} | age_minutes={delta_min:.2f} | "
+                    f"threshold={threshold_min} | skip={skip}"
+                )
+                if skip:
                     self._skip_initial_proactive_h1 = True
                     log.info(
                         f"STARTUP | Skipping initial Floki call — last analysis was {int(delta_min)}m ago (threshold: {threshold_min}m)"
@@ -2697,7 +2702,7 @@ class TradingBot:
         
 
     def _get_last_closed_h1_time_iso(self) -> str:
-        """Return ISO timestamp of the last CLOSED M30 candle, or empty string if unavailable."""
+        """Return ISO timestamp of the last CLOSED H1 candle, or empty string if unavailable."""
         try:
             import MetaTrader5 as mt5
             rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 1, 1)

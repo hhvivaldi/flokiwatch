@@ -800,6 +800,10 @@ class AgentMonitor:
                         },
                         author="SIMBA",
                     )
+                    try:
+                        log.info(f"SIMBA_5MIN_SUMMARY | {msg}")
+                    except Exception:
+                        pass
                     summary_emitted = True
                     try:
                         self._last_simba_summary_ts = float(now_ts)

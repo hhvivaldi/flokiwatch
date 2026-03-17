@@ -176,6 +176,12 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
         model_l = str(model or "").strip().lower()
         use_gemini = model_l.startswith("gemini")
 
+        try:
+            provider = "gemini" if use_gemini else "openai"
+            log.info(f"REX | model={model} | provider={provider}")
+        except Exception:
+            pass
+
         if not use_gemini:
             api_key = os.environ.get("OPENAI_API_KEY", "").strip()
             if not api_key:
