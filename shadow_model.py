@@ -408,6 +408,13 @@ def call_shadow_model(agent_data: Dict[str, Any], floki_decision: Dict[str, Any]
         cleaned = _strip_think_tags(content)
         obj = _first_json_object(cleaned)
         if not isinstance(obj, dict):
+            try:
+                raw_preview = str(content).replace("\r", " ").replace("\n", " ")
+                raw_preview = raw_preview[:500]
+                log.info(f"SHADOW_RAW | first_500_chars: {raw_preview}")
+                out["raw_preview"] = raw_preview
+            except Exception:
+                pass
             out["error"] = "invalid_decision_json"
             return out
 
