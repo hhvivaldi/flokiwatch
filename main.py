@@ -2634,7 +2634,7 @@ class TradingBot:
         """Return ISO timestamp of the last CLOSED M30 candle, or empty string if unavailable."""
         try:
             import MetaTrader5 as mt5
-            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M30, 1, 1)
+            rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 1, 1)
             if rates is None or len(rates) == 0:
                 return ""
             t = int(rates[0]["time"])
@@ -2678,6 +2678,17 @@ class TradingBot:
         from agent_tools import AgentTools
         import safety_checks
         import risk_manager
+
+        if trigger_type == "SIMBA_WAKE":
+            try:
+                now_ts = time.time()
+                last_ts = getattr(self, "_last_simba_wake_call_ts", 0) or 0
+                if (now_ts - last_ts) < 60:
+                    log.info("SIMBA_WAKE | skipped — dedupe (<60s since last wake call)")
+                    return
+                self._last_simba_wake_call_ts = now_ts
+            except Exception:
+                pass
 
         agent = get_agent()
         if not agent.is_enabled():
