@@ -175,6 +175,14 @@ def _extract_sr_nearest_10(agent_data: Dict[str, Any], mid_price: Optional[float
 def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
     dp = agent_data if isinstance(agent_data, dict) else {}
 
+    try:
+        log.debug(
+            f"SHADOW_PROMPT_DEBUG | positions_key_exists={('positions' in dp)} | "
+            f"open_positions_key={('open_positions' in dp)} | keys={list(dp.keys())[:10]}"
+        )
+    except Exception:
+        pass
+
     # Price
     bid = _safe_float(_get_nested(dp, ["current_price", "bid"]))
     ask = _safe_float(_get_nested(dp, ["current_price", "ask"]))
