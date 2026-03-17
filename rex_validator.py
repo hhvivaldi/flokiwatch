@@ -160,7 +160,19 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
         if not api_key:
             return {"success": False, "reason": "GEMINI_API_KEY not set"}
 
-        model = os.environ.get("REX_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+        cfg_model = None
+        try:
+            import config
+
+            cfg_model = getattr(config, "REX_MODEL", None)
+        except Exception:
+            cfg_model = None
+
+        model = (
+            (str(cfg_model).strip() if cfg_model else "")
+            or os.environ.get("REX_MODEL", "gemini-2.5-flash").strip()
+            or "gemini-2.5-flash"
+        )
 
         try:
             from google import genai

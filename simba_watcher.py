@@ -31,7 +31,20 @@ class SimbaResult:
 
 class SimbaWatcher:
     def __init__(self, *, model: Optional[str] = None, timeout_seconds: int = 10):
-        self.model = (model or os.environ.get("SIMBA_MODEL", "gpt-4o-mini")).strip() or "gpt-4o-mini"
+        cfg_model = None
+        try:
+            import config
+
+            cfg_model = getattr(config, "SIMBA_MODEL", None)
+        except Exception:
+            cfg_model = None
+
+        self.model = (
+            model
+            or (str(cfg_model).strip() if cfg_model else "")
+            or os.environ.get("SIMBA_MODEL", "gpt-4o-mini").strip()
+            or "gpt-4o-mini"
+        )
         try:
             self.timeout_seconds = int(timeout_seconds)
         except Exception:
