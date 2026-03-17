@@ -895,6 +895,11 @@ class AgentMonitor:
         except Exception:
             tol_default = 1.0
 
+        ctx_shared = {
+            "current_price": price,
+            "price_touch_default_tolerance": tol_default,
+        }
+
         for idx, c in enumerate(conditions or [], start=1):
             if not isinstance(c, dict):
                 continue
@@ -924,18 +929,8 @@ class AgentMonitor:
                         triggered.append(cid)
 
                 elif ctype == "price_touch":
-                    level = self._safe_float(c.get("level"))
-                    if level is None or price is None:
-                        continue
-
-                    tol = tol_default
-                    try:
-                        if c.get("tolerance") is not None:
-                            tol = float(c.get("tolerance"))
-                    except Exception:
-                        tol = tol_default
-
-                    if abs(float(price) - float(level)) <= float(tol):
+                    ok, _ = self._is_simba_condition_met(c, ctx_shared, source="wake")
+                    if ok:
                         met += 1
                         triggered.append(cid)
 
@@ -1078,12 +1073,6 @@ class AgentMonitor:
         if current_price is None:
             current_price = self._safe_float(scanner_data.get("current_price"))
 
-        tol_default = 0.05
-        try:
-            tol_default = float(0.05)
-        except Exception:
-            tol_default = 0.05
-
         macro = {}
         try:
             bot = getattr(self, "bot", None)
@@ -1094,45 +1083,79 @@ class AgentMonitor:
         except Exception:
             macro = {}
 
+        ctx = {
+            "current_price": current_price,
+            "pnl_dollars": pnl_dollars,
+            "macro": macro,
+        }
         for c in conditions or []:
             if not isinstance(c, dict):
                 continue
-            ctype = str(c.get("type") or "").strip()
-            if not ctype:
-                continue
+            ok, _ = self._is_simba_condition_met(c, ctx, source="watch")
+            if ok:
+                return c
+        return None
 
+    def _is_simba_condition_met(self, cond: Dict[str, Any], ctx: Dict[str, Any], source: str) -> Tuple[bool, Optional[str]]:
+        ctype = str(cond.get("type") or "").strip()
+        if not ctype:
+            return False, None
+
+        try:
             if ctype == "price_touch":
-                lvl = self._safe_float(c.get("level"))
-                if lvl is None or current_price is None:
-                    continue
-                if abs(float(current_price) - float(lvl)) <= float(tol_default):
-                    return c
+                lvl = self._safe_float(cond.get("level"))
+                price = self._safe_float(ctx.get("current_price"))
+                if lvl is None or price is None:
+                    return False, None
+                tol = 0.05
+                try:
+                    if cond.get("tolerance") is not None:
+                        tol = float(cond.get("tolerance"))
+                    elif ctx.get("price_touch_default_tolerance") is not None:
+                        tol = float(ctx.get("price_touch_default_tolerance"))
+                except Exception:
+                    tol = 0.05
+                return abs(float(price) - float(lvl)) <= float(tol), None
 
             if ctype == "pnl_threshold":
-                thr = self._safe_float(c.get("value"))
-                if thr is None or pnl_dollars is None:
-                    continue
-                if (thr < 0 and float(pnl_dollars) <= float(thr)) or (thr > 0 and float(pnl_dollars) >= float(thr)) or thr == 0:
-                    return c
+                thr = self._safe_float(cond.get("value"))
+                pnl = self._safe_float(ctx.get("pnl_dollars"))
+                if thr is None or pnl is None:
+                    return False, None
+                return (
+                    (thr < 0 and float(pnl) <= float(thr))
+                    or (thr > 0 and float(pnl) >= float(thr))
+                    or thr == 0
+                ), None
 
             if ctype == "indicator_threshold":
-                ind = str(c.get("indicator") or "").strip().lower()
-                direction = str(c.get("direction") or "").strip().lower()
-                lvl = self._safe_float(c.get("level"))
+                ind = str(cond.get("indicator") or "").strip().lower()
+                direction = str(cond.get("direction") or "").strip().lower()
+                lvl = self._safe_float(cond.get("level"))
                 if ind != "vix" or lvl is None or direction not in ("above", "below"):
-                    continue
+                    return False, None
+                macro = ctx.get("macro") if isinstance(ctx.get("macro"), dict) else {}
                 vix_val = self._safe_float(macro.get("vix"))
                 if vix_val is None:
-                    continue
-                if (direction == "above" and float(vix_val) >= float(lvl)) or (direction == "below" and float(vix_val) <= float(lvl)):
-                    return c
+                    return False, None
+                ok = (direction == "above" and float(vix_val) >= float(lvl)) or (direction == "below" and float(vix_val) <= float(lvl))
+                return ok, None
+
+            if ctype in ("price_above", "price_below", "h1_volume_above", "scanner_pattern", "indicator_above", "indicator_below"):
+                # These are wake-only types (handled in _evaluate_wake_conditions)
+                return False, None
 
             try:
-                log.warning(f"SIMBA | unrecognized watch condition type: {ctype}")
+                log.warning(f"SIMBA | unrecognized {source} condition type: {ctype}")
             except Exception:
                 pass
-
-        return None
+            return False, "unrecognized"
+        except Exception as e:
+            try:
+                log.debug(f"SIMBA | condition eval error (ignored) | source={source} type={ctype}: {e}")
+            except Exception:
+                pass
+            return False, "error"
 
     def _get_active_trade(self) -> Optional[Dict[str, Any]]:
         try:
