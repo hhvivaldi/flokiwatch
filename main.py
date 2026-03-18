@@ -1773,7 +1773,7 @@ class TradingBot:
                     else:
                         delta_s = max(0, (scheduled_dt - now_utc).total_seconds())
                         approx_minutes = int(round(delta_s / 60.0))
-                        sleep_minutes = _clamp_minutes(requested_minutes if requested_minutes is not None else approx_minutes)
+                        sleep_minutes = _clamp_minutes(approx_minutes)
                         log.info(
                             f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested — skipping Floki this cycle)"
                         )
