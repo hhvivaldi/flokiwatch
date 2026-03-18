@@ -705,9 +705,15 @@ class TradingBot:
                     return False
 
             needs_details = [t for t in closed_trades if _needs_deal_details(t)]
-            log.info(f"RESOLVE_PENDING | checked {len(closed_trades)} closed trades | {len(needs_details)} need deal details")
             if not needs_details:
                 return
+
+            try:
+                log.info(
+                    f"RESOLVE_PENDING | checked {len(closed_trades)} closed trades | {len(needs_details)} need deal details"
+                )
+            except Exception:
+                pass
 
             resolved_any = False
 
@@ -1779,9 +1785,16 @@ class TradingBot:
                         delta_s = max(0, (scheduled_dt - now_utc).total_seconds())
                         approx_minutes = int(round(delta_s / 60.0))
                         sleep_minutes = _clamp_minutes(approx_minutes)
-                        log.info(
-                            f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested — skipping Floki this cycle)"
-                        )
+                        try:
+                            milestones = {30, 25, 20, 15, 10, 5, 2, 1}
+                            last_logged = getattr(self, "_last_floki_schedule_milestone", None)
+                            if sleep_minutes in milestones and sleep_minutes != last_logged:
+                                setattr(self, "_last_floki_schedule_milestone", sleep_minutes)
+                                log.info(
+                                    f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested — skipping Floki this cycle)"
+                                )
+                        except Exception:
+                            pass
             except Exception as e:
                 log.warning(f"FLOKI_SCHEDULE | schedule check error (ignored): {e}")
             

@@ -1248,7 +1248,7 @@ class AgentMonitor:
                     now_ts = time.time()
                     if (now_ts - float(self._last_stale_db_active_trade_log_ts or 0.0)) > 900.0:
                         self._last_stale_db_active_trade_log_ts = now_ts
-                        log.info(
+                        log.debug(
                             "AGENT_MONITOR | stale DB active_trade ignored (MT5 has 0 positions)"
                         )
             except Exception:

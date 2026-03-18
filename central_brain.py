@@ -450,7 +450,7 @@ def _evaluate_momentum(momentum_data: Dict) -> Tuple[str, str, List[str], List[s
     # Penalize high momentum with low volume (false breakout)
     momentum_score = momentum_data.get("score", 50.0)
     if vol_ratio < 0.5 and momentum_score > 60:
-        alerts.append(f"WARNING: Momentum {momentum_score:.0f} with very low volume ({vol_ratio:.1f}x) - possible false breakout")
+        alerts.append(f"Momentum {momentum_score:.0f} with very low volume ({vol_ratio:.1f}x) - possible false breakout")
         idx = strength_levels.index(strength)
         if idx >= 2:
             strength = strength_levels[max(0, idx - 2)]
