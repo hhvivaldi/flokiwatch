@@ -832,6 +832,10 @@ class AIAgent:
                 parts = []
                 part_types = []
 
+            logger.info(
+                f"GEMINI_PARTS | types={part_types} fn_calls={len(fn_calls)} text_out={'Y' if (text_out and str(text_out).strip()) else 'N'} tool_calls={tool_calls}/{int(self.max_tool_calls)}"
+            )
+
             if text_out and not fn_calls:
                 return {
                     "content": str(text_out).strip(),
