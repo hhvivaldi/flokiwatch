@@ -1071,88 +1071,11 @@ class TradingBot:
                 # Monitor open positions
                 self._monitor_cycle()
                 
-                # Wait for next cycle (agent-controlled scheduling) with monitor sub-loop
-                # - Agent sets next_check_at via data/agent_next_check.json
-                # - If missing/invalid, default is 5 minutes
-                # - Simba wake/watch triggers override the timer (handled by AgentMonitor)
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                next_path = os.path.join(base_dir, "data", "agent_next_check.json")
-
-                default_minutes = 5
-                requested_minutes = None
-                next_check_at = None
-                now_utc = datetime.utcnow()
-
-                try:
-                    if os.path.exists(next_path):
-                        with open(next_path, "r", encoding="utf-8") as f:
-                            payload = json.load(f)
-                        if isinstance(payload, dict):
-                            requested_minutes = payload.get("requested_minutes")
-                            next_check_at = payload.get("next_check_at")
-                except Exception:
-                    requested_minutes = None
-                    next_check_at = None
-
-                def _parse_next_check(iso_s: Optional[str]) -> Optional[datetime]:
-                    if not isinstance(iso_s, str) or not iso_s.strip():
-                        return None
-                    s = iso_s.strip()
-                    try:
-                        if s.endswith("Z"):
-                            s = s[:-1] + "+00:00"
-                    except Exception:
-                        pass
-                    try:
-                        dt = datetime.fromisoformat(s)
-                    except Exception:
-                        return None
-                    try:
-                        if dt.tzinfo is not None:
-                            return dt.astimezone(timezone.utc).replace(tzinfo=None)
-                    except Exception:
-                        pass
-                    return None
-
-                def _clamp_minutes(m: int) -> int:
-                    try:
-                        m_i = int(m)
-                    except Exception:
-                        m_i = default_minutes
-                    if m_i < 2:
-                        return 2
-                    if m_i > 120:
-                        return 120
-                    return m_i
-
-                scheduled_dt = _parse_next_check(next_check_at)
-                if scheduled_dt is None:
-                    sleep_minutes = default_minutes
-                    log.info(
-                        "FLOKI_SCHEDULE | Next check in 5 minutes (default — agent did not call set_next_check)"
-                    )
-                else:
-                    try:
-                        delta_s = max(0, (scheduled_dt - now_utc).total_seconds())
-                    except Exception:
-                        delta_s = 0
-
-                    approx_minutes = int(round(delta_s / 60.0))
-                    if requested_minutes is not None:
-                        sleep_minutes = _clamp_minutes(requested_minutes)
-                    else:
-                        sleep_minutes = _clamp_minutes(approx_minutes)
-
-                    if sleep_minutes <= 0:
-                        sleep_minutes = default_minutes
-
-                    log.info(
-                        f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested)"
-                    )
-
-                interval = int(sleep_minutes * 60)
+                # Wait for next cycle with monitor sub-loop
+                # Scanner + Monitor must run every 60s for fresh data.
+                interval = 60
                 elapsed = 0
-                monitor_interval = int(getattr(config, "MONITOR_INTERVAL_SECONDS", 30) or 30)
+                monitor_interval = int(getattr(config, "MONITOR_INTERVAL_SECONDS", 10) or 10)
 
                 while elapsed < interval and self.running:
                     sleep_time = min(monitor_interval, interval - elapsed)
@@ -1777,6 +1700,84 @@ class TradingBot:
             # H1 boundary must not call Floki independently.
             # Agent controls its call frequency via set_next_check.
             # ================================================================
+
+            # ================================================================
+            # SCHEDULED AI AGENT (timer gate)
+            # The analysis cycle runs every minute; the Agent is called only
+            # when next_check_at is due (or missing/invalid).
+            # ================================================================
+            try:
+                if getattr(config, "USE_AI_AGENT", False):
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    next_path = os.path.join(base_dir, "data", "agent_next_check.json")
+
+                    requested_minutes = None
+                    next_check_at = None
+                    try:
+                        if os.path.exists(next_path):
+                            with open(next_path, "r", encoding="utf-8") as f:
+                                payload = json.load(f)
+                            if isinstance(payload, dict):
+                                requested_minutes = payload.get("requested_minutes")
+                                next_check_at = payload.get("next_check_at")
+                    except Exception:
+                        requested_minutes = None
+                        next_check_at = None
+
+                    def _parse_next_check(iso_s: Optional[str]) -> Optional[datetime]:
+                        if not isinstance(iso_s, str) or not iso_s.strip():
+                            return None
+                        s = iso_s.strip()
+                        try:
+                            if s.endswith("Z"):
+                                s = s[:-1] + "+00:00"
+                        except Exception:
+                            pass
+                        try:
+                            dt = datetime.fromisoformat(s)
+                        except Exception:
+                            return None
+                        try:
+                            if dt.tzinfo is not None:
+                                return dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        except Exception:
+                            pass
+                        return None
+
+                    def _clamp_minutes(m: Any) -> int:
+                        try:
+                            m_i = int(m)
+                        except Exception:
+                            m_i = 5
+                        if m_i < 2:
+                            return 2
+                        if m_i > 120:
+                            return 120
+                        return m_i
+
+                    now_utc = datetime.utcnow()
+                    scheduled_dt = _parse_next_check(next_check_at)
+                    due = (scheduled_dt is None) or (scheduled_dt <= now_utc)
+
+                    if due:
+                        log.info("FLOKI_SCHEDULE | Calling Floki now (timer due)")
+                        self.agent_proactive_out_of_cycle(
+                            trigger_type="SCHEDULED",
+                            trigger_data={
+                                "due": True,
+                                "next_check_at": next_check_at,
+                                "requested_minutes": requested_minutes,
+                            },
+                        )
+                    else:
+                        delta_s = max(0, (scheduled_dt - now_utc).total_seconds())
+                        approx_minutes = int(round(delta_s / 60.0))
+                        sleep_minutes = _clamp_minutes(requested_minutes if requested_minutes is not None else approx_minutes)
+                        log.info(
+                            f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested — skipping Floki this cycle)"
+                        )
+            except Exception as e:
+                log.debug(f"FLOKI_SCHEDULE | schedule check error (ignored): {e}")
             
             if decision is None:
                 return
