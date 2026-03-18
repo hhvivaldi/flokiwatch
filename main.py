@@ -157,6 +157,7 @@ class TradingBot:
         self._skip_initial_proactive_h1 = False
         
         self._floki_local_lock = threading.Lock()
+        self._floki_local_raw_log_remaining = 0
 
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -237,6 +238,16 @@ class TradingBot:
             conf = local.get("confidence")
             reasoning = str(local.get("reasoning") or "").strip()
 
+            raw_snip = None
+            try:
+                raw_snip = local.get("raw") if isinstance(local.get("raw"), str) else local.get("cleaned")
+            except Exception:
+                raw_snip = None
+            if isinstance(raw_snip, str) and raw_snip:
+                raw_snip = raw_snip[:500]
+            else:
+                raw_snip = None
+
             try:
                 conf_i = int(round(float(conf))) if conf is not None else None
             except Exception:
@@ -244,6 +255,21 @@ class TradingBot:
 
             conf_s = f"{conf_i}%" if conf_i is not None else "—%"
             log.info(f"FLOKI_LOCAL | decision: {decision} | conf: {conf_s}")
+
+            if reasoning:
+                try:
+                    log.info(f"FLOKI_LOCAL_REASONING | {reasoning[:1000]}")
+                except Exception:
+                    pass
+
+            try:
+                if self._floki_local_raw_log_remaining <= 0:
+                    self._floki_local_raw_log_remaining = 3
+                if self._floki_local_raw_log_remaining > 0 and isinstance(raw_snip, str) and raw_snip:
+                    log.info(f"FLOKI_LOCAL_RAW | {raw_snip}")
+                    self._floki_local_raw_log_remaining -= 1
+            except Exception:
+                pass
 
             try:
                 if not hasattr(self, "last_analysis") or not isinstance(getattr(self, "last_analysis", None), dict):
@@ -259,6 +285,37 @@ class TradingBot:
                 tp = local.get("trade_plan")
                 if isinstance(tp, dict):
                     self.last_analysis["floki_local"]["trade_plan"] = tp
+            except Exception:
+                pass
+
+            try:
+                from db_writer import record_agent_event
+
+                conf_feed = conf_i
+                try:
+                    conf_feed = int(round(float(conf_i))) if conf_i is not None else None
+                except Exception:
+                    conf_feed = conf_i
+
+                reason_feed = reasoning
+                if len(reason_feed) > 500:
+                    reason_feed = reason_feed[:500].rstrip() + "..."
+
+                feed_content = f"{decision} ({conf_feed if conf_feed is not None else '—'}%). {reason_feed}".strip()
+                payload = {
+                    "timestamp": snapshot_time_iso,
+                    "decision": decision,
+                    "confidence": conf_feed,
+                    "latency_ms": local.get("latency_ms"),
+                    "trade_plan": local.get("trade_plan") if isinstance(local.get("trade_plan"), dict) else None,
+                    "raw": raw_snip,
+                }
+                record_agent_event(
+                    "FLOKI_DECISION",
+                    feed_content[:4000],
+                    author="FLOKI",
+                    payload=payload,
+                )
             except Exception:
                 pass
 

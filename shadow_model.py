@@ -382,6 +382,8 @@ def call_local_floki_model(agent_data: Dict[str, Any]) -> Dict[str, Any]:
         "confidence": None,
         "reasoning": None,
         "trade_plan": None,
+        "raw": None,
+        "cleaned": None,
         "latency_ms": 0,
         "error": None,
     }
@@ -437,6 +439,14 @@ def call_local_floki_model(agent_data: Dict[str, Any]) -> Dict[str, Any]:
             return out
 
         cleaned = _strip_think_tags(content)
+        try:
+            out["raw"] = content[:4000]
+        except Exception:
+            out["raw"] = None
+        try:
+            out["cleaned"] = cleaned[:4000] if isinstance(cleaned, str) else None
+        except Exception:
+            out["cleaned"] = None
         obj = _first_json_object(cleaned)
         if not isinstance(obj, dict):
             out["error"] = "invalid_decision_json"
