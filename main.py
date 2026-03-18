@@ -209,6 +209,15 @@ class TradingBot:
         acquired = False
         try:
             try:
+                ad = agent_data if isinstance(agent_data, dict) else {}
+                keys_preview = list(ad.keys())[:15]
+                log.info(
+                    f"FLOKI_LOCAL_DATA | keys={keys_preview} | price={ad.get('current_price')} | indicators={type(ad.get('indicators'))}"
+                )
+            except Exception:
+                pass
+
+            try:
                 acquired = self._floki_local_lock.acquire(blocking=False)
             except Exception:
                 acquired = True
@@ -1392,12 +1401,6 @@ class TradingBot:
             except Exception:
                 pass
 
-            try:
-                if self._is_floki_local_enabled():
-                    self._call_floki_local_and_execute(agent_data)
-            except Exception as e:
-                log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
-
             # ------------------------------------------------------------
             # AGENT TOOL CACHE BRIDGE (non-blocking)
             # The Scanner returns agent_data with keys like tech_data/news_data/calendar_data,
@@ -1791,6 +1794,12 @@ class TradingBot:
             except Exception:
                 # Never block trading loop due to cache enrichment
                 pass
+
+            try:
+                if self._is_floki_local_enabled():
+                    self._call_floki_local_and_execute(agent_data)
+            except Exception as e:
+                log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
 
             # ================================================================
             # PROACTIVE AI AGENT (H1 snapshot)
