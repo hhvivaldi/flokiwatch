@@ -23,10 +23,41 @@ class AgentMonitor:
         self._simba_5m_high: Optional[float] = None
         self._simba_5m_low: Optional[float] = None
         self._simba_5m_first_price: Optional[float] = None
+        self._last_stale_db_active_trade_log_ts: float = 0.0
 
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
         try:
+            # Reconcile cached per-ticket state against live MT5 positions (source of truth)
+            try:
+                from executor import executor
+
+                live_positions = executor.get_open_positions() or []
+                live_tickets = set()
+                for p in live_positions:
+                    try:
+                        t = getattr(p, "ticket", None)
+                        if t is not None:
+                            live_tickets.add(int(t))
+                    except Exception:
+                        continue
+
+                if live_tickets:
+                    try:
+                        stale = [t for t in list(self.max_profit_seen_points_by_ticket.keys()) if int(t) not in live_tickets]
+                        for t in stale:
+                            self.max_profit_seen_points_by_ticket.pop(t, None)
+                    except Exception:
+                        pass
+                    try:
+                        stale = [t for t in list(self._last_drawdown_track_log_ts_by_ticket.keys()) if int(t) not in live_tickets]
+                        for t in stale:
+                            self._last_drawdown_track_log_ts_by_ticket.pop(t, None)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             tick_mid = None
             try:
                 tick_mid = self._mid_price()
@@ -62,18 +93,11 @@ class AgentMonitor:
             except Exception:
                 upcoming_high = "none"
 
-            try:
-                price_str = f"{tick_mid:.2f}" if isinstance(tick_mid, (int, float)) else "n/a"
-                log.debug(
-                    "AGENT_MONITOR | tick | "
-                    f"price={price_str} | "
-                    f"active_trade={trade_summary} | "
-                    f"dist_SL={dist_sl_str} | dist_TP={dist_tp_str} | "
-                    f"conditions={conditions_status} | "
-                    f"upcoming_high={upcoming_high}"
-                )
-            except Exception:
-                pass
+            _ = trade_summary
+            _ = dist_sl_str
+            _ = dist_tp_str
+            _ = conditions_status
+            _ = upcoming_high
 
             try:
                 self._check_trade_at_risk()
@@ -137,6 +161,8 @@ class AgentMonitor:
     def _load_wake_conditions(self) -> Dict[str, Any]:
         import json
         import os
+        import time
+        from datetime import datetime
 
         path = self._wake_conditions_path()
         if not os.path.exists(path):
@@ -1197,12 +1223,62 @@ class AgentMonitor:
             return False, "error"
 
     def _get_active_trade(self) -> Optional[Dict[str, Any]]:
+        # MT5 is the source of truth. DB is advisory only.
+        try:
+            from executor import executor
+
+            live_positions = executor.get_open_positions() or []
+        except Exception:
+            live_positions = []
+
+        if not live_positions:
+            # Ignore stale DB-only "active trade" when MT5 has none.
+            try:
+                from db_writer import get_active_trade_from_proactive
+
+                stale = get_active_trade_from_proactive()
+                if stale:
+                    now_ts = time.time()
+                    if (now_ts - float(self._last_stale_db_active_trade_log_ts or 0.0)) > 900.0:
+                        self._last_stale_db_active_trade_log_ts = now_ts
+                        log.info(
+                            "AGENT_MONITOR | stale DB active_trade ignored (MT5 has 0 positions)"
+                        )
+            except Exception:
+                pass
+            return None
+
+        # Build from the first live position
+        pos = live_positions[0]
+        try:
+            ticket = getattr(pos, "ticket", None)
+            direction = getattr(pos, "direction", None)
+            open_price = getattr(pos, "open_price", None)
+            sl = getattr(pos, "sl", None)
+            tp = getattr(pos, "tp", None)
+            out = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "decision": "OPEN_BUY" if str(direction).upper() == "BUY" else "OPEN_SELL",
+                "entry": open_price,
+                "sl": sl,
+                "tp": tp,
+                "ticket": ticket,
+            }
+        except Exception:
+            out = None
+
+        # If DB has a newer open record, keep its timestamp (but never override MT5 existence)
         try:
             from db_writer import get_active_trade_from_proactive
 
-            return get_active_trade_from_proactive()
+            db_trade = get_active_trade_from_proactive()
+            if isinstance(out, dict) and isinstance(db_trade, dict):
+                if db_trade.get("timestamp"):
+                    out["timestamp"] = db_trade.get("timestamp")
         except Exception:
-            return None
+            pass
+
+        return out
 
     def _trade_direction_from_decision(self, decision: str) -> str:
         if decision == "OPEN_BUY":

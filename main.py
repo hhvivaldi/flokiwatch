@@ -155,20 +155,10 @@ class TradingBot:
         self._last_agent_data = None
         self._last_df = None
         self._skip_initial_proactive_h1 = False
-        
-        self._floki_local_lock = threading.Lock()
-        self._floki_local_raw_log_remaining = 0
 
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
         signal.signal(signal.SIGTERM, self._shutdown_handler)
-
-    def _is_floki_local_enabled(self) -> bool:
-        try:
-            src = str(getattr(config, "FLOKI_MODEL_SOURCE", "claude") or "").strip().lower()
-            return src == "local"
-        except Exception:
-            return False
 
     def _validate_trade_plan_open(self, decision: str, trade_plan: dict) -> Optional[dict]:
         try:
@@ -204,253 +194,6 @@ class TradingBot:
             }
         except Exception as e:
             return {"ok": False, "reason": f"validation_error:{e}"}
-
-    def _call_floki_local_and_execute(self, agent_data: dict) -> None:
-        acquired = False
-        try:
-            try:
-                acquired = self._floki_local_lock.acquire(blocking=False)
-            except Exception:
-                acquired = True
-
-            if not acquired:
-                log.info("FLOKI_LOCAL | Skipped — previous call still in progress")
-                return
-
-            if not self._is_floki_local_enabled():
-                return
-
-            snapshot_time_iso = datetime.utcnow().isoformat()
-            log.info(f"FLOKI_LOCAL | Calling local model | ts: {snapshot_time_iso}")
-
-            try:
-                import json
-
-                try:
-                    sr_preview = (agent_data.get("sr_zones") or agent_data.get("sr") or []) if isinstance(agent_data, dict) else []
-                    if isinstance(sr_preview, dict):
-                        sr_preview = sr_preview.get("zones") or sr_preview.get("nearest") or sr_preview.get("levels") or []
-                    if not isinstance(sr_preview, list):
-                        sr_preview = []
-                    log.info(f"FLOKI_SR | {json.dumps(sr_preview[:3], default=str)[:500]}")
-                except Exception:
-                    pass
-
-                try:
-                    news_preview = agent_data.get("news_data", {}) if isinstance(agent_data, dict) else {}
-                    log.info(f"FLOKI_NEWS | {json.dumps(news_preview, default=str)[:500]}")
-                except Exception:
-                    pass
-
-                try:
-                    mem_path = "data/agent_session_memory.json"
-                    with open(mem_path, "r", encoding="utf-8") as f:
-                        mem_obj = json.load(f)
-                    log.info(f"FLOKI_MEMORY | {json.dumps(mem_obj, default=str)[:500]}")
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
-            from shadow_model import call_local_floki_model
-
-            local = call_local_floki_model(agent_data if isinstance(agent_data, dict) else {})
-            err = local.get("error")
-            if err:
-                if err == "timeout":
-                    log.error("FLOKI_LOCAL | Timeout after 120s")
-                else:
-                    log.error(f"FLOKI_LOCAL | Model unavailable — {err}")
-                return
-
-            decision = str(local.get("decision") or "").strip().upper()
-            conf = local.get("confidence")
-            reasoning = str(local.get("reasoning") or "").strip()
-
-            raw_snip = None
-            try:
-                raw_snip = local.get("raw") if isinstance(local.get("raw"), str) else local.get("cleaned")
-            except Exception:
-                raw_snip = None
-            if isinstance(raw_snip, str) and raw_snip:
-                raw_snip = raw_snip[:500]
-            else:
-                raw_snip = None
-
-            try:
-                conf_i = int(round(float(conf))) if conf is not None else None
-            except Exception:
-                conf_i = None
-
-            conf_s = f"{conf_i}%" if conf_i is not None else "—%"
-            log.info(f"FLOKI_LOCAL | decision: {decision} | conf: {conf_s}")
-
-            if reasoning:
-                try:
-                    log.info(f"FLOKI_LOCAL_REASONING | {reasoning[:1000]}")
-                except Exception:
-                    pass
-
-            try:
-                if self._floki_local_raw_log_remaining <= 0:
-                    self._floki_local_raw_log_remaining = 3
-                if self._floki_local_raw_log_remaining > 0 and isinstance(raw_snip, str) and raw_snip:
-                    log.info(f"FLOKI_LOCAL_RAW | {raw_snip}")
-                    self._floki_local_raw_log_remaining -= 1
-            except Exception:
-                pass
-
-            try:
-                if not hasattr(self, "last_analysis") or not isinstance(getattr(self, "last_analysis", None), dict):
-                    self.last_analysis = {}
-                self.last_analysis["floki_local"] = {
-                    "timestamp": snapshot_time_iso,
-                    "decision": decision,
-                    "confidence": conf_i,
-                    "reasoning": reasoning[:4000],
-                    "latency_ms": local.get("latency_ms"),
-                    "model": getattr(config, "SHADOW_MODEL_NAME", ""),
-                }
-                tp = local.get("trade_plan")
-                if isinstance(tp, dict):
-                    self.last_analysis["floki_local"]["trade_plan"] = tp
-            except Exception:
-                pass
-
-            try:
-                from db_writer import record_agent_event
-
-                conf_feed = conf_i
-                try:
-                    conf_feed = int(round(float(conf_i))) if conf_i is not None else None
-                except Exception:
-                    conf_feed = conf_i
-
-                reason_feed = reasoning
-                if len(reason_feed) > 500:
-                    reason_feed = reason_feed[:500].rstrip() + "..."
-
-                feed_content = f"{decision} ({conf_feed if conf_feed is not None else '—'}%). {reason_feed}".strip()
-                payload = {
-                    "timestamp": snapshot_time_iso,
-                    "decision": decision,
-                    "confidence": conf_feed,
-                    "latency_ms": local.get("latency_ms"),
-                    "trade_plan": local.get("trade_plan") if isinstance(local.get("trade_plan"), dict) else None,
-                    "raw": raw_snip,
-                }
-                record_agent_event(
-                    "FLOKI_DECISION",
-                    feed_content[:4000],
-                    author="FLOKI",
-                    payload=payload,
-                )
-            except Exception:
-                pass
-
-            try:
-                open_positions = []
-                try:
-                    open_positions = executor.get_open_positions() or []
-                except Exception:
-                    open_positions = []
-
-                if decision in ("OPEN_BUY", "OPEN_SELL"):
-                    if open_positions:
-                        log.info("FLOKI_LOCAL | OPEN blocked — position already open")
-                        return
-
-                    tp = local.get("trade_plan")
-                    vr = self._validate_trade_plan_open(decision, tp)
-                    if not isinstance(vr, dict) or not vr.get("ok"):
-                        log.error("FLOKI_LOCAL | Invalid response")
-                        return
-
-                    exec_direction = "BUY" if decision == "OPEN_BUY" else "SELL"
-
-                    try:
-                        ok_safe, reason = is_safe_to_trade(exec_direction, confidence=float(conf_i or 0))
-                        if not ok_safe:
-                            log.info(f"FLOKI_LOCAL | Safety blocked — {reason}")
-                            try:
-                                alert_safety_block(reason)
-                            except Exception:
-                                pass
-                            return
-                    except Exception:
-                        log.error("FLOKI_LOCAL | Safety check error — skipping")
-                        return
-
-                    lot = None
-                    try:
-                        account_balance = get_account_balance() if self.executes_trades else float(getattr(config, "CAPITAL_INICIAL", 0) or 0)
-                        lot = calculate_position_size(account_balance)
-                    except Exception:
-                        lot = None
-                    if lot is None:
-                        lot = float(getattr(config, "MIN_LOT_SIZE", 0.01) or 0.01)
-
-                    sl_price = float(vr.get("stop_loss"))
-                    tp_price = float(vr.get("take_profit"))
-
-                    comment = f"FLOKI_LOCAL-{exec_direction}"
-                    res = (
-                        execute_buy(lot, sl_price, tp_price, comment=comment, confidence=float(conf_i or 0), scenario="floki_local")
-                        if exec_direction == "BUY"
-                        else execute_sell(lot, sl_price, tp_price, comment=comment, confidence=float(conf_i or 0), scenario="floki_local")
-                    )
-
-                    try:
-                        log.info(
-                            f"FLOKI_LOCAL | execute_trade | dir={exec_direction} | lot={lot} | SL={sl_price} | TP={tp_price} | result_success={getattr(res,'success',None)}"
-                        )
-                    except Exception:
-                        pass
-
-                elif decision == "CLOSE_TRADE":
-                    if not open_positions:
-                        return
-                    for p in open_positions[:3]:
-                        try:
-                            close_position(int(getattr(p, "ticket", 0)))
-                        except Exception:
-                            continue
-
-                elif decision == "ADJUST_TRADE":
-                    if not open_positions:
-                        return
-                    tp = local.get("trade_plan")
-                    new_sl = None
-                    new_tp = None
-                    if isinstance(tp, dict):
-                        new_sl = tp.get("stop_loss") or tp.get("sl")
-                        new_tp = tp.get("take_profit") or tp.get("tp")
-                    if new_sl is None and new_tp is None:
-                        return
-                    for p in open_positions[:3]:
-                        tkt = int(getattr(p, "ticket", 0) or 0)
-                        try:
-                            if new_sl is not None:
-                                executor.modify_position(tkt, new_sl=float(new_sl))
-                        except Exception:
-                            pass
-                        try:
-                            if new_tp is not None:
-                                executor.modify_position(tkt, new_tp=float(new_tp))
-                        except Exception:
-                            pass
-            except Exception as e:
-                log.error(f"FLOKI_LOCAL | Execution error (non-blocking): {e}")
-                return
-
-        except Exception as e:
-            log.error(f"FLOKI_LOCAL | Error (non-blocking): {e}")
-        finally:
-            if acquired:
-                try:
-                    self._floki_local_lock.release()
-                except Exception:
-                    pass
 
     def _get_last_proactive_analysis_timestamp_iso(self) -> Optional[str]:
         try:
@@ -1952,20 +1695,13 @@ class TradingBot:
                                 "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                             }
             except Exception:
-                # Never block trading loop due to cache enrichment
+                # Never block trading loop
                 pass
-
-            try:
-                if self._is_floki_local_enabled():
-                    self._call_floki_local_and_execute(agent_data)
-            except Exception as e:
-                log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
 
             # ================================================================
             # PROACTIVE AI AGENT (H1 snapshot)
-            # Disabled when FLOKI_MODEL_SOURCE=local (single-path architecture).
             # ================================================================
-            if (not self._is_floki_local_enabled()) and getattr(config, 'USE_AI_AGENT', False):
+            if getattr(config, 'USE_AI_AGENT', False):
                 try:
                     market_open, _, _ = is_market_open()
                     if market_open:
@@ -2010,7 +1746,7 @@ class TradingBot:
                 return
             
             # Signal detected!
-            log.info(f"   🔔 SIGNAL: {decision} ({direction})")
+            log.info(f"   SIGNAL: {decision} ({direction})")
 
             # alert_brain_decision disabled in Phase 0 (dashboard shows Brain decision)
 
@@ -2049,7 +1785,7 @@ class TradingBot:
             try:
                 from momentum_detector import check_m5_reversal
                 m5_check = check_m5_reversal(direction)
-                log.info(f"   🔄 M5 Check: {m5_check['description']}")
+                log.info(f"   M5 Check: {m5_check['description']}")
                 
                 if m5_check["reversal_detected"]:
                     if m5_check["reversal_strength"] == "strong":
@@ -2058,7 +1794,7 @@ class TradingBot:
                         return
                     elif m5_check["reversal_strength"] == "moderate":
                         confidence -= config.M5_REVERSAL_CONFIDENCE_PENALTY
-                        log.info(f"   ⚠️ Moderate M5 reversal: confidence reduced {config.M5_REVERSAL_CONFIDENCE_PENALTY} → {confidence:.1f}")
+                        log.info(f"   Moderate M5 reversal: confidence reduced {config.M5_REVERSAL_CONFIDENCE_PENALTY} → {confidence:.1f}")
                         if confidence < config.BRAIN_MIN_CONFIDENCE:
                             log.safety_block(f"Moderate M5 reversal reduced confidence below minimum ({confidence:.1f} < {config.BRAIN_MIN_CONFIDENCE})")
                             alert_m5_reversal_block(direction, m5_check["recent_move_pct"], m5_check["description"])
@@ -2073,10 +1809,10 @@ class TradingBot:
             # Spread Check with Retry Loop
             spread = executor.get_spread()
             if spread is not None:
-                log.info(f"   📊 Spread: {spread:.1f} pips")
+                log.info(f"   Spread: {spread:.1f} pips")
                 
                 if spread > config.MAX_SPREAD_PIPS:
-                    log.warning(f"   ⏳ Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry")
+                    log.warning(f"   Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry")
                     alert_spread_delay(spread, config.MAX_SPREAD_PIPS, 1)
                     
                     # Retry loop
@@ -2085,21 +1821,21 @@ class TradingBot:
                         spread = executor.get_spread()
                         
                         if spread is None:
-                            log.warning(f"   ⚠️ Could not get spread on retry #{retry}")
+                            log.warning(f"   Could not get spread on retry #{retry}")
                             continue
                         
-                        log.info(f"   📊 Spread retry #{retry}: {spread:.1f} pips")
+                        log.info(f"   Spread retry #{retry}: {spread:.1f} pips")
                         
                         if spread <= config.MAX_SPREAD_PIPS:
-                            log.info(f"   ✅ Spread normalized: {spread:.1f} pips — proceeding with entry")
+                            log.info(f"   Spread normalized: {spread:.1f} pips — proceeding with entry")
                             break
                     else:
                         # Exhausted all retries
-                        log.warning(f"   ⛔ Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped")
+                        log.warning(f"   Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped")
                         alert_spread_skip(direction, spread if spread else 0, final_score)
                         return
             else:
-                log.warning("   ⚠️ Could not get spread — proceeding anyway")
+                log.warning("   Could not get spread — proceeding anyway")
             
             # Calculate risk
             sl_pips = levels.sl_pips
@@ -2132,11 +1868,11 @@ class TradingBot:
                     stale_threshold = getattr(config, 'EA_STALE_THRESHOLD_SECONDS', 60)
                     if is_ea_online(stale_threshold):
                         use_ea = True
-                        log.info(f"   🔗 EA Bridge: ONLINE — sending signal via JSON")
+                        log.info(f"   EA Bridge: ONLINE — sending signal via JSON")
                     else:
-                        log.warning(f"   ⚠️ EA Bridge: OFFLINE — falling back to direct MT5 API")
+                        log.warning(f"   EA Bridge: OFFLINE — falling back to direct MT5 API")
                 except Exception as e:
-                    log.warning(f"   ⚠️ EA Bridge error: {e} — falling back to direct MT5 API")
+                    log.warning(f"   EA Bridge error: {e} — falling back to direct MT5 API")
             
             if use_ea:
                 # EA Bridge: Write signal to JSON, EA handles execution
@@ -2355,11 +2091,11 @@ class TradingBot:
             except Exception:
                 spread = None
             if spread is not None:
-                log.info(f"   📊 Spread: {spread:.1f} pips")
+                log.info(f"   Spread: {spread:.1f} pips")
 
                 if spread > config.MAX_SPREAD_PIPS:
                     log.warning(
-                        f"   ⏳ Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry"
+                        f"   Spread too high: {spread:.1f} pips (max: {config.MAX_SPREAD_PIPS}) — delaying entry"
                     )
                     try:
                         alert_spread_delay(spread, config.MAX_SPREAD_PIPS, 1)
@@ -2373,15 +2109,15 @@ class TradingBot:
                         except Exception:
                             spread = None
                         if spread is None:
-                            log.warning(f"   ⚠️ Could not get spread on retry #{retry}")
+                            log.warning(f"   Could not get spread on retry #{retry}")
                             continue
-                        log.info(f"   📊 Spread retry #{retry}: {spread:.1f} pips")
+                        log.info(f"   Spread retry #{retry}: {spread:.1f} pips")
                         if spread <= config.MAX_SPREAD_PIPS:
-                            log.info(f"   ✅ Spread normalized: {spread:.1f} pips — proceeding with entry")
+                            log.info(f"   Spread normalized: {spread:.1f} pips — proceeding with entry")
                             break
                     else:
                         log.warning(
-                            f"   ⛔ Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped"
+                            f"   Spread did not normalize after {config.SPREAD_MAX_RETRIES} retries — trade skipped"
                         )
                         try:
                             alert_spread_skip(direction, spread if spread else 0, float(confidence or 0))
@@ -2394,7 +2130,7 @@ class TradingBot:
                             "used_ea_bridge": False,
                         }
             else:
-                log.warning("   ⚠️ Could not get spread — proceeding anyway")
+                log.warning("   Could not get spread — proceeding anyway")
 
             pos_size = calculate_position_size(account_balance, config.RISK_PER_TRADE, sl_pips)
             log.info(f"   Entry: {entry_price:.2f}")
@@ -2422,11 +2158,11 @@ class TradingBot:
                     stale_threshold = getattr(config, "EA_STALE_THRESHOLD_SECONDS", 60)
                     if is_ea_online(stale_threshold):
                         used_ea = True
-                        log.info("   🔗 EA Bridge: ONLINE — sending signal via JSON")
+                        log.info("   EA Bridge: ONLINE — sending signal via JSON")
                     else:
-                        log.warning("   ⚠️ EA Bridge: OFFLINE — falling back to direct MT5 API")
+                        log.warning("   EA Bridge: OFFLINE — falling back to direct MT5 API")
                 except Exception as e:
-                    log.warning(f"   ⚠️ EA Bridge error: {e} — falling back to direct MT5 API")
+                    log.warning(f"   EA Bridge error: {e} — falling back to direct MT5 API")
 
             if used_ea:
                 from ea_bridge import write_signal
@@ -2645,6 +2381,8 @@ class TradingBot:
             except Exception:
                 pass
             return {"success": False, "ticket": None, "reason": msg}
+
+        reason_str = str(reason or "agent_adjust")
 
         positions_list = []
         try:
@@ -3302,139 +3040,6 @@ class TradingBot:
             alert_proactive_decision(agent_result)
         except Exception as e:
             log.debug(f"{trigger_type} | Discord alert error (ignored): {e}")
-
-        def _shadow_worker(data_snapshot: dict, floki_result) -> None:
-            try:
-                if not getattr(config, "SHADOW_MODEL_ENABLED", False):
-                    return
-
-                floki_decision = str(getattr(floki_result, "decision", "") or "").strip().upper()
-                floki_conf = getattr(floki_result, "confidence", None)
-                try:
-                    floki_conf_i = int(round(float(floki_conf))) if floki_conf is not None else None
-                except Exception:
-                    floki_conf_i = None
-
-                local = call_shadow_model(data_snapshot, floki_decision={})
-                err = local.get("error")
-                if err:
-                    log.info(f"SHADOW | Trigger={trigger_type} | Local unavailable — {err}")
-                    try:
-                        from db_writer import record_agent_event
-
-                        record_agent_event(
-                            "SHADOW",
-                            f"Trigger={trigger_type} | Local unavailable — {err}"[:4000],
-                            payload={
-                                "trigger": trigger_type,
-                                "timestamp": snapshot_time_iso,
-                                "error": err,
-                                "latency_ms": local.get("latency_ms"),
-                            },
-                            author="SHADOW",
-                        )
-                    except Exception:
-                        pass
-                    return
-
-                local_decision = str(local.get("decision") or "").strip().upper() or None
-                local_conf = local.get("confidence")
-                try:
-                    local_conf_i = int(round(float(local_conf))) if local_conf is not None else None
-                except Exception:
-                    local_conf_i = None
-
-                match = "MATCH" if (local_decision and local_decision == floki_decision) else "DIVERGE"
-
-                floki_conf_s = f"{floki_conf_i}%" if floki_conf_i is not None else "—%"
-                local_conf_s = f"{local_conf_i}%" if local_conf_i is not None else "—%"
-
-                log.info(
-                    f"SHADOW | Trigger={trigger_type} | Claude: {floki_decision} ({floki_conf_s}) | "
-                    f"Local: {local_decision} ({local_conf_s}) | {match}"
-                )
-
-                try:
-                    claude_reasoning = str(getattr(floki_result, "reasoning", "") or "").strip()
-                    if claude_reasoning:
-                        log.info(f"SHADOW_CLAUDE | {claude_reasoning[:1000]}")
-                except Exception:
-                    pass
-
-                try:
-                    local_reasoning = str(local.get("reasoning") or "").strip()
-                    if local_reasoning:
-                        log.info(f"SHADOW_LOCAL | {local_reasoning[:1000]}")
-                except Exception:
-                    pass
-
-                try:
-                    from db_writer import record_agent_event
-
-                    record_agent_event(
-                        "SHADOW",
-                        f"Claude: {floki_decision} ({floki_conf_s}) | Local: {local_decision} ({local_conf_s}) | {match}"[:4000],
-                        payload={
-                            "trigger": trigger_type,
-                            "timestamp": snapshot_time_iso,
-                            "match": match,
-                            "claude": {"decision": floki_decision, "confidence": floki_conf_i},
-                            "local": {
-                                "decision": local_decision,
-                                "confidence": local_conf_i,
-                                "latency_ms": local.get("latency_ms"),
-                                "error": None,
-                            },
-                        },
-                        author="SHADOW",
-                    )
-                except Exception:
-                    pass
-            except Exception as e:
-                try:
-                    log.info(f"SHADOW | Trigger={trigger_type} | Local unavailable — {e}")
-                except Exception:
-                    pass
-
-        try:
-            if getattr(config, "SHADOW_MODEL_ENABLED", False):
-                dp_snapshot = dict(agent_data) if isinstance(agent_data, dict) else {}
-
-                try:
-                    pos_out = []
-                    try:
-                        open_pos = executor.get_open_positions() or []
-                    except Exception:
-                        open_pos = []
-
-                    for p in open_pos:
-                        try:
-                            pos_out.append(
-                                {
-                                    "ticket": int(getattr(p, "ticket", 0)),
-                                    "direction": str(getattr(p, "direction", "")),
-                                    "open_price": float(getattr(p, "open_price", 0.0)),
-                                    "profit": float(getattr(p, "profit", 0.0)),
-                                    "sl": float(getattr(p, "sl", 0.0)),
-                                    "tp": float(getattr(p, "tp", 0.0)),
-                                    "volume": float(getattr(p, "volume", 0.0)),
-                                }
-                            )
-                        except Exception:
-                            continue
-
-                    dp_snapshot["positions"] = pos_out
-                except Exception:
-                    pass
-                th = threading.Thread(
-                    target=_shadow_worker,
-                    args=(dp_snapshot, agent_result),
-                    daemon=True,
-                    name="shadow-model",
-                )
-                th.start()
-        except Exception:
-            pass
 
         try:
             # Persist to SQLite
