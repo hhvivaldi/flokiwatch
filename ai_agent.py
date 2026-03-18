@@ -343,7 +343,7 @@ class AIAgent:
 
     def initialize(self) -> bool:
         """
-        Initialize the Anthropic client.
+        Initialize the Gemini client.
         Call this after config is loaded.
         
         Returns:
@@ -359,23 +359,28 @@ class AIAgent:
                 return False
             
             # Get API key
-            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            api_key = os.environ.get("GEMINI_API_KEY", "")
             if not api_key:
-                logger.warning("ANTHROPIC_API_KEY not set - AI Agent disabled")
+                logger.warning("GEMINI_API_KEY not set - AI Agent disabled")
                 self.enabled = False
                 return False
-            
-            # Import and initialize Anthropic client
+
+            # Import and initialize Gemini client
             try:
-                from anthropic import Anthropic
-                self.client = Anthropic(api_key=api_key)
+                from google import genai
+
+                self.client = genai.Client(api_key=api_key)
             except ImportError:
-                logger.error("anthropic package not installed. Run: pip install anthropic")
+                logger.error("google-genai package not installed. Run: pip install google-genai")
+                self.enabled = False
+                return False
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}")
                 self.enabled = False
                 return False
             
             # Get config
-            self.model = getattr(config, 'AI_AGENT_MODEL', 'claude-sonnet-4-20250514')
+            self.model = getattr(config, 'FLOKI_MODEL', 'gemini-3-flash-preview')
             self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 60)
             self.mode = getattr(config, 'AI_AGENT_MODE', 'shadow')
 
@@ -413,7 +418,7 @@ class AIAgent:
                 user_message = "Scheduled analysis. Decide what to check and whether to act."
 
             response = await asyncio.wait_for(
-                self._call_claude_with_tools(user_message, tools=tools),
+                self._call_gemini_with_tools(user_message, tools=tools),
                 timeout=self.timeout,
             )
             
@@ -642,6 +647,26 @@ class AIAgent:
             },
         ]
 
+    def _gemini_function_declarations(self) -> List[Dict[str, Any]]:
+        decls: List[Dict[str, Any]] = []
+        for t in self._tool_schemas():
+            try:
+                name = t.get("name")
+                desc = t.get("description")
+                schema = t.get("input_schema")
+                if not name or not isinstance(schema, dict):
+                    continue
+                decls.append(
+                    {
+                        "name": name,
+                        "description": desc or "",
+                        "parameters": schema,
+                    }
+                )
+            except Exception:
+                continue
+        return decls
+
     def _execute_tool(self, tools: Any, name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
         try:
             fn = getattr(tools, name, None)
@@ -655,21 +680,29 @@ class AIAgent:
         except Exception as e:
             return {"success": False, "reason": f"tool error: {e}"}
 
-    async def _call_claude_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
+    async def _call_gemini_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
         loop = asyncio.get_event_loop()
         start_time = time.time()
-
-        tool_schemas = self._tool_schemas()
-        messages: List[Dict[str, Any]] = [
-            {"role": "user", "content": trigger_context}
-        ]
 
         total_input_tokens = 0
         total_output_tokens = 0
         last_model = self.model
-
         tool_calls = 0
         tool_trace: List[Dict[str, Any]] = []
+
+        system_prompt = ""
+        try:
+            system_prompt = get_system_prompt()
+        except Exception:
+            system_prompt = ""
+
+        fn_decls = self._gemini_function_declarations()
+
+        # Gemini chat content format: list of content items with role + parts.
+        contents: List[Dict[str, Any]] = []
+        if system_prompt:
+            contents.append({"role": "user", "parts": [{"text": system_prompt}]})
+        contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
 
         while True:
             if (time.time() - start_time) >= float(self.timeout):
@@ -707,41 +740,56 @@ class AIAgent:
                 }
 
             def _sync_call():
-                return self.client.messages.create(
+                return self.client.models.generate_content(
                     model=self.model,
-                    max_tokens=int(self.max_tokens),
-                    system=[{"type": "text", "text": get_system_prompt(), "cache_control": {"type": "ephemeral"}}],
-                    tools=tool_schemas,
-                    messages=messages,
+                    contents=contents,
+                    config={
+                        "max_output_tokens": int(self.max_tokens),
+                        "temperature": 0.2,
+                        "tools": [{"function_declarations": fn_decls}],
+                    },
                 )
 
-            response = await loop.run_in_executor(None, _sync_call)
+            resp = await loop.run_in_executor(None, _sync_call)
 
             try:
-                total_input_tokens += int(getattr(response.usage, "input_tokens", 0) or 0)
-                total_output_tokens += int(getattr(response.usage, "output_tokens", 0) or 0)
+                usage = getattr(resp, "usage_metadata", None)
+                if usage is not None:
+                    total_input_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
+                    total_output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
             except Exception:
                 pass
 
+            text_out = None
+            fn_calls = []
             try:
-                usage = getattr(response, "usage", None)
-                cache_created = getattr(usage, "cache_created", None)
-                cache_read = getattr(usage, "cache_read", None)
-                if cache_created is not None or cache_read is not None:
-                    log.info(
-                        f"AGENT_CACHE_USAGE | model={getattr(response, 'model', None)} | cache_created={cache_created} | cache_read={cache_read}"
-                    )
+                # google-genai returns candidates[0].content.parts
+                candidates = getattr(resp, "candidates", None) or []
+                c0 = candidates[0] if candidates else None
+                content = getattr(c0, "content", None)
+                parts = getattr(content, "parts", None) or []
+                for p in parts:
+                    fc = getattr(p, "function_call", None)
+                    if fc is not None:
+                        fn_calls.append(fc)
+                    else:
+                        t = getattr(p, "text", None)
+                        if isinstance(t, str) and t.strip():
+                            text_out = (text_out or "") + t
             except Exception:
-                pass
+                text_out = None
+                fn_calls = []
 
-            try:
-                last_model = getattr(response, "model", last_model)
-            except Exception:
-                pass
+            if text_out and not fn_calls:
+                return {
+                    "content": str(text_out).strip(),
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "model": last_model,
+                    "tool_trace": tool_trace,
+                }
 
-            content_blocks = list(getattr(response, "content", []) or [])
-            if not content_blocks:
-                # Treat as terminal failure
+            if not fn_calls:
                 return {
                     "content": json.dumps(
                         {
@@ -758,78 +806,43 @@ class AIAgent:
                     "tool_trace": tool_trace,
                 }
 
-            tool_uses = []
-            text_parts = []
-            for block in content_blocks:
-                btype = getattr(block, "type", None)
-                if btype == "tool_use":
-                    tool_uses.append(block)
-                elif btype == "text":
-                    t = getattr(block, "text", "")
-                    if t:
-                        text_parts.append(t)
-
-            if text_parts and not tool_uses:
-                return {
-                    "content": "\n".join(text_parts).strip(),
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "model": last_model,
-                    "tool_trace": tool_trace,
-                }
-
-            # Otherwise, execute tool calls and continue loop.
-            if tool_uses:
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "id": getattr(tu, "id", ""),
-                                "name": getattr(tu, "name", ""),
-                                "input": getattr(tu, "input", {}) or {},
-                            }
-                            for tu in tool_uses
-                        ],
-                    }
-                )
-
-                tool_results_blocks = []
-                for tu in tool_uses:
-                    if tool_calls >= int(self.max_tool_calls):
-                        break
-                    tool_calls += 1
-                    name = str(getattr(tu, "name", "") or "").strip()
-                    tid = str(getattr(tu, "id", "") or "").strip()
-                    inp = getattr(tu, "input", {}) or {}
+            # Execute requested function calls and append function_response parts.
+            for fc in fn_calls:
+                if tool_calls >= int(self.max_tool_calls):
+                    break
+                tool_calls += 1
+                try:
+                    name = str(getattr(fc, "name", "") or "").strip()
+                    args = getattr(fc, "args", None)
+                    if not isinstance(args, dict):
+                        try:
+                            args = dict(args) if args is not None else {}
+                        except Exception:
+                            args = {}
 
                     t0 = time.time()
-                    result = self._execute_tool(tools, name, inp if isinstance(inp, dict) else {})
+                    result = self._execute_tool(tools, name, args)
                     dt_ms = int((time.time() - t0) * 1000)
 
-                    tool_trace.append(
+                    tool_trace.append({"name": name, "input": args, "result": result, "latency_ms": dt_ms})
+
+                    contents.append(
                         {
-                            "name": name,
-                            "input": inp,
-                            "result": result,
-                            "latency_ms": dt_ms,
+                            "role": "user",
+                            "parts": [
+                                {
+                                    "function_response": {
+                                        "name": name,
+                                        "response": result,
+                                    }
+                                }
+                            ],
                         }
                     )
+                except Exception as e:
+                    tool_trace.append({"name": "unknown", "input": {}, "result": {"success": False, "reason": str(e)}, "latency_ms": 0})
+                    continue
 
-                    tool_results_blocks.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tid,
-                            "content": json.dumps(result, ensure_ascii=False, default=str),
-                        }
-                    )
-
-                messages.append({"role": "user", "content": tool_results_blocks})
-                continue
-
-            # If we got here, we had text + tool_uses. Ignore the text and continue tool loop;
-            # the final answer should be text-only.
             continue
 
 
