@@ -291,6 +291,11 @@ class TradingBot:
             except Exception:
                 acquired = True
 
+            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH"}
+            if str(trigger_type or "") not in allowed:
+                log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
+                return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
+
             if not acquired:
                 log.info("MONITOR | Out-of-cycle Proactive skipped — analysis already running")
                 return {"success": False, "reason": "proactive_in_progress"}
@@ -2955,6 +2960,9 @@ class TradingBot:
         """Call the AI Agent proactively once per H1 candle close (diagnostic only)."""
         acquired = False
         try:
+            log.info("PROACTIVE_H1 | disabled")
+            return
+
             try:
                 acquired = self._proactive_lock.acquire(blocking=False)
             except Exception:

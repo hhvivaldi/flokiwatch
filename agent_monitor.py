@@ -1610,10 +1610,7 @@ class AgentMonitor:
         signed_move = last_price - first_price
         sign = "+" if signed_move >= 0 else "-"
         log.info(f"MONITOR | Breakout detected — price moved {sign}{abs(move):.1f} points in 5 minutes")
-        self._fire_proactive_out_of_cycle(
-            "BREAKOUT_5M",
-            {"move": float(move), "signed_move": float(signed_move), "window_seconds": 300},
-        )
+        return
 
     def _check_session_change(self) -> None:
         now = datetime.utcnow()
@@ -1624,14 +1621,14 @@ class AgentMonitor:
             if self.session_last_trigger_date.get(london_key) != today:
                 self.session_last_trigger_date[london_key] = today
                 log.info("MONITOR | London session opening")
-                self._fire_proactive_out_of_cycle("SESSION_OPEN_LONDON", {"time_utc": now.isoformat()})
+                return
 
         ny_key = "ny"
         if now.hour == 13 and 0 <= now.minute < 5:
             if self.session_last_trigger_date.get(ny_key) != today:
                 self.session_last_trigger_date[ny_key] = today
                 log.info("MONITOR | NY session opening")
-                self._fire_proactive_out_of_cycle("SESSION_OPEN_NY", {"time_utc": now.isoformat()})
+                return
 
     def _check_profit_drawdown(self) -> None:
         try:
@@ -1878,15 +1875,6 @@ class AgentMonitor:
                 desc = str(primary.get("description") or "").strip()
                 label = desc or (f"{ctype} @ {lvl_f}" if lvl_f is not None else ctype)
                 log.info(f"MONITOR | Entry condition met — {direction} {ctype} @ {lvl_f} | {label}")
-                self._fire_proactive_out_of_cycle(
-                    "ENTRY_CONDITION_MET",
-                    {
-                        "direction": direction,
-                        "condition_type": ctype,
-                        "level": lvl_f,
-                        "price": price_used,
-                        "description": label,
-                    },
-                )
+                return
 
         self.last_price_used = price_used
