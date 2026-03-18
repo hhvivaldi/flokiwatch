@@ -2721,50 +2721,53 @@ class TradingBot:
             except Exception:
                 system_prompt = ""
 
-            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-            if not api_key:
-                return {"success": False, "reason": "ANTHROPIC_API_KEY not set"}
-
-            try:
-                from anthropic import Anthropic
-                client = Anthropic(api_key=api_key)
-            except Exception as e:
-                return {"success": False, "reason": f"anthropic client init failed: {e}"}
-
+            # Fast agent path: use the main tool-driven agent (Gemini) instead of legacy Anthropic.
             start_ts = time.time()
-            resp_text = ""
-            input_tokens = 0
-            output_tokens = 0
             model_used = None
+            parsed = None
             try:
-                resp = client.messages.create(
-                    model=getattr(config, "AI_AGENT_MODEL", "claude-sonnet-4-20250514"),
-                    max_tokens=600,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_message}],
+                import asyncio
+                from ai_agent import get_agent, agent_decide
+                from agent_tools import AgentTools
+                import safety_checks
+                import risk_manager
+
+                agent = get_agent()
+                if not agent.is_enabled():
+                    return {"success": False, "reason": "agent_disabled"}
+
+                tools_obj = AgentTools(
+                    self,
+                    executor=executor,
+                    safety_checks_module=safety_checks,
+                    risk_manager_module=risk_manager,
                 )
-                resp_text = resp.content[0].text if resp.content else ""
-                model_used = getattr(resp, "model", None)
-                try:
-                    input_tokens = int(getattr(resp.usage, "input_tokens", 0))
-                    output_tokens = int(getattr(resp.usage, "output_tokens", 0))
-                except Exception:
-                    input_tokens = 0
-                    output_tokens = 0
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                agent_result = loop.run_until_complete(
+                    agent_decide(
+                        user_message,
+                        tools_obj,
+                        trigger_type=f"FAST_{trigger_type}",
+                    )
+                )
+                loop.close()
+
+                model_used = getattr(agent_result, "model", None)
+                # Map AgentResult into the legacy FAST parsed dict shape
+                parsed = {
+                    "action": "ACT" if agent_result.decision in ("OPEN_BUY", "OPEN_SELL", "CLOSE_TRADE", "ADJUST_TRADE") else "HOLD",
+                    "reason": str(getattr(agent_result, "reasoning", "") or ""),
+                    "execution": {},
+                }
             except Exception as e:
                 log.warning(f"AGENT_FAST | call failed (ignored): {e}")
                 return {"success": False, "reason": str(e)}
 
             latency_ms = int((time.time() - start_ts) * 1000)
-
-            parsed = None
-            try:
-                start = resp_text.find("{")
-                end = resp_text.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    parsed = json.loads(resp_text[start:end + 1])
-            except Exception:
-                parsed = None
+            input_tokens = 0
+            output_tokens = 0
 
             action = None
             exec_payload = {}

@@ -9,6 +9,7 @@ import asyncio
 import os
 import re
 import time
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Optional, List, Any
@@ -648,6 +649,25 @@ class AIAgent:
         ]
 
     def _gemini_function_declarations(self) -> List[Dict[str, Any]]:
+        def _strip_additional_props(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                if "additionalProperties" in obj:
+                    try:
+                        obj.pop("additionalProperties", None)
+                    except Exception:
+                        pass
+                if "additional_properties" in obj:
+                    try:
+                        obj.pop("additional_properties", None)
+                    except Exception:
+                        pass
+                for k, v in list(obj.items()):
+                    obj[k] = _strip_additional_props(v)
+                return obj
+            if isinstance(obj, list):
+                return [_strip_additional_props(x) for x in obj]
+            return obj
+
         decls: List[Dict[str, Any]] = []
         for t in self._tool_schemas():
             try:
@@ -656,11 +676,13 @@ class AIAgent:
                 schema = t.get("input_schema")
                 if not name or not isinstance(schema, dict):
                     continue
+                schema_copy = copy.deepcopy(schema)
+                schema_copy = _strip_additional_props(schema_copy)
                 decls.append(
                     {
                         "name": name,
                         "description": desc or "",
-                        "parameters": schema,
+                        "parameters": schema_copy,
                     }
                 )
             except Exception:
