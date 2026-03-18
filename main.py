@@ -1806,6 +1806,14 @@ class TradingBot:
                         log.info(
                             f"FLOKI_LOCAL_DATA_FULL | indicators_keys={list(ind.keys())} | sr_zones_count={len(sr)} | headlines_count={len(hl)} | macro_keys={list(mac.keys())}"
                         )
+
+                        import json
+                        try:
+                            log.info(
+                                f"FLOKI_LOCAL_INDICATORS | {json.dumps(ind, default=str)[:1000]}"
+                            )
+                        except Exception:
+                            pass
                     except Exception:
                         pass
                     self._call_floki_local_and_execute(agent_data)
