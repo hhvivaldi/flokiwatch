@@ -48,8 +48,6 @@ from executor import (
 from monitor import monitor_positions, get_positions_summary, close_all_positions
 from technical_analyzer import get_mt5_data, calculate_indicators, calculate_technical_score, get_atr_value
 
-from shadow_model import call_shadow_model
-
 
 # ============================================================================
 # NEWS CACHE (avoid excessive requests)
@@ -158,9 +156,215 @@ class TradingBot:
         self._last_df = None
         self._skip_initial_proactive_h1 = False
         
+        self._floki_local_lock = threading.Lock()
+
         # Configure shutdown handler
         signal.signal(signal.SIGINT, self._shutdown_handler)
         signal.signal(signal.SIGTERM, self._shutdown_handler)
+
+    def _is_floki_local_enabled(self) -> bool:
+        try:
+            src = str(getattr(config, "FLOKI_MODEL_SOURCE", "claude") or "").strip().lower()
+            return src == "local"
+        except Exception:
+            return False
+
+    def _validate_trade_plan_open(self, decision: str, trade_plan: dict) -> Optional[dict]:
+        try:
+            d = str(decision or "").strip().upper()
+            if d not in ("OPEN_BUY", "OPEN_SELL"):
+                return None
+
+            if not isinstance(trade_plan, dict):
+                return {"ok": False, "reason": "missing_trade_plan"}
+
+            entry = trade_plan.get("entry") or trade_plan.get("entry_price")
+            sl = trade_plan.get("stop_loss") or trade_plan.get("sl")
+            tp = trade_plan.get("take_profit") or trade_plan.get("tp")
+
+            try:
+                entry_f = float(entry)
+                sl_f = float(sl)
+                tp_f = float(tp)
+            except Exception:
+                return {"ok": False, "reason": "non_numeric_entry_sl_tp"}
+
+            pip = 0.1
+            sl_pips = abs(entry_f - sl_f) / pip
+            if sl_pips < 50 or sl_pips > 800:
+                return {"ok": False, "reason": f"sl_distance_out_of_range_pips:{sl_pips:.1f}"}
+
+            return {
+                "ok": True,
+                "entry": entry_f,
+                "stop_loss": sl_f,
+                "take_profit": tp_f,
+                "sl_pips": sl_pips,
+            }
+        except Exception as e:
+            return {"ok": False, "reason": f"validation_error:{e}"}
+
+    def _call_floki_local_and_execute(self, agent_data: dict) -> None:
+        acquired = False
+        try:
+            try:
+                acquired = self._floki_local_lock.acquire(blocking=False)
+            except Exception:
+                acquired = True
+
+            if not acquired:
+                log.info("FLOKI_LOCAL | Skipped — previous call still in progress")
+                return
+
+            if not self._is_floki_local_enabled():
+                return
+
+            snapshot_time_iso = datetime.utcnow().isoformat()
+            log.info(f"FLOKI_LOCAL | Calling local model | ts: {snapshot_time_iso}")
+
+            from shadow_model import call_local_floki_model
+
+            local = call_local_floki_model(agent_data if isinstance(agent_data, dict) else {})
+            err = local.get("error")
+            if err:
+                if err == "timeout":
+                    log.error("FLOKI_LOCAL | Timeout after 120s")
+                else:
+                    log.error(f"FLOKI_LOCAL | Model unavailable — {err}")
+                return
+
+            decision = str(local.get("decision") or "").strip().upper()
+            conf = local.get("confidence")
+            reasoning = str(local.get("reasoning") or "").strip()
+
+            try:
+                conf_i = int(round(float(conf))) if conf is not None else None
+            except Exception:
+                conf_i = None
+
+            conf_s = f"{conf_i}%" if conf_i is not None else "—%"
+            log.info(f"FLOKI_LOCAL | decision: {decision} | conf: {conf_s}")
+
+            try:
+                if not hasattr(self, "last_analysis") or not isinstance(getattr(self, "last_analysis", None), dict):
+                    self.last_analysis = {}
+                self.last_analysis["floki_local"] = {
+                    "timestamp": snapshot_time_iso,
+                    "decision": decision,
+                    "confidence": conf_i,
+                    "reasoning": reasoning[:4000],
+                    "latency_ms": local.get("latency_ms"),
+                    "model": getattr(config, "SHADOW_MODEL_NAME", ""),
+                }
+                tp = local.get("trade_plan")
+                if isinstance(tp, dict):
+                    self.last_analysis["floki_local"]["trade_plan"] = tp
+            except Exception:
+                pass
+
+            try:
+                open_positions = []
+                try:
+                    open_positions = executor.get_open_positions() or []
+                except Exception:
+                    open_positions = []
+
+                if decision in ("OPEN_BUY", "OPEN_SELL"):
+                    if open_positions:
+                        log.info("FLOKI_LOCAL | OPEN blocked — position already open")
+                        return
+
+                    tp = local.get("trade_plan")
+                    vr = self._validate_trade_plan_open(decision, tp)
+                    if not isinstance(vr, dict) or not vr.get("ok"):
+                        log.error("FLOKI_LOCAL | Invalid response")
+                        return
+
+                    exec_direction = "BUY" if decision == "OPEN_BUY" else "SELL"
+
+                    try:
+                        ok_safe, reason = is_safe_to_trade(exec_direction, confidence=float(conf_i or 0))
+                        if not ok_safe:
+                            log.info(f"FLOKI_LOCAL | Safety blocked — {reason}")
+                            try:
+                                alert_safety_block(reason)
+                            except Exception:
+                                pass
+                            return
+                    except Exception:
+                        log.error("FLOKI_LOCAL | Safety check error — skipping")
+                        return
+
+                    lot = None
+                    try:
+                        account_balance = get_account_balance() if self.executes_trades else float(getattr(config, "CAPITAL_INICIAL", 0) or 0)
+                        lot = calculate_position_size(account_balance)
+                    except Exception:
+                        lot = None
+                    if lot is None:
+                        lot = float(getattr(config, "MIN_LOT_SIZE", 0.01) or 0.01)
+
+                    sl_price = float(vr.get("stop_loss"))
+                    tp_price = float(vr.get("take_profit"))
+
+                    comment = f"FLOKI_LOCAL-{exec_direction}"
+                    res = (
+                        execute_buy(lot, sl_price, tp_price, comment=comment, confidence=float(conf_i or 0), scenario="floki_local")
+                        if exec_direction == "BUY"
+                        else execute_sell(lot, sl_price, tp_price, comment=comment, confidence=float(conf_i or 0), scenario="floki_local")
+                    )
+
+                    try:
+                        log.info(
+                            f"FLOKI_LOCAL | execute_trade | dir={exec_direction} | lot={lot} | SL={sl_price} | TP={tp_price} | result_success={getattr(res,'success',None)}"
+                        )
+                    except Exception:
+                        pass
+
+                elif decision == "CLOSE_TRADE":
+                    if not open_positions:
+                        return
+                    for p in open_positions[:3]:
+                        try:
+                            close_position(int(getattr(p, "ticket", 0)))
+                        except Exception:
+                            continue
+
+                elif decision == "ADJUST_TRADE":
+                    if not open_positions:
+                        return
+                    tp = local.get("trade_plan")
+                    new_sl = None
+                    new_tp = None
+                    if isinstance(tp, dict):
+                        new_sl = tp.get("stop_loss") or tp.get("sl")
+                        new_tp = tp.get("take_profit") or tp.get("tp")
+                    if new_sl is None and new_tp is None:
+                        return
+                    for p in open_positions[:3]:
+                        tkt = int(getattr(p, "ticket", 0) or 0)
+                        try:
+                            if new_sl is not None:
+                                executor.modify_position(tkt, new_sl=float(new_sl))
+                        except Exception:
+                            pass
+                        try:
+                            if new_tp is not None:
+                                executor.modify_position(tkt, new_tp=float(new_tp))
+                        except Exception:
+                            pass
+            except Exception as e:
+                log.error(f"FLOKI_LOCAL | Execution error (non-blocking): {e}")
+                return
+
+        except Exception as e:
+            log.error(f"FLOKI_LOCAL | Error (non-blocking): {e}")
+        finally:
+            if acquired:
+                try:
+                    self._floki_local_lock.release()
+                except Exception:
+                    pass
 
     def _get_last_proactive_analysis_timestamp_iso(self) -> Optional[str]:
         try:
@@ -1131,6 +1335,12 @@ class TradingBot:
             except Exception:
                 pass
 
+            try:
+                if self._is_floki_local_enabled():
+                    self._call_floki_local_and_execute(agent_data)
+            except Exception as e:
+                log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
+
             # ------------------------------------------------------------
             # AGENT TOOL CACHE BRIDGE (non-blocking)
             # The Scanner returns agent_data with keys like tech_data/news_data/calendar_data,
@@ -1526,10 +1736,10 @@ class TradingBot:
                 pass
 
             # ================================================================
-            # PROACTIVE AI AGENT (H1 snapshot) — shadow mode, diagnostic only
-            # Runs once per closed H1 candle when market is open.
+            # PROACTIVE AI AGENT (H1 snapshot)
+            # Disabled when FLOKI_MODEL_SOURCE=local (single-path architecture).
             # ================================================================
-            if getattr(config, 'USE_AI_AGENT', False):
+            if (not self._is_floki_local_enabled()) and getattr(config, 'USE_AI_AGENT', False):
                 try:
                     market_open, _, _ = is_market_open()
                     if market_open:

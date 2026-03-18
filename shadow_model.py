@@ -249,9 +249,19 @@ def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
     sr_nearest = _extract_sr_nearest_10(dp, mid_price=mid)
 
     lines: List[str] = []
-    lines.append("You are running in SHADOW MODE. You have NO tool access. Use only the data below.")
-    lines.append("Return ONLY valid JSON: {\"decision\":..., \"confidence\":0-100, \"reasoning\":\"...\"}.")
-    lines.append("Decisions allowed: WAIT, OPEN_BUY, OPEN_SELL, HOLD_TRADE, CLOSE_TRADE.")
+    lines.append("You are FLOKI, the primary trading decision engine for XAUUSD.")
+    lines.append("You have NO tool access. You MUST use only the data below.")
+    lines.append("Return ONLY valid JSON with this exact top-level schema:")
+    lines.append('{"decision":"...","confidence":0-100,"reasoning":"...","trade_plan":{...}}')
+    lines.append("Allowed decisions: WAIT, OPEN_BUY, OPEN_SELL, HOLD_TRADE, CLOSE_TRADE, ADJUST_TRADE, REJECT.")
+    lines.append("")
+    lines.append("When your decision is OPEN_BUY or OPEN_SELL, you MUST include trade_plan with numeric prices:")
+    lines.append("- entry: exact entry price (use current bid/ask)")
+    lines.append("- stop_loss: exact SL price (must be 50-800 pips from entry for XAU/USD; 1 pip = 0.1)")
+    lines.append("- take_profit: exact TP price")
+    lines.append("Without trade_plan on OPEN decisions, the trade will NOT execute.")
+    lines.append("Example OPEN_SELL JSON:")
+    lines.append('{"decision":"OPEN_SELL","confidence":72,"reasoning":"...","trade_plan":{"entry":4995.00,"stop_loss":5015.00,"take_profit":4975.00}}')
     lines.append("")
 
     lines.append("# PRICE")
@@ -363,6 +373,108 @@ def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
         lines.append("- OPEN_SELL: open a sell position")
 
     return "\n".join(lines).strip()
+
+
+def call_local_floki_model(agent_data: Dict[str, Any]) -> Dict[str, Any]:
+    t0 = time.time()
+    out: Dict[str, Any] = {
+        "decision": None,
+        "confidence": None,
+        "reasoning": None,
+        "trade_plan": None,
+        "latency_ms": 0,
+        "error": None,
+    }
+
+    try:
+        url = str(getattr(config, "SHADOW_MODEL_URL", "") or "").strip()
+        model = str(getattr(config, "SHADOW_MODEL_NAME", "") or "").strip()
+        timeout_s = int(getattr(config, "SHADOW_MODEL_TIMEOUT", 120) or 120)
+
+        if not url:
+            out["error"] = "missing_url"
+            return out
+        if not model:
+            out["error"] = "missing_model"
+            return out
+
+        user_prompt = build_shadow_prompt(agent_data)
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": get_system_prompt()},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+        }
+
+        resp = requests.post(url, json=payload, timeout=timeout_s)
+        out["latency_ms"] = int((time.time() - t0) * 1000)
+
+        if resp.status_code >= 400:
+            out["error"] = f"http_{resp.status_code}"
+            return out
+
+        try:
+            data = resp.json()
+        except Exception:
+            out["error"] = "invalid_json_response"
+            return out
+
+        content = None
+        try:
+            choices = data.get("choices")
+            if isinstance(choices, list) and choices:
+                msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+                if isinstance(msg, dict):
+                    content = msg.get("content")
+        except Exception:
+            content = None
+
+        if not isinstance(content, str) or not content.strip():
+            out["error"] = "empty_content"
+            return out
+
+        cleaned = _strip_think_tags(content)
+        obj = _first_json_object(cleaned)
+        if not isinstance(obj, dict):
+            out["error"] = "invalid_decision_json"
+            return out
+
+        decision = str(obj.get("decision") or "").strip().upper()
+        conf = _safe_int(obj.get("confidence"))
+        reasoning = str(obj.get("reasoning") or "").strip()
+
+        if decision not in _ALLOWED_DECISIONS:
+            out["error"] = f"invalid_decision:{decision or 'missing'}"
+            return out
+
+        if conf is not None:
+            conf = max(0, min(100, conf))
+
+        trade_plan = obj.get("trade_plan")
+        if trade_plan is not None and not isinstance(trade_plan, dict):
+            trade_plan = None
+
+        out["decision"] = decision
+        out["confidence"] = conf
+        out["reasoning"] = reasoning[:4000] if reasoning else ""
+        out["trade_plan"] = trade_plan
+        return out
+
+    except requests.Timeout:
+        out["latency_ms"] = int((time.time() - t0) * 1000)
+        out["error"] = "timeout"
+        return out
+    except Exception as e:
+        out["latency_ms"] = int((time.time() - t0) * 1000)
+        out["error"] = str(e)
+        try:
+            log.debug(f"FLOKI_LOCAL | error (non-blocking): {e}")
+        except Exception:
+            pass
+        return out
 
 
 def call_shadow_model(agent_data: Dict[str, Any], floki_decision: Dict[str, Any]) -> Dict[str, Any]:

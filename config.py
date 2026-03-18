@@ -367,10 +367,13 @@ AI_AGENT_MODEL = "claude-sonnet-4-20250514"  # Claude model to use
 AI_AGENT_TIMEOUT = 120                    # Timeout in seconds for API calls
 AI_AGENT_MAX_TOOL_CALLS = 25              # Max tool calls per decision (investigation + debate + execution)
 
+# Select Floki decision engine source. "local" bypasses Claude and uses SHADOW_MODEL_URL/NAME.
+FLOKI_MODEL_SOURCE = os.environ.get("FLOKI_MODEL_SOURCE", "local")
+
 # ============================================================================
 # SHADOW MODEL (Local OpenAI-compatible model for unbiased comparison)
 # ============================================================================
-SHADOW_MODEL_ENABLED = True
+SHADOW_MODEL_ENABLED = False
 SHADOW_MODEL_URL = "https://needed-utc-spots-roy.trycloudflare.com/v1/chat/completions"
 SHADOW_MODEL_NAME = "kwangsuklee/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
 SHADOW_MODEL_TIMEOUT = 120

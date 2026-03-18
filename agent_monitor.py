@@ -476,13 +476,9 @@ class AgentMonitor:
                     "watch_reason": watch_reason,
                     "watch_type": watch_cond_type,
                 }
-                bot._call_agent_proactive_snapshot(
-                    trigger_type="SIMBA_WATCH",
-                    snapshot_time_iso=snapshot_time_iso,
-                    agent_data=dp,
-                    df=df,
-                    trigger_data=trigger_data,
-                )
+                _ = df
+                _ = snapshot_time_iso
+                _ = trigger_data
             except Exception as e:
                 try:
                     log.debug(f"AGENT_MONITOR | simba watch call failed (ignored): {e}")
@@ -907,13 +903,9 @@ class AgentMonitor:
                 "triggered": triggered_ids,
                 "simba": simba_result,
             }
-            bot._call_agent_proactive_snapshot(
-                trigger_type="SIMBA_WAKE",
-                snapshot_time_iso=snapshot_time_iso,
-                agent_data=dp,
-                df=df,
-                trigger_data=trigger_data,
-            )
+            _ = df
+            _ = snapshot_time_iso
+            _ = trigger_data
         except Exception as e:
             try:
                 log.debug(f"AGENT_MONITOR | simba wake call failed (ignored): {e}")

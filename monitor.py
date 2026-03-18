@@ -442,41 +442,7 @@ class PositionMonitor:
 
             # Call Agent with watch-trigger context (non-blocking; ignore failures)
             try:
-                from ai_agent import agent_decide
-                from agent_tools import AgentTools
-                import safety_checks
-                import risk_manager
-                import asyncio
-
-                bot = getattr(self, "bot", None)
-                if bot is None:
-                    # If no bot reference, just clear the condition
-                    raise RuntimeError("no bot reference")
-
-                trigger_context = (
-                    f"WATCH_CONDITION triggered for ticket {t}: {trigger_reason}. "
-                    f"Position: {pos.direction} open={pos.open_price} current={pos.current_price} "
-                    f"profit=${pos.profit:+.2f} ({pos.profit_pips:+.0f} pips)."
-                )
-
-                tools_obj = AgentTools(
-                    bot,
-                    executor=executor,
-                    safety_checks_module=safety_checks,
-                    risk_manager_module=risk_manager,
-                )
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                _ = loop.run_until_complete(
-                    agent_decide(
-                        trigger_context,
-                        tools_obj,
-                        trigger_type="WATCH_CONDITION",
-                        allow_memory_write=False,
-                    )
-                )
-                loop.close()
+                pass
             except Exception as e:
                 log.debug(f"   Monitor: watch trigger agent call failed (ignored): {e}")
 
