@@ -191,7 +191,9 @@ def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
 
     rsi = _safe_float(_get_nested(ind, ["rsi", "value"]))
     macd = _safe_float(_get_nested(ind, ["macd", "value"]))
-    macd_hist = _safe_float(_get_nested(ind, ["macd", "hist"]))
+    macd_hist = _safe_float(_get_nested(ind, ["macd", "histogram"]))
+    if macd_hist is None:
+        macd_hist = _safe_float(_get_nested(ind, ["macd", "hist"]))
     adx = _safe_float(_get_nested(ind, ["adx", "value"]))
     atr = _safe_float(_get_nested(ind, ["atr", "value"]))
 
@@ -200,7 +202,9 @@ def build_shadow_prompt(agent_data: Dict[str, Any]) -> str:
     ema200 = _safe_float(emas.get("ema200"))
 
     bb = ind.get("bollinger") if isinstance(ind.get("bollinger"), dict) else {}
-    bb_pos = _safe_float(bb.get("position"))
+    bb_pos = _safe_float(bb.get("position_pct"))
+    if bb_pos is None:
+        bb_pos = _safe_float(bb.get("position"))
     bb_upper = _safe_float(bb.get("upper"))
     bb_middle = _safe_float(bb.get("middle"))
     bb_lower = _safe_float(bb.get("lower"))

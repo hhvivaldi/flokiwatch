@@ -209,15 +209,6 @@ class TradingBot:
         acquired = False
         try:
             try:
-                ad = agent_data if isinstance(agent_data, dict) else {}
-                keys_preview = list(ad.keys())[:15]
-                log.info(
-                    f"FLOKI_LOCAL_DATA | keys={keys_preview} | price={ad.get('current_price')} | indicators={type(ad.get('indicators'))}"
-                )
-            except Exception:
-                pass
-
-            try:
                 acquired = self._floki_local_lock.acquire(blocking=False)
             except Exception:
                 acquired = True
@@ -1419,24 +1410,95 @@ class TradingBot:
                     # indicators
                     if not isinstance(dp.get("indicators"), dict) or not dp.get("indicators"):
                         indicators = {}
+
+                        def _df_get(col_name: str):
+                            try:
+                                if df is None or not hasattr(df, "columns"):
+                                    return None
+                                if col_name not in df.columns:
+                                    return None
+                                return df[col_name].iloc[-1]
+                            except Exception:
+                                return None
                         try:
                             indicators["rsi"] = tech_data.get("rsi") if isinstance(tech_data.get("rsi"), dict) else {}
                         except Exception:
                             indicators["rsi"] = {}
                         try:
                             macd = tech_data.get("macd") if isinstance(tech_data.get("macd"), dict) else {}
+
+                            macd_value = None
+                            try:
+                                # Most detailed analyzer provides macd_val separately from signal/hist.
+                                macd_value = macd.get("value")
+                                if macd_value is None:
+                                    macd_value = macd.get("macd")
+                            except Exception:
+                                macd_value = None
+
+                            macd_signal = None
+                            try:
+                                macd_signal = macd.get("signal")
+                            except Exception:
+                                macd_signal = None
+
+                            macd_hist = None
+                            try:
+                                macd_hist = macd.get("histogram")
+                                if macd_hist is None:
+                                    macd_hist = macd.get("macd_hist")
+                            except Exception:
+                                macd_hist = None
+
                             indicators["macd"] = {
-                                "value": macd.get("macd") if macd else None,
-                                "signal": macd.get("signal") if macd else None,
-                                "histogram": macd.get("histogram") if macd else None,
+                                "value": macd_value,
+                                "signal": macd_signal,
+                                "histogram": macd_hist,
                             }
+
+                            # If analyzer only provides histogram/signal label, backfill MACD line from df columns.
+                            try:
+                                if indicators.get("macd") and indicators["macd"].get("value") is None:
+                                    dv = _df_get("macd")
+                                    if dv is not None:
+                                        indicators["macd"]["value"] = float(dv)
+                            except Exception:
+                                pass
                         except Exception:
                             indicators["macd"] = {}
                         try:
                             ema = tech_data.get("ema") if isinstance(tech_data.get("ema"), dict) else {}
+
+                            # Support both legacy keys and technical_analyzer.analyze_technical_detailed shape.
+                            ema50 = None
+                            ema200 = None
+                            try:
+                                ema50 = ema.get("ema50")
+                                if ema50 is None:
+                                    ema50 = ema.get("ema_50")
+                            except Exception:
+                                ema50 = None
+                            try:
+                                ema200 = ema.get("ema200")
+                                if ema200 is None:
+                                    ema200 = ema.get("ema_200")
+                            except Exception:
+                                ema200 = None
+
+                            # If analyzer only provides above flags, do not fabricate numeric EMA.
                             indicators["emas"] = {
-                                "ema200": ema.get("ema200"),
+                                "ema50": ema50,
+                                "ema200": ema200,
                             }
+
+                            # Backfill ema50 from df if missing (technical_analyzer calculates ema_50).
+                            try:
+                                if indicators.get("emas") and indicators["emas"].get("ema50") is None:
+                                    ev = _df_get("ema_50")
+                                    if ev is not None:
+                                        indicators["emas"]["ema50"] = float(ev)
+                            except Exception:
+                                pass
                         except Exception:
                             indicators["emas"] = {}
                         try:
@@ -1456,12 +1518,61 @@ class TradingBot:
                             indicators["adx"] = {}
                         try:
                             bb = tech_data.get("bollinger") if isinstance(tech_data.get("bollinger"), dict) else {}
+
+                            # Most analyzer provides bb position/width/squeeze; prefer explicit bands if present.
+                            bb_upper = None
+                            bb_middle = None
+                            bb_lower = None
+                            bb_pos = None
+                            try:
+                                bb_upper = bb.get("upper")
+                                if bb_upper is None:
+                                    bb_upper = bb.get("bb_upper")
+                            except Exception:
+                                bb_upper = None
+                            try:
+                                bb_middle = bb.get("middle")
+                                if bb_middle is None:
+                                    bb_middle = bb.get("bb_middle")
+                            except Exception:
+                                bb_middle = None
+                            try:
+                                bb_lower = bb.get("lower")
+                                if bb_lower is None:
+                                    bb_lower = bb.get("bb_lower")
+                            except Exception:
+                                bb_lower = None
+                            try:
+                                bb_pos = bb.get("position_pct")
+                                if bb_pos is None:
+                                    bb_pos = bb.get("position")
+                            except Exception:
+                                bb_pos = None
+
                             indicators["bollinger"] = {
-                                "upper": bb.get("upper"),
-                                "middle": bb.get("middle"),
-                                "lower": bb.get("lower"),
-                                "position_pct": bb.get("position_pct"),
+                                "upper": bb_upper,
+                                "middle": bb_middle,
+                                "lower": bb_lower,
+                                "position_pct": bb_pos,
                             }
+
+                            # Backfill Bollinger bands from df if analyzer only provides position/width.
+                            try:
+                                if indicators.get("bollinger"):
+                                    if indicators["bollinger"].get("upper") is None:
+                                        uv = _df_get("bb_upper")
+                                        if uv is not None:
+                                            indicators["bollinger"]["upper"] = float(uv)
+                                    if indicators["bollinger"].get("middle") is None:
+                                        mv = _df_get("bb_middle")
+                                        if mv is not None:
+                                            indicators["bollinger"]["middle"] = float(mv)
+                                    if indicators["bollinger"].get("lower") is None:
+                                        lv = _df_get("bb_lower")
+                                        if lv is not None:
+                                            indicators["bollinger"]["lower"] = float(lv)
+                            except Exception:
+                                pass
                         except Exception:
                             indicators["bollinger"] = {}
                         dp["indicators"] = indicators
@@ -1506,6 +1617,13 @@ class TradingBot:
                                 headlines = sentiment.get("headlines")
                             except Exception:
                                 headlines = None
+                        if headlines is None:
+                            try:
+                                # get_news_detailed often nests analyzed headlines under sentiment.headlines (dicts with title)
+                                sentiment = news_data.get("sentiment") if isinstance(news_data.get("sentiment"), dict) else {}
+                                headlines = sentiment.get("news_headlines")
+                            except Exception:
+                                headlines = None
                         # Hybrid news detailed output does not include headline text; attempt alternate keys if present.
                         if headlines is None:
                             try:
@@ -1515,8 +1633,21 @@ class TradingBot:
                             except Exception:
                                 headlines = None
                         if isinstance(headlines, list):
-                            dp["headlines"] = headlines
-                            dp["news_headlines"] = headlines
+                            cleaned = []
+                            for h in headlines:
+                                try:
+                                    if isinstance(h, dict):
+                                        txt = h.get("title") or h.get("headline") or h.get("text")
+                                    else:
+                                        txt = h
+                                    txt = str(txt).strip() if txt is not None else ""
+                                    if txt:
+                                        cleaned.append(txt)
+                                except Exception:
+                                    continue
+                            cleaned = cleaned[:10]
+                            dp["headlines"] = cleaned
+                            dp["news_headlines"] = cleaned
                         else:
                             try:
                                 # Debug visibility only when missing; do not spam INFO.
@@ -1797,25 +1928,6 @@ class TradingBot:
 
             try:
                 if self._is_floki_local_enabled():
-                    try:
-                        dp = agent_data if isinstance(agent_data, dict) else {}
-                        ind = dp.get("indicators") if isinstance(dp.get("indicators"), dict) else {}
-                        sr = dp.get("sr_zones") if isinstance(dp.get("sr_zones"), list) else []
-                        hl = dp.get("headlines") if isinstance(dp.get("headlines"), list) else []
-                        mac = dp.get("macro") if isinstance(dp.get("macro"), dict) else {}
-                        log.info(
-                            f"FLOKI_LOCAL_DATA_FULL | indicators_keys={list(ind.keys())} | sr_zones_count={len(sr)} | headlines_count={len(hl)} | macro_keys={list(mac.keys())}"
-                        )
-
-                        import json
-                        try:
-                            log.info(
-                                f"FLOKI_LOCAL_INDICATORS | {json.dumps(ind, default=str)[:1000]}"
-                            )
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
                     self._call_floki_local_and_execute(agent_data)
             except Exception as e:
                 log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
