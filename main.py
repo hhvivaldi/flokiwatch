@@ -1797,6 +1797,17 @@ class TradingBot:
 
             try:
                 if self._is_floki_local_enabled():
+                    try:
+                        dp = agent_data if isinstance(agent_data, dict) else {}
+                        ind = dp.get("indicators") if isinstance(dp.get("indicators"), dict) else {}
+                        sr = dp.get("sr_zones") if isinstance(dp.get("sr_zones"), list) else []
+                        hl = dp.get("headlines") if isinstance(dp.get("headlines"), list) else []
+                        mac = dp.get("macro") if isinstance(dp.get("macro"), dict) else {}
+                        log.info(
+                            f"FLOKI_LOCAL_DATA_FULL | indicators_keys={list(ind.keys())} | sr_zones_count={len(sr)} | headlines_count={len(hl)} | macro_keys={list(mac.keys())}"
+                        )
+                    except Exception:
+                        pass
                     self._call_floki_local_and_execute(agent_data)
             except Exception as e:
                 log.error(f"FLOKI_LOCAL | Call failed (non-blocking): {e}")
