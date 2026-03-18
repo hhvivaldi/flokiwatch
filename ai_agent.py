@@ -820,16 +820,6 @@ class AIAgent:
                 parts = []
                 part_types = []
 
-            try:
-                log.info(
-                    "GEMINI_RAW | "
-                    f"parts={len(parts)} | "
-                    f"types={part_types} | "
-                    f"text_preview={(str(text_out)[:500] if text_out is not None else '')}"
-                )
-            except Exception:
-                pass
-
             if text_out and not fn_calls:
                 return {
                     "content": str(text_out).strip(),
