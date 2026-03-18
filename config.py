@@ -220,6 +220,7 @@ CALENDAR_DURING_MINUTES = 3          # DURING phase: 0-3 min after release
 CALENDAR_POST_EVENT_MINUTES = 30     # POST_EVENT phase: 3-30 min after release
 CALENDAR_JSON_PATH = os.environ.get("CALENDAR_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\calendar_events.json")
 CALENDAR_JSON_MAX_AGE_MINUTES = 15   # If JSON older than this, use fallback
+MT5_SERVER_UTC_OFFSET = int(os.environ.get("MT5_SERVER_UTC_OFFSET", "2") or "2")
 FCS_API_KEY = ""                     # Optional: fcsapi.com key for fallback
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")  # Optional: fred.stlouisfed.org key for yields fallback
 

@@ -363,6 +363,25 @@ def _parse_event_time(time_str: str) -> Optional[datetime]:
     return None
 
 
+def _get_reference_time(raw_data: Dict) -> datetime:
+    """Return the reference clock to compare calendar events against.
+
+    Preferred: MT5 JSON `server_time` (same timezone as `time_server`).
+    Fallback: derive a server-like clock from UTC using MT5_SERVER_UTC_OFFSET.
+    """
+    server_time_str = raw_data.get("server_time", "") if isinstance(raw_data, dict) else ""
+    if server_time_str:
+        parsed = _parse_event_time(server_time_str)
+        if parsed is not None:
+            return parsed
+
+    try:
+        off = int(getattr(config, "MT5_SERVER_UTC_OFFSET", 0) or 0)
+    except Exception:
+        off = 0
+    return datetime.utcnow() + timedelta(hours=off)
+
+
 def _is_relevant_event(event_name: str) -> bool:
     """Check if the event is one of the high-impact ones we care about"""
     name_lower = event_name.lower()
@@ -541,13 +560,11 @@ def get_calendar_data() -> Dict:
         events = raw_data.get("events", [])
         source = raw_data.get("source", "unknown")
         
-        # Use server_time from JSON as reference (same timezone as events)
-        reference_time = None
-        server_time_str = raw_data.get("server_time", "")
-        if server_time_str:
-            reference_time = _parse_event_time(server_time_str)
-        if reference_time is not None:
+        reference_time = _get_reference_time(raw_data)
+        try:
             log.debug(f"Calendar reference_time (server): {reference_time}")
+        except Exception:
+            pass
         
         # Classify phase
         phase, closest_event = classify_phase(events, reference_time=reference_time)
@@ -651,13 +668,7 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
         raw_data = _get_raw_calendar_data()
         events = raw_data.get("events", [])
         
-        # Use server_time as reference (same timezone as events)
-        reference_time = None
-        server_time_str = raw_data.get("server_time", "")
-        if server_time_str:
-            reference_time = _parse_event_time(server_time_str)
-        if reference_time is None:
-            reference_time = datetime.utcnow()
+        reference_time = _get_reference_time(raw_data)
         
         upcoming = []
         for event in events:
@@ -696,9 +707,44 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                 "is_past": is_past,
                 "minutes_until": round(minutes_until, 1),
             })
+
+        # Safety: ensure we don't accidentally drop near-term HIGH events due to feed quirks.
+        # If a HIGH event is within the +/-60m window, it should be eligible for display.
+        try:
+            for event in events:
+                event_time = _parse_event_time(event.get("time_server", ""))
+                if event_time is None:
+                    continue
+                importance = str(event.get("importance", "MEDIUM") or "MEDIUM")
+                if str(importance).upper() != "HIGH":
+                    continue
+                minutes_until = (event_time - reference_time).total_seconds() / 60
+                if minutes_until < -60 or minutes_until > 60:
+                    continue
+                name = event.get("name", "?")
+                # If not already included, add it.
+                if not any(str(x.get("name")) == str(name) and str(x.get("time")) == event_time.strftime("%H:%M") for x in upcoming):
+                    if minutes_until > 0:
+                        time_until = f"{int(minutes_until)}m"
+                        is_past = False
+                    else:
+                        time_until = f"{int(abs(minutes_until))}m ago"
+                        is_past = True
+                    upcoming.append(
+                        {
+                            "name": name,
+                            "time": event_time.strftime("%H:%M"),
+                            "importance": importance,
+                            "time_until": time_until,
+                            "is_past": is_past,
+                            "minutes_until": round(minutes_until, 1),
+                        }
+                    )
+        except Exception:
+            pass
         
-        # Sort: future first (closest first), then past
-        upcoming.sort(key=lambda e: (e["is_past"], abs(e["minutes_until"])))
+        # Sort: future first (soonest first), then past (most recent first)
+        upcoming.sort(key=lambda e: (e["is_past"], e["minutes_until"] if not e["is_past"] else abs(e["minutes_until"])))
         
         return upcoming[:max_events]
         
