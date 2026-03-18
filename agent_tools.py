@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
@@ -20,6 +20,35 @@ class AgentTools:
         self._executor = executor
         self._safety = safety_checks_module
         self._risk = risk_manager_module
+
+    def set_next_check(self, minutes: int = 5) -> Dict[str, Any]:
+        start = time.time()
+        try:
+            m = self._safe_int(minutes)
+            if m is None:
+                m = 5
+            if m < 2:
+                m = 2
+            if m > 120:
+                m = 120
+
+            now = datetime.utcnow()
+            next_at = now + timedelta(minutes=int(m))
+            payload = {
+                "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
+                "requested_minutes": int(m),
+            }
+
+            ok = self._write_json_atomic(self._next_check_path(), payload)
+            if not ok:
+                self._log_fail("set_next_check", start, "persist failed")
+                return {"success": False, "reason": "persist failed"}
+
+            self._log_tool("set_next_check", start, f"minutes={m}")
+            return {"success": True, **payload}
+        except Exception as e:
+            self._log_tool("set_next_check", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
 
     # ---------------------------------------------------------------------
     # Internals
@@ -1704,6 +1733,12 @@ class AgentTools:
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "agent_watch_conditions.json")
+
+    def _next_check_path(self) -> str:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "agent_next_check.json")
 
     def _wake_conditions_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))

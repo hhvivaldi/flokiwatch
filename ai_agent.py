@@ -646,6 +646,18 @@ class AIAgent:
                 },
                 "cache_control": {"type": "ephemeral"},
             },
+            {
+                "name": "set_next_check",
+                "description": "Schedule your next analysis cycle. Writes next_check_at timestamp; bounds: 2-120 minutes (default 5).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "minutes": {"type": "integer", "minimum": 2, "maximum": 120},
+                    },
+                    "required": ["minutes"],
+                    "additionalProperties": False,
+                },
+            },
         ]
 
     def _gemini_function_declarations(self) -> List[Dict[str, Any]]:

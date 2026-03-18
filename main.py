@@ -1071,21 +1071,96 @@ class TradingBot:
                 # Monitor open positions
                 self._monitor_cycle()
                 
-                # Wait for next cycle with monitor sub-loop
-                # If positions open: monitor every 30s
-                # If not: normal 300s sleep
+                # Wait for next cycle (agent-controlled scheduling) with monitor sub-loop
+                # - Agent sets next_check_at via data/agent_next_check.json
+                # - If missing/invalid, default is 5 minutes
+                # - Simba wake/watch triggers override the timer (handled by AgentMonitor)
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                next_path = os.path.join(base_dir, "data", "agent_next_check.json")
+
+                default_minutes = 5
+                requested_minutes = None
+                next_check_at = None
+                now_utc = datetime.utcnow()
+
+                try:
+                    if os.path.exists(next_path):
+                        with open(next_path, "r", encoding="utf-8") as f:
+                            payload = json.load(f)
+                        if isinstance(payload, dict):
+                            requested_minutes = payload.get("requested_minutes")
+                            next_check_at = payload.get("next_check_at")
+                except Exception:
+                    requested_minutes = None
+                    next_check_at = None
+
+                def _parse_next_check(iso_s: Optional[str]) -> Optional[datetime]:
+                    if not isinstance(iso_s, str) or not iso_s.strip():
+                        return None
+                    s = iso_s.strip()
+                    try:
+                        if s.endswith("Z"):
+                            s = s[:-1] + "+00:00"
+                    except Exception:
+                        pass
+                    try:
+                        dt = datetime.fromisoformat(s)
+                    except Exception:
+                        return None
+                    try:
+                        if dt.tzinfo is not None:
+                            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    except Exception:
+                        pass
+                    return None
+
+                def _clamp_minutes(m: int) -> int:
+                    try:
+                        m_i = int(m)
+                    except Exception:
+                        m_i = default_minutes
+                    if m_i < 2:
+                        return 2
+                    if m_i > 120:
+                        return 120
+                    return m_i
+
+                scheduled_dt = _parse_next_check(next_check_at)
+                if scheduled_dt is None:
+                    sleep_minutes = default_minutes
+                    log.info(
+                        "FLOKI_SCHEDULE | Next check in 5 minutes (default — agent did not call set_next_check)"
+                    )
+                else:
+                    try:
+                        delta_s = max(0, (scheduled_dt - now_utc).total_seconds())
+                    except Exception:
+                        delta_s = 0
+
+                    approx_minutes = int(round(delta_s / 60.0))
+                    if requested_minutes is not None:
+                        sleep_minutes = _clamp_minutes(requested_minutes)
+                    else:
+                        sleep_minutes = _clamp_minutes(approx_minutes)
+
+                    if sleep_minutes <= 0:
+                        sleep_minutes = default_minutes
+
+                    log.info(
+                        f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested)"
+                    )
+
+                interval = int(sleep_minutes * 60)
                 elapsed = 0
-                interval = config.ANALYSIS_INTERVAL_SECONDS
-                monitor_interval = config.MONITOR_INTERVAL_SECONDS
-                
+                monitor_interval = int(getattr(config, "MONITOR_INTERVAL_SECONDS", 30) or 30)
+
                 while elapsed < interval and self.running:
-                    # Sleep for monitor interval or remaining time
                     sleep_time = min(monitor_interval, interval - elapsed)
-                    for _ in range(sleep_time):
+                    for _ in range(int(sleep_time)):
                         if not self.running:
                             break
                         time.sleep(1)
-                    elapsed += sleep_time
+                    elapsed += int(sleep_time)
 
                     if self.running:
                         try:
@@ -1099,8 +1174,7 @@ class TradingBot:
                                 self._last_agent_monitor_tick = now_ts
                         except Exception as e:
                             log.debug(f"AGENT_MONITOR | tick error (ignored): {e}")
-                    
-                    # If not yet time for next analysis, run monitor
+
                     if elapsed < interval and self.running and self.executes_trades:
                         positions = executor.get_open_positions()
                         if positions:
@@ -1699,27 +1773,10 @@ class TradingBot:
                 pass
 
             # ================================================================
-            # PROACTIVE AI AGENT (H1 snapshot)
+            # PROACTIVE AI AGENT (H1 snapshot) — DISABLED
+            # H1 boundary must not call Floki independently.
+            # Agent controls its call frequency via set_next_check.
             # ================================================================
-            if getattr(config, 'USE_AI_AGENT', False):
-                try:
-                    market_open, _, _ = is_market_open()
-                    if market_open:
-                        if getattr(self, "_skip_initial_proactive_h1", False):
-                            self._skip_initial_proactive_h1 = False
-                        else:
-                            last_closed_h1_iso = self._get_last_closed_h1_time_iso()
-                            if last_closed_h1_iso:
-                                prev_iso = getattr(self, '_last_proactive_h1_close_time', None)
-                                if prev_iso != last_closed_h1_iso:
-                                    self._call_agent_proactive_h1_snapshot(
-                                        h1_close_time_iso=last_closed_h1_iso,
-                                        agent_data=agent_data,
-                                        df=df,
-                                    )
-                                    self._last_proactive_h1_close_time = last_closed_h1_iso
-                except Exception as e:
-                    log.warning(f"PROACTIVE_H1 | error (non-blocking): {e}")
             
             if decision is None:
                 return
@@ -2939,6 +2996,9 @@ class TradingBot:
                 self._last_simba_wake_call_ts = now_ts
             except Exception:
                 pass
+
+        if trigger_type in ("SIMBA_WAKE", "SIMBA_WATCH"):
+            log.info("FLOKI_SCHEDULE | Simba override — calling Floki now (wake/watch condition met)")
 
         agent = get_agent()
         if not agent.is_enabled():

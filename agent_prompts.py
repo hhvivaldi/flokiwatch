@@ -236,6 +236,15 @@ Condition types (v1):
 - indicator_threshold: VIX only (risk-off spike)
 </position_management_tools>
 
+<scheduling>
+At the end of every decision, call set_next_check to schedule your next analysis. Consider:
+- Active trade being managed: 3-5 minutes
+- High-impact event approaching: set check before the event
+- Sideways/no-setup market: 15-30 minutes
+- Low volatility session (Asian): 30-60 minutes
+- If you don't call set_next_check, default is 5 minutes
+</scheduling>
+
 <setup_evaluation>
 The Brain's score is one input, not a decision rule. A score of 60 with perfect alignment can be stronger than 80 in choppy market.
 
