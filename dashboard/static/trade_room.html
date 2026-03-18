@@ -724,6 +724,31 @@
           }
         }
 
+        function refreshWatchConditions() {
+          try {
+            var now = Date.now();
+            if (now - lastWatchConditionsFetchMs < 8000) return;
+            lastWatchConditionsFetchMs = now;
+
+            fetch('/api/agent-watch-conditions', { cache: 'no-store' })
+              .then(function (r) {
+                if (!r.ok) throw new Error('http_' + r.status);
+                return r.json();
+              })
+              .then(function (payload) {
+                cachedWatchConditionsPayload = payload || null;
+                try {
+                  renderSimbaStatusFromWatchConditionsPayload(cachedWatchConditionsPayload);
+                } catch(e) {}
+              })
+              .catch(function () {
+                // silent
+              });
+          } catch (e) {
+            // silent
+          }
+        }
+
         function initCardAvatarRotation() {
           try {
             var ids = [
@@ -936,6 +961,60 @@
           el.textContent = d ? d.replaceAll('_',' ') : '—';
         }
 
+        function countWatchConditions(payload) {
+          try {
+            if (!payload || typeof payload !== 'object') return 0;
+            var wc = payload.watch_conditions;
+            if (!wc || typeof wc !== 'object') return 0;
+
+            // Accept either an array or an object map.
+            if (Array.isArray(wc)) return wc.length;
+            var keys = Object.keys(wc);
+            if (!keys.length) return 0;
+
+            // If values are arrays, count them; otherwise count keys.
+            var total = 0;
+            for (var i = 0; i < keys.length; i++) {
+              var v = wc[keys[i]];
+              if (Array.isArray(v)) total += v.length;
+              else if (v && typeof v === 'object' && Array.isArray(v.conditions)) total += v.conditions.length;
+              else total += 1;
+            }
+            return total;
+          } catch (e) {
+            return 0;
+          }
+        }
+
+        function renderSimbaStatusFromWatchConditionsPayload(payload) {
+          try {
+            var pill = document.getElementById('simba-status-pill');
+            var condText = document.getElementById('simba-conditions-text');
+            var condBar = document.getElementById('simba-conditions-bar');
+            var modeTag = document.getElementById('simba-mode-tag');
+            if (!pill || !condText || !condBar || !modeTag) return;
+
+            var n = countWatchConditions(payload);
+            var watching = n > 0;
+
+            condText.textContent = 'CONDITIONS: ' + String(n);
+            condBar.style.width = watching ? '100%' : '0%';
+
+            // Never show OFF while bot is running.
+            if (watching) {
+              pill.textContent = 'WATCHING';
+              pill.className = 'decision-pill pill-buy';
+              modeTag.innerHTML = '<span class="dot-green"></span>WATCHING';
+            } else {
+              pill.textContent = 'PATROL';
+              pill.className = 'decision-pill pill-hold';
+              modeTag.innerHTML = '<span class="dot-gray"></span>PATROL';
+            }
+          } catch (e) {
+            // silent
+          }
+        }
+
         function renderSimbaFromState(state) {
           try {
             var pill = document.getElementById('simba-status-pill');
@@ -950,11 +1029,12 @@
             var simba = last.simba || null;
 
             if (!simba || !simba.decision) {
-              pill.textContent = 'OFF';
-              pill.className = 'decision-pill pill-standby';
-              condText.textContent = '—';
+              // Fallback renderer (legacy). Actual status is driven by /api/agent-watch-conditions.
+              pill.textContent = 'PATROL';
+              pill.className = 'decision-pill pill-hold';
+              condText.textContent = 'CONDITIONS: 0';
               condBar.style.width = '0%';
-              modeTag.innerHTML = '<span class="dot-gray"></span>OFF';
+              modeTag.innerHTML = '<span class="dot-gray"></span>PATROL';
               summaryTag.textContent = '—';
               return;
             }
@@ -1010,7 +1090,14 @@
         var cachedTopPatternsText = null;
         var cachedPatternsUpdated = null;
 
+        var cachedWatchConditionsPayload = null;
+        var lastWatchConditionsFetchMs = 0;
+
         initCardAvatarRotation();
+
+        try {
+          refreshWatchConditions();
+        } catch(e) {}
 
         function fmtPatternLine(p) {
           try {
@@ -1052,6 +1139,15 @@
               }
             }
 
+            // Prefer proactive decision/confidence from /api/state for the Floki card display.
+            try {
+              var pa = (state && state.last_analysis) ? state.last_analysis.proactive_analysis : null;
+              var paDecision = pa ? pa.decision : null;
+              var paConf = pa ? pa.confidence : null;
+              if (paDecision) flokiDecision = paDecision;
+              if (paConf !== null && paConf !== undefined) flokiConf = paConf;
+            } catch(e) {}
+
             var flokiCard = document.getElementById('floki-card');
             var rexCard = document.getElementById('rex-card');
             var simbaCard = document.getElementById('simba-card');
@@ -1062,6 +1158,15 @@
             try {
               renderSimbaFromState(state);
             } catch (e) {}
+
+            // Override Simba status from /api/agent-watch-conditions (authoritative for Trade Room).
+            try {
+              renderSimbaStatusFromWatchConditionsPayload(cachedWatchConditionsPayload);
+            } catch(e) {}
+
+            try {
+              refreshWatchConditions();
+            } catch(e) {}
 
             if (marketClosed) {
               var flokiPill = document.getElementById('floki-decision-pill');
