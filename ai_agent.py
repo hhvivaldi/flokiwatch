@@ -784,6 +784,8 @@ class AIAgent:
 
             text_out = None
             fn_calls = []
+            parts = []
+            part_types = []
             try:
                 # google-genai returns candidates[0].content.parts
                 candidates = getattr(resp, "candidates", None) or []
@@ -798,9 +800,35 @@ class AIAgent:
                         t = getattr(p, "text", None)
                         if isinstance(t, str) and t.strip():
                             text_out = (text_out or "") + t
+
+                try:
+                    for p in parts:
+                        try:
+                            if getattr(p, "function_call", None) is not None:
+                                part_types.append("function_call")
+                            elif getattr(p, "text", None) is not None:
+                                part_types.append("text")
+                            else:
+                                part_types.append(type(p).__name__)
+                        except Exception:
+                            part_types.append("unknown")
+                except Exception:
+                    part_types = []
             except Exception:
                 text_out = None
                 fn_calls = []
+                parts = []
+                part_types = []
+
+            try:
+                log.info(
+                    "GEMINI_RAW | "
+                    f"parts={len(parts)} | "
+                    f"types={part_types} | "
+                    f"text_preview={(str(text_out)[:500] if text_out is not None else '')}"
+                )
+            except Exception:
+                pass
 
             if text_out and not fn_calls:
                 return {
