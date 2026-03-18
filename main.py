@@ -223,6 +223,35 @@ class TradingBot:
             snapshot_time_iso = datetime.utcnow().isoformat()
             log.info(f"FLOKI_LOCAL | Calling local model | ts: {snapshot_time_iso}")
 
+            try:
+                import json
+
+                try:
+                    sr_preview = (agent_data.get("sr_zones") or agent_data.get("sr") or []) if isinstance(agent_data, dict) else []
+                    if isinstance(sr_preview, dict):
+                        sr_preview = sr_preview.get("zones") or sr_preview.get("nearest") or sr_preview.get("levels") or []
+                    if not isinstance(sr_preview, list):
+                        sr_preview = []
+                    log.info(f"FLOKI_SR | {json.dumps(sr_preview[:3], default=str)[:500]}")
+                except Exception:
+                    pass
+
+                try:
+                    news_preview = agent_data.get("news_data", {}) if isinstance(agent_data, dict) else {}
+                    log.info(f"FLOKI_NEWS | {json.dumps(news_preview, default=str)[:500]}")
+                except Exception:
+                    pass
+
+                try:
+                    mem_path = "data/agent_session_memory.json"
+                    with open(mem_path, "r", encoding="utf-8") as f:
+                        mem_obj = json.load(f)
+                    log.info(f"FLOKI_MEMORY | {json.dumps(mem_obj, default=str)[:500]}")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
             from shadow_model import call_local_floki_model
 
             local = call_local_floki_model(agent_data if isinstance(agent_data, dict) else {})
