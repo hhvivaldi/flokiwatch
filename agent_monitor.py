@@ -504,7 +504,10 @@ class AgentMonitor:
                 }
                 _ = df
                 _ = snapshot_time_iso
-                _ = trigger_data
+                try:
+                    self._fire_proactive_out_of_cycle("SIMBA_WATCH", dict(trigger_data))
+                except Exception as e:
+                    log.debug(f"AGENT_MONITOR | simba watch fire failed (ignored): {e}")
             except Exception as e:
                 try:
                     log.debug(f"AGENT_MONITOR | simba watch call failed (ignored): {e}")
@@ -931,7 +934,11 @@ class AgentMonitor:
             }
             _ = df
             _ = snapshot_time_iso
-            _ = trigger_data
+
+            try:
+                self._fire_proactive_out_of_cycle("SIMBA_WAKE", dict(trigger_data))
+            except Exception as e:
+                log.debug(f"AGENT_MONITOR | simba wake fire failed (ignored): {e}")
         except Exception as e:
             try:
                 log.debug(f"AGENT_MONITOR | simba wake call failed (ignored): {e}")
