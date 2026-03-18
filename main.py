@@ -2988,6 +2988,9 @@ class TradingBot:
         import safety_checks
         import risk_manager
 
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        next_path = os.path.join(base_dir, "data", "agent_next_check.json")
+
         if trigger_type == "SIMBA_WAKE":
             try:
                 now_ts = time.time()
@@ -3084,6 +3087,14 @@ class TradingBot:
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
+            pre_next_check_mtime = None
+            try:
+                if os.path.exists(next_path):
+                    pre_next_check_mtime = os.path.getmtime(next_path)
+            except Exception:
+                pre_next_check_mtime = None
+
             agent_result = loop.run_until_complete(
                 agent_decide(
                     trigger_context,
@@ -3093,6 +3104,36 @@ class TradingBot:
                 )
             )
             loop.close()
+
+            try:
+                post_next_check_mtime = None
+                try:
+                    if os.path.exists(next_path):
+                        post_next_check_mtime = os.path.getmtime(next_path)
+                except Exception:
+                    post_next_check_mtime = None
+
+                if post_next_check_mtime == pre_next_check_mtime:
+                    now_utc = datetime.utcnow()
+                    next_at = now_utc + timedelta(minutes=5)
+                    payload = {
+                        "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
+                        "requested_minutes": 5,
+                    }
+
+                    try:
+                        os.makedirs(os.path.dirname(next_path), exist_ok=True)
+                        tmp_path = next_path + ".tmp"
+                        with open(tmp_path, "w", encoding="utf-8") as f:
+                            json.dump(payload, f, ensure_ascii=False, indent=2)
+                        os.replace(tmp_path, next_path)
+                        log.info(
+                            "FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to 5 minutes"
+                        )
+                    except Exception as e:
+                        log.debug(f"FLOKI_SCHEDULE | default schedule write failed (ignored): {e}")
+            except Exception:
+                pass
 
             if agent_result.decision in ("REJECT", "DEFER_TO_BRAIN"):
                 log.info(f"PROACTIVE_H1 | Coerced invalid decision '{agent_result.decision}' -> WAIT")
