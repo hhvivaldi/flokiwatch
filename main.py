@@ -1707,7 +1707,10 @@ class TradingBot:
             # when next_check_at is due (or missing/invalid).
             # ================================================================
             try:
-                if getattr(config, "USE_AI_AGENT", False):
+                use_agent = bool(getattr(config, "USE_AI_AGENT", False))
+                log.info(f"FLOKI_SCHEDULE | Gate check | use_agent={use_agent}")
+
+                if use_agent:
                     base_dir = os.path.dirname(os.path.abspath(__file__))
                     next_path = os.path.join(base_dir, "data", "agent_next_check.json")
 
@@ -1759,6 +1762,17 @@ class TradingBot:
                     scheduled_dt = _parse_next_check(next_check_at)
                     due = (scheduled_dt is None) or (scheduled_dt <= now_utc)
 
+                    if scheduled_dt is None:
+                        log.info("FLOKI_SCHEDULE | Gate state | scheduled_dt=INVALID_OR_MISSING")
+                    else:
+                        try:
+                            mins_remaining = int(round(max(0, (scheduled_dt - now_utc).total_seconds()) / 60.0))
+                        except Exception:
+                            mins_remaining = None
+                        log.info(
+                            f"FLOKI_SCHEDULE | Gate state | scheduled_dt={scheduled_dt.isoformat(timespec='seconds')} | due={due} | mins_remaining={mins_remaining}"
+                        )
+
                     if due:
                         log.info("FLOKI_SCHEDULE | Calling Floki now (timer due)")
                         self.agent_proactive_out_of_cycle(
@@ -1777,7 +1791,7 @@ class TradingBot:
                             f"FLOKI_SCHEDULE | Next check in {sleep_minutes} minutes (agent requested — skipping Floki this cycle)"
                         )
             except Exception as e:
-                log.debug(f"FLOKI_SCHEDULE | schedule check error (ignored): {e}")
+                log.warning(f"FLOKI_SCHEDULE | schedule check error (ignored): {e}")
             
             if decision is None:
                 return
