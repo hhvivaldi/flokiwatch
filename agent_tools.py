@@ -1597,6 +1597,16 @@ class AgentTools:
                 self._log_tool("read_session_memory", start, "empty")
                 return {"empty": True}
 
+            try:
+                now = datetime.now()
+                today = now.date().isoformat()
+                if str(payload.get("session_date") or "") != today:
+                    payload["session_date"] = today
+                    payload["notes"] = []
+                    payload["last_updated"] = now.isoformat(timespec="seconds")
+            except Exception:
+                pass
+
             self._log_tool("read_session_memory", start)
             return payload
         except Exception as e:

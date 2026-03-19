@@ -54,6 +54,7 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
             except Exception:
                 pass
 
+        # Daily cutoff: if session_date != today, clear notes so stale context doesn't persist.
         if str(payload.get("session_date") or "") != today:
             try:
                 prev_date = str(payload.get("session_date") or "").strip()
