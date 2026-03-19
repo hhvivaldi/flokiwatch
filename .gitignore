@@ -38,6 +38,10 @@ data/*.csv
 data/*.txt
 data/*.json
 
+# Allow committing Sage schema/report artifacts
+!data/sage_report.schema.json
+!data/sage_report.json
+
 # ============================================================================
 # MODELS (binary files - regenerated from training scripts)
 # ============================================================================

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sage Performance Auditor Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_date",
+    "total_trades_in_db",
+    "trade_count_analyzed",
+    "period_start",
+    "period_end",
+    "population_filter",
+    "insights",
+    "recommendations",
+    "metadata"
+  ],
+  "properties": {
+    "report_date": {
+      "type": "string",
+      "description": "UTC date the report was generated for (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "total_trades_in_db": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of trades in the trades table before applying Population B filters."
+    },
+    "trade_count_analyzed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of trades analyzed after applying Population B filters."
+    },
+    "period_start": {
+      "type": "string",
+      "description": "Oldest trade open_time included in the analysis window (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "period_end": {
+      "type": "string",
+      "description": "Newest trade open_time included in the analysis window (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "population_filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "rules"],
+      "properties": {
+        "name": {"type": "string"},
+        "rules": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1
+        }
+      }
+    },
+    "insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "finding", "sample_size", "confidence_level"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "session",
+              "direction",
+              "hour",
+              "weekday",
+              "close_reason",
+              "pattern",
+              "behavioral"
+            ]
+          },
+          "finding": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sample_size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sample size for this insight (n)."
+          },
+          "confidence_level": {
+            "type": "string",
+            "enum": ["LOW_CONFIDENCE", "MEDIUM_CONFIDENCE", "HIGH_CONFIDENCE"],
+            "description": "Hard rules: n<10 => LOW; 10<=n<20 => MEDIUM; n>=20 => HIGH."
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "tokens", "latency_ms"],
+      "properties": {
+        "model": {"type": "string"},
+        "tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input", "output", "total"],
+          "properties": {
+            "input": {"type": "integer", "minimum": 0},
+            "output": {"type": "integer", "minimum": 0},
+            "total": {"type": "integer", "minimum": 0}
+          }
+        },
+        "latency_ms": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
