@@ -20,6 +20,7 @@ class AgentMonitor:
         self.session_last_trigger_date: Dict[str, str] = {}
         self._simba_template_idx: int = 0
         self._last_simba_summary_ts: float = 0.0
+        self._last_simba_eval_ts: float = 0.0
         self._simba_5m_high: Optional[float] = None
         self._simba_5m_low: Optional[float] = None
         self._simba_5m_first_price: Optional[float] = None
@@ -255,6 +256,14 @@ class AgentMonitor:
         }
 
     def _check_simba_wake_conditions(self) -> None:
+        now_ts = time.time()
+        try:
+            if (now_ts - float(self._last_simba_eval_ts or 0.0)) < 30.0:
+                return
+        except Exception:
+            pass
+        self._last_simba_eval_ts = now_ts
+
         wake_conditions = self._load_wake_conditions()
         bot = getattr(self, "bot", None)
         if bot is None:
@@ -583,7 +592,6 @@ class AgentMonitor:
             price_f = self._safe_float(scanner_data.get("current_price"))
             price_str = f"{price_f:.2f}" if isinstance(price_f, (int, float)) else "n/a"
 
-            now_ts = time.time()
             emit_summary = False
             try:
                 if decision == "WAKE" or raw_wake or in_cooldown:

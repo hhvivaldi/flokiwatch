@@ -1100,7 +1100,7 @@ class TradingBot:
                         try:
                             now_ts = time.time()
                             last_ts = self._last_agent_monitor_tick or 0
-                            if (now_ts - last_ts) >= 60:
+                            if (now_ts - last_ts) >= 30:
                                 if self._agent_monitor is None:
                                     from agent_monitor import AgentMonitor
                                     self._agent_monitor = AgentMonitor(bot=self)
