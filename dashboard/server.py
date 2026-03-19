@@ -47,7 +47,7 @@ HISTORY_DB = Path(os.environ.get("HISTORY_DB_PATH", str(APP_DIR / ".." / "data" 
 WATCH_CONDITIONS_FILE = Path(
     os.environ.get(
         "AGENT_WATCH_CONDITIONS_FILE",
-        str(APP_DIR / ".." / "data" / "agent_watch_conditions.json"),
+        str(APP_DIR / ".." / "data" / "agent_wake_conditions.json"),
     )
 ).resolve()
 OFFLINE_AFTER_SECONDS = int(os.environ.get("DASHBOARD_OFFLINE_AFTER_SECONDS", "60"))
@@ -699,13 +699,13 @@ def trade_room_api(limit: int = 50):
 def agent_watch_conditions():
     try:
         if not WATCH_CONDITIONS_FILE.exists():
-            return JSONResponse({"updated_at": None, "watch_conditions": {}})
+            return JSONResponse({"updated_at": None, "conditions": []})
         payload = _safe_json_loads(WATCH_CONDITIONS_FILE.read_text(encoding="utf-8"), default={})
         if not isinstance(payload, dict):
             payload = {}
         return JSONResponse(payload)
     except Exception:
-        return JSONResponse({"updated_at": None, "watch_conditions": {}})
+        return JSONResponse({"updated_at": None, "conditions": []})
 
 
 @app.get("/api/indicator-history")

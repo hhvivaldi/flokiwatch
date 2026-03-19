@@ -1006,23 +1006,9 @@
         function countWatchConditions(payload) {
           try {
             if (!payload || typeof payload !== 'object') return 0;
-            var wc = payload.watch_conditions;
-            if (!wc || typeof wc !== 'object') return 0;
-
-            // Accept either an array or an object map.
-            if (Array.isArray(wc)) return wc.length;
-            var keys = Object.keys(wc);
-            if (!keys.length) return 0;
-
-            // If values are arrays, count them; otherwise count keys.
-            var total = 0;
-            for (var i = 0; i < keys.length; i++) {
-              var v = wc[keys[i]];
-              if (Array.isArray(v)) total += v.length;
-              else if (v && typeof v === 'object' && Array.isArray(v.conditions)) total += v.conditions.length;
-              else total += 1;
-            }
-            return total;
+            var conds = payload.conditions;
+            if (!Array.isArray(conds)) return 0;
+            return conds.length;
           } catch (e) {
             return 0;
           }
@@ -1560,47 +1546,32 @@
                   fetchJson('/api/agent-watch-conditions').then(function(payload) {
                     try {
                       var root = payload || {};
-                      var wc = root.watch_conditions;
-                      if (!wc || typeof wc !== 'object') {
-                        wcEl.textContent = 'No active watch conditions';
-                        return;
-                      }
-
-                      var tickets = [];
-                      try { tickets = Object.keys(wc); } catch(e) { tickets = []; }
-                      if (!tickets.length) {
+                      var conds = root.conditions;
+                      if (!Array.isArray(conds) || !conds.length) {
                         wcEl.textContent = 'No active watch conditions';
                         return;
                       }
 
                       var total = 0;
                       var lines = [];
-                      for (var ti = 0; ti < tickets.length; ti++) {
-                        var ticket = tickets[ti];
-                        var block = wc[ticket] || null;
-                        var conds = null;
-                        if (Array.isArray(block)) conds = block;
-                        else if (block && typeof block === 'object' && Array.isArray(block.conditions)) conds = block.conditions;
-                        else conds = [];
 
-                        if (!conds.length) continue;
-                        total += conds.length;
-                        lines.push('TICKET ' + ticket + ' (' + String(conds.length) + '):');
-                        for (var i = 0; i < conds.length; i++) {
-                          var c = conds[i] || {};
-                          var t = (c.type || '').toString();
-                          var desc = (c.description || '').toString();
-                          var lvl = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level).toFixed(2) : null;
-                          var val = (c.value !== null && c.value !== undefined && isFinite(Number(c.value))) ? String(Number(c.value)) : null;
-                          var detail = '';
-                          if (lvl !== null) detail = 'level=' + lvl;
-                          else if (val !== null) detail = 'value=' + val;
-                          var head = t ? t : 'condition';
-                          var parts = [];
-                          if (detail) parts.push(detail);
-                          if (desc) parts.push(desc);
-                          lines.push('- ' + head + (parts.length ? ' | ' + parts.join(' | ') : ''));
-                        }
+                      total = conds.length;
+                      for (var i = 0; i < conds.length; i++) {
+                        var c = conds[i] || {};
+                        var t = (c.type || '').toString();
+                        var desc = (c.description || c.condition_description || '').toString();
+                        var lvl = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level).toFixed(2) : null;
+                        var val = (c.value !== null && c.value !== undefined && isFinite(Number(c.value))) ? String(Number(c.value)) : null;
+                        var thr = (c.threshold !== null && c.threshold !== undefined && isFinite(Number(c.threshold))) ? String(Number(c.threshold)) : null;
+                        var detail = '';
+                        if (lvl !== null) detail = 'level=' + lvl;
+                        else if (val !== null) detail = 'value=' + val;
+                        else if (thr !== null) detail = 'threshold=' + thr;
+                        var head = t ? t : 'condition';
+                        var parts = [];
+                        if (detail) parts.push(detail);
+                        if (desc) parts.push(desc);
+                        lines.push('- ' + head + (parts.length ? ' | ' + parts.join(' | ') : ''));
                       }
 
                       if (!total) {
