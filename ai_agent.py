@@ -738,6 +738,8 @@ class AIAgent:
             contents.append({"role": "user", "parts": [{"text": system_prompt}]})
         contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
 
+        had_empty_retry = False
+
         while True:
             if (time.time() - start_time) >= float(self.timeout):
                 return {
@@ -786,6 +788,14 @@ class AIAgent:
 
             resp = await loop.run_in_executor(None, _sync_call)
 
+            finish_reason = None
+            try:
+                candidates = getattr(resp, "candidates", None) or []
+                c0 = candidates[0] if candidates else None
+                finish_reason = getattr(c0, "finish_reason", None)
+            except Exception:
+                finish_reason = None
+
             try:
                 usage = getattr(resp, "usage_metadata", None)
                 if usage is not None:
@@ -833,7 +843,7 @@ class AIAgent:
                 part_types = []
 
             logger.info(
-                f"GEMINI_PARTS | types={part_types} fn_calls={len(fn_calls)} text_out={'Y' if (text_out and str(text_out).strip()) else 'N'} tool_calls={tool_calls}/{int(self.max_tool_calls)}"
+                f"GEMINI_PARTS | types={part_types} fn_calls={len(fn_calls)} text_out={'Y' if (text_out and str(text_out).strip()) else 'N'} finish_reason={finish_reason} tool_calls={tool_calls}/{int(self.max_tool_calls)}"
             )
 
             if text_out and not fn_calls:
@@ -846,6 +856,22 @@ class AIAgent:
                 }
 
             if not fn_calls:
+                try:
+                    fr_s = str(finish_reason or "").strip().upper()
+                    retryable_finish = bool(fr_s) and fr_s not in ("STOP", "MAX_TOKENS")
+                    if (not had_empty_retry) and retryable_finish:
+                        had_empty_retry = True
+                        tool_trace.append(
+                            {
+                                "name": "gemini_retry",
+                                "input": {"reason": "empty_response", "finish_reason": fr_s},
+                                "result": {"success": True, "retry": 1},
+                                "latency_ms": 0,
+                            }
+                        )
+                        continue
+                except Exception:
+                    pass
                 return {
                     "content": json.dumps(
                         {
