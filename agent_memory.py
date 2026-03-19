@@ -183,21 +183,27 @@ def write_sage_insights(insights: List[Any]) -> bool:
         except Exception:
             pass
 
-        # Combine insights into a single note
+        # Combine recommendations into a single concise note
         lines: List[str] = []
-        for it in insights if isinstance(insights, list) else []:
+        for it in recommendations if isinstance(recommendations, list) else []:
             if it is None:
                 continue
             if isinstance(it, str):
                 s = it.strip()
             elif isinstance(it, dict):
-                s = str(it.get("finding") or it.get("text") or "").strip()
+                s = str(it.get("recommendation") or it.get("text") or "").strip()
             else:
                 s = str(it).strip()
             if s:
                 lines.append(f"- {s}")
+            if len(lines) >= 5:
+                break
 
-        note_text = "SAGE DAILY AUDIT\n" + ("\n".join(lines) if lines else "- (no insights)")
+        report_date_text = str(report_date or today).strip() or today
+        note_text = (
+            f"SAGE DAILY BRIEFING ({int(trade_count)} trades, {report_date_text}):\n"
+            + ("\n".join(lines) if lines else "- (no recommendations)")
+        )
 
         payload["notes"].append(
             {"time": now.strftime("%H:%M"), "note": note_text, "source": "sage"}
