@@ -9,17 +9,20 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />
 
     <link rel="stylesheet" href="/static/style.css" />
 
     <style>
       html, body {
         font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background: #0d0d0d;
-        background-image: 
+        background-color: #080808;
+        background-image:
           radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
-          radial-gradient(circle at 80% 70%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
+          radial-gradient(circle at 80% 70%, rgba(99, 102, 241, 0.03) 0%, transparent 40%),
+          linear-gradient(rgba(16, 185, 129, 0.016) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(16, 185, 129, 0.016) 1px, transparent 1px);
+        background-size: auto, auto, 28px 28px, 28px 28px;
         background-attachment: fixed;
       }
       .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
@@ -467,24 +470,22 @@
     <!-- ═══════════════════════════════════════════════
          TOP NAV BAR (matches existing FlokiWatch nav)
     ════════════════════════════════════════════════ -->
-    <div class="bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
+    <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
       <div class="flex flex-wrap items-center justify-between text-xs gap-2">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div class="flex items-center gap-2">
-            <span class="text-gray-400">STATUS:</span>
-            <span class="text-gray-500 font-mono">TRADE ROOM VIEW</span>
-          </div>
+        <div class="flex items-center gap-2">
+          <span class="status-key">STATUS:</span>
+          <span class="font-mono text-gray-500 text-xs">TRADE ROOM VIEW</span>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-4">
           <nav class="flex gap-4 sm:gap-5 items-center">
-            <a href="/"            class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">DASHBOARD</a>
-            <a href="/history"     class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">HISTORY</a>
-            <a href="/roadmap"     class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ROADMAP</a>
-            <a href="/trade-room"  class="text-sm font-semibold text-white   hover:text-white   transition-colors duration-200">TRADE ROOM</a>
-            <a href="/about"       class="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors duration-200">ABOUT</a>
+            <a href="/"           class="site-nav-link">DASHBOARD</a>
+            <a href="/history"    class="site-nav-link hidden sm:inline">HISTORY</a>
+            <a href="/roadmap"    class="site-nav-link hidden sm:inline">ROADMAP</a>
+            <a href="/trade-room" class="site-nav-link active">TRADE ROOM</a>
+            <a href="/about"      class="site-nav-link hidden sm:inline">ABOUT</a>
           </nav>
-          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon">
-          <span class="hidden sm:inline text-white font-bold tracking-wider text-sm">FLOKIWATCH</span>
+          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon pixel-float">
+          <span class="hidden sm:inline brand-name">FLOKIWATCH</span>
         </div>
       </div>
     </div>
@@ -493,7 +494,7 @@
          PAGE HEADER STRIP
     ════════════════════════════════════════════════ -->
     <div class="page-header-strip">
-      <span class="text-xs font-bold tracking-[0.2em] text-emerald-400 uppercase">TRADE ROOM — FLOKI &amp; REX</span>
+      <span class="section-pixel-header text-emerald-400">TRADE ROOM — FLOKI &amp; REX</span>
       <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
       <span id="data-badge" class="ml-auto text-[10px] font-bold font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/20 animate-pulse">LIVE DATA</span>
     </div>
@@ -501,7 +502,7 @@
     <!-- ═══════════════════════════════════════════════
          3-COLUMN BODY
     ════════════════════════════════════════════════ -->
-    <div class="trade-room-grid">
+    <div class="trade-room-grid page-content">
 
       <!-- ══════════════════════
            LEFT — Agent Status

@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@300;400;600;700;900&family=Press+Start+2P&display=swap" rel="stylesheet" />
 
     <link rel="stylesheet" href="/static/style.css" />
 
@@ -23,36 +23,36 @@
   <body class="bg-black text-white">
 
     <!-- Header -->
-    <div class="bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
-      <div class="flex items-center justify-between text-xs">
-        <a href="/" class="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors font-black tracking-[0.2em] uppercase">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          <span>BACK TO DASHBOARD</span>
+    <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
+      <div class="flex items-center justify-between text-xs gap-3">
+        <a href="/" class="back-link flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          <span class="hidden sm:inline">BACK</span>
         </a>
         <nav class="flex gap-4 sm:gap-6 items-center">
-          <a href="/" class="text-sm font-black tracking-[0.2em] text-gray-400 hover:text-gray-200 transition-colors duration-200 uppercase">DASHBOARD</a>
-          <a href="/history" class="text-sm font-black tracking-[0.2em] text-gray-400 hover:text-gray-200 transition-colors duration-200 uppercase">HISTORY</a>
-          <a href="/roadmap" class="text-sm font-black tracking-[0.2em] text-gray-200 hover:text-white transition-colors duration-200 uppercase">ROADMAP</a>
-          <a href="/trade-room" class="text-sm font-black tracking-[0.2em] text-gray-400 hover:text-gray-200 transition-colors duration-200 uppercase">TRADE ROOM</a>
-          <a href="/about" class="text-sm font-black tracking-[0.2em] text-gray-400 hover:text-gray-200 transition-colors duration-200 uppercase">ABOUT</a>
+          <a href="/" class="site-nav-link">DASHBOARD</a>
+          <a href="/history" class="site-nav-link hidden sm:inline">HISTORY</a>
+          <a href="/roadmap" class="site-nav-link active">ROADMAP</a>
+          <a href="/trade-room" class="site-nav-link hidden md:inline">TRADE ROOM</a>
+          <a href="/about" class="site-nav-link hidden sm:inline">ABOUT</a>
         </nav>
         <div class="flex items-center gap-3">
-          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon">
-          <span class="hidden sm:inline text-white font-black tracking-[0.2em] text-sm uppercase">FLOKIWATCH</span>
+          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon pixel-float">
+          <span class="hidden sm:inline brand-name">FLOKIWATCH</span>
         </div>
       </div>
     </div>
 
     <!-- Main content -->
-    <main class="max-w-4xl mx-auto px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-16">
+    <main class="page-content max-w-4xl mx-auto px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-16">
 
       <!-- Hero -->
       <section class="flex flex-col items-center gap-4 sm:gap-6 mb-10 sm:mb-16">
         <div class="flex items-center gap-4">
           <img src="/image/flokiwatch.png" alt="FlokiWatch pixel art" class="about-pixel-img">
           <div>
-            <h1 class="text-2xl sm:text-3xl font-black tracking-[0.2em] text-cyan-400 uppercase">Roadmap</h1>
-            <div class="text-[10px] text-gray-500 font-black tracking-[0.2em] mt-1 uppercase">WHERE WE ARE &amp; WHERE WE'RE GOING</div>
+            <h1 class="page-title-pixel">Roadmap</h1>
+            <div class="section-pixel-header text-gray-500 mt-2">WHERE WE ARE &amp; WHERE WE'RE GOING</div>
           </div>
         </div>
       </section>
