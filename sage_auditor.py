@@ -143,13 +143,13 @@ def _total_population_b_closed_trades(conn: sqlite3.Connection) -> int:
 
 def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.Row]:
     q = (
-        "SELECT ticket, direction, volume, open_price, close_price, sl, tp, profit, close_reason, open_time, close_time, comment, breakeven_activated "
+        "SELECT ticket, direction, volume, open_price, close_price, sl, tp, profit, close_reason, open_time, close_time, comment, breakeven_activated, decision_source "
         "FROM trades "
         "WHERE close_time IS NOT NULL "
         "  AND profit IS NOT NULL "
         "  AND ticket >= ? "
         "  AND open_time >= ? "
-        "  AND comment LIKE 'Agent-%' "
+        "  AND (decision_source = 'agent_gemini' OR (decision_source IS NULL AND comment LIKE 'Agent-%')) "
         "ORDER BY open_time ASC"
     )
     rows = conn.execute(q, (POPULATION_B_MIN_TICKET, POPULATION_B_MIN_OPEN_TIME)).fetchall()

@@ -481,6 +481,7 @@ class TradingBot:
                         sl=0, tp=0,
                         open_time=deal['close_time'].isoformat(),
                         comment=deal.get('comment', 'recovered'),
+                        decision_source=None,
                     )
                     record_trade_close(
                         ticket=pos_id, close_price=deal['close_price'],
@@ -2024,6 +2025,7 @@ class TradingBot:
                         sl=levels.stop_loss,
                         tp=levels.take_profit_1,
                         comment=comment,
+                        decision_source="brain",
                     )
                 else:
                     log.error(f"Failed to send signal to EA")
@@ -2069,6 +2071,7 @@ class TradingBot:
                         sl=levels.stop_loss,
                         tp=levels.take_profit_1,
                         comment=comment,
+                        decision_source="brain",
                     )
                 else:
                     log.error(f"Failed to execute trade: {order_result.error_message}")
@@ -2313,6 +2316,7 @@ class TradingBot:
                         sl=sl_f,
                         tp=tp_f,
                         comment=comment,
+                        decision_source="agent_gemini",
                     )
                     return {"success": True, "ticket": 0, "reason": None, "used_ea_bridge": True}
 
@@ -2364,6 +2368,7 @@ class TradingBot:
                     sl=sl_f,
                     tp=tp_f,
                     comment=comment,
+                    decision_source="agent_gemini",
                 )
                 return {"success": True, "ticket": order_result.ticket, "reason": None, "used_ea_bridge": False}
 

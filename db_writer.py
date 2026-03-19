@@ -152,7 +152,8 @@ def init_db() -> None:
                 open_time TEXT,
                 close_time TEXT,
                 comment TEXT,
-                breakeven_activated INTEGER
+                breakeven_activated INTEGER,
+                decision_source TEXT
             )
         """)
 
@@ -162,6 +163,25 @@ def init_db() -> None:
             conn.commit()
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        # Migration: add decision_source column if missing
+        try:
+            cursor.execute("ALTER TABLE trades ADD COLUMN decision_source TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Backfill decision_source for legacy rows (safe and repeatable)
+        try:
+            cursor.execute(
+                "UPDATE trades SET decision_source = 'agent_gemini' WHERE decision_source IS NULL AND comment LIKE 'Agent-%'"
+            )
+            cursor.execute(
+                "UPDATE trades SET decision_source = 'brain' WHERE decision_source IS NULL AND comment LIKE 'Bot-%'"
+            )
+            conn.commit()
+        except Exception:
+            pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS account_snapshots (
@@ -465,14 +485,15 @@ def record_trade_open(
     tp: float,
     open_time: Optional[str] = None,
     comment: str = "",
+    decision_source: Optional[str] = None,
 ) -> None:
     """Record trade open."""
     try:
         conn = _get_connection()
         conn.execute(
             """INSERT OR IGNORE INTO trades
-               (ticket, direction, volume, open_price, sl, tp, open_time, comment)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (ticket, direction, volume, open_price, sl, tp, open_time, comment, decision_source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 ticket,
                 direction,
@@ -482,6 +503,7 @@ def record_trade_open(
                 tp,
                 open_time or datetime.now().isoformat(),
                 comment,
+                decision_source,
             ),
         )
         conn.commit()
