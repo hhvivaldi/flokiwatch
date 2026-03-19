@@ -1691,13 +1691,20 @@ class AgentTools:
 
             # Daily rollover
             if str(payload.get("session_date") or "") != today:
+                preserved_sage_notes = []
+                try:
+                    for n in payload.get("notes") or []:
+                        if isinstance(n, dict) and str(n.get("source") or "").strip().lower() == "sage":
+                            preserved_sage_notes.append(n)
+                except Exception:
+                    preserved_sage_notes = []
                 payload = {
                     "session_date": today,
                     "thesis": thesis_s,
                     "trades_today": 0,
                     "wins_today": 0,
                     "losses_today": 0,
-                    "notes": [],
+                    "notes": preserved_sage_notes,
                     "last_updated": now.isoformat(timespec="seconds"),
                 }
 

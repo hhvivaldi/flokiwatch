@@ -56,6 +56,13 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
 
         # Daily cutoff: if session_date != today, clear notes so stale context doesn't persist.
         if str(payload.get("session_date") or "") != today:
+            preserved_sage_notes = []
+            try:
+                for n in payload.get("notes") or []:
+                    if isinstance(n, dict) and str(n.get("source") or "").strip().lower() == "sage":
+                        preserved_sage_notes.append(n)
+            except Exception:
+                preserved_sage_notes = []
             try:
                 prev_date = str(payload.get("session_date") or "").strip()
                 if prev_date:
@@ -74,7 +81,7 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
                 "trades_today": 0,
                 "wins_today": 0,
                 "losses_today": 0,
-                "notes": [],
+                "notes": preserved_sage_notes,
                 "last_updated": now.isoformat(timespec="seconds"),
             }
 
