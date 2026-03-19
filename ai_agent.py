@@ -859,13 +859,18 @@ class AIAgent:
             if not fn_calls:
                 try:
                     fr_s = str(finish_reason or "").strip().upper()
+                    had_text_part = any(str(t).strip().lower() == "text" for t in (part_types or []))
+                    empty_text_part = had_text_part and not (text_out and str(text_out).strip())
                     retryable_finish = bool(fr_s) and fr_s not in ("STOP", "MAX_TOKENS")
-                    if (not had_empty_retry) and retryable_finish:
+                    if (not had_empty_retry) and (empty_text_part or retryable_finish):
                         had_empty_retry = True
                         tool_trace.append(
                             {
                                 "name": "gemini_retry",
-                                "input": {"reason": "empty_response", "finish_reason": fr_s},
+                                "input": {
+                                    "reason": "empty_text_part" if empty_text_part else "empty_response",
+                                    "finish_reason": fr_s,
+                                },
                                 "result": {"success": True, "retry": 1},
                                 "latency_ms": 0,
                             }
@@ -934,6 +939,64 @@ class AIAgent:
         formatted_data = json.dumps(data_package or {}, indent=2, default=str)
         return f"```json\n{formatted_data}\n```"
 
+    def _extract_first_json_object(self, content: str) -> Optional[str]:
+        if not isinstance(content, str):
+            return None
+
+        if "```json" in content:
+            try:
+                return content.split("```json", 1)[1].split("```", 1)[0].strip() or None
+            except Exception:
+                pass
+
+        if "```" in content:
+            try:
+                return content.split("```", 1)[1].split("```", 1)[0].strip() or None
+            except Exception:
+                pass
+
+        start = content.find("{")
+        if start == -1:
+            return None
+
+        in_string = False
+        escape = False
+        depth = 0
+        obj_start = None
+
+        for i in range(start, len(content)):
+            ch = content[i]
+
+            if in_string:
+                if escape:
+                    escape = False
+                    continue
+                if ch == "\\":
+                    escape = True
+                    continue
+                if ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+                continue
+
+            if ch == "{":
+                if depth == 0:
+                    obj_start = i
+                depth += 1
+                continue
+
+            if ch == "}":
+                if depth > 0:
+                    depth -= 1
+                    if depth == 0 and obj_start is not None:
+                        candidate = content[obj_start : i + 1].strip()
+                        return candidate or None
+
+        return None
+
     def _parse_response(self, response: Dict, latency_ms: int) -> AgentResult:
         """
         Parse Claude's response into an AgentResult.
@@ -949,19 +1012,7 @@ class AIAgent:
         
         try:
             # Extract JSON from response (may include narrative text and/or markdown code blocks)
-            json_str = None
-
-            if "```json" in content:
-                json_str = content.split("```json", 1)[1].split("```", 1)[0].strip()
-            elif "```" in content:
-                json_str = content.split("```", 1)[1].split("```", 1)[0].strip()
-            else:
-                # Fallback: find first '{' and last '}' and parse that substring.
-                # This handles mixed narrative + naked JSON.
-                start = content.find("{")
-                end = content.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    json_str = content[start : end + 1].strip()
+            json_str = self._extract_first_json_object(content)
 
             if not json_str:
                 raise json.JSONDecodeError("No JSON object found in response", content, 0)
@@ -1131,16 +1182,7 @@ async def agent_decide(
         parsed_obj = None
         try:
             content = result.raw_response or ""
-            json_str = None
-            if "```json" in content:
-                json_str = content.split("```json", 1)[1].split("```", 1)[0].strip()
-            elif "```" in content:
-                json_str = content.split("```", 1)[1].split("```", 1)[0].strip()
-            else:
-                start = content.find("{")
-                end = content.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    json_str = content[start : end + 1].strip()
+            json_str = agent._extract_first_json_object(content)
             if json_str:
                 parsed_obj = json.loads(json_str)
         except Exception:
