@@ -298,6 +298,23 @@
         color: #cbd5e1;
         box-shadow: 0 4px 15px rgba(0,0,0,0.15);
       }
+
+      .msg-content {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        line-clamp: 5;
+        -webkit-line-clamp: 5;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+        user-select: text;
+      }
+
+      .msg-content.expanded {
+        line-clamp: initial;
+        -webkit-line-clamp: initial;
+        overflow: visible;
+      }
       .bubble-floki {
         background: rgba(30, 41, 59, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.06);
@@ -919,6 +936,8 @@
             } catch (e) {}
             content = esc(content).replaceAll('\n', '<br>');
 
+            var msgId = (m.id || ('idx:' + i));
+
             html += '<div class="' + sideCls + '">' +
               '<div class="msg-avatar" aria-label="' + esc(author) + ' avatar">' +
                 '<img alt="' + esc(author) + '" src="' + esc(avatarImg) + '" />' +
@@ -928,7 +947,9 @@
                   '<span class="msg-author ' + nameCls + '">' + esc(author) + '</span>' +
                   '<span class="msg-time">' + esc(fmtTime(m.timestamp)) + '</span>' +
                 '</div>' +
-                '<div class="' + bubbleCls + '">' + content + '</div>' +
+                '<div class="' + bubbleCls + '">' +
+                  '<div class="msg-content" data-msg-id="' + esc(msgId) + '" data-expanded="0">' + content + '</div>' +
+                '</div>' +
               '</div>' +
             '</div>';
           }
@@ -939,6 +960,27 @@
           }
 
           feed.innerHTML = html;
+
+          try {
+            var nodes = feed.querySelectorAll('.msg-content[data-msg-id]');
+            nodes.forEach(function (node) {
+              if (!node || node.__boundExpand) return;
+              node.__boundExpand = true;
+              node.addEventListener('click', function () {
+                try {
+                  var cur = node.getAttribute('data-expanded') || '0';
+                  var next = (cur === '1') ? '0' : '1';
+                  node.setAttribute('data-expanded', next);
+                  if (next === '1') node.classList.add('expanded');
+                  else node.classList.remove('expanded');
+                } catch (e) {
+                  // silent
+                }
+              });
+            });
+          } catch (e) {
+            // silent
+          }
         }
 
         function setFilter(f) {
