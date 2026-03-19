@@ -123,8 +123,8 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> bool:
         return False
 
 
-def write_sage_insights(insights: List[Any]) -> bool:
-    """Write Sage insights into session memory as a single protected note.
+def write_sage_insights(recommendations: List[Any], trade_count: int, report_date: str) -> bool:
+    """Write Sage recommendations into session memory as a single protected note.
 
     Behavior (non-blocking):
     - Load data/agent_session_memory.json (create if missing)
