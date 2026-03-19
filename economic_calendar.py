@@ -379,7 +379,41 @@ def _get_reference_time(raw_data: Dict) -> datetime:
         off = int(getattr(config, "MT5_SERVER_UTC_OFFSET", 0) or 0)
     except Exception:
         off = 0
-    return datetime.utcnow() + timedelta(hours=off)
+    # Use local wall clock + offset, not utcnow().
+    # Rationale: many deployments run on a machine configured in the same timezone as the MT5 server.
+    # Using utcnow() here double-applies the offset and produces incorrect countdowns.
+    return datetime.now() + timedelta(hours=off)
+
+
+def _get_server_utc_offset_hours(raw_data: Dict) -> int:
+    """Best-effort server UTC offset for debug/visibility.
+
+    If MT5 provides `server_time` and `exported_at`, derive the offset.
+    Otherwise fall back to config.MT5_SERVER_UTC_OFFSET.
+    """
+    try:
+        if not isinstance(raw_data, dict):
+            raw_data = {}
+
+        st = raw_data.get("server_time", "")
+        ea = raw_data.get("exported_at", "")
+        if st and ea:
+            st_dt = _parse_event_time(str(st))
+            ea_dt = _parse_event_time(str(ea))
+            if st_dt is not None and ea_dt is not None:
+                # exported_at is written by Python as UTC, but may be provided by other sources.
+                # Treat it as UTC if it looks like UTC (best-effort).
+                utc_dt = ea_dt
+                # Derive hour offset between server wall clock and exported_at.
+                diff = st_dt - utc_dt
+                return int(round(diff.total_seconds() / 3600.0))
+    except Exception:
+        pass
+
+    try:
+        return int(getattr(config, "MT5_SERVER_UTC_OFFSET", 0) or 0)
+    except Exception:
+        return 0
 
 
 def _is_relevant_event(event_name: str) -> bool:
@@ -561,6 +595,7 @@ def get_calendar_data() -> Dict:
         source = raw_data.get("source", "unknown")
         
         reference_time = _get_reference_time(raw_data)
+        server_utc_offset_hours = _get_server_utc_offset_hours(raw_data)
         try:
             log.debug(f"Calendar reference_time (server): {reference_time}")
         except Exception:
@@ -669,6 +704,7 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
         events = raw_data.get("events", [])
         
         reference_time = _get_reference_time(raw_data)
+        server_utc_offset_hours = _get_server_utc_offset_hours(raw_data)
         
         upcoming = []
         for event in events:
@@ -706,6 +742,8 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                 "time_until": time_until,
                 "is_past": is_past,
                 "minutes_until": round(minutes_until, 1),
+                "reference_time": reference_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "server_utc_offset_hours": server_utc_offset_hours,
             })
 
         # Safety: ensure we don't accidentally drop near-term HIGH events due to feed quirks.
@@ -738,13 +776,31 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                             "time_until": time_until,
                             "is_past": is_past,
                             "minutes_until": round(minutes_until, 1),
+                            "reference_time": reference_time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "server_utc_offset_hours": server_utc_offset_hours,
                         }
                     )
         except Exception:
             pass
         
         # Sort: future first (soonest first), then past (most recent first)
-        upcoming.sort(key=lambda e: (e["is_past"], e["minutes_until"] if not e["is_past"] else abs(e["minutes_until"])))
+        # NOTE: `time_until` is a human string. Always sort using numeric minutes.
+        def _sort_key(e: Dict) -> Tuple[int, float]:
+            try:
+                is_past = bool(e.get("is_past"))
+                minutes = float(e.get("minutes_until"))
+            except Exception:
+                is_past = False
+                minutes = 1e9
+
+            # future: small positive first
+            if not is_past:
+                return (0, minutes)
+
+            # past: most recent first => minutes is negative, so higher (closer to 0) should come first
+            return (1, abs(minutes))
+
+        upcoming.sort(key=_sort_key)
         
         return upcoming[:max_events]
         
