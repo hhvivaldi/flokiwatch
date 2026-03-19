@@ -85,9 +85,7 @@ class TradingLogger:
     
     def decision(self, decision: str, confidence: str, score: float):
         """Decision log"""
-        self.logger.info(
-            f"DECISION | {decision} (confidence: {confidence}) Score:{score:.1f}"
-        )
+        return
     
     def order(self, action: str, ticket: int, lot: float, price: float, sl: float, tp: float):
         """Order log"""
