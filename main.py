@@ -1048,7 +1048,7 @@ class TradingBot:
                             mm = max(0, min(59, mm))
 
                             today = now_utc.date().isoformat()
-                            due = (now_utc.hour == hh and now_utc.minute == mm)
+                            due = (now_utc.hour, now_utc.minute) >= (hh, mm)
                             not_run_today = (getattr(self, "_sage_last_run_date", None) != today)
 
                             if due and not_run_today:
