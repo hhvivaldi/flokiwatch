@@ -671,12 +671,13 @@ def alert_sl_hit(ticket: int, loss: float, loss_percent: float):
     )
 
 
-def alert_safety_block(decision: str, score: float, reason: str):
+def alert_safety_block(decision: str, score: float, reason: str, agent_decision: Optional[str] = None):
     """Alert: Trade blocked by safety check"""
+    effective_decision = agent_decision or decision
     discord_router.send_embed(
         CHANNEL_BRAIN,
         title="⛔ Signal Blocked",
-        description=f"Trade {decision} (Score: {score:.1f}) was blocked.",
+        description=f"Trade {effective_decision} (Score: {score:.1f}) was blocked.",
         color=0xffff00,
         fields=[
             {"name": "Reason", "value": reason, "inline": False},

@@ -689,7 +689,7 @@ function render(state) {
   }
 
   const la = state.last_analysis || {};
-  const hasRealAnalysis = la.decision != null && la.final_score != null;
+  const hasRealAnalysis = la.agent_decision != null && la.final_score != null;
   const marketClosed = state.market?.is_open === false;
 
   const card = el("goldcon");
@@ -723,9 +723,9 @@ function render(state) {
       }
     }
   } else {
-    const decision = la.decision || "HOLD";
+    const decision = la.agent_decision || "HOLD";
     const score = la.final_score;
-    const conf = la.confidence;
+    const conf = la.agent_confidence;
     const cls = badgeClassByDecision(decision);
     
     // Apply new mockup styling classes to the card
@@ -734,7 +734,7 @@ function render(state) {
     el("goldcon-decision").textContent = decision;
     el("goldcon-decision").className = `text-4xl sm:text-5xl md:text-6xl font-bold leading-none ${cls.text} text-shadow-soft transition-colors duration-300`;
     el("goldcon-score").textContent = fmtNum(score, 1);
-    el("goldcon-conf").textContent = `${fmtNum(conf, 1)}%`;
+    el("goldcon-conf").textContent = conf != null ? `${fmtNum(conf, 1)}%` : "—";
     const scenarioDisplay = {
       "momentum_forte_confirmado": "Strong confirmed momentum",
       "rsi_extremo_com_momentum": "Extreme RSI with momentum",

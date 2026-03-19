@@ -1809,10 +1809,20 @@ class TradingBot:
                 hold_forced = bool(last_analysis.get("hold_forced"))
                 original_decision = last_analysis.get("original_decision")
                 hold_reason = last_analysis.get("hold_reason")
+                try:
+                    pa = last_analysis.get("proactive_analysis") if isinstance(last_analysis.get("proactive_analysis"), dict) else None
+                    if pa:
+                        pa_dec = pa.get("decision")
+                        pa_conf = pa.get("confidence")
+                        if pa_dec is not None:
+                            last_analysis["agent_decision"] = pa_dec
+                        if pa_conf is not None:
+                            last_analysis["agent_confidence"] = pa_conf
+                except Exception:
+                    pass
             
             # Analysis log
             log.analysis(tech_score, news_score, ml_score, final_score)
-            log.decision(decision, confidence, final_score)
             
             if config.USE_CENTRAL_BRAIN:
                 self._check_heartbeat()
@@ -1823,7 +1833,7 @@ class TradingBot:
                 return
             
             # Signal detected!
-            log.info(f"   SIGNAL: {decision} ({direction})")
+            
 
             # alert_brain_decision disabled in Phase 0 (dashboard shows Brain decision)
 
@@ -1839,7 +1849,6 @@ class TradingBot:
             # alert_signal_detected disabled in Phase 0 (Brain no longer executes trades)
             
             # NOTE: Safety checks and execution must be reconnected under Agent execution (Phase 3)
-            log.info("Scanner execution disabled — Agent is sole decision maker")
             return
 
             
