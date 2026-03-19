@@ -789,6 +789,15 @@ class AIAgent:
 
             resp = await loop.run_in_executor(None, _sync_call)
 
+            try:
+                usage = getattr(resp, "usage_metadata", None)
+                if usage is not None:
+                    logger.info(
+                        f"GEMINI_USAGE | total_tokens={getattr(usage, 'total_token_count', 0)} cached_tokens={getattr(usage, 'cached_content_token_count', 0)} prompt_tokens={getattr(usage, 'prompt_token_count', 0)}"
+                    )
+            except Exception:
+                pass
+
             finish_reason = None
             try:
                 candidates = getattr(resp, "candidates", None) or []
