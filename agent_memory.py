@@ -21,6 +21,7 @@ from dataclasses import dataclass, field, asdict
 from logger import log
 
 MEMORY_FILE = "data/agent_memory.json"
+SESSION_MEMORY_FILE = "data/agent_session_memory.json"
 SCHEMA_VERSION = 1
 MAX_HISTORY_ENTRIES = 20
 
@@ -119,6 +120,94 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> bool:
         return True
     except Exception as e:
         log.warning(f"agent_memory: write failed: {e}")
+        return False
+
+
+def write_sage_insights(insights: List[Any]) -> bool:
+    """Write Sage insights into session memory as a single protected note.
+
+    Behavior (non-blocking):
+    - Load data/agent_session_memory.json (create if missing)
+    - Remove existing notes with source == "sage"
+    - Append ONE combined note with {time, note, source:"sage"}
+    - Write back atomically
+
+    Returns True on success, False on failure. Never raises.
+    """
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        mem_path = os.path.join(data_dir, os.path.basename(SESSION_MEMORY_FILE))
+        os.makedirs(data_dir, exist_ok=True)
+
+        now = datetime.now()
+        today = now.date().isoformat()
+
+        payload: Dict[str, Any] = {
+            "session_date": today,
+            "thesis": "",
+            "trades_today": 0,
+            "wins_today": 0,
+            "losses_today": 0,
+            "notes": [],
+            "last_updated": now.isoformat(timespec="seconds"),
+        }
+
+        if os.path.exists(mem_path):
+            try:
+                with open(mem_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    payload.update(existing)
+            except Exception:
+                pass
+
+        if str(payload.get("session_date") or "") != today:
+            payload["session_date"] = today
+            payload["notes"] = []
+
+        if not isinstance(payload.get("notes"), list):
+            payload["notes"] = []
+
+        # Remove prior Sage notes
+        try:
+            cleaned = []
+            for n in payload.get("notes") or []:
+                if not isinstance(n, dict):
+                    cleaned.append(n)
+                    continue
+                if str(n.get("source") or "").strip().lower() == "sage":
+                    continue
+                cleaned.append(n)
+            payload["notes"] = cleaned
+        except Exception:
+            pass
+
+        # Combine insights into a single note
+        lines: List[str] = []
+        for it in insights if isinstance(insights, list) else []:
+            if it is None:
+                continue
+            if isinstance(it, str):
+                s = it.strip()
+            elif isinstance(it, dict):
+                s = str(it.get("finding") or it.get("text") or "").strip()
+            else:
+                s = str(it).strip()
+            if s:
+                lines.append(f"- {s}")
+
+        note_text = "SAGE DAILY AUDIT\n" + ("\n".join(lines) if lines else "- (no insights)")
+
+        payload["notes"].append(
+            {"time": now.strftime("%H:%M"), "note": note_text, "source": "sage"}
+        )
+
+        payload["last_updated"] = now.isoformat(timespec="seconds")
+
+        return _atomic_write_json(mem_path, payload)
+    except Exception as e:
+        log.warning(f"agent_memory: failed to write sage insights: {e}")
         return False
 
 
