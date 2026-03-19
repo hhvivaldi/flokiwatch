@@ -134,6 +134,9 @@ class TradingBot:
         self._last_deal_resolver_launch_ts_by_ticket = {}
         self._last_scenario_description = None
         self._last_gpt_validation = None
+
+        # Sage daily auditor schedule guard (UTC date string)
+        self._sage_last_run_date = None
         
         # Cycle Memory (cycle memory for temporal context)
         from cycle_memory import CycleMemory
@@ -1028,6 +1031,39 @@ class TradingBot:
             try:
                 # Daily reset
                 self._check_daily_reset()
+
+                # Sage daily auditor (non-blocking, UTC schedule, skip weekends)
+                try:
+                    use_sage = bool(getattr(config, "USE_SAGE_AUDITOR", False))
+                    run_time = str(getattr(config, "SAGE_RUN_TIME_UTC", "21:00") or "21:00").strip()
+                    if use_sage and run_time:
+                        now_utc = datetime.utcnow()
+                        # Skip weekends
+                        if now_utc.weekday() < 5:
+                            parts = run_time.split(":")
+                            hh = int(parts[0]) if len(parts) >= 1 else 21
+                            mm = int(parts[1]) if len(parts) >= 2 else 0
+                            hh = max(0, min(23, hh))
+                            mm = max(0, min(59, mm))
+
+                            today = now_utc.date().isoformat()
+                            due = (now_utc.hour == hh and now_utc.minute == mm)
+                            not_run_today = (getattr(self, "_sage_last_run_date", None) != today)
+
+                            if due and not_run_today:
+                                setattr(self, "_sage_last_run_date", today)
+
+                                def _run_sage_safe() -> None:
+                                    try:
+                                        from sage_auditor import run_sage_auditor
+
+                                        run_sage_auditor()
+                                    except Exception as e_sage:
+                                        log.warning(f"SAGE | scheduler error (ignored): {e_sage}")
+
+                                threading.Thread(target=_run_sage_safe, daemon=True).start()
+                except Exception as e:
+                    log.debug(f"SAGE | schedule check error (ignored): {e}")
                 
                 # Check if market is open
                 market_open, market_reason, next_open = is_market_open()

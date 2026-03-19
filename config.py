@@ -372,6 +372,12 @@ AI_AGENT_MAX_TOOL_CALLS = 25              # Max tool calls per decision (investi
 FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "gemini-3-flash-preview")
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
+# ============================================================================
+# SAGE PERFORMANCE AUDITOR (daily)
+# ============================================================================
+USE_SAGE_AUDITOR = True
+SAGE_RUN_TIME_UTC = "21:00"
+
 # NOTE: FLOKI_CALL_INTERVAL controls the Agent's preferred scheduling cadence,
 # but the main loop analysis cadence remains governed by ANALYSIS_INTERVAL_SECONDS.
 
