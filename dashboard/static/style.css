@@ -1216,12 +1216,46 @@ body::after {
   .site-nav-link {
     font-size: 6px !important;
     letter-spacing: 0.06em;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .brand-name {
     font-size: 8px !important;
   }
   .page-title-pixel {
     font-size: 11px;
+  }
+
+  /* Nav: all links always visible, scrolls horizontally if needed */
+  .site-header nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .site-header nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Header right group: don't overflow viewport */
+  .site-header .flex.items-center.gap-4,
+  .site-header .flex.items-center.gap-2 {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Dashboard account cards: prevent overflow on 2-col grid */
+  .account-card p,
+  .account-card div {
+    overflow-wrap: break-word;
+    word-break: break-all;
+  }
+
+  /* History tables: ensure overflow-x scroll wrapper works */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }
 
