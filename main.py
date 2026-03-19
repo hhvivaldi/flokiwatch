@@ -2756,7 +2756,23 @@ class TradingBot:
                         payload["notes"] = []
                     if msg:
                         payload["notes"].append({"time": now.strftime("%H:%M"), "note": msg})
-                        payload["notes"] = payload["notes"][-10:]
+
+                        # Keep max 20 notes, protect Sage notes from truncation.
+                        # Strategy: keep all notes where source == 'sage', truncate only non-sage notes to last 19.
+                        try:
+                            all_notes = payload.get("notes") or []
+                            sage_notes = []
+                            normal_notes = []
+                            for n in all_notes:
+                                if isinstance(n, dict) and str(n.get("source") or "").strip().lower() == "sage":
+                                    sage_notes.append(n)
+                                else:
+                                    normal_notes.append(n)
+                            normal_notes = normal_notes[-19:]
+                            payload["notes"] = normal_notes + sage_notes
+                            payload["notes"] = payload["notes"][-20:]
+                        except Exception:
+                            payload["notes"] = payload["notes"][-20:]
                     payload["last_updated"] = now.isoformat(timespec="seconds")
 
                     with open(mem_path, "w", encoding="utf-8") as f:
