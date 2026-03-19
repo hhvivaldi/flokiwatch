@@ -1552,35 +1552,17 @@
                         return;
                       }
 
-                      var total = 0;
                       var lines = [];
-
-                      total = conds.length;
                       for (var i = 0; i < conds.length; i++) {
                         var c = conds[i] || {};
                         var t = (c.type || '').toString();
-                        var desc = (c.description || c.condition_description || '').toString();
-                        var lvl = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level).toFixed(2) : null;
-                        var val = (c.value !== null && c.value !== undefined && isFinite(Number(c.value))) ? String(Number(c.value)) : null;
-                        var thr = (c.threshold !== null && c.threshold !== undefined && isFinite(Number(c.threshold))) ? String(Number(c.threshold)) : null;
-                        var detail = '';
-                        if (lvl !== null) detail = 'level=' + lvl;
-                        else if (val !== null) detail = 'value=' + val;
-                        else if (thr !== null) detail = 'threshold=' + thr;
+                        var level = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level) : null;
+                        var levelText = (level === null) ? '—' : String(level.toFixed(1));
                         var head = t ? t : 'condition';
-                        var parts = [];
-                        if (detail) parts.push(detail);
-                        if (desc) parts.push(desc);
-                        lines.push('- ' + head + (parts.length ? ' | ' + parts.join(' | ') : ''));
+                        lines.push(head + ': ' + levelText);
                       }
 
-                      if (!total) {
-                        wcEl.textContent = 'No active watch conditions';
-                        return;
-                      }
-
-                      lines.unshift(String(total) + ' active conditions');
-                      wcEl.textContent = lines.join('\n');
+                      wcEl.textContent = lines.length ? lines.join('\n') : 'No active watch conditions';
                     } catch(e) {
                       wcEl.textContent = 'No active watch conditions';
                     }
