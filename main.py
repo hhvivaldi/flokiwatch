@@ -4524,6 +4524,15 @@ class TradingBot:
                         evt["name"] = _s(evt["name"])
             except Exception:
                 upcoming = []
+
+            market_watch_time = ""
+            try:
+                if upcoming:
+                    rt = upcoming[0].get("reference_time")
+                    if isinstance(rt, str) and len(rt) >= 16:
+                        market_watch_time = rt[11:16]
+            except Exception:
+                market_watch_time = ""
             
             # Override phase_description when NORMAL but upcoming events exist
             phase_desc = cal.get("phase_description", "")
@@ -4541,6 +4550,7 @@ class TradingBot:
                 "closest_event": _s(closest_event.get("name", "")) if isinstance(closest_event, dict) else "",
                 "phase_description": _s(phase_desc),
                 "upcoming_events": upcoming,
+                "market_watch_time": market_watch_time,
             }
 
             # GPT Validator

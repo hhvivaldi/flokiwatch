@@ -1088,6 +1088,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
 
   // Calendar
   const calEl = el("intel-calendar");
+  const calClockEl = el("calendar-market-watch");
   const cal = feed.calendar;
   if (cal && cal.phase) {
     const phaseColors = {
@@ -1099,6 +1100,19 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const phaseColor = phaseColors[cal.phase] || "text-gray-400";
     const biasIcon = cal.bias === "BULLISH" ? "&#9650;" : (cal.bias === "BEARISH" ? "&#9660;" : "&#9679;");
     const biasColor = cal.bias === "BULLISH" ? "text-green-400" : (cal.bias === "BEARISH" ? "text-red-400" : "text-gray-500");
+
+    try {
+      if (calClockEl) {
+        let hhmm = cal.market_watch_time || "";
+        if (!hhmm) {
+          const u0 = (cal.upcoming_events && cal.upcoming_events.length) ? cal.upcoming_events[0] : null;
+          const rt = u0 ? u0.reference_time : "";
+          if (typeof rt === "string" && rt.length >= 16) hhmm = rt.slice(11, 16);
+        }
+        calClockEl.textContent = "Market Watch: " + (hhmm || "—");
+      }
+    } catch (e) {}
+
     let calHtml = `
       <div class="flex items-center gap-2">
         <span class="${phaseColor} font-bold">${cal.phase.toUpperCase().replace("_", " ")}</span>
@@ -1135,6 +1149,9 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     calEl.innerHTML = calHtml;
   } else {
     calEl.innerHTML = `<span class="text-gray-600">No calendar data</span>`;
+    try {
+      if (calClockEl) calClockEl.textContent = "Market Watch: —";
+    } catch (e) {}
   }
 
   // S/R Zones
