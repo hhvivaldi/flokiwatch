@@ -378,6 +378,9 @@ FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 USE_SAGE_AUDITOR = True
 SAGE_RUN_TIME_UTC = "21:00"
 
+# Dedicated API key for Sage cost isolation (fallback to GEMINI_API_KEY in sage_auditor.py)
+SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
+
 # NOTE: FLOKI_CALL_INTERVAL controls the Agent's preferred scheduling cadence,
 # but the main loop analysis cadence remains governed by ANALYSIS_INTERVAL_SECONDS.
 

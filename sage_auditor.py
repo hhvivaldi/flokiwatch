@@ -227,9 +227,13 @@ async def _call_gemini_for_patterns(
     start = time.time()
     meta: Dict[str, Any] = {"model": getattr(config, "FLOKI_MODEL", ""), "tokens": {"input": 0, "output": 0, "total": 0}, "latency_ms": 0}
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    sage_api_key = str(getattr(config, "SAGE_API_KEY", "") or os.environ.get("SAGE_API_KEY", "") or "").strip()
+    shared_api_key = str(os.environ.get("GEMINI_API_KEY", "") or "").strip()
+    api_key = sage_api_key or shared_api_key
     if not api_key:
         return [], [], meta
+    if not sage_api_key and shared_api_key:
+        log.warning("SAGE | WARNING | Using shared GEMINI_API_KEY — set SAGE_API_KEY for independent cost tracking")
 
     try:
         from google import genai
