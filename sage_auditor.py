@@ -125,6 +125,22 @@ def _total_trades_in_db(conn: sqlite3.Connection) -> int:
     return _safe_int(row["c"] if row else 0, 0)
 
 
+def _total_population_b_closed_trades(conn: sqlite3.Connection) -> int:
+    try:
+        q = (
+            "SELECT COUNT(*) AS c "
+            "FROM trades "
+            "WHERE close_time IS NOT NULL "
+            "  AND profit IS NOT NULL "
+            "  AND ticket >= ? "
+            "  AND open_time >= ?"
+        )
+        row = conn.execute(q, (POPULATION_B_MIN_TICKET, POPULATION_B_MIN_OPEN_TIME)).fetchone()
+        return _safe_int(row["c"] if row else 0, 0)
+    except Exception:
+        return 0
+
+
 def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.Row]:
     q = (
         "SELECT ticket, direction, volume, open_price, close_price, sl, tp, profit, close_reason, open_time, close_time, comment, breakeven_activated "
@@ -133,6 +149,7 @@ def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.
         "  AND profit IS NOT NULL "
         "  AND ticket >= ? "
         "  AND open_time >= ? "
+        "  AND comment LIKE 'Agent-%' "
         "ORDER BY open_time ASC"
     )
     rows = conn.execute(q, (POPULATION_B_MIN_TICKET, POPULATION_B_MIN_OPEN_TIME)).fetchall()
@@ -489,12 +506,15 @@ def run_sage_auditor() -> SageRunResult:
         conn = _get_connection()
         try:
             total_trades = _total_trades_in_db(conn)
+            total_population = _total_population_b_closed_trades(conn)
             trades = _query_population_b_closed_trades(conn)
         finally:
             try:
                 conn.close()
             except Exception:
                 pass
+
+        log.info(f"SAGE | Population: Agent-only | trades={len(trades)} (filtered from {total_population} total)")
 
         period_start, period_end = _min_max_open_dates(trades)
 
