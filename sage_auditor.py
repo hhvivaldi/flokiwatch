@@ -33,6 +33,77 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_str(v: Any) -> str:
+    try:
+        return str(v or "")
+    except Exception:
+        return ""
+
+
+def _parse_iso8601_to_utc(s: str) -> Optional[datetime]:
+    try:
+        t = (s or "").strip()
+        if not t:
+            return None
+        t = t.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(t)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _duration_minutes(open_time: str, close_time: str) -> Optional[float]:
+    try:
+        ot = _parse_iso8601_to_utc(open_time)
+        ct = _parse_iso8601_to_utc(close_time)
+        if ot is None or ct is None:
+            return None
+        return max(0.0, (ct - ot).total_seconds() / 60.0)
+    except Exception:
+        return None
+
+
+def _weekday_hour(open_time: str) -> Tuple[Optional[int], Optional[int]]:
+    try:
+        ot = _parse_iso8601_to_utc(open_time)
+        if ot is None:
+            return None, None
+        return int(ot.weekday()), int(ot.hour)
+    except Exception:
+        return None, None
+
+
+def _price_delta_pips(direction: str, open_price: Any, close_price: Any) -> Optional[float]:
+    try:
+        op = float(open_price)
+        cp = float(close_price)
+        d = (cp - op) if str(direction or "").upper().strip() == "BUY" else (op - cp)
+        return d * 10.0
+    except Exception:
+        return None
+
+
+def _risk_reward_fields(open_price: Any, sl: Any, tp: Any) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    try:
+        if open_price is None or sl is None or tp is None:
+            return None, None, None
+        op = float(open_price)
+        sl_f = float(sl)
+        tp_f = float(tp)
+        if sl_f == 0.0 or tp_f == 0.0:
+            return None, None, None
+        risk_to_sl = abs(op - sl_f)
+        reward_to_tp = abs(tp_f - op)
+        if risk_to_sl <= 0:
+            return None, None, None
+        rr_planned = reward_to_tp / risk_to_sl
+        return rr_planned, risk_to_sl, reward_to_tp
+    except Exception:
+        return None, None, None
+
+
 def _confidence_level(sample_size: int) -> str:
     n = _safe_int(sample_size, 0)
     if n < 10:
@@ -56,7 +127,7 @@ def _total_trades_in_db(conn: sqlite3.Connection) -> int:
 
 def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.Row]:
     q = (
-        "SELECT ticket, direction, profit, close_reason, open_time, close_time "
+        "SELECT ticket, direction, volume, open_price, close_price, sl, tp, profit, close_reason, open_time, close_time, comment, breakeven_activated "
         "FROM trades "
         "WHERE close_time IS NOT NULL "
         "  AND profit IS NOT NULL "
@@ -243,13 +314,30 @@ async def _call_gemini_for_patterns(
     # Build compact trade rows
     rows = []
     for r in trades[-120:]:
+        rr_planned, risk_to_sl, reward_to_tp = _risk_reward_fields(r["open_price"], r["sl"], r["tp"])
+        weekday_i, hour_i = _weekday_hour(_safe_str(r["open_time"]))
         rows.append(
             {
                 "ticket": _safe_int(r["ticket"], 0),
-                "direction": str(r["direction"] or ""),
+                "direction": _safe_str(r["direction"]),
+                "volume": _safe_float(r["volume"], 0.0),
+                "open_price": _safe_float(r["open_price"], 0.0),
+                "close_price": _safe_float(r["close_price"], 0.0),
+                "sl": _safe_float(r["sl"], 0.0),
+                "tp": _safe_float(r["tp"], 0.0),
                 "profit": _safe_float(r["profit"], 0.0),
-                "close_reason": str(r["close_reason"] or ""),
-                "open_time": str(r["open_time"] or ""),
+                "close_reason": _safe_str(r["close_reason"]),
+                "open_time": _safe_str(r["open_time"]),
+                "close_time": _safe_str(r["close_time"]),
+                "comment": _safe_str(r["comment"]),
+                "breakeven_activated": _safe_int(r["breakeven_activated"], 0),
+                "duration_minutes": _duration_minutes(_safe_str(r["open_time"]), _safe_str(r["close_time"])),
+                "pips": _price_delta_pips(_safe_str(r["direction"]), r["open_price"], r["close_price"]),
+                "rr_planned": rr_planned,
+                "risk_to_sl": risk_to_sl,
+                "reward_to_tp": reward_to_tp,
+                "weekday": weekday_i,
+                "hour": hour_i,
             }
         )
 
@@ -265,12 +353,41 @@ async def _call_gemini_for_patterns(
 
     system = (
         "You are Sage, a read-only performance auditor for an XAUUSD trading bot. "
-        "You must analyze only the provided closed trade data. "
-        "For EVERY insight you report, you MUST report sample size as an integer field sample_size (n). "
+        "Your job is to discover actionable performance patterns in CLOSED trades and to identify: "
+        "1) Edge strength vs edge decay over time "
+        "2) Behavioral / execution biases (overtrading, revenge trading after losses, taking profits too early, letting losses run) "
+        "3) Cross-variable correlations (e.g., session × direction × weekday combinations) "
+        "4) Sequence effects (what tends to happen after 1–3 consecutive losses or wins) "
+        "5) Exit quality (breakeven activation vs SL/TP outcomes if the data supports it) "
+        "6) Position sizing anomalies (volume changes after wins/losses). "
+        "You must base conclusions ONLY on the provided closed trade sample. Do not invent fields or infer anything not supported by data. "
+        "Analysis requirements: Prefer patterns that are stable and evidence-backed. "
+        "Compare at least one recent slice vs overall (e.g., last 10–20 trades vs full sample) to detect edge decay or regime change. "
+        "Look for interactions, not only single-variable statistics (example: 'NewYork + BUY performs well, but only Mon–Thu; Fridays underperform.'). "
+        "Check post-loss behavior: does volume increase, does holding time change, does win rate drop after losing streaks? "
+        "Evaluate trade duration effects using open_time and close_time. "
+        "If SL/TP exist, comment on planned vs realized behavior: how often trades close via SL vs TP vs other reasons; whether outcomes cluster when SL/TP are tight/wide. "
+        "If breakeven_activated exists, evaluate whether breakeven activation correlates with better outcomes or premature exits. "
+        "Hard rules: For EVERY insight you report, include sample_size as an integer field sample_size (n). "
         "Confidence must follow HARD RULES: n<10 => LOW_CONFIDENCE, 10<=n<20 => MEDIUM_CONFIDENCE, n>=20 => HIGH_CONFIDENCE. "
         "Any LOW_CONFIDENCE insight is informational only and must not be framed as a decision rule. "
-        "Return JSON ONLY with keys: insights (array) and recommendations (array)."
+        "Do not recommend changes that affect trade decisions unless you can cite the supporting pattern and sample size. "
+        "Write recommendations as direct operational rules that another AI trading agent can follow. Be specific and actionable. "
+        "Example: 'Avoid BUY during London session on Fridays' — not 'Consider implementing a risk reduction protocol.' "
+        "Output must be valid JSON only. "
+        "Output format: Return JSON ONLY with keys: insights (array) and recommendations (array)."
     )
+
+    wins = sum(1 for r in rows if isinstance(r, dict) and _safe_float(r.get("profit"), 0.0) > 0)
+    losses = sum(1 for r in rows if isinstance(r, dict) and _safe_float(r.get("profit"), 0.0) < 0)
+    breakevens = max(0, len(rows) - wins - losses)
+    close_reason_counts: Dict[str, int] = {}
+    for rr in rows:
+        try:
+            cr = str((rr or {}).get("close_reason") or "").strip() or "UNKNOWN"
+            close_reason_counts[cr] = close_reason_counts.get(cr, 0) + 1
+        except Exception:
+            pass
 
     user = {
         "population_filter": {
@@ -280,6 +397,14 @@ async def _call_gemini_for_patterns(
         },
         "allowed_categories": allowed_categories,
         "existing_insights": existing_insights,
+        "summary": {
+            "trade_count": int(len(rows)),
+            "wins": int(wins),
+            "losses": int(losses),
+            "breakevens": int(breakevens),
+            "close_reasons": close_reason_counts,
+            "recent_slice_hint": {"last_n": 20},
+        },
         "trades_sample": rows,
     }
 
@@ -350,7 +475,7 @@ async def _call_gemini_for_patterns(
             }
         )
 
-    clean_recs = [str(r).strip() for r in out_recs if str(r).strip()][:10]
+    clean_recs = [str(r).strip() for r in out_recs if str(r).strip()][:5]
 
     return clean_insights, clean_recs, meta
 
