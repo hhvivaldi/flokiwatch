@@ -1829,7 +1829,6 @@ class TradingBot:
 
             # Check if actionable signal
             if direction is None:
-                log.info(f"   Decision: {decision} - Waiting...")
                 return
             
             # Signal detected!
@@ -3596,8 +3595,6 @@ class TradingBot:
         
         # Detailed log
         log.info(f"   📊 Scenario: {brain_result.scenario_description}")
-        log.info(f"   📊 Score: {brain_result.final_score:.1f} | Confidence: {brain_result.confidence:.1f} ({brain_result.confidence_level})")
-        log.info(f"   📊 Decision: {brain_result.decision}")
 
         try:
             if brain_result.scenario == "ml_vs_tech_conflito":
