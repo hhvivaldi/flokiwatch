@@ -84,15 +84,37 @@ MAX_POSITION_MIN_PROFIT_PIPS = 5  # Minimum profit to keep position
 # Maximum drawdown per position
 MAX_POSITION_DRAWDOWN_PIPS = 1000  # Emergency safety net: only triggers if broker SL fails (max SL ~300 pips)
 
+# Position management mode
+FLOKI_MANAGES_POSITION = True   # True = Floki actively manages open trades, EA acts as wide safety net
+
 # Trailing Stop (2 phases) — fixed values as fallback
 BREAKEVEN_TRIGGER_PIPS = 100    # Phase 1: move SL to entry after +100 pips (fallback)
 TRAILING_TRIGGER_PIPS = 150     # Phase 2: activate trailing after +150 pips (fallback)
 TRAILING_DISTANCE_PIPS = 100    # Trailing: SL stays 100 pips behind maximum (fallback)
 
+# EA safety net parameters — current/tight behavior
+EA_TIGHT_BREAKEVEN_TRIGGER_PIPS = BREAKEVEN_TRIGGER_PIPS
+EA_TIGHT_TRAILING_TRIGGER_PIPS = TRAILING_TRIGGER_PIPS
+EA_TIGHT_TRAILING_DISTANCE_PIPS = TRAILING_DISTANCE_PIPS
+EA_TIGHT_MAX_DRAWDOWN_PIPS = MAX_POSITION_DRAWDOWN_PIPS
+
 # Dynamic Trailing Stop (ATR-based — preferred)
 BREAKEVEN_ATR_MULT = 0.5        # Breakeven trigger = 0.5 × SL distance (changed from 0.7 after backtest)
 TRAILING_ATR_MULT = 0.7         # Trailing trigger = 0.7 × SL distance (activate earlier)
 TRAILING_DISTANCE_ATR_MULT = 0.7  # Trailing distance = 0.7 × ATR
+
+# EA safety net parameters — Floki-managed wide behavior
+FLOKI_BREAKEVEN_ATR_MULT = 0.8      # Breakeven trigger = 0.8 × SL distance when Floki manages position
+FLOKI_TRAILING_TRIGGER_PIPS = 500   # Wide trailing trigger to keep EA mostly passive
+FLOKI_TRAILING_DISTANCE_PIPS = 300  # Wide trailing distance to avoid cutting winners early
+FLOKI_MAX_DRAWDOWN_PIPS = MAX_POSITION_DRAWDOWN_PIPS
+
+# Scheduling caps with open position
+FLOKI_MAX_CHECK_WITH_POSITION = 10   # Max minutes between checks when a position is open
+FLOKI_FALLBACK_CHECK_WITH_POSITION = 3  # Fallback minutes if Floki forgets set_next_check with open position
+
+# ADJUST_TRADE rate limit
+MAX_ADJUSTMENTS_PER_HOUR = 3  # Max successful ADJUST_TRADE per trade per rolling hour
 
 # ============================================================================
 # DISCORD WEBHOOK (loaded from .env)
