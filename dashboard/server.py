@@ -50,6 +50,8 @@ WATCH_CONDITIONS_FILE = Path(
         str(APP_DIR / ".." / "data" / "agent_wake_conditions.json"),
     )
 ).resolve()
+SAGE_REPORT_FILE = Path(os.environ.get("SAGE_REPORT_FILE", str(APP_DIR / ".." / "data" / "sage_report.json"))).resolve()
+SAGE_LAST_RUN_FILE = Path(os.environ.get("SAGE_LAST_RUN_FILE", str(APP_DIR / ".." / "data" / "sage_last_run.json"))).resolve()
 OFFLINE_AFTER_SECONDS = int(os.environ.get("DASHBOARD_OFFLINE_AFTER_SECONDS", "60"))
 
 
@@ -175,6 +177,52 @@ def _as_clean_text(v: Any, max_len: int = 2000) -> str:
         return s
     except Exception:
         return ""
+
+
+def _default_sage_report() -> Dict[str, Any]:
+    return {
+        "report_date": None,
+        "trade_count_analyzed": 0,
+        "period_start": None,
+        "period_end": None,
+        "recommendations": [],
+        "insights": [],
+        "metadata": {},
+    }
+
+
+def _default_sage_last_run() -> Dict[str, Any]:
+    return {"last_run_date": None, "last_run_time": None}
+
+
+def _read_sage_payload() -> Dict[str, Any]:
+    report = _default_sage_report()
+    last_run = _default_sage_last_run()
+
+    try:
+        if SAGE_REPORT_FILE.exists():
+            loaded_report = _safe_json_loads(SAGE_REPORT_FILE.read_text(encoding="utf-8"), default={})
+            if isinstance(loaded_report, dict):
+                report.update(loaded_report)
+    except Exception:
+        pass
+
+    try:
+        if SAGE_LAST_RUN_FILE.exists():
+            loaded_last_run = _safe_json_loads(SAGE_LAST_RUN_FILE.read_text(encoding="utf-8"), default={})
+            if isinstance(loaded_last_run, dict):
+                last_run.update(loaded_last_run)
+    except Exception:
+        pass
+
+    has_report = bool(report.get("report_date") or report.get("trade_count_analyzed") or report.get("recommendations") or report.get("insights"))
+    has_last_run = bool(last_run.get("last_run_time") or last_run.get("last_run_date"))
+
+    return {
+        "status": "ACTIVE" if (has_report or has_last_run) else "STANDBY",
+        "report": report,
+        "last_run": last_run,
+    }
 
 
 def _safe_iso_timestamp(ts: Any) -> str:
@@ -706,6 +754,20 @@ def agent_watch_conditions():
         return JSONResponse(payload)
     except Exception:
         return JSONResponse({"updated_at": None, "conditions": []})
+
+
+@app.get("/api/sage")
+def sage_api():
+    try:
+        return JSONResponse(_read_sage_payload())
+    except Exception:
+        return JSONResponse(
+            {
+                "status": "STANDBY",
+                "report": _default_sage_report(),
+                "last_run": _default_sage_last_run(),
+            }
+        )
 
 
 @app.get("/api/indicator-history")

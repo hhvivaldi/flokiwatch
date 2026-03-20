@@ -47,15 +47,15 @@
 
       /* ── Avatar ─────────────────────────────── */
       .agent-avatar {
-        width: 72px;
-        height: 72px;
-        border-radius: 14px;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'JetBrains Mono', monospace;
         font-weight: 700;
-        font-size: 18px;
+        font-size: 14px;
         flex-shrink: 0;
         overflow: hidden;
         position: relative;
@@ -88,11 +88,35 @@
         color: #6366f1;
         box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
       }
+      .avatar-sage {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1.5px solid rgba(245, 158, 11, 0.3);
+        color: #f59e0b;
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.12);
+      }
       .avatar-sm {
         width: 32px;
         height: 32px;
         font-size: 13px;
         border-radius: 8px;
+      }
+      .avatar-hiring {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1.5px dashed rgba(148, 163, 184, 0.28);
+        color: rgba(226, 232, 240, 0.6);
+        box-shadow: none;
+      }
+      .avatar-hiring-echo {
+        box-shadow: 0 0 14px rgba(0, 229, 255, 0.18);
+        border-color: rgba(0, 229, 255, 0.35);
+      }
+      .avatar-hiring-luna {
+        box-shadow: 0 0 14px rgba(224, 64, 251, 0.18);
+        border-color: rgba(224, 64, 251, 0.35);
+      }
+      .avatar-hiring-atlas {
+        box-shadow: 0 0 14px rgba(0, 150, 136, 0.18);
+        border-color: rgba(0, 150, 136, 0.35);
       }
 
       /* ── Pulse Animation ────────────────────── */
@@ -416,7 +440,7 @@
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
         display: grid;
-        grid-template-columns: 260px 1fr 220px;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
         gap: 20px;
         padding: 20px 24px;
         height: calc(100vh - 94px);
@@ -439,6 +463,162 @@
         min-width: 0;
         overflow: hidden;
       }
+      .trade-room-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+        gap: 20px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .agent-office-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        align-content: start;
+      }
+      .agent-card-compact {
+        padding: 14px;
+        min-height: 140px;
+      }
+      .agent-card-button {
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: none;
+        color: inherit;
+        padding: 0;
+        cursor: pointer;
+      }
+      .agent-card-button:focus-visible {
+        outline: 1px solid rgba(170, 255, 0, 0.55);
+        outline-offset: 6px;
+        border-radius: 10px;
+      }
+      .agent-card-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .agent-meta {
+        min-width: 0;
+        flex: 1;
+      }
+      .agent-name-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .agent-role-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #cbd5e1;
+      }
+      .agent-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .agent-expand {
+        margin-top: 10px;
+        display: none;
+      }
+      .agent-expand.open {
+        display: block;
+      }
+      .agent-expand-block {
+        background: rgba(2, 6, 23, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 10px;
+        padding: 10px 11px;
+        margin-top: 8px;
+      }
+      .agent-expand-label {
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 6px;
+      }
+      .agent-expand-copy {
+        font-size: 11px;
+        line-height: 1.6;
+        color: #e2e8f0;
+        white-space: pre-wrap;
+      }
+      .agent-recommendations {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .agent-rec-item {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 8px 9px;
+        border-radius: 9px;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .priority-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 54px;
+        padding: 2px 7px;
+        border-radius: 9999px;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .priority-high {
+        color: #fecaca;
+        background: rgba(220, 38, 38, 0.18);
+        border: 1px solid rgba(248, 113, 113, 0.32);
+      }
+      .priority-medium {
+        color: #fde68a;
+        background: rgba(245, 158, 11, 0.18);
+        border: 1px solid rgba(251, 191, 36, 0.28);
+      }
+      .priority-low {
+        color: #cbd5e1;
+        background: rgba(100, 116, 139, 0.18);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      .hiring-card {
+        opacity: 0.45;
+        filter: grayscale(0.18);
+      }
+      .hiring-card:hover {
+        transform: none;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.03);
+      }
+      .hiring-text {
+        color: #AAFF00;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .dim-role {
+        color: #94a3b8;
+        background: rgba(148, 163, 184, 0.06);
+        border-color: rgba(148, 163, 184, 0.12);
+      }
 
       /* Terminal Focus Glows */
       .focus-glow-emerald {
@@ -460,6 +640,10 @@
           height: auto;
           overflow: visible;
         }
+        .trade-room-main {
+          grid-template-columns: 1fr;
+          overflow: visible;
+        }
         .feed-scroll { max-height: 600px; }
       }
 
@@ -476,12 +660,6 @@
         }
         .col-left, .col-right {
           overflow-y: visible;
-        }
-        .agent-avatar {
-          width: 52px;
-          height: 52px;
-          font-size: 14px;
-          border-radius: 10px;
         }
         .msg-bubble {
           max-width: 95%;
@@ -528,7 +706,7 @@
          PAGE HEADER STRIP
     ════════════════════════════════════════════════ -->
     <div class="page-header-strip">
-      <span class="section-pixel-header text-emerald-400">TRADE ROOM — FLOKI &amp; REX</span>
+      <span class="section-pixel-header text-emerald-400">TRADE ROOM — TRADING OFFICE</span>
       <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
       <span id="data-badge" class="ml-auto text-[10px] font-bold font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/20 animate-pulse">LIVE DATA</span>
     </div>
@@ -538,141 +716,241 @@
     ════════════════════════════════════════════════ -->
     <div class="trade-room-grid page-content">
 
-      <!-- ══════════════════════
-           LEFT — Agent Status
-      ═══════════════════════ -->
-      <div class="col-left">
+      <div class="trade-room-main">
+        <div class="col-left">
 
-        <!-- FLOKI card -->
-        <div class="glass-panel-deep rounded-xl p-4 focus-glow-emerald" id="floki-card">
-          <div class="flex items-center gap-4 mb-4">
-            <!-- Avatar slot: swap inner content for <img src="..." alt="FLOKI"> when photo is ready -->
-            <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar" data-agent="floki" data-rotate-ms="60000">
-              <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-black tracking-wider" style="color:#10b981">FLOKI</span>
-                <span class="status-tag">PROACTIVE · M30</span>
+          <div class="agent-office-grid">
+            <div class="glass-panel-deep rounded-xl agent-card-compact focus-glow-emerald" id="floki-card">
+              <button type="button" class="agent-card-button" data-expand-target="floki-expand" aria-expanded="false">
+                <div class="agent-card-head">
+                  <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar" data-agent="floki" data-rotate-ms="60000">
+                    <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
+                  </div>
+                  <div class="agent-meta">
+                    <div class="agent-name-row">
+                      <span class="text-sm font-black tracking-wider" style="color:#10b981">FLOKI</span>
+                      <span class="agent-role-badge">PORTFOLIO MANAGER</span>
+                    </div>
+                    <div class="agent-status-row">
+                      <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
+                      <span id="floki-thesis-tag" class="status-tag">THESIS: —</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <span id="floki-decision-pill" class="decision-pill pill-wait">WAIT</span>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex justify-between items-center px-0.5">
+                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONFIDENCE</span>
+                    <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 font-bold">—%</span>
+                  </div>
+                  <div class="confidence-bar-track"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                </div>
+              </button>
+              <div id="floki-expand" class="agent-expand">
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">THESIS</div>
+                  <div id="floki-summary" class="agent-expand-copy">—</div>
+                </div>
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">SESSION NOTES</div>
+                  <div id="floki-session-notes" class="agent-expand-copy">Expand to inspect the live thesis chain and current proactive stance.</div>
+                </div>
               </div>
-              <div class="mt-1.5">
-                <span id="floki-decision-pill" class="decision-pill pill-wait">WAIT</span>
+            </div>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact" id="rex-card">
+              <button type="button" class="agent-card-button" data-expand-target="rex-expand" aria-expanded="false">
+                <div class="agent-card-head">
+                  <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar" data-agent="rex" data-rotate-ms="60000">
+                    <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
+                  </div>
+                  <div class="agent-meta">
+                    <div class="agent-name-row">
+                      <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
+                      <span class="agent-role-badge">DEBATE PARTNER</span>
+                    </div>
+                    <div class="agent-status-row">
+                      <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
+                      <span id="rex-concerns-tag" class="status-tag">CONCERNS: —</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex justify-between items-center px-0.5">
+                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">AGREEMENT</span>
+                    <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+                  </div>
+                  <div class="confidence-bar-track"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                </div>
+              </button>
+              <div id="rex-expand" class="agent-expand">
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">LAST DEBATE</div>
+                  <div id="rex-last-debate" class="agent-expand-copy">No debate captured yet.</div>
+                </div>
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">AGREEMENT STATS</div>
+                  <div id="rex-agreement-stats" class="agent-expand-copy">—</div>
+                </div>
               </div>
             </div>
-          </div>
-          <!-- Confidence bar -->
-          <div class="flex flex-col gap-1.5 mb-3">
-            <div class="flex justify-between items-center px-0.5">
-              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONFIDENCE</span>
-              <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 font-bold">—%</span>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact" id="simba-card">
+              <button type="button" class="agent-card-button" data-expand-target="simba-expand" aria-expanded="false">
+                <div class="agent-card-head">
+                  <div class="agent-avatar avatar-rex" id="avatar-simba" aria-label="SIMBA avatar" data-agent="simba" data-rotate-ms="60000">
+                    <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
+                  </div>
+                  <div class="agent-meta">
+                    <div class="agent-name-row">
+                      <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SIMBA</span>
+                      <span class="agent-role-badge">WATCHDOG</span>
+                    </div>
+                    <div class="agent-status-row">
+                      <span id="simba-mode-tag" class="status-tag"><span class="dot-gray"></span>OFF</span>
+                      <span id="simba-summary-tag" class="status-tag">—</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <span id="simba-status-pill" class="decision-pill pill-standby">OFF</span>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex justify-between items-center px-0.5">
+                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONDITIONS</span>
+                    <span id="simba-conditions-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+                  </div>
+                  <div class="confidence-bar-track"><div id="simba-conditions-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                </div>
+              </button>
+              <div id="simba-expand" class="agent-expand">
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">WATCH CONDITIONS</div>
+                  <div id="simba-watch-conditions" class="agent-expand-copy">No active watch conditions.</div>
+                </div>
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">PATROL REPORT</div>
+                  <div id="simba-patrol-report" class="agent-expand-copy">Patrol status will summarize current wake criteria.</div>
+                </div>
+              </div>
             </div>
-            <div class="confidence-bar-track"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact" id="sage-card">
+              <button type="button" class="agent-card-button" data-expand-target="sage-expand" aria-expanded="false">
+                <div class="agent-card-head">
+                  <div class="agent-avatar avatar-sage" aria-label="SAGE avatar">SG</div>
+                  <div class="agent-meta">
+                    <div class="agent-name-row">
+                      <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SAGE</span>
+                      <span class="agent-role-badge">AUDITOR</span>
+                    </div>
+                    <div class="agent-status-row">
+                      <span id="sage-status" class="status-tag"><span class="dot-gray"></span>STANDBY</span>
+                      <span id="sage-last-run" class="status-tag">LAST RUN: —</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <span id="sage-summary" class="decision-pill pill-standby">STANDBY</span>
+                </div>
+              </button>
+              <div id="sage-expand" class="agent-expand">
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">REPORT SNAPSHOT</div>
+                  <div class="agent-expand-copy">
+                    <div class="stat-row"><span class="stat-label">PERIOD</span><span id="sage-report-period" class="stat-val">—</span></div>
+                    <div class="stat-row"><span class="stat-label">TRADES</span><span id="sage-report-trades" class="stat-val">—</span></div>
+                    <div class="stat-row"><span class="stat-label">WIN RATE</span><span id="sage-report-win-rate" class="stat-val">—</span></div>
+                    <div class="stat-row"><span class="stat-label">PROFIT FACTOR</span><span id="sage-report-profit-factor" class="stat-val">—</span></div>
+                  </div>
+                </div>
+                <div class="agent-expand-block">
+                  <div class="agent-expand-label">RECOMMENDATIONS</div>
+                  <div id="sage-report-recommendations" class="agent-recommendations">
+                    <div class="agent-expand-copy">No report loaded.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="echo-card" aria-disabled="true">
+              <div class="agent-card-head">
+                <div class="agent-avatar avatar-hiring avatar-hiring-echo" aria-label="ECHO hiring slot">?</div>
+                <div class="agent-meta">
+                  <div class="agent-name-row">
+                    <span class="text-sm font-black tracking-wider" style="color:#00E5FF">ECHO</span>
+                    <span class="agent-role-badge dim-role">NEWS SENTINEL</span>
+                  </div>
+                  <div class="agent-status-row">
+                    <span class="hiring-text">WE ARE HIRING</span>
+                  </div>
+                </div>
+              </div>
+              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
+            </div>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="luna-card" aria-disabled="true">
+              <div class="agent-card-head">
+                <div class="agent-avatar avatar-hiring avatar-hiring-luna" aria-label="LUNA hiring slot">?</div>
+                <div class="agent-meta">
+                  <div class="agent-name-row">
+                    <span class="text-sm font-black tracking-wider" style="color:#E040FB">LUNA</span>
+                    <span class="agent-role-badge dim-role">MACRO ANALYST</span>
+                  </div>
+                  <div class="agent-status-row">
+                    <span class="hiring-text">WE ARE HIRING</span>
+                  </div>
+                </div>
+              </div>
+              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
+            </div>
+
+            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="atlas-card" aria-disabled="true">
+              <div class="agent-card-head">
+                <div class="agent-avatar avatar-hiring avatar-hiring-atlas" aria-label="ATLAS hiring slot">?</div>
+                <div class="agent-meta">
+                  <div class="agent-name-row">
+                    <span class="text-sm font-black tracking-wider" style="color:#009688">ATLAS</span>
+                    <span class="agent-role-badge dim-role">TECHNICAL ANALYST</span>
+                  </div>
+                  <div class="agent-status-row">
+                    <span class="hiring-text">WE ARE HIRING</span>
+                  </div>
+                </div>
+              </div>
+              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
+            </div>
           </div>
-          <!-- Status tags -->
-          <div class="flex flex-wrap gap-2">
-            <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
-            <span id="floki-thesis-tag" class="status-tag">THESIS: —</span>
+
+          <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
+
+          <div class="glass-panel-deep rounded-xl p-3">
+            <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
+            <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
+            <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
+            <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
+            <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
           </div>
+
         </div>
 
-        <!-- REX card -->
-        <div class="glass-panel-deep rounded-xl p-4" id="rex-card">
-          <div class="flex items-center gap-4 mb-4">
-            <!-- Avatar slot: swap inner content for <img src="..." alt="REX"> when photo is ready -->
-            <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar" data-agent="rex" data-rotate-ms="60000">
-              <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
-                <span class="status-tag">DEBATE PARTNER</span>
-              </div>
-              <div class="mt-1.5">
-                <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
-              </div>
-            </div>
+        <div class="col-center">
+          <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap">
+            <button class="filter-tab active" data-filter="all">ALL</button>
+            <button class="filter-tab" data-filter="decision">DECISIONS</button>
+            <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
+            <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
+            <button class="filter-tab" data-filter="alert">ALERTS</button>
           </div>
-          <!-- Confidence bar -->
-          <div class="flex flex-col gap-1.5 mb-3">
-            <div class="flex justify-between items-center px-0.5">
-              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">AGREEMENT</span>
-              <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-            </div>
-            <div class="confidence-bar-track"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
-          </div>
-          <!-- Status tags -->
-          <div class="flex flex-wrap gap-2">
-            <span class="status-tag"><span class="dot-gray"></span>STANDBY</span>
-            <span id="rex-concerns-tag" class="status-tag">CONCERNS: —</span>
-          </div>
+          <div class="feed-scroll" id="feed"></div>
         </div>
+      </div>
 
-        <!-- SIMBA card -->
-        <div class="glass-panel-deep rounded-xl p-4" id="simba-card">
-          <div class="flex items-center gap-4 mb-4">
-            <div class="agent-avatar avatar-rex" id="avatar-simba" aria-label="SIMBA avatar" data-agent="simba" data-rotate-ms="60000">
-              <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SIMBA</span>
-                <span class="status-tag">WATCHDOG</span>
-              </div>
-              <div class="mt-1.5">
-                <span id="simba-status-pill" class="decision-pill pill-standby">OFF</span>
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-col gap-1.5 mb-3">
-            <div class="flex justify-between items-center px-0.5">
-              <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONDITIONS</span>
-              <span id="simba-conditions-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
-            </div>
-            <div class="confidence-bar-track"><div id="simba-conditions-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <span id="simba-mode-tag" class="status-tag"><span class="dot-gray"></span>OFF</span>
-            <span id="simba-summary-tag" class="status-tag">—</span>
-          </div>
-        </div>
-
-        <!-- Agreement / Conflict banner -->
-        <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
-
-        <!-- Session stats -->
-        <div class="glass-panel-deep rounded-xl p-3">
-          <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
-          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
-          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
-          <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
-          <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
-        </div>
-
-      </div><!-- /col-left -->
-
-
-      <!-- ══════════════════════
-           CENTER — Feed
-      ═══════════════════════ -->
-      <div class="col-center">
-
-        <!-- Filter tabs -->
-        <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap">
-          <button class="filter-tab active" data-filter="all">ALL</button>
-          <button class="filter-tab" data-filter="decision">DECISIONS</button>
-          <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
-          <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
-          <button class="filter-tab" data-filter="alert">ALERTS</button>
-        </div>
-
-        <!-- Conversation feed -->
-        <div class="feed-scroll" id="feed"></div><!-- /feed-scroll -->
-      </div><!-- /col-center -->
-
-
-      <!-- ══════════════════════
-           RIGHT — Market Context
-      ═══════════════════════ -->
       <div class="col-right">
 
         <!-- Price block -->
@@ -750,6 +1028,7 @@
         var currentFilter = 'all';
         var latestMessages = [];
         var prevCtxPrice = null;
+        var cachedSagePayload = null;
 
         var AVATAR_ROTATE_MS = 60000;
         var CARD_AVATAR_GIFS = {
@@ -774,6 +1053,16 @@
           } catch (e) {
             // silent
           }
+        }
+
+        function refreshSage() {
+          return fetchJson('/api/sage').then(function(payload) {
+            cachedSagePayload = payload || null;
+            renderSage(cachedSagePayload);
+          }).catch(function() {
+            cachedSagePayload = null;
+            renderSage(null);
+          });
         }
 
         function refreshWatchConditions() {
@@ -834,6 +1123,112 @@
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&#39;');
+        }
+
+        function bindAgentExpandersOnce() {
+          try {
+            var nodes = document.querySelectorAll('[data-expand-target]');
+            nodes.forEach(function(node) {
+              if (!node || node.__expandBound) return;
+              node.__expandBound = true;
+              node.addEventListener('click', function() {
+                try {
+                  var targetId = node.getAttribute('data-expand-target');
+                  if (!targetId) return;
+                  var panel = document.getElementById(targetId);
+                  if (!panel) return;
+                  var open = panel.classList.contains('open');
+                  panel.classList.toggle('open', !open);
+                  node.setAttribute('aria-expanded', open ? 'false' : 'true');
+                } catch (e) {
+                  // silent
+                }
+              });
+            });
+          } catch (e) {
+            // silent
+          }
+        }
+
+        function setText(id, value) {
+          var el = document.getElementById(id);
+          if (el) el.textContent = value;
+        }
+
+        function deriveSageStats(report) {
+          var out = { winRate: '—', profitFactor: '—' };
+          try {
+            var insights = (report && Array.isArray(report.insights)) ? report.insights : [];
+            for (var i = 0; i < insights.length; i++) {
+              var finding = (((insights[i] || {}).finding) || '').toString();
+              if (out.winRate === '—') {
+                var wrMatch = finding.match(/WR\s*(\d+(?:\.\d+)?)%/i);
+                if (wrMatch) out.winRate = wrMatch[1] + '%';
+              }
+              if (out.profitFactor === '—') {
+                var pfMatch = finding.match(/Profit Factor of\s*(\d+(?:\.\d+)?)/i);
+                if (pfMatch) out.profitFactor = pfMatch[1];
+              }
+              if (out.winRate !== '—' && out.profitFactor !== '—') break;
+            }
+          } catch (e) {
+            // silent
+          }
+          return out;
+        }
+
+        function parseRecommendationPriority(rec) {
+          var s = (rec || '').toString();
+          if (s.indexOf('[HIGH]') === 0) return { level: 'HIGH', cls: 'priority-high', text: s.replace(/^\[HIGH\]\s*/i, '') };
+          if (s.indexOf('[MEDIUM]') === 0) return { level: 'MEDIUM', cls: 'priority-medium', text: s.replace(/^\[MEDIUM\]\s*/i, '') };
+          return { level: 'LOW', cls: 'priority-low', text: s.replace(/^\[LOW\]\s*/i, '') || s };
+        }
+
+        function renderSage(payload) {
+          var statusEl = document.getElementById('sage-status');
+          var pillEl = document.getElementById('sage-summary');
+          var lastRunEl = document.getElementById('sage-last-run');
+          var recEl = document.getElementById('sage-report-recommendations');
+          var report = payload && payload.report ? payload.report : {};
+          var lastRun = payload && payload.last_run ? payload.last_run : {};
+          var status = (payload && payload.status) ? String(payload.status).toUpperCase() : 'STANDBY';
+          var lastRunText = '—';
+          if (lastRun && lastRun.last_run_time) lastRunText = String(lastRun.last_run_time);
+          else if (lastRun && lastRun.last_run_date) lastRunText = String(lastRun.last_run_date);
+
+          if (statusEl) {
+            statusEl.innerHTML = status === 'ACTIVE'
+              ? '<span class="dot-green"></span>ACTIVE'
+              : '<span class="dot-gray"></span>STANDBY';
+          }
+          if (pillEl) {
+            pillEl.textContent = status === 'ACTIVE' ? 'REPORT READY' : 'STANDBY';
+            pillEl.className = 'decision-pill ' + (status === 'ACTIVE' ? 'pill-hold' : 'pill-standby');
+          }
+          if (lastRunEl) lastRunEl.textContent = 'LAST RUN: ' + lastRunText;
+
+          var periodStart = report.period_start || null;
+          var periodEnd = report.period_end || null;
+          setText('sage-report-period', (periodStart || periodEnd) ? ((periodStart || '—') + ' → ' + (periodEnd || '—')) : '—');
+          setText('sage-report-trades', report.trade_count_analyzed != null ? String(report.trade_count_analyzed) : '—');
+          var stats = deriveSageStats(report);
+          setText('sage-report-win-rate', stats.winRate);
+          setText('sage-report-profit-factor', stats.profitFactor);
+
+          if (recEl) {
+            var recs = Array.isArray(report.recommendations) ? report.recommendations : [];
+            if (!recs.length) {
+              recEl.innerHTML = '<div class="agent-expand-copy">No recommendations available.</div>';
+            } else {
+              recEl.innerHTML = recs.map(function(rec) {
+                var parsed = parseRecommendationPriority(rec);
+                return '<div class="agent-rec-item">' +
+                  '<span class="priority-badge ' + parsed.cls + '">' + parsed.level + '</span>' +
+                  '<div class="agent-expand-copy">' + esc(parsed.text) + '</div>' +
+                '</div>';
+              }).join('');
+            }
+          }
         }
 
         function fmtTime(ts) {
@@ -1214,9 +1609,11 @@
             var flokiCard = document.getElementById('floki-card');
             var rexCard = document.getElementById('rex-card');
             var simbaCard = document.getElementById('simba-card');
+            var sageCard = document.getElementById('sage-card');
             if (flokiCard) flokiCard.classList.toggle('opacity-60', marketClosed);
             if (rexCard) rexCard.classList.toggle('opacity-60', marketClosed);
             if (simbaCard) simbaCard.classList.toggle('opacity-60', marketClosed);
+            if (sageCard) sageCard.classList.toggle('opacity-60', false);
 
             try {
               renderSimbaFromState(state);
@@ -1225,6 +1622,12 @@
             // Override Simba status from /api/agent-watch-conditions (authoritative for Trade Room).
             try {
               renderSimbaStatusFromWatchConditionsPayload(cachedWatchConditionsPayload);
+            } catch(e) {}
+            try {
+              var simbaSummary = document.getElementById('simba-summary-tag');
+              setText('simba-patrol-report', simbaSummary ? simbaSummary.textContent : 'Patrol active.');
+              var wc = document.getElementById('ctx-watch-conditions');
+              setText('simba-watch-conditions', wc ? wc.textContent : 'No active watch conditions.');
             } catch(e) {}
 
             try {
@@ -1263,6 +1666,7 @@
 
             var thesisTag = document.getElementById('floki-thesis-tag');
             if (thesisTag) thesisTag.textContent = 'THESIS: ' + (thesis ? thesis : '—');
+            setText('floki-summary', thesis ? thesis : 'No active thesis captured.');
 
             // REX last debate stance
             var rexAgree = null;
@@ -1309,6 +1713,18 @@
             var rexConcernsTag = document.getElementById('rex-concerns-tag');
             if (rexConcernsTag) rexConcernsTag.textContent = 'CONCERNS: ' + (rexConcernsCount === null ? '—' : String(rexConcernsCount));
 
+            try {
+              for (var dr = 0; dr < (messages || []).length; dr++) {
+                var debateMsg = messages[dr];
+                if ((debateMsg.author || '').toString().toUpperCase() === 'REX' && (debateMsg.type || '').toString().toUpperCase() === 'DEBATE') {
+                  setText('rex-last-debate', ((debateMsg.content || '').toString().slice(0, 400) || 'No debate captured yet.').replace(/\n+/g, ' '));
+                  break;
+                }
+              }
+            } catch (e) {
+              // silent
+            }
+
             // Agreement/conflict banner + stats
             var conflicts = 0;
             var agreements = 0;
@@ -1339,6 +1755,7 @@
             var elC = document.getElementById('stats-conflicts');
             var elM = document.getElementById('stats-messages');
             var elCalls = document.getElementById('stats-calls');
+            setText('rex-agreement-stats', 'Agreements: ' + String(agreements) + ' · Conflicts: ' + String(conflicts));
             if (elA) elA.textContent = String(agreements);
             if (elC) elC.textContent = String(conflicts);
             if (elM) elM.textContent = String((messages || []).length);
@@ -1644,6 +2061,7 @@
             fetchJson('/api/trade-room?limit=50'),
             fetchJson('/api/state'),
             refreshTopPatterns(),
+            refreshSage(),
           ]).then(function(res) {
             var msgPayload = res[0] || {};
             latestMessages = (msgPayload.messages || []).slice();
@@ -1673,6 +2091,7 @@
           var match = hash.match(/filter=([a-z_]+)/);
           if (match) hashFilter = match[1];
         } catch(e) {}
+        bindAgentExpandersOnce();
         setFilter(hashFilter);
 
         loadOnce();
