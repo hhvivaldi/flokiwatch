@@ -1978,14 +1978,10 @@ class TradingBot:
             
             # Determine trailing parameters (Volatility Guard may override)
             sl_pips_orig = levels.sl_pips
-            if self._last_vol_status == "COOLING_DOWN":
-                be_trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
-                tr_trigger = config.COOLING_TRAILING_TRIGGER_PIPS
-                tr_distance = config.COOLING_TRAILING_DISTANCE_PIPS
-            else:
-                be_trigger = sl_pips_orig * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
-                tr_trigger = sl_pips_orig * getattr(config, 'TRAILING_ATR_MULT', 0.7)
-                tr_distance = sl_pips_orig * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
+            be_trigger, tr_trigger, tr_distance, max_drawdown_pips = get_ea_management_params(
+                sl_pips=sl_pips_orig,
+                volatility_status=getattr(self, "_last_vol_status", None),
+            )
             
             # Check if EA bridge is enabled and EA is online
             use_ea = False
@@ -2012,7 +2008,7 @@ class TradingBot:
                     breakeven_trigger_pips=be_trigger,
                     trailing_trigger_pips=tr_trigger,
                     trailing_distance_pips=tr_distance,
-                    max_drawdown_pips=config.MAX_POSITION_DRAWDOWN_PIPS,
+                    max_drawdown_pips=max_drawdown_pips,
                     comment=comment
                 )
                 
