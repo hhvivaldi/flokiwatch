@@ -386,6 +386,7 @@ If previous REJECT context is in data with conditions marked met/unmet, maintain
 
 <final_reminder>
 Your response must be ONLY valid JSON. Start with { end with }. Every response must be parseable by json.loads(). No exceptions. No text before or after the JSON.
+CRITICAL OUTPUT RULE: Your final response MUST be ONLY valid JSON. Never output free-text reasoning, explanations, or thinking. If you need to reason about data, do it internally before producing your JSON response. Any response that is not valid JSON will be discarded.
 </final_reminder>
 """
 

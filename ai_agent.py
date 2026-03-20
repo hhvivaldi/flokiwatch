@@ -450,7 +450,7 @@ class AIAgent:
             # Calculate latency
             latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
-            result = self._parse_response(response, latency_ms)
+            result = await self._parse_response_with_retry(response, latency_ms, user_message)
 
             try:
                 tool_trace = response.get("tool_trace")
@@ -737,6 +737,16 @@ class AIAgent:
             return {"success": False, "reason": f"invalid tool args: {e}"}
         except Exception as e:
             return {"success": False, "reason": f"tool error: {e}"}
+
+    @staticmethod
+    def _looks_like_non_json_text(content: Any) -> bool:
+        try:
+            trimmed = str(content or "").lstrip()
+            if not trimmed:
+                return False
+            return not trimmed.startswith("{") and not trimmed.startswith("[")
+        except Exception:
+            return False
 
     async def _call_gemini_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
         loop = asyncio.get_event_loop()
@@ -1142,6 +1152,81 @@ class AIAgent:
             logger.error(f"Failed to parse Agent response as JSON: {e}")
             logger.debug(f"Raw response: {content[:500]}")
             return self._fallback_result(f"JSON parse error: {e}", raw_response=content)
+
+    async def _request_json_retry(self, trigger_context: str) -> Dict[str, Any]:
+        loop = asyncio.get_event_loop()
+        retry_prompt = (
+            "Your previous response was not valid JSON. "
+            "Respond with ONLY your decision as valid JSON now."
+        )
+        system_prompt = ""
+        try:
+            system_prompt = get_system_prompt()
+        except Exception:
+            system_prompt = ""
+
+        contents: List[Dict[str, Any]] = []
+        if system_prompt:
+            contents.append({"role": "user", "parts": [{"text": system_prompt}]})
+        contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
+        contents.append({"role": "user", "parts": [{"text": retry_prompt}]})
+
+        def _sync_retry_call():
+            return self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config={
+                    "max_output_tokens": int(self.max_tokens),
+                    "temperature": 0.1,
+                },
+            )
+
+        resp = await loop.run_in_executor(None, _sync_retry_call)
+
+        input_tokens = 0
+        output_tokens = 0
+        try:
+            usage = getattr(resp, "usage_metadata", None)
+            if usage is not None:
+                input_tokens = int(getattr(usage, "prompt_token_count", 0) or 0)
+                output_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+        except Exception:
+            input_tokens = 0
+            output_tokens = 0
+
+        content = ""
+        try:
+            content = getattr(resp, "text", None) or ""
+        except Exception:
+            content = ""
+
+        return {
+            "content": content,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "model": self.model,
+            "tool_trace": [],
+        }
+
+    async def _parse_response_with_retry(self, response: Dict, latency_ms: int, trigger_context: str) -> AgentResult:
+        content = response.get("content", "")
+
+        if self._looks_like_non_json_text(content):
+            logger.warning("AGENT_JSON_RETRY | non-JSON response detected, retrying once")
+            try:
+                retry_response = await self._request_json_retry(trigger_context)
+                response = {
+                    "content": retry_response.get("content", ""),
+                    "input_tokens": int(response.get("input_tokens", 0) or 0) + int(retry_response.get("input_tokens", 0) or 0),
+                    "output_tokens": int(response.get("output_tokens", 0) or 0) + int(retry_response.get("output_tokens", 0) or 0),
+                    "model": retry_response.get("model", response.get("model", self.model)),
+                    "tool_trace": response.get("tool_trace", []),
+                }
+                logger.warning(f"AGENT_JSON_RETRY | retry_response_preview={str(response.get('content', ''))[:200]}")
+            except Exception as e:
+                logger.warning(f"AGENT_JSON_RETRY | retry failed: {e}")
+
+        return self._parse_response(response, latency_ms)
 
     def _fallback_result(self, error: str, raw_response: str = None) -> AgentResult:
         """
