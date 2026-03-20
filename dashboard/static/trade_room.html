@@ -572,7 +572,15 @@
         max-height: 80px;
         overflow: hidden;
       }
-      .agent-expand.open { display: block; }
+      .agent-expand.open {
+        display: block;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .agent-expand.open::-webkit-scrollbar { width: 4px; }
+      .agent-expand.open::-webkit-scrollbar-track { background: transparent; }
+      .agent-expand.open::-webkit-scrollbar-thumb { background: rgba(138, 138, 154, 0.3); border-radius: 4px; }
+      .agent-expand.open::-webkit-scrollbar-thumb:hover { background: rgba(138, 138, 154, 0.5); }
       .bc-card-hiring { opacity: 0.45; pointer-events: none; cursor: default; }
       .bc-hiring-row2 {
         text-align: center;
