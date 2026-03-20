@@ -763,6 +763,7 @@ class AIAgent:
         contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
 
         had_empty_retry = False
+        budget_warning_injected = False
 
         while True:
             if (time.time() - start_time) >= float(self.timeout):
@@ -959,6 +960,22 @@ class AIAgent:
                             ],
                         }
                     )
+
+                    if (not budget_warning_injected) and tool_calls >= 20:
+                        contents.append(
+                            {
+                                "role": "user",
+                                "parts": [
+                                    {
+                                        "text": "IMPORTANT: You have used 20 of 25 available tool calls. You MUST produce your final JSON decision NOW. Do not call any more tools. Respond with your decision JSON immediately."
+                                    }
+                                ],
+                            }
+                        )
+                        budget_warning_injected = True
+                        logger.warning(
+                            f"GEMINI_TOOL_BUDGET | finalization instruction injected at tool_calls={tool_calls}/{int(self.max_tool_calls)}"
+                        )
                 except Exception as e:
                     tool_trace.append({"name": "unknown", "input": {}, "result": {"success": False, "reason": str(e)}, "latency_ms": 0})
                     continue
@@ -1212,9 +1229,9 @@ async def agent_decide(
 
     try:
         parsed_obj = None
+        raw_response = result.raw_response or ""
         try:
-            content = result.raw_response or ""
-            json_str = agent._extract_first_json_object(content)
+            json_str = agent._extract_first_json_object(raw_response)
             if json_str:
                 parsed_obj = json.loads(json_str)
         except Exception:
@@ -1226,6 +1243,7 @@ async def agent_decide(
             pass
         else:
             logger.warning("AGENT_CHECKLIST | MISSING — could not re-parse raw_response JSON for checklist validation")
+            logger.warning(f"AGENT_CHECKLIST | MISSING | raw_response_preview={str(raw_response)[:500]}")
     except Exception as e:
         logger.debug(f"AGENT_CHECKLIST | validation failed (non-blocking): {e}")
 
