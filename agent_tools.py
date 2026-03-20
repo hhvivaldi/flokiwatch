@@ -732,6 +732,7 @@ class AgentTools:
             for c in conditions:
                 if not isinstance(c, dict):
                     continue
+
                 ctype = str(c.get("type", "")).strip()
                 desc = str(c.get("description", "")).strip()
                 if not ctype:
@@ -1554,11 +1555,51 @@ class AgentTools:
             if sl_f is None and tp_f is None:
                 return {"success": False, "reason": "invalid new sl/tp"}
 
+            if tp_f is None:
+                log.warning("ADJUST_TRADE | BLOCKED | reason=tp_missing")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | reason=tp_missing")
+                return {"success": False, "reason": "tp_missing"}
+
+            pos = self._get_position_by_ticket(t)
+            if pos is None:
+                log.warning("ADJUST_TRADE | BLOCKED | reason=position_not_found")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | reason=position_not_found")
+                return {"success": False, "reason": "position_not_found"}
+
+            direction = str(getattr(pos, "direction", "") or "").strip().upper()
+            current_price = self._safe_float(getattr(pos, "current_price", None))
+            old_sl = self._safe_float(getattr(pos, "sl", None))
+            old_tp = self._safe_float(getattr(pos, "tp", None))
+            if current_price is None or direction not in ("BUY", "SELL"):
+                log.warning("ADJUST_TRADE | BLOCKED | reason=invalid_position_data")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | reason=invalid_position_data")
+                return {"success": False, "reason": "invalid_position_data"}
+
+            if self._is_sl_widening(direction, current_price, old_sl, sl_f):
+                log.warning("ADJUST_TRADE | BLOCKED | reason=sl_widening")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | reason=sl_widening")
+                return {"success": False, "reason": "sl_widening"}
+
+            state, successful_adjustments, now = self._get_adjust_trade_window(t)
+            if len(successful_adjustments) >= int(MAX_ADJUSTMENTS_PER_HOUR):
+                log.warning("ADJUST_TRADE | BLOCKED | reason=rate_limit")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | reason=rate_limit count={len(successful_adjustments)}")
+                return {"success": False, "reason": "rate_limit"}
+
             res = self._executor.modify_position(t, new_sl=sl_f, new_tp=tp_f)
             if not getattr(res, "success", False):
                 reason = getattr(res, "error_message", None) or "adjust failed"
                 self._log_tool("adjust_trade", start, f"ticket={t} | success=false | {reason}")
                 return {"success": False, "reason": str(reason)}
+
+            if not self._record_adjust_trade_success(state, t, successful_adjustments, now=now):
+                self._log_tool("adjust_trade", start, f"ticket={t} | success=false | rate_limit_persist_failed")
+                return {"success": False, "reason": "rate_limit_persist_failed"}
+
+            log.info(
+                f"ADJUST_TRADE | SL: {self._format_adjust_value(old_sl)}→{self._format_adjust_value(sl_f)} | "
+                f"TP: {self._format_adjust_value(old_tp)}→{self._format_adjust_value(tp_f)} | reason=agent_adjust"
+            )
 
             self._log_tool("adjust_trade", start, f"ticket={t} | success")
             return {
