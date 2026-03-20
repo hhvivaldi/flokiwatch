@@ -14,6 +14,7 @@ from alerts import (
     alert_trade_executed, alert_trade_closed, 
     alert_error, alert_trailing_stop
 )
+from floki_position_manager import get_ea_management_params
 
 
 @dataclass
@@ -242,9 +243,10 @@ class MT5Executor:
                     ref_price = ask if direction.upper() == "BUY" else bid
                     sl_pips = abs(ref_price - float(stop_loss)) / 0.1
 
-                    be_pips = float(sl_pips) * 0.5
-                    tr_trig_pips = float(sl_pips) * 0.7
-                    tr_dist_pips = float(sl_pips) * 0.7
+                    be_pips, tr_trig_pips, tr_dist_pips, max_drawdown_pips = get_ea_management_params(
+                        sl_pips,
+                        None,
+                    )
 
                     ok = write_signal(
                         signal=direction,
@@ -255,7 +257,7 @@ class MT5Executor:
                         breakeven_trigger_pips=be_pips,
                         trailing_trigger_pips=tr_trig_pips,
                         trailing_distance_pips=tr_dist_pips,
-                        max_drawdown_pips=float(getattr(config, "MAX_POSITION_DRAWDOWN_PIPS", 1000)),
+                        max_drawdown_pips=max_drawdown_pips,
                         comment=comment,
                     )
 
