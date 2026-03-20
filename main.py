@@ -47,7 +47,12 @@ from executor import (
 )
 from monitor import monitor_positions, get_positions_summary, close_all_positions
 from technical_analyzer import get_mt5_data, calculate_indicators, calculate_technical_score, get_atr_value
-
+from floki_position_manager import (
+    get_ea_management_params,
+    get_fallback_minutes,
+    get_scheduled_minutes,
+    write_floki_heartbeat,
+)
 
 # ============================================================================
 # NEWS CACHE (avoid excessive requests)
@@ -2265,15 +2270,10 @@ class TradingBot:
 
             comment = f"Agent-{scenario}-{direction}-{int(confidence or 0)}"
 
-            sl_pips_orig = sl_pips
-            if self._last_vol_status == "COOLING_DOWN":
-                be_trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
-                tr_trigger = config.COOLING_TRAILING_TRIGGER_PIPS
-                tr_distance = config.COOLING_TRAILING_DISTANCE_PIPS
-            else:
-                be_trigger = sl_pips_orig * getattr(config, "BREAKEVEN_ATR_MULT", 0.7)
-                tr_trigger = sl_pips_orig * getattr(config, "TRAILING_ATR_MULT", 0.7)
-                tr_distance = sl_pips_orig * getattr(config, "TRAILING_DISTANCE_ATR_MULT", 0.7)
+            be_trigger, tr_trigger, tr_distance, max_drawdown_pips = get_ea_management_params(
+                sl_pips=sl_pips,
+                volatility_status=getattr(self, "_last_vol_status", None),
+            )
 
             used_ea = False
             if getattr(config, "USE_EA_BRIDGE", False) and self.executes_trades:
@@ -2300,7 +2300,7 @@ class TradingBot:
                     breakeven_trigger_pips=be_trigger,
                     trailing_trigger_pips=tr_trigger,
                     trailing_distance_pips=tr_distance,
-                    max_drawdown_pips=config.MAX_POSITION_DRAWDOWN_PIPS,
+                    max_drawdown_pips=max_drawdown_pips,
                     comment=comment,
                 )
 
@@ -3199,6 +3199,11 @@ class TradingBot:
             loop.close()
 
             try:
+                write_floki_heartbeat()
+            except Exception:
+                pass
+
+            try:
                 post_next_check_mtime = None
                 try:
                     if os.path.exists(next_path):
@@ -3206,12 +3211,20 @@ class TradingBot:
                 except Exception:
                     post_next_check_mtime = None
 
+                positions_now = []
+                try:
+                    positions_now = get_positions() if self.executes_trades else []
+                except Exception:
+                    positions_now = []
+                has_open_position = bool(positions_now)
+
                 if post_next_check_mtime == pre_next_check_mtime:
+                    fallback_minutes = get_fallback_minutes(has_open_position)
                     now_utc = datetime.utcnow()
-                    next_at = now_utc + timedelta(minutes=5)
+                    next_at = now_utc + timedelta(minutes=fallback_minutes)
                     payload = {
                         "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
-                        "requested_minutes": 5,
+                        "requested_minutes": fallback_minutes,
                     }
 
                     try:
@@ -3221,10 +3234,34 @@ class TradingBot:
                             json.dump(payload, f, ensure_ascii=False, indent=2)
                         os.replace(tmp_path, next_path)
                         log.info(
-                            "FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to 5 minutes"
+                            f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes"
                         )
                     except Exception as e:
                         log.debug(f"FLOKI_SCHEDULE | default schedule write failed (ignored): {e}")
+                elif has_open_position:
+                    try:
+                        with open(next_path, "r", encoding="utf-8") as f:
+                            payload = json.load(f)
+                        if isinstance(payload, dict):
+                            requested_minutes = payload.get("requested_minutes")
+                            capped_minutes = get_scheduled_minutes(requested_minutes, True)
+                            if requested_minutes is None or int(capped_minutes) != int(requested_minutes):
+                                now_utc = datetime.utcnow()
+                                next_at = now_utc + timedelta(minutes=capped_minutes)
+                                capped_payload = {
+                                    "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
+                                    "requested_minutes": capped_minutes,
+                                }
+                                os.makedirs(os.path.dirname(next_path), exist_ok=True)
+                                tmp_path = next_path + ".tmp"
+                                with open(tmp_path, "w", encoding="utf-8") as f:
+                                    json.dump(capped_payload, f, ensure_ascii=False, indent=2)
+                                os.replace(tmp_path, next_path)
+                                log.info(
+                                    f"FLOKI_SCHEDULE | Open position cap applied — next check set to {capped_minutes} minutes"
+                                )
+                    except Exception as e:
+                        log.debug(f"FLOKI_SCHEDULE | schedule cap write failed (ignored): {e}")
             except Exception:
                 pass
 
