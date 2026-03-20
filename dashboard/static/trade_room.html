@@ -61,10 +61,11 @@
         position: relative;
         transition: transform 0.3s ease;
       }
-      .agent-avatar img {
+      .agent-avatar img, .bc-avatar img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        border-radius: 50%;
       }
 
       .agent-avatar img.avatar-img {
@@ -440,185 +441,153 @@
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-        gap: 20px;
-        padding: 20px 24px;
+        grid-template-rows: auto 1fr;
+        grid-template-columns: 1fr 250px;
+        gap: 12px 20px;
+        padding: 12px 24px 20px;
         height: calc(100vh - 94px);
         box-sizing: border-box;
         overflow: hidden;
       }
 
-      .col-left, .col-right {
+      .agent-top-strip {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: flex-start;
+        overflow-x: auto;
+      }
+      .agent-top-strip::-webkit-scrollbar { height: 3px; }
+      .agent-top-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
+      .agent-top-strip #agreement-banner { flex: 1 1 100%; }
+
+      .col-center {
+        grid-column: 1;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .col-right {
+        grid-column: 2;
+        grid-row: 2;
         display: flex;
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
       }
-      .col-left::-webkit-scrollbar, .col-right::-webkit-scrollbar { width: 4px; }
-      .col-left::-webkit-scrollbar-thumb, .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
+      .col-right::-webkit-scrollbar { width: 4px; }
+      .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
 
-      .col-center {
+      /* ── Business-card agent cards (FLO-33 redesign) ── */
+      .bc-card {
+        flex: 1 1 180px;
+        max-width: none;
+        height: 130px;
+        overflow: hidden;
+        border-radius: 10px;
+        background: #1a1a2e;
+        border: 1px solid;
         display: flex;
         flex-direction: column;
-        min-width: 0;
-        overflow: hidden;
+        box-sizing: border-box;
       }
-      .trade-room-main {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
-        gap: 20px;
-        min-width: 0;
-        overflow: hidden;
+      .bc-card:has(.agent-expand.open) {
+        height: auto;
+        max-height: 215px;
+        overflow: visible;
       }
-      .agent-office-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
-        align-content: start;
-      }
-      .agent-card-compact {
-        padding: 14px;
-        min-height: 140px;
-      }
-      .agent-card-button {
+      .bc-btn {
         width: 100%;
-        text-align: left;
+        height: 130px;
         background: transparent;
         border: none;
-        color: inherit;
-        padding: 0;
+        padding: 10px 12px;
         cursor: pointer;
-      }
-      .agent-card-button:focus-visible {
-        outline: 1px solid rgba(170, 255, 0, 0.55);
-        outline-offset: 6px;
-        border-radius: 10px;
-      }
-      .agent-card-head {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        margin-bottom: 10px;
-      }
-      .agent-meta {
-        min-width: 0;
-        flex: 1;
-      }
-      .agent-name-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .agent-role-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 9999px;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        color: #cbd5e1;
-      }
-      .agent-status-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 8px;
-      }
-      .agent-expand {
-        margin-top: 10px;
-        display: none;
-      }
-      .agent-expand.open {
-        display: block;
-      }
-      .agent-expand-block {
-        background: rgba(2, 6, 23, 0.45);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 10px;
-        padding: 10px 11px;
-        margin-top: 8px;
-      }
-      .agent-expand-label {
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: #64748b;
-        margin-bottom: 6px;
-      }
-      .agent-expand-copy {
-        font-size: 11px;
-        line-height: 1.6;
-        color: #e2e8f0;
-        white-space: pre-wrap;
-      }
-      .agent-recommendations {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 7px;
+        text-align: left;
+        color: inherit;
+        box-sizing: border-box;
+        flex-shrink: 0;
       }
-      .agent-rec-item {
+      .bc-btn:focus-visible { outline: 1px solid rgba(170,255,0,0.55); outline-offset: 4px; border-radius: 9px; }
+      .bc-row1 { display: flex; align-items: center; gap: 8px; }
+      .bc-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #2a2a3e;
+        border: 2px solid;
         display: flex;
-        gap: 8px;
-        align-items: flex-start;
-        padding: 8px 9px;
-        border-radius: 9px;
-        background: rgba(15, 23, 42, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .priority-badge {
-        display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 54px;
-        padding: 2px 7px;
-        border-radius: 9999px;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: 'JetBrains Mono', monospace;
+        flex-shrink: 0;
       }
-      .priority-high {
-        color: #fecaca;
-        background: rgba(220, 38, 38, 0.18);
-        border: 1px solid rgba(248, 113, 113, 0.32);
+      .bc-identity { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+      .bc-name {
+        font-size: 14px;
+        font-weight: 500;
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1.1;
+        white-space: nowrap;
       }
-      .priority-medium {
-        color: #fde68a;
-        background: rgba(245, 158, 11, 0.18);
-        border: 1px solid rgba(251, 191, 36, 0.28);
+      .bc-role {
+        font-size: 11px;
+        color: #8a8a9a;
+        font-family: 'JetBrains Mono', monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .priority-low {
-        color: #cbd5e1;
-        background: rgba(100, 116, 139, 0.18);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-      }
-      .hiring-card {
-        opacity: 0.45;
-        filter: grayscale(0.18);
-      }
-      .hiring-card:hover {
-        transform: none;
-        border-color: rgba(255, 255, 255, 0.08);
-        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.03);
-      }
-      .hiring-text {
-        color: #AAFF00;
+      .bc-row2 { display: flex; gap: 4px; align-items: center; }
+      .bc-pill {
         font-size: 10px;
-        font-weight: 900;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 20px;
+        white-space: nowrap;
+        font-family: 'JetBrains Mono', monospace;
       }
-      .dim-role {
-        color: #94a3b8;
-        background: rgba(148, 163, 184, 0.06);
-        border-color: rgba(148, 163, 184, 0.12);
+      .bc-row3 { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
+      .bc-metric { display: flex; justify-content: space-between; align-items: center; }
+      .bc-metric-label { font-size: 10px; color: #6a6a7a; font-family: 'JetBrains Mono', monospace; }
+      .bc-metric-val { font-size: 12px; font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+      .bc-bar-track { height: 3px; background: #2a2a3e; border-radius: 2px; overflow: hidden; }
+      .bc-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+      .agent-expand {
+        display: none;
+        padding: 6px 12px 10px;
+        font-size: 10px;
+        color: #8a8a9a;
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1.5;
+        max-height: 80px;
+        overflow: hidden;
       }
+      .agent-expand.open { display: block; }
+      .bc-card-hiring { opacity: 0.45; pointer-events: none; cursor: default; }
+      .bc-hiring-row2 {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 500;
+        color: #AAFF00;
+        letter-spacing: 1px;
+        font-family: 'JetBrains Mono', monospace;
+        padding: 2px 0;
+      }
+      .bc-hiring-row3 { text-align: center; font-size: 10px; color: #4a4a5a; font-family: 'JetBrains Mono', monospace; }
+      .agent-recommendations { display: flex; flex-direction: column; gap: 4px; }
+      .priority-high { color: #fecaca; }
+      .priority-medium { color: #fde68a; }
+      .priority-low { color: #cbd5e1; }
 
       /* Terminal Focus Glows */
       .focus-glow-emerald {
@@ -636,14 +605,14 @@
       /* ── Responsive fallback (tablet) ──────── */
       @media (max-width: 1024px) {
         .trade-room-grid {
+          grid-template-rows: auto auto 1fr;
           grid-template-columns: 1fr;
           height: auto;
           overflow: visible;
         }
-        .trade-room-main {
-          grid-template-columns: 1fr;
-          overflow: visible;
-        }
+        .agent-top-strip { grid-column: 1; grid-row: 1; }
+        .col-center { grid-column: 1; grid-row: 3; }
+        .col-right { grid-column: 1; grid-row: 2; }
         .feed-scroll { max-height: 600px; }
       }
 
@@ -658,7 +627,7 @@
           flex-wrap: wrap;
           gap: 6px;
         }
-        .col-left, .col-right {
+        .col-right {
           overflow-y: visible;
         }
         .msg-bubble {
@@ -716,230 +685,187 @@
     ════════════════════════════════════════════════ -->
     <div class="trade-room-grid page-content">
 
-      <div class="trade-room-main">
-        <div class="col-left">
-
-          <div class="agent-office-grid">
-            <div class="glass-panel-deep rounded-xl agent-card-compact focus-glow-emerald" id="floki-card">
-              <button type="button" class="agent-card-button" data-expand-target="floki-expand" aria-expanded="false">
-                <div class="agent-card-head">
-                  <div class="agent-avatar avatar-floki pulse-active-floki" id="avatar-floki" aria-label="FLOKI avatar" data-agent="floki" data-rotate-ms="60000">
+      <div class="agent-top-strip">
+            <!-- FLOKI -->
+            <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
+              <button type="button" class="bc-btn" data-expand-target="floki-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" id="avatar-floki" style="border-color:#AAFF00">
                     <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
                   </div>
-                  <div class="agent-meta">
-                    <div class="agent-name-row">
-                      <span class="text-sm font-black tracking-wider" style="color:#10b981">FLOKI</span>
-                      <span class="agent-role-badge">PORTFOLIO MANAGER</span>
-                    </div>
-                    <div class="agent-status-row">
-                      <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
-                      <span id="floki-thesis-tag" class="status-tag">THESIS: —</span>
-                    </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#AAFF00">FLOKI</span>
+                    <span class="bc-role">Portfolio manager</span>
                   </div>
                 </div>
-                <div class="mb-2">
-                  <span id="floki-decision-pill" class="decision-pill pill-wait">WAIT</span>
+                <div class="bc-row2">
+                  <span class="bc-pill" style="background:rgba(170,255,0,0.15);color:#AAFF00">ACTIVE</span>
+                  <span id="floki-decision-pill" class="bc-pill" style="background:rgba(170,255,0,0.08);color:#8a8a9a">WAIT</span>
                 </div>
-                <div class="flex flex-col gap-1.5">
-                  <div class="flex justify-between items-center px-0.5">
-                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONFIDENCE</span>
-                    <span id="floki-conf-text" class="font-mono text-[10px] text-gray-300 font-bold">—%</span>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Confidence</span>
+                    <span id="floki-conf-text" class="bc-metric-val" style="color:#AAFF00">—%</span>
                   </div>
-                  <div class="confidence-bar-track"><div id="floki-conf-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                  <div class="bc-bar-track"><div id="floki-conf-bar" class="bc-bar-fill" style="width:0%;background:#AAFF00"></div></div>
                 </div>
               </button>
               <div id="floki-expand" class="agent-expand">
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">THESIS</div>
-                  <div id="floki-summary" class="agent-expand-copy">—</div>
-                </div>
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">SESSION NOTES</div>
-                  <div id="floki-session-notes" class="agent-expand-copy">Expand to inspect the live thesis chain and current proactive stance.</div>
-                </div>
+                <div id="floki-summary" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical">—</div>
+                <span id="floki-thesis-tag" style="display:none"></span>
+                <div id="floki-session-notes" style="display:none"></div>
               </div>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact" id="rex-card">
-              <button type="button" class="agent-card-button" data-expand-target="rex-expand" aria-expanded="false">
-                <div class="agent-card-head">
-                  <div class="agent-avatar avatar-rex" id="avatar-rex" aria-label="REX avatar" data-agent="rex" data-rotate-ms="60000">
+            <!-- REX -->
+            <div class="bc-card" id="rex-card" style="border-color:#9C27B0">
+              <button type="button" class="bc-btn" data-expand-target="rex-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" id="avatar-rex" style="border-color:#9C27B0">
                     <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
                   </div>
-                  <div class="agent-meta">
-                    <div class="agent-name-row">
-                      <span class="text-sm font-black tracking-wider" style="color:#6366f1">REX</span>
-                      <span class="agent-role-badge">DEBATE PARTNER</span>
-                    </div>
-                    <div class="agent-status-row">
-                      <span class="status-tag"><span class="dot-green"></span>ACTIVE</span>
-                      <span id="rex-concerns-tag" class="status-tag">CONCERNS: —</span>
-                    </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#9C27B0">REX</span>
+                    <span class="bc-role">Debate partner</span>
                   </div>
                 </div>
-                <div class="mb-2">
-                  <span id="rex-opinion-pill" class="decision-pill pill-standby">STANDBY</span>
+                <div class="bc-row2">
+                  <span class="bc-pill" style="background:rgba(156,39,176,0.15);color:#9C27B0">ACTIVE</span>
+                  <span id="rex-opinion-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">STANDBY</span>
+                  <span id="rex-concerns-tag" style="display:none"></span>
                 </div>
-                <div class="flex flex-col gap-1.5">
-                  <div class="flex justify-between items-center px-0.5">
-                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">AGREEMENT</span>
-                    <span id="rex-agree-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Agreement</span>
+                    <span id="rex-agree-text" class="bc-metric-val" style="color:#9C27B0">—</span>
                   </div>
-                  <div class="confidence-bar-track"><div id="rex-agree-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                  <div class="bc-bar-track"><div id="rex-agree-bar" class="bc-bar-fill" style="width:0%;background:#9C27B0"></div></div>
                 </div>
               </button>
               <div id="rex-expand" class="agent-expand">
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">LAST DEBATE</div>
-                  <div id="rex-last-debate" class="agent-expand-copy">No debate captured yet.</div>
-                </div>
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">AGREEMENT STATS</div>
-                  <div id="rex-agreement-stats" class="agent-expand-copy">—</div>
-                </div>
+                <div id="rex-last-debate" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical">No debate yet.</div>
+                <div id="rex-agreement-stats" style="display:none"></div>
               </div>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact" id="simba-card">
-              <button type="button" class="agent-card-button" data-expand-target="simba-expand" aria-expanded="false">
-                <div class="agent-card-head">
-                  <div class="agent-avatar avatar-rex" id="avatar-simba" aria-label="SIMBA avatar" data-agent="simba" data-rotate-ms="60000">
+            <!-- SIMBA -->
+            <div class="bc-card" id="simba-card" style="border-color:#00E5FF">
+              <button type="button" class="bc-btn" data-expand-target="simba-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" id="avatar-simba" style="border-color:#00E5FF">
                     <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
                   </div>
-                  <div class="agent-meta">
-                    <div class="agent-name-row">
-                      <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SIMBA</span>
-                      <span class="agent-role-badge">WATCHDOG</span>
-                    </div>
-                    <div class="agent-status-row">
-                      <span id="simba-mode-tag" class="status-tag"><span class="dot-gray"></span>OFF</span>
-                      <span id="simba-summary-tag" class="status-tag">—</span>
-                    </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#00E5FF">SIMBA</span>
+                    <span class="bc-role">Watchdog</span>
                   </div>
                 </div>
-                <div class="mb-2">
-                  <span id="simba-status-pill" class="decision-pill pill-standby">OFF</span>
+                <div class="bc-row2">
+                  <span id="simba-mode-tag" class="bc-pill" style="background:rgba(0,229,255,0.15);color:#00E5FF">OFF</span>
+                  <span id="simba-status-pill" class="bc-pill" style="background:rgba(0,229,255,0.08);color:#8a8a9a">OFF</span>
+                  <span id="simba-summary-tag" style="display:none"></span>
                 </div>
-                <div class="flex flex-col gap-1.5">
-                  <div class="flex justify-between items-center px-0.5">
-                    <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">CONDITIONS</span>
-                    <span id="simba-conditions-text" class="font-mono text-[10px] text-gray-300 font-bold">—</span>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Conditions</span>
+                    <span id="simba-conditions-text" class="bc-metric-val" style="color:#00E5FF">—</span>
                   </div>
-                  <div class="confidence-bar-track"><div id="simba-conditions-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div></div>
+                  <div class="bc-bar-track"><div id="simba-conditions-bar" class="bc-bar-fill" style="width:0%;background:#00E5FF"></div></div>
                 </div>
               </button>
               <div id="simba-expand" class="agent-expand">
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">WATCH CONDITIONS</div>
-                  <div id="simba-watch-conditions" class="agent-expand-copy">No active watch conditions.</div>
-                </div>
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">PATROL REPORT</div>
-                  <div id="simba-patrol-report" class="agent-expand-copy">Patrol status will summarize current wake criteria.</div>
-                </div>
+                <div id="simba-watch-conditions" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical">No active conditions.</div>
+                <div id="simba-patrol-report" style="display:none"></div>
               </div>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact" id="sage-card">
-              <button type="button" class="agent-card-button" data-expand-target="sage-expand" aria-expanded="false">
-                <div class="agent-card-head">
-                  <div class="agent-avatar avatar-sage" aria-label="SAGE avatar">SG</div>
-                  <div class="agent-meta">
-                    <div class="agent-name-row">
-                      <span class="text-sm font-black tracking-wider" style="color:#f59e0b">SAGE</span>
-                      <span class="agent-role-badge">AUDITOR</span>
-                    </div>
-                    <div class="agent-status-row">
-                      <span id="sage-status" class="status-tag"><span class="dot-gray"></span>STANDBY</span>
-                      <span id="sage-last-run" class="status-tag">LAST RUN: —</span>
-                    </div>
+            <!-- SAGE -->
+            <div class="bc-card" id="sage-card" style="border-color:#FFB300">
+              <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border-color:#FFB300;color:#FFB300">SG</div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#FFB300">SAGE</span>
+                    <span class="bc-role">Auditor</span>
                   </div>
                 </div>
-                <div class="mb-2">
-                  <span id="sage-summary" class="decision-pill pill-standby">STANDBY</span>
+                <div class="bc-row2">
+                  <span id="sage-status" class="bc-pill" style="background:rgba(255,179,0,0.15);color:#FFB300">STANDBY</span>
+                  <span id="sage-summary" class="bc-pill" style="background:rgba(255,179,0,0.08);color:#8a8a9a">STANDBY</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Last run</span>
+                    <span id="sage-last-run" class="bc-metric-val" style="color:#FFB300">—</span>
+                  </div>
+                  <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#FFB300"></div></div>
                 </div>
               </button>
               <div id="sage-expand" class="agent-expand">
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">REPORT SNAPSHOT</div>
-                  <div class="agent-expand-copy">
-                    <div class="stat-row"><span class="stat-label">PERIOD</span><span id="sage-report-period" class="stat-val">—</span></div>
-                    <div class="stat-row"><span class="stat-label">TRADES</span><span id="sage-report-trades" class="stat-val">—</span></div>
-                    <div class="stat-row"><span class="stat-label">WIN RATE</span><span id="sage-report-win-rate" class="stat-val">—</span></div>
-                    <div class="stat-row"><span class="stat-label">PROFIT FACTOR</span><span id="sage-report-profit-factor" class="stat-val">—</span></div>
-                  </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">Win rate</span>
+                  <span id="sage-report-win-rate" class="bc-metric-val" style="color:#FFB300">—</span>
                 </div>
-                <div class="agent-expand-block">
-                  <div class="agent-expand-label">RECOMMENDATIONS</div>
-                  <div id="sage-report-recommendations" class="agent-recommendations">
-                    <div class="agent-expand-copy">No report loaded.</div>
-                  </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">Profit factor</span>
+                  <span id="sage-report-profit-factor" class="bc-metric-val" style="color:#FFB300">—</span>
                 </div>
+                <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
+                <span id="sage-report-period" style="display:none"></span>
+                <span id="sage-report-trades" style="display:none"></span>
               </div>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="echo-card" aria-disabled="true">
-              <div class="agent-card-head">
-                <div class="agent-avatar avatar-hiring avatar-hiring-echo" aria-label="ECHO hiring slot">?</div>
-                <div class="agent-meta">
-                  <div class="agent-name-row">
-                    <span class="text-sm font-black tracking-wider" style="color:#00E5FF">ECHO</span>
-                    <span class="agent-role-badge dim-role">NEWS SENTINEL</span>
-                  </div>
-                  <div class="agent-status-row">
-                    <span class="hiring-text">WE ARE HIRING</span>
+            <!-- ECHO — hiring -->
+            <div class="bc-card bc-card-hiring" id="echo-card" style="border-color:rgba(0,229,255,0.25)" aria-disabled="true">
+              <div class="bc-btn" style="cursor:default">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border:2px dashed rgba(0,229,255,0.4);color:rgba(0,229,255,0.4)">?</div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:rgba(0,229,255,0.6)">ECHO</span>
+                    <span class="bc-role">News sentinel</span>
                   </div>
                 </div>
+                <div class="bc-hiring-row2">WE ARE HIRING</div>
+                <div class="bc-hiring-row3">+ open desk</div>
               </div>
-              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="luna-card" aria-disabled="true">
-              <div class="agent-card-head">
-                <div class="agent-avatar avatar-hiring avatar-hiring-luna" aria-label="LUNA hiring slot">?</div>
-                <div class="agent-meta">
-                  <div class="agent-name-row">
-                    <span class="text-sm font-black tracking-wider" style="color:#E040FB">LUNA</span>
-                    <span class="agent-role-badge dim-role">MACRO ANALYST</span>
-                  </div>
-                  <div class="agent-status-row">
-                    <span class="hiring-text">WE ARE HIRING</span>
+            <!-- LUNA — hiring -->
+            <div class="bc-card bc-card-hiring" id="luna-card" style="border-color:rgba(224,64,251,0.25)" aria-disabled="true">
+              <div class="bc-btn" style="cursor:default">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border:2px dashed rgba(224,64,251,0.4);color:rgba(224,64,251,0.4)">?</div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:rgba(224,64,251,0.6)">LUNA</span>
+                    <span class="bc-role">Macro analyst</span>
                   </div>
                 </div>
+                <div class="bc-hiring-row2">WE ARE HIRING</div>
+                <div class="bc-hiring-row3">+ open desk</div>
               </div>
-              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
             </div>
 
-            <div class="glass-panel-deep rounded-xl agent-card-compact hiring-card" id="atlas-card" aria-disabled="true">
-              <div class="agent-card-head">
-                <div class="agent-avatar avatar-hiring avatar-hiring-atlas" aria-label="ATLAS hiring slot">?</div>
-                <div class="agent-meta">
-                  <div class="agent-name-row">
-                    <span class="text-sm font-black tracking-wider" style="color:#009688">ATLAS</span>
-                    <span class="agent-role-badge dim-role">TECHNICAL ANALYST</span>
-                  </div>
-                  <div class="agent-status-row">
-                    <span class="hiring-text">WE ARE HIRING</span>
+            <!-- ATLAS — hiring -->
+            <div class="bc-card bc-card-hiring" id="atlas-card" style="border-color:rgba(0,150,136,0.25)" aria-disabled="true">
+              <div class="bc-btn" style="cursor:default">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border:2px dashed rgba(0,150,136,0.4);color:rgba(0,150,136,0.4)">?</div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:rgba(0,150,136,0.6)">ATLAS</span>
+                    <span class="bc-role">Technical analyst</span>
                   </div>
                 </div>
+                <div class="bc-hiring-row2">WE ARE HIRING</div>
+                <div class="bc-hiring-row3">+ open desk</div>
               </div>
-              <span class="status-tag"><span class="dot-gray"></span>OPEN DESK</span>
             </div>
-          </div>
 
           <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
 
-          <div class="glass-panel-deep rounded-xl p-3">
-            <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
-            <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
-            <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
-            <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
-            <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
-          </div>
+      </div>
 
-        </div>
-
-        <div class="col-center">
+      <div class="col-center">
           <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap">
             <button class="filter-tab active" data-filter="all">ALL</button>
             <button class="filter-tab" data-filter="decision">DECISIONS</button>
@@ -949,9 +875,17 @@
           </div>
           <div class="feed-scroll" id="feed"></div>
         </div>
-      </div>
 
       <div class="col-right">
+
+        <!-- Session stats -->
+        <div class="glass-panel-deep rounded-xl p-3">
+          <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
+          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
+          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
+          <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
+          <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
+        </div>
 
         <!-- Price block -->
         <div class="ctx-block border-l-4 border-l-white/20">
