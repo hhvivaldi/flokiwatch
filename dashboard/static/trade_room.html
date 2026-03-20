@@ -610,7 +610,63 @@
         z-index: -1;
       }
 
-      /* ── Responsive fallback (tablet) ──────── */
+      /* ── Tool pills (Investigation) ─────────── */
+      .tool-pills-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+      .tool-pill {
+        background: rgba(138,138,154,0.1);
+        border: 0.5px solid rgba(138,138,154,0.2);
+        border-radius: 12px;
+        font-size: 10px;
+        padding: 2px 8px;
+        font-family: 'JetBrains Mono', monospace;
+        white-space: nowrap;
+        color: #8a8a9a;
+      }
+      .tp-market   { color: #00E5FF; border-color: rgba(0,229,255,0.3);   background: rgba(0,229,255,0.07); }
+      .tp-analysis { color: #FFB300; border-color: rgba(255,179,0,0.3);   background: rgba(255,179,0,0.07); }
+      .tp-memory   { color: #4CAF50; border-color: rgba(76,175,80,0.3);   background: rgba(76,175,80,0.07); }
+      .tp-decision { color: #AAFF00; border-color: rgba(170,255,0,0.3);   background: rgba(170,255,0,0.07); }
+      .tool-count-badge {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+        color: #64748b; font-family: 'JetBrains Mono', monospace;
+        margin-bottom: 5px; text-align: right;
+      }
+
+      /* ── Pattern rows (Top Patterns) ─────────── */
+      .pattern-row {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 0;
+        border-bottom: 0.5px solid rgba(138,138,154,0.1);
+      }
+      .pattern-row:last-child { border-bottom: none; }
+      .pat-dir-pill {
+        font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+        flex-shrink: 0; font-family: 'JetBrains Mono', monospace;
+      }
+      .pat-dir-buy  { background: rgba(76,175,80,0.15);  color: #4CAF50; border: 0.5px solid rgba(76,175,80,0.3); }
+      .pat-dir-sell { background: rgba(226,75,74,0.15);  color: #E24B4A; border: 0.5px solid rgba(226,75,74,0.3); }
+      .pat-dir-n    { background: rgba(148,163,184,0.1); color: #64748b; border: 0.5px solid rgba(148,163,184,0.2); }
+      .pat-name     { font-size: 10px; color: #e2e8f0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+      .pat-wr-wrap  { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+      .pat-wr-text  { font-size: 10px; color: #94a3b8; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+      .pat-bar-track{ width: 56px; height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+      .pat-bar-fill { height: 100%; border-radius: 2px; }
+
+      /* ── Watch range bar (Watch Conditions) ──── */
+      .wc-range-wrap   { margin-top: 4px; }
+      .wc-range-labels { display: flex; justify-content: space-between; margin-bottom: 4px; }
+      .wc-range-label  { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #00E5FF; }
+      .wc-range-track  { position: relative; height: 8px; border-radius: 4px; background: #2a2a3e; }
+      .wc-price-marker {
+        position: absolute; top: -3px;
+        width: 3px; height: 14px; border-radius: 2px;
+        transform: translateX(-50%);
+        transition: left 0.3s ease;
+        z-index: 1;
+      }
+      .wc-raw-line { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #64748b; margin-top: 5px; }
+
+      /* ── Responsive fallback (tablet) ──────────── */
       @media (max-width: 1024px) {
         .trade-room-grid {
           grid-template-rows: auto auto 1fr;
@@ -791,7 +847,9 @@
             <div class="bc-card" id="sage-card" style="border-color:#FFB300">
               <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" style="border-color:#FFB300;color:#FFB300">SG</div>
+                  <div class="bc-avatar" id="avatar-sage" style="border-color:#FFB300;color:#FFB300">
+                    <img class="avatar-img" id="avatar-sage-img" alt="SAGE" src="/image/sage-video-trade-room.gif" data-variant="1" />
+                  </div>
                   <div class="bc-identity">
                     <span class="bc-name" style="color:#FFB300">SAGE</span>
                     <span class="bc-role">Auditor</span>
@@ -924,19 +982,19 @@
         <!-- Floki last investigation -->
         <div class="ctx-block">
           <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
-          <div id="ctx-investigation" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap break-words">—</div>
+          <div id="ctx-investigation">—</div>
         </div>
 
         <!-- Top patterns -->
         <div class="ctx-block">
           <div class="ctx-label">TOP PATTERNS</div>
-          <div id="ctx-top-patterns" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap">—</div>
+          <div id="ctx-top-patterns">—</div>
         </div>
 
         <!-- Watch conditions -->
         <div class="ctx-block">
           <div class="ctx-label">WATCH CONDITIONS</div>
-          <div id="ctx-watch-conditions" class="font-mono text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap">No active watch conditions</div>
+          <div id="ctx-watch-conditions">No active watch conditions</div>
         </div>
 
         <!-- Session block -->
@@ -977,6 +1035,7 @@
           floki: ['/image/floki-video-trade-room.gif', '/image/floki-video-trade-room-2.gif'],
           rex: ['/image/rex-video-trade-room.gif', '/image/rex-video-trade-room-2.gif'],
           simba: ['/image/simba-video-trade-room.gif', '/image/simba-video-trade-room-2.gif'],
+          sage: ['/image/sage-video-trade-room.gif', '/image/sage-video-trade-room-2.gif'],
         };
 
         var tabs = document.querySelectorAll('.filter-tab');
@@ -1038,6 +1097,7 @@
               { id: 'avatar-floki-img', key: 'floki' },
               { id: 'avatar-rex-img', key: 'rex' },
               { id: 'avatar-simba-img', key: 'simba' },
+              { id: 'avatar-sage-img', key: 'sage' },
             ];
 
             ids.forEach(function (x) {
@@ -1266,9 +1326,10 @@
             var isFloki = author === 'FLOKI';
             var isRex = author === 'REX';
             var isSimba = author === 'SIMBA';
+            var isSage = author === 'SAGE';
 
             // Allow Simba events to display as feed messages.
-            if (!isFloki && !isRex && !isSimba) {
+            if (!isFloki && !isRex && !isSimba && !isSage) {
               // Unknown author: keep existing behavior (skip)
               continue;
             }
@@ -1282,6 +1343,11 @@
               bubbleCls = 'msg-bubble bubble-rex';
               nameCls = 'name-rex';
             }
+            if (isSage) {
+              sideCls = 'msg-row msg-left';
+              bubbleCls = 'msg-bubble bubble-floki';
+              nameCls = 'name-floki';
+            }
 
             var avatarClass = isRex ? 'avatar-rex' : 'avatar-floki';
             var avatarText = isRex ? 'RX' : 'FL';
@@ -1289,11 +1355,16 @@
               avatarClass = 'avatar-rex';
               avatarText = 'SI';
             }
+            if (isSage) {
+              avatarClass = 'avatar-sage';
+              avatarText = 'SG';
+            }
 
             var avatarImg = null;
             if (isFloki) avatarImg = '/image/floki-trade-room.png';
             else if (isRex) avatarImg = '/image/rex-trade-room.png';
             else if (isSimba) avatarImg = '/image/simba-trade-room.png';
+            else if (isSage) avatarImg = '/image/sage-trade-room.png';
 
             var content = (m.content || '').toString();
             // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
@@ -1488,6 +1559,7 @@
         }
 
         var cachedTopPatternsText = null;
+        var cachedTopPatternsHtml = null;
         var cachedPatternsUpdated = null;
 
         var cachedWatchConditionsPayload = null;
@@ -1518,6 +1590,85 @@
           } catch (e) {
             return '';
           }
+        }
+
+        function getToolCategory(name) {
+          var t = (name || '').toString().toLowerCase();
+          if (t === 'get_current_price' || t.indexOf('get_candle') === 0 || t.indexOf('get_indicator') === 0) return 'tp-market';
+          if (t === 'get_sr_zones' || t === 'get_fibonacci_levels' || t === 'get_macro') return 'tp-analysis';
+          if (t === 'read_session_memory' || t.indexOf('get_trade_pattern') === 0) return 'tp-memory';
+          if (t === 'debate_with_rex' || t === 'set_next_check' || t === 'execute_trade') return 'tp-decision';
+          return '';
+        }
+
+        function renderToolPills(tools) {
+          if (!Array.isArray(tools) || !tools.length) return '<span style="color:#64748b;font-size:10px;font-family:\'JetBrains Mono\',monospace">—</span>';
+          var html = '<div class="tool-count-badge">' + tools.length + ' tools</div><div class="tool-pills-wrap">';
+          for (var i = 0; i < tools.length; i++) {
+            var cls = getToolCategory(tools[i]);
+            html += '<span class="tool-pill' + (cls ? ' ' + cls : '') + '">' + esc(String(tools[i])) + '</span>';
+          }
+          return html + '</div>';
+        }
+
+        function renderPatternRows(pats) {
+          if (!Array.isArray(pats) || !pats.length) return '<span style="color:#64748b;font-size:10px;font-family:\'JetBrains Mono\',monospace">—</span>';
+          var html = '';
+          for (var pi = 0; pi < pats.length && pi < 3; pi++) {
+            var p = pats[pi] || {};
+            var name = (p.name || '—').toString();
+            var wr = (p.wr != null) ? Number(p.wr) : null;
+            var trades = (p.trades != null) ? Number(p.trades) : null;
+            var nu = name.toUpperCase();
+            var dir = nu.indexOf('BUY') >= 0 ? 'buy' : (nu.indexOf('SELL') >= 0 ? 'sell' : 'n');
+            var dirLbl = dir === 'buy' ? 'BUY' : (dir === 'sell' ? 'SELL' : 'N/A');
+            var wrPct = (wr !== null && isFinite(wr)) ? Math.round(wr) : null;
+            var barClr = wrPct === null ? '#64748b' : (wrPct >= 60 ? '#4CAF50' : (wrPct >= 50 ? '#FFB300' : '#E24B4A'));
+            var nTxt = (trades !== null && isFinite(trades)) ? '(n=' + Math.round(trades) + ')' : '';
+            var bw = wrPct !== null ? Math.min(100, wrPct) : 0;
+            html += '<div class="pattern-row">' +
+              '<span class="pat-dir-pill pat-dir-' + dir + '">' + dirLbl + '</span>' +
+              '<span class="pat-name">' + esc(name) + '</span>' +
+              '<div class="pat-wr-wrap"><span class="pat-wr-text">' + (wrPct !== null ? wrPct + '%' : '—') + ' ' + nTxt + '</span>' +
+              '<div class="pat-bar-track"><div class="pat-bar-fill" style="width:' + bw + '%;background:' + barClr + '"></div></div></div>' +
+            '</div>';
+          }
+          return html;
+        }
+
+        function renderWatchConditionsBar(conds, price) {
+          if (!Array.isArray(conds) || !conds.length) return '<span style="color:#64748b;font-size:10px;font-family:\'JetBrains Mono\',monospace">No active watch conditions</span>';
+          var lower = null, upper = null, rawLines = [];
+          for (var ci = 0; ci < conds.length; ci++) {
+            var c = conds[ci] || {};
+            var ct = (c.type || '').toString().toLowerCase();
+            var lv = (c.level != null && isFinite(Number(c.level))) ? Number(c.level) : null;
+            rawLines.push(esc((c.type || 'condition') + ': ' + (lv !== null ? lv.toFixed(1) : '—')));
+            if (ct === 'price_below' && lv !== null) upper = lv;
+            if (ct === 'price_above' && lv !== null) lower = lv;
+          }
+          var html = '';
+          if (lower !== null || upper !== null) {
+            var lo = lower !== null ? lower : (upper - 100);
+            var hi = upper !== null ? upper : (lower + 100);
+            var rng = hi - lo; if (rng <= 0) rng = 1;
+            var markerPct = null, markerClr = '#FFFFFF';
+            if (price !== null && isFinite(price)) {
+              if (price < lo) { markerPct = 0; markerClr = '#E24B4A'; }
+              else if (price > hi) { markerPct = 100; markerClr = '#4CAF50'; }
+              else { markerPct = ((price - lo) / rng) * 100; markerClr = '#FFFFFF'; }
+            }
+            html += '<div class="wc-range-wrap"><div class="wc-range-labels">' +
+              '<span class="wc-range-label">' + lo.toFixed(1) + '</span>' +
+              '<span class="wc-range-label">' + hi.toFixed(1) + '</span></div>' +
+              '<div class="wc-range-track">' +
+              (markerPct !== null ? '<div class="wc-price-marker" style="left:' + markerPct.toFixed(1) + '%;background:' + markerClr + '"></div>' : '') +
+              '</div></div>';
+          }
+          for (var rl = 0; rl < rawLines.length; rl++) {
+            html += '<div class="wc-raw-line">' + rawLines[rl] + '</div>';
+          }
+          return html;
         }
 
         function updatePanels(messages, state) {
@@ -1715,11 +1866,11 @@
                   if (!isFloki || !isDecision) continue;
                   var toolsUsed = m2.metadata ? m2.metadata.tools_used : null;
                   if (Array.isArray(toolsUsed) && toolsUsed.length) {
-                    chain = toolsUsed.join(' → ');
+                    chain = toolsUsed;
                   }
                   break;
                 }
-                invEl.textContent = chain || '—';
+                invEl.innerHTML = renderToolPills(Array.isArray(chain) ? chain : []);
               }
             } catch(e) {}
 
@@ -1727,7 +1878,9 @@
             try {
               var patEl = document.getElementById('ctx-top-patterns');
               if (patEl) {
-                if (cachedTopPatternsText) {
+                if (cachedTopPatternsHtml !== null) {
+                  patEl.innerHTML = cachedTopPatternsHtml;
+                } else if (cachedTopPatternsText) {
                   patEl.textContent = cachedTopPatternsText;
                 } else {
                   patEl.textContent = '—';
@@ -1936,27 +2089,14 @@
               try {
                 var wcEl = document.getElementById('ctx-watch-conditions');
                 if (wcEl) {
+                  var capturedPrice = isFinite(nShowPrice) ? nShowPrice : null;
                   wcEl.textContent = 'Loading...';
                   fetchJson('/api/agent-watch-conditions').then(function(payload) {
                     try {
                       var root = payload || {};
                       var conds = root.conditions;
-                      if (!Array.isArray(conds) || !conds.length) {
-                        wcEl.textContent = 'No active watch conditions';
-                        return;
-                      }
-
-                      var lines = [];
-                      for (var i = 0; i < conds.length; i++) {
-                        var c = conds[i] || {};
-                        var t = (c.type || '').toString();
-                        var level = (c.level !== null && c.level !== undefined && isFinite(Number(c.level))) ? Number(c.level) : null;
-                        var levelText = (level === null) ? '—' : String(level.toFixed(1));
-                        var head = t ? t : 'condition';
-                        lines.push(head + ': ' + levelText);
-                      }
-
-                      wcEl.textContent = lines.length ? lines.join('\n') : 'No active watch conditions';
+                      if (!Array.isArray(conds)) conds = [];
+                      wcEl.innerHTML = renderWatchConditionsBar(conds, capturedPrice);
                     } catch(e) {
                       wcEl.textContent = 'No active watch conditions';
                     }
@@ -1993,6 +2133,7 @@
               if (line) lines.push(line);
             }
             cachedTopPatternsText = lines.length ? lines.join('\n') : '—';
+            cachedTopPatternsHtml = renderPatternRows(pats.slice(0, 3));
           }).catch(function() {
             // silent
           });
