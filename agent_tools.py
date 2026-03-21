@@ -492,6 +492,20 @@ class AgentTools:
     ) -> Dict[str, Any]:
         start = time.time()
         try:
+            # Gate: Rex only reviews OPEN/CLOSE decisions (cost optimization FLO-50)
+            dir_check = str(my_direction or "").upper().strip()
+            rex_worthy = any(k in dir_check for k in ("BUY", "SELL", "OPEN", "CLOSE"))
+            if not rex_worthy:
+                from logger import log
+                log.info(f"REX | Skipped — decision is {dir_check} (Rex only reviews OPEN/CLOSE)")
+                elapsed = round((time.time() - start) * 1000, 1)
+                return {
+                    "success": True,
+                    "skipped": True,
+                    "reason": f"Rex only reviews OPEN/CLOSE — {dir_check} skipped",
+                    "latency_ms": elapsed,
+                }
+
             now = time.time()
             last_ts = getattr(self, "_rex_debate_last_ts", None)
             if last_ts is None or (now - float(last_ts)) > 300:
