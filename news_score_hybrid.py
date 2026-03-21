@@ -430,7 +430,7 @@ def get_direct_rss_headlines(max_headlines=30, max_age_hours=24):
 
     unique.sort(key=lambda x: x.get("age_hours", 999))
 
-    log(f"[ECHO] Direct RSS: {total_found} found, {filtered_out} filtered (>24h), {len(unique)} unique | feeds: {feeds_ok}/{len(ECHO_DIRECT_FEEDS)} ok, {feeds_failed} failed")
+    log.info(f"[ECHO] Direct RSS: {total_found} found, {filtered_out} filtered (>24h), {len(unique)} unique | feeds: {feeds_ok}/{len(ECHO_DIRECT_FEEDS)} ok, {feeds_failed} failed")
 
     return unique[:max_headlines]
 
