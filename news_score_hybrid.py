@@ -312,6 +312,129 @@ def get_rss_headlines(max_headlines=20, max_age_hours=24):
     return unique[:max_headlines]
 
 
+# ============================================================================
+# ECHO DIRECT RSS FEEDS (11 sources — faster than Google News for breaking news)
+# ============================================================================
+ECHO_DIRECT_FEEDS = [
+    # Forex / Gold breaking news
+    ("https://www.fxstreet.com/rss", "FXStreet", "forex_gold"),
+    ("https://www.fxstreet.com/rss/analysis", "FXStreet Analysis", "technical"),
+    # InvestingLive — fast breaking
+    ("https://investinglive.com/feed/news/", "InvestingLive", "breaking"),
+    ("https://investinglive.com/feed/forexorders/", "InvestingLive Orders", "forex_flow"),
+    ("https://investinglive.com/feed/", "InvestingLive All", "general"),
+    # Investing.com — commodities & economy
+    ("https://investing.com/rss/news_11.rss", "Investing.com", "commodities"),
+    ("https://investing.com/rss/news_14.rss", "Investing.com", "economy"),
+    # DailyForex
+    ("https://www.dailyforex.com/rss/forexnews.xml", "DailyForex", "forex_news"),
+    ("https://www.dailyforex.com/rss/technicalanalysis.xml", "DailyForex", "technical"),
+    # Community & geopolitics
+    ("https://www.myfxbook.com/rss/latest-forex-news", "Myfxbook", "forex_community"),
+    ("https://oilprice.com/rss/main", "OilPrice", "oil_geopolitics"),
+]
+
+
+def get_direct_rss_headlines(max_headlines=30, max_age_hours=24):
+    """
+    Fetch headlines from 11 direct RSS feeds (Echo News Sentinel sources).
+    Same pattern as get_rss_headlines() but for non-Google direct feeds.
+    Called every 5 min by Echo (ECHO_SCAN_INTERVAL_SECONDS).
+    """
+    headlines = []
+    now = datetime.now().astimezone()
+    cutoff = now - timedelta(hours=max_age_hours)
+
+    FEED_TIMEOUT = 5
+    feeds_ok = 0
+    feeds_failed = 0
+    total_found = 0
+    filtered_out = 0
+
+    for feed_url, source, category in ECHO_DIRECT_FEEDS:
+        try:
+            response = requests.get(feed_url, headers=HEADERS, timeout=FEED_TIMEOUT)
+            response.raise_for_status()
+            feeds_ok += 1
+
+            clean_text = response.text.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+            soup = BeautifulSoup(clean_text, 'lxml-xml')
+            items = soup.find_all('item')
+
+            for item in items[:10]:
+                title = item.find('title')
+                pub_date = item.find('pubDate')
+                description = item.find('description')
+                link = item.find('link')
+
+                if not title:
+                    continue
+
+                title_text = title.get_text(strip=True)
+                title_text = title_text.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+                if len(title_text) < 15:
+                    continue
+
+                total_found += 1
+
+                desc_text = ""
+                if description:
+                    desc_raw = description.get_text(strip=True)
+                    desc_clean = re.sub(r'<[^>]+>', '', desc_raw).strip()
+                    if len(desc_clean) > 10:
+                        desc_text = desc_clean[:500]
+                        desc_text = desc_text.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+
+                link_text = link.get_text(strip=True) if link else ""
+
+                if pub_date:
+                    parsed_date = parse_rss_date(pub_date.get_text())
+                    if parsed_date:
+                        if parsed_date < cutoff:
+                            filtered_out += 1
+                            continue
+                        age_hours = (now - parsed_date).total_seconds() / 3600
+                        timestamp_str = parsed_date.isoformat()
+                    else:
+                        age_hours = 0
+                        timestamp_str = datetime.now().isoformat()
+                else:
+                    age_hours = 0
+                    timestamp_str = datetime.now().isoformat()
+
+                headlines.append({
+                    "title": title_text,
+                    "description": desc_text,
+                    "link": link_text,
+                    "source": source,
+                    "category": category,
+                    "timestamp": timestamp_str,
+                    "age_hours": round(age_hours, 1),
+                })
+
+        except requests.exceptions.Timeout:
+            feeds_failed += 1
+            continue
+        except Exception:
+            feeds_failed += 1
+            continue
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for h in headlines:
+        title_lower = h["title"].lower()[:50]
+        if title_lower not in seen:
+            seen.add(title_lower)
+            unique.append(h)
+
+    unique.sort(key=lambda x: x.get("age_hours", 999))
+
+    log(f"[ECHO] Direct RSS: {total_found} found, {filtered_out} filtered (>24h), {len(unique)} unique | feeds: {feeds_ok}/{len(ECHO_DIRECT_FEEDS)} ok, {feeds_failed} failed")
+
+    return unique[:max_headlines]
+
+
 def get_headlines():
     """
     Fetch headlines via RSS (more reliable)
