@@ -19,6 +19,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import agent_reflection
+from config import INITIAL_BALANCE
 
 try:
     from dotenv import load_dotenv
@@ -977,8 +978,8 @@ def history_data():
         best_trade = None
         worst_trade = None
         
-        peak_equity = 0.0
-        current_equity = 0.0
+        peak_equity = float(INITIAL_BALANCE)
+        current_equity = float(INITIAL_BALANCE)
         max_drawdown_dollars = 0.0
         equity_curve = []
         
@@ -1197,8 +1198,28 @@ def history_data():
         live_stats = _calc_stats(live_trades)
         live_stats["max_drawdown"] = round(_calc_max_drawdown(live_trades), 2)
 
+        # Total P&L from bot_state.json balance minus INITIAL_BALANCE
+        total_pnl = None
+        try:
+            if STATE_FILE.exists():
+                with open(STATE_FILE, "r") as f:
+                    bot_state = json.load(f)
+                account = bot_state.get("account", {})
+                current_balance = float(account.get("balance", 0))
+                total_pnl = round(current_balance - INITIAL_BALANCE, 2)
+        except Exception:
+            pass
+
+        # Use live_stats (Population B) for the main stat cards
+        # Override total_profit with balance-derived P&L
+        card_stats = dict(live_stats)
+        if total_pnl is not None:
+            card_stats["total_profit"] = total_pnl
+        card_stats["best_trade_profit"] = round(best_trade["profit"], 2) if best_trade else 0.0
+        card_stats["worst_trade_profit"] = round(worst_trade["profit"], 2) if worst_trade else 0.0
+
         return JSONResponse({
-            "global_stats": global_stats,
+            "global_stats": card_stats,
             "live_stats": live_stats,
             "monthly_stats": monthly_stats,
             "equity_curve": equity_curve,

@@ -180,8 +180,8 @@ class HistoryApp {
         const ctx = document.getElementById('equityChart').getContext('2d');
         const curve = this.data.equity_curve || [];
         
-        // Add starting point 0
-        const dataPoints = [{x: 'Start', y: 0}];
+        // Start at INITIAL_BALANCE ($1000) — server sends balance values
+        const dataPoints = [{x: 'Start', y: 1000}];
         curve.forEach((point, index) => {
             // Shorten the time label for X axis
             const date = new Date(point.time);
@@ -222,7 +222,7 @@ class HistoryApp {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Cumulative P&L ($)',
+                    label: 'Account Balance ($)',
                     data: data,
                     borderColor: color,
                     backgroundColor: bgGradient,
@@ -249,7 +249,7 @@ class HistoryApp {
                         callbacks: {
                             label: function(context) {
                                 let val = context.parsed.y;
-                                return ` P&L: $${val.toFixed(2)}`;
+                                return ` Balance: $${val.toFixed(2)}`;
                             }
                         }
                     }
@@ -261,6 +261,7 @@ class HistoryApp {
                     },
                     y: {
                         grid: { color: '#1f2937', drawBorder: false },
+                        min: 750,
                         ticks: {
                             color: '#6b7280',
                             callback: function(value) { return '$' + value; }
