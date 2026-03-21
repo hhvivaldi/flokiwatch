@@ -916,7 +916,8 @@
             <div class="bc-card" id="echo-card" style="border-color:#00BCD4">
               <button type="button" class="bc-btn" data-expand-target="echo-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-echo" style="border-color:#00BCD4;color:#00BCD4;font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center">E</div>
+                  <div class="bc-avatar" id="avatar-echo" style="border-color:#00BCD4">
+                    <img class="avatar-img" id="avatar-echo-img" alt="ECHO" src="/image/echo-video-trade-room.gif" data-variant="1" />
                   <div class="bc-identity">
                     <span class="bc-name" style="color:#00BCD4">ECHO</span>
                     <span class="bc-role">News Sentinel</span>
@@ -1090,6 +1091,7 @@
           rex: ['/image/rex-video-trade-room.gif', '/image/rex-video-trade-room-2.gif'],
           simba: ['/image/simba-video-trade-room.gif', '/image/simba-video-trade-room-2.gif'],
           sage: ['/image/sage-video-trade-room.gif', '/image/sage-video-trade-room-2.gif'],
+          echo: ['/image/echo-video-trade-room.gif', '/image/echo-video-trade-room-2.gif'],
         };
 
         var tabs = document.querySelectorAll('.filter-tab');
@@ -1160,6 +1162,7 @@
               { id: 'avatar-rex-img', key: 'rex' },
               { id: 'avatar-simba-img', key: 'simba' },
               { id: 'avatar-sage-img', key: 'sage' },
+              { id: 'avatar-echo-img', key: 'echo' },
             ];
 
             ids.forEach(function (x) {
@@ -1487,6 +1490,7 @@
             else if (isRex) avatarImg = '/image/rex-trade-room.png';
             else if (isSimba) avatarImg = '/image/simba-trade-room.png';
             else if (isSage) avatarImg = '/image/sage-trade-room.png';
+            else if (isEcho) avatarImg = '/image/echo-trade-room.png';
 
             var content = (m.content || '').toString();
             // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
