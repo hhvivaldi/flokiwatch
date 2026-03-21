@@ -1,121 +1,172 @@
-# Monday Verification Checklist (March 16, 2026)
+# Monday Verification Checklist
 
-Market opens Sunday 22:00 UTC. Bot should be running on commit 57dfd87.
-
----
-
-## Phase 1: Startup (Sunday 22:00 UTC)
-
-Checklist: restart the dashboard server after any change to dashboard/server.py.
-
-### 1.1 Clean startup
-- Restart bot: python main.py
-- Verify: "AI Agent initialized: model=claude-sonnet-4-20250514, mode=active, timeout=60s"
-- Verify: No import errors
-- Verify: DB migrations applied (tool_trace columns)
-- Verify: "Market open" detected (not "Weekend — market closed")
-
-### 1.2 First Brain cycle
-- Wait 60 seconds
-- Verify: Brain analysis completes (Tech/News/ML/Momentum/Calendar scores in log)
-- This populates the cache that tools read from
+Market opens Sunday 22:00 UTC. All agents should be running.
 
 ---
 
-## Phase 2: First Agent Call (within first 30 min)
+## Phase 1: Startup (Sunday ~21:50 UTC)
 
-### 2.1 Tool use works
-- When PROACTIVE_H1 fires, verify log shows: "AGENT_TOOL | get_current_price | Xms"
-- Verify: Agent calls MULTIPLE tools (not just one)
-- Verify: Agent returns a valid JSON decision (WAIT, OPEN, etc.)
+### 1.1 Start the bot
+```powershell
+cd C:\Users\Hermano\OneDrive\Desktop\XAUUSD
+python main.py
+```
 
-### 2.2 Tool trace logged
-- Search log: Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "AGENT_TOOL" | Select-Object -Last 20
-- Should show sequence of tool calls with latency
+Verify in logs:
+- `AI Agent initialized: model=gemini-3-flash-preview, mode=active`
+- No import errors or tracebacks
+- `Market open` detected (not "Weekend — market closed")
 
-### 2.3 Session memory
-- After first Agent call, check: Get-Content -Path .\data\agent_session_memory.json -Raw
-- Should exist and contain session_notes from the Agent
+### 1.2 Start the dashboard
+```powershell
+python -m uvicorn dashboard.server:app --host 0.0.0.0 --port 8080
+```
+Access: http://localhost:8080/trade-room
 
-### 2.4 No errors
-- Search: Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "ERROR|CRITICAL|Traceback" | Select-Object -Last 10
-- Should be empty or only non-critical warnings
+### 1.3 First Brain cycle (within 60s)
+- Brain analysis completes: Tech/News/ML/Momentum/Calendar scores in log
+- This populates the cache that Floki's tools read from
 
 ---
 
-## Phase 3: First Trade (when Agent decides OPEN)
+## Phase 2: Agent Verification (first 30 min)
 
-### 3.1 execute_trade tool fires
-- Log shows: "AGENT_TOOL | execute_trade | direction=SELL sl=X tp=Y"
-- Safety checks pass (or fail with clear reason)
+### 2.1 Floki (Gemini 3 Flash)
+- `FLOKI_SCHEDULE | Calling Floki now (timer due)` in log
+- Floki calls multiple tools (get_current_price, get_indicators, get_headlines, etc.)
+- Returns valid decision: WAIT/OPEN_BUY/OPEN_SELL/HOLD_TRADE/CLOSE_TRADE
+- Trade Room card shows decision + confidence %
+
+### 2.2 Rex (GPT-4o) — on Floki decision
+- Rex debates Floki's reasoning (AGREE/DISAGREE)
+- Trade Room shows Rex message with structured badge
+
+### 2.3 Simba (Python) — every 30s
+- `SIMBA_CHECK` events in log
+- Trade Room shows patrol reports (price, conditions, trend, levels)
+- If Floki set wake conditions: Simba monitors them
+
+### 2.4 Echo (GPT-4o-mini) — every 5 min
+- `[ECHO] Direct RSS: N found` in log (11/11 feeds ok)
+- `[ECHO] N scanned, M fresh, K pass keyword filter`
+- IMPORTANT/CRITICAL alerts appear in Trade Room NEWS tab
+- Echo card shows: ACTIVE, last scan time, alert counts
+
+### 2.5 Session memory
+```powershell
+Get-Content .\data\agent_session_memory.json -Raw
+```
+Should contain Floki's session notes after first call.
+
+### 2.6 No errors
+```powershell
+Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|CRITICAL|Traceback" | Select-Object -Last 10
+```
+
+---
+
+## Phase 3: First Trade (when Floki decides OPEN)
+
+### 3.1 Trade execution
+- Log: `AGENT_TOOL | execute_trade | direction=BUY/SELL sl=X tp=Y`
+- Safety checks pass
 - Trade opens in MT5
+- Trade Room shows Floki decision with green/red badge
 
-### 3.2 BE/trailing parameters
-- If Agent specified custom BE/trailing, verify in brain_signal.json
-- If not specified, verify defaults calculated from SL distance
+### 3.2 Watch conditions
+- After trade: Floki calls `set_watch_conditions`
+- Simba starts monitoring those conditions
+- `data/agent_watch_conditions.json` contains the ticket
 
-### 3.3 Watch conditions set
-- After trade opens, check if Agent called set_watch_conditions
-- Verify: data/agent_watch_conditions.json contains the ticket
-
-### 3.4 Balance capture
-- Log shows: "BALANCE_CAPTURE | ticket=#X | balance=$Y"
+### 3.3 Balance capture
+- Log: `BALANCE_CAPTURE | ticket=#X | balance=$Y`
 
 ---
 
-## Phase 4: Position Management
+## Phase 4: Ongoing Monitoring
 
-### 4.1 Watch condition evaluation
-- Monitor checks conditions every 1 minute (when market open)
-- If condition triggers: Agent called with WATCH_CONDITION trigger type
+### 4.1 Agent scheduling
+- Floki self-schedules via `set_next_check` (5-120 min)
+- Check: `data/agent_next_check.json` for next_check_at timestamp
 
-### 4.2 Scheduled re-evaluation
-- Every 30 minutes: Agent called with PROACTIVE trigger
-- Agent should call get_open_positions() to check trade status
+### 4.2 Simba wake triggers
+- If wake condition met: `SIMBA_WAKE | Floki called immediately`
+- Floki reviews market and decides action
+
+### 4.3 Echo news alerts
+- CRITICAL → Simba wake → Floki called (max 2/hr)
+- IMPORTANT → stored in `data/echo_alerts.json` → Floki reads on next call
+- Trade Room NEWS tab shows all Echo alerts
+
+### 4.4 Sage daily audit
+- Runs at 21:00 UTC (Mon-Fri)
+- Report in `data/sage_report.json`
+- Trade Room Sage card shows win rate + profit factor
 
 ---
 
 ## Phase 5: Trade Close
 
-### 5.1 Position closes (EA trailing/SL/TP)
-- "Position #X disappeared" in log
-- "BALANCE_DIFF | ticket=#X | open=$Y | now=$Z | diff=$W"
+### 5.1 Position closes (EA trailing/SL/TP or Floki CLOSE_TRADE)
+- `Position #X disappeared` in log
+- `BALANCE_DIFF | ticket=#X | diff=$W`
+- Deal resolver finds matching MT5 deal
 
-### 5.2 Deal resolution
-- "DEAL_REFRESH | Forcing MT5 reconnect for ticket #X"
-- N2.5 today-only search attempts to find deal
-- Deal resolver subprocess if needed
-
-### 5.3 Watch conditions cleared
-- data/agent_watch_conditions.json: ticket removed after close
+### 5.2 Post-close
+- Watch conditions cleared for that ticket
+- Floki re-evaluates market on next scheduled call
 
 ---
 
-## Diagnostic Commands (run without restarting)
+## Diagnostic Commands
 
-# Tool use evidence
-Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "AGENT_TOOL" | Select-Object -Last 30
+```powershell
+# Recent Floki tool calls
+Select-String -Path .\logs\trading_bot_*.log -Pattern "AGENT_TOOL" | Select-Object -Last 20
+
+# Echo scan results
+Select-String -Path .\logs\trading_bot_*.log -Pattern "\[ECHO\]" | Select-Object -Last 10
+
+# Simba status
+Get-Content .\data\agent_wake_conditions.json -Raw
 
 # Session memory
-Get-Content -Path .\data\agent_session_memory.json -Raw
+Get-Content .\data\agent_session_memory.json -Raw
 
-# Watch conditions
-Get-Content -Path .\data\agent_watch_conditions.json -Raw
+# Next Floki check
+Get-Content .\data\agent_next_check.json -Raw
 
-# Errors
-Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "ERROR|Traceback" | Select-Object -Last 10
+# Echo alerts
+Get-Content .\data\echo_alerts.json -Raw
 
-# Agent decisions
-Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "Agent decision:" | Select-Object -Last 10
-
-# Balance capture
-Select-String -Path .\logs\trading_bot_2026-03-16.log -Pattern "BALANCE_CAPTURE|BALANCE_DIFF" | Select-Object -Last 10
+# Errors only
+Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|Traceback" | Select-Object -Last 10
+```
 
 ---
 
-## Rollback Plan
-If critical failures occur:
-- Last stable commit before tool-use: 24c4241 (prompt refinement, old XML architecture)
-- git checkout 24c4241 -- ai_agent.py main.py agent_prompts.py
-- Restart bot
-- This restores the old single-call XML flow
+## Key Config Values
+
+| Setting | Value | File |
+|---------|-------|------|
+| Floki model | gemini-3-flash-preview | config.py |
+| Rex model | gpt-4o | rex_validator.py |
+| Echo model | gpt-4o-mini (env: ECHO_MODEL) | config.py |
+| Brain cycle | 60s | config.py (ANALYSIS_INTERVAL_SECONDS) |
+| Monitor cycle | 10s | monitor.py |
+| Simba cycle | 30s | simba_watcher.py |
+| Echo scan | 300s (5 min) | config.py (ECHO_SCAN_INTERVAL_SECONDS) |
+| Floki default interval | 300s (5 min) | config.py (FLOKI_CALL_INTERVAL) |
+| Echo max wakes/hr | 2 | config.py (ECHO_MAX_WAKES_PER_HOUR) |
+| Echo daily cost cap | $1.00 | config.py (ECHO_DAILY_COST_CAP) |
+| Dashboard port | 8080 | uvicorn command |
+
+---
+
+## Trade Room Market Hours
+
+| Period | Floki/Rex/Simba/Sage | Echo |
+|--------|---------------------|------|
+| Market open (Mon 22:00 → Fri 21:00 UTC) | Normal status | ACTIVE |
+| Daily pause (21:00-22:00 UTC Mon-Thu) | COFFEE BREAK | ON WATCH |
+| Weekend (Fri 21:00 → Sun 22:00 UTC) | REST DAY | ON WATCH |
