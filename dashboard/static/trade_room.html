@@ -990,6 +990,7 @@
             <button class="filter-tab" data-filter="decision">DECISIONS</button>
             <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
             <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
+            <button class="filter-tab" data-filter="news">NEWS</button>
             <button class="filter-tab" data-filter="alert">ALERTS</button>
           </div>
           <div class="feed-scroll" id="feed"></div>
@@ -1368,6 +1369,10 @@
           if (currentFilter === 'conflict') {
             if (m.__kind === 'conflict') return true;
             return type === 'debate';
+          }
+          if (currentFilter === 'news') {
+            var rawType = (m.type || '').toString().toUpperCase();
+            return rawType.indexOf('ECHO_') === 0;
           }
           return type === currentFilter;
         }
