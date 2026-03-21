@@ -307,7 +307,7 @@ def get_rss_headlines(max_headlines=20, max_age_hours=24):
     # Sort by most recent first
     unique.sort(key=lambda x: x.get("age_hours", 999))
     
-    print(f"   📊 {total_found} found, {filtered_out} filtered (>24h), {len(unique)} unique | feeds: {feeds_ok} ok, {feeds_failed} failed")
+    log.info(f"RSS: {total_found} found, {filtered_out} filtered (>24h), {len(unique)} unique | feeds: {feeds_ok} ok, {feeds_failed} failed")
     
     return unique[:max_headlines]
 
@@ -335,12 +335,14 @@ ECHO_DIRECT_FEEDS = [
 ]
 
 
-def get_direct_rss_headlines(max_headlines=30, max_age_hours=24):
+def get_direct_rss_headlines(max_headlines=30, max_age_hours=None):
     """
     Fetch headlines from 11 direct RSS feeds (Echo News Sentinel sources).
     Same pattern as get_rss_headlines() but for non-Google direct feeds.
     Called every 5 min by Echo (ECHO_SCAN_INTERVAL_SECONDS).
     """
+    if max_age_hours is None:
+        max_age_hours = float(getattr(config, "ECHO_MAX_AGE_HOURS_DIRECT", 6))
     headlines = []
     now = datetime.now().astimezone()
     cutoff = now - timedelta(hours=max_age_hours)

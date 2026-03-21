@@ -418,6 +418,8 @@ ECHO_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_SCAN_INTERVAL_SECONDS", "3
 ECHO_GOOGLE_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_GOOGLE_SCAN_INTERVAL_SECONDS", "600"))  # 10 min for Google News feeds
 ECHO_COOLDOWN_MINUTES = int(os.environ.get("ECHO_COOLDOWN_MINUTES", "30"))           # Dedup window — same headline ignored within this window
 ECHO_DAILY_COST_CAP = float(os.environ.get("ECHO_DAILY_COST_CAP", "1.00"))          # Daily cost cap in USD (safety)
+ECHO_MAX_AGE_HOURS_DIRECT = float(os.environ.get("ECHO_MAX_AGE_HOURS_DIRECT", "6"))   # Direct feeds: max 6h old
+ECHO_MAX_AGE_HOURS_GOOGLE = float(os.environ.get("ECHO_MAX_AGE_HOURS_GOOGLE", "12"))  # Google News: max 12h old
 DISCORD_WEBHOOK_ECHO = os.environ.get("DISCORD_WEBHOOK_ECHO", "")                   # Echo alerts Discord channel
 
 # ============================================================================

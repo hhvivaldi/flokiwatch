@@ -982,9 +982,17 @@ function categoryBadge(cat) {
     market_risk: { label: "RISK", cls: "bg-pink-600/30 text-pink-400" },
     sanctions: { label: "SANCT", cls: "bg-amber-600/30 text-amber-400" },
     crisis_events: { label: "BLACK SWAN", cls: "bg-red-800/30 text-red-200" },
+    echo: { label: "ECHO", cls: "bg-cyan-600/30 text-cyan-400" },
   };
   const m = map[cat] || { label: cat || "?", cls: "bg-gray-600/30 text-gray-400" };
   return `<span class="px-1 py-0.5 rounded text-[9px] font-bold uppercase ${m.cls}">${m.label}</span>`;
+}
+
+function echoBadge(classification) {
+  if (!classification) return "";
+  if (classification === "CRITICAL") return `<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-red-500/30 text-red-400 border border-red-500/40 animate-pulse">CRITICAL</span>`;
+  if (classification === "IMPORTANT") return `<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/25 text-amber-400 border border-amber-500/30">IMPORTANT</span>`;
+  return "";
 }
 
 function renderIntelFeed(feed, mtfTrend, volumeGate) {
@@ -1023,7 +1031,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           <div class="flex-1 min-w-0 py-0.5">
             <div class="text-xs text-gray-200 leading-snug truncate font-medium" title="${h.title.replace(/"/g, '&quot;')}">${titleTrunc}</div>
             <div class="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 font-mono">
-              ${categoryBadge(h.category)}
+              ${echoBadge(h.echo_classification)}${categoryBadge(h.category)}
               <span>${age} ago</span>
             </div>
           </div>

@@ -408,6 +408,16 @@ def run_echo_scan(
             error="Echo disabled",
         )
 
+    # Check market hours — suppress IMPORTANT when market is closed
+    market_open = True
+    try:
+        from safety_checks import is_market_open
+        market_open, market_reason, _ = is_market_open()
+        if not market_open:
+            log.info(f"[ECHO] Market closed ({market_reason}) — IMPORTANT alerts suppressed, CRITICAL only")
+    except Exception:
+        pass  # If check fails, assume open (safer)
+
     scan_time = datetime.utcnow().isoformat()
 
     # 1. Collect headlines
@@ -420,6 +430,15 @@ def run_echo_scan(
         except Exception as e:
             log.error(f"[ECHO] Failed to fetch direct feeds: {e}")
             direct_headlines = []
+
+    if google_headlines is None:
+        try:
+            from news_score_hybrid import get_rss_headlines
+            google_max_age = float(getattr(config, "ECHO_MAX_AGE_HOURS_GOOGLE", 12))
+            google_headlines = get_rss_headlines(max_age_hours=google_max_age)
+        except Exception as e:
+            log.error(f"[ECHO] Failed to fetch Google News feeds: {e}")
+            google_headlines = []
 
     all_headlines.extend(direct_headlines or [])
     all_headlines.extend(google_headlines or [])
@@ -508,8 +527,11 @@ def run_echo_scan(
             critical_alerts.append(classified)
             store_alert(classified)
         elif classified.classification == "IMPORTANT":
-            important_alerts.append(classified)
-            store_alert(classified)
+            if market_open:
+                important_alerts.append(classified)
+                store_alert(classified)
+            else:
+                routine_count += 1  # Suppress IMPORTANT when market closed
         else:
             routine_count += 1
 

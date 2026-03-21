@@ -4626,9 +4626,46 @@ class TradingBot:
                     "age_hours": h.get("age_hours", 0),
                     "source": _s(h.get("source", "")),
                     "category": h.get("category", "gold"),
+                    "echo_classification": None,
                 }
                 for h in raw_headlines[:8]
             ]
+
+            # Enrich with Echo classifications from echo_alerts.json
+            try:
+                import json as _json
+                _alerts_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "echo_alerts.json")
+                if os.path.exists(_alerts_path):
+                    with open(_alerts_path, "r", encoding="utf-8") as _af:
+                        _echo_alerts = _json.load(_af)
+                    if isinstance(_echo_alerts, list):
+                        _alert_map = {a.get("title", "").lower()[:50]: a for a in _echo_alerts}
+                        # Tag matching headlines
+                        for hl in headlines:
+                            key = hl["title"].lower()[:50]
+                            if key in _alert_map:
+                                hl["echo_classification"] = _alert_map[key].get("classification")
+                                hl["echo_impact"] = _alert_map[key].get("gold_impact")
+                        # Add Echo-only headlines not already in Scanner set
+                        seen_keys = {hl["title"].lower()[:50] for hl in headlines}
+                        for a in reversed(_echo_alerts[-20:]):
+                            if len(headlines) >= 12:
+                                break
+                            key = (a.get("title") or "").lower()[:50]
+                            if key not in seen_keys and a.get("classification") in ("CRITICAL", "IMPORTANT"):
+                                headlines.append({
+                                    "title": _s(a.get("title", "")),
+                                    "score": a.get("relevance_score", 50),
+                                    "method": "echo",
+                                    "age_hours": 0,
+                                    "source": _s(a.get("source", "")),
+                                    "category": "echo",
+                                    "echo_classification": a.get("classification"),
+                                    "echo_impact": a.get("gold_impact"),
+                                })
+                                seen_keys.add(key)
+            except Exception:
+                pass
 
             # Macro components
             dxy_comp = components.get("dxy", {})
