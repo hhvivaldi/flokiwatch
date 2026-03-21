@@ -408,3 +408,16 @@ SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
 # but the main loop analysis cadence remains governed by ANALYSIS_INTERVAL_SECONDS.
 
 # ============================================================================
+# ECHO NEWS SENTINEL (24/7 breaking news monitor)
+# ============================================================================
+ECHO_ENABLED = True                                                           # Master switch for Echo agent
+ECHO_MODEL = os.environ.get("ECHO_MODEL", "gpt-4o-mini")                     # Classification model (swap to gpt-5-nano when available)
+ECHO_API_KEY = os.environ.get("ECHO_API_KEY", os.environ.get("OPENAI_API_KEY", ""))  # Dedicated key; falls back to OPENAI_API_KEY
+ECHO_MAX_WAKES_PER_HOUR = int(os.environ.get("ECHO_MAX_WAKES_PER_HOUR", "2"))       # Safety cap on CRITICAL → Simba wake
+ECHO_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_SCAN_INTERVAL_SECONDS", "300"))       # 5 min for direct RSS feeds
+ECHO_GOOGLE_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_GOOGLE_SCAN_INTERVAL_SECONDS", "600"))  # 10 min for Google News feeds
+ECHO_COOLDOWN_MINUTES = int(os.environ.get("ECHO_COOLDOWN_MINUTES", "30"))           # Dedup window — same headline ignored within this window
+ECHO_DAILY_COST_CAP = float(os.environ.get("ECHO_DAILY_COST_CAP", "1.00"))          # Daily cost cap in USD (safety)
+DISCORD_WEBHOOK_ECHO = os.environ.get("DISCORD_WEBHOOK_ECHO", "")                   # Echo alerts Discord channel
+
+# ============================================================================
