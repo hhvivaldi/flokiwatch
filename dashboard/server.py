@@ -800,8 +800,18 @@ def echo_api():
             except Exception:
                 pass
 
+        # Read last_scan from echo_status.json (written every cycle)
+        status_file = data_dir / "echo_status.json"
         last_scan = None
-        if today_alerts:
+        headlines_scanned = 0
+        if status_file.exists():
+            try:
+                status_data = json.loads(status_file.read_text(encoding="utf-8"))
+                last_scan = status_data.get("last_scan_at")
+                headlines_scanned = status_data.get("headlines_scanned", 0)
+            except Exception:
+                pass
+        if not last_scan and today_alerts:
             last_scan = today_alerts[-1].get("timestamp")
 
         enabled = bool(getattr(config, "ECHO_ENABLED", False)) if "config" in dir() else True

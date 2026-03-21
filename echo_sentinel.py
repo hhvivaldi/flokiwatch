@@ -35,6 +35,7 @@ DATA_DIR = Path(__file__).parent / "data"
 ALERTS_FILE = DATA_DIR / "echo_alerts.json"
 SEEN_HASHES_FILE = DATA_DIR / "echo_seen_hashes.json"
 COST_FILE = DATA_DIR / "echo_daily_cost.json"
+STATUS_FILE = DATA_DIR / "echo_status.json"
 
 # ============================================================================
 # KEYWORD PRE-FILTER (reuse from news_score_hybrid)
@@ -564,7 +565,7 @@ def run_echo_scan(
     except Exception as e:
         log.error(f"[ECHO] Failed to record agent events: {e}")
 
-    return EchoScanResult(
+    result = EchoScanResult(
         scan_time=scan_time,
         headlines_scanned=total_scanned,
         passed_keyword_filter=len(candidates),
@@ -573,3 +574,19 @@ def run_echo_scan(
         important_alerts=important_alerts,
         routine_count=routine_count,
     )
+
+    # Write status on every scan (even when no new alerts)
+    try:
+        STATUS_FILE.write_text(json.dumps({
+            "last_scan_at": scan_time,
+            "headlines_scanned": total_scanned,
+            "fresh": len(fresh_headlines) if 'fresh_headlines' in dir() else 0,
+            "passed_filter": len(candidates),
+            "critical": len(critical_alerts),
+            "important": len(important_alerts),
+            "routine": routine_count,
+        }, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return result
