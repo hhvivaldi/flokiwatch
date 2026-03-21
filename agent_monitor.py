@@ -1078,6 +1078,51 @@ class AgentMonitor:
                         met += 1
                         triggered.append(cid)
 
+                elif ctype in ("rsi_above", "rsi_below"):
+                    thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                    cur_rsi = self._safe_float(indicators.get("rsi"))
+                    if cur_rsi is None or thr is None:
+                        continue
+                    is_met = (cur_rsi > thr) if ctype == "rsi_above" else (cur_rsi < thr)
+                    status = "MET" if is_met else "NOT MET"
+                    try:
+                        log.info(f"SIMBA_CHECK | RSI H1: {cur_rsi:.1f} | condition {ctype}({thr:.0f}): {status}")
+                    except Exception:
+                        pass
+                    if is_met:
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "volume_above":
+                    thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                    cur_vol = last_h1_vol if last_h1_vol is not None else volume
+                    if cur_vol is None or thr is None:
+                        continue
+                    is_met = float(cur_vol) > float(thr)
+                    status = "MET" if is_met else "NOT MET"
+                    try:
+                        log.info(f"SIMBA_CHECK | Volume H1: {cur_vol:.0f} | condition volume_above({thr:.0f}): {status}")
+                    except Exception:
+                        pass
+                    if is_met:
+                        met += 1
+                        triggered.append(cid)
+
+                elif ctype == "adx_above":
+                    thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
+                    cur_adx = self._safe_float(indicators.get("adx"))
+                    if cur_adx is None or thr is None:
+                        continue
+                    is_met = float(cur_adx) > float(thr)
+                    status = "MET" if is_met else "NOT MET"
+                    try:
+                        log.info(f"SIMBA_CHECK | ADX H1: {cur_adx:.1f} | condition adx_above({thr:.0f}): {status}")
+                    except Exception:
+                        pass
+                    if is_met:
+                        met += 1
+                        triggered.append(cid)
+
                 else:
                     try:
                         log.warning(f"SIMBA | unrecognized wake condition type: {ctype} (id={cid})")

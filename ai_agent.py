@@ -608,7 +608,7 @@ class AIAgent:
             },
             {
                 "name": "set_wake_conditions",
-                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor and wake you only when conditions are met.",
+                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor (every 30s) and wake you when conditions are met. Supported condition types: price_above, price_below (level field), rsi_above, rsi_below (value field, H1 RSI), volume_above (value field, H1 tick volume), adx_above (value field, H1 ADX). Example condition: {type: 'rsi_above', value: 70, description: 'RSI overbought'}.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
