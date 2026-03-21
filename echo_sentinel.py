@@ -117,9 +117,8 @@ def _save_seen_hashes(hashes: Dict[str, float]) -> None:
 
 
 def _prune_expired_hashes(hashes: Dict[str, float]) -> Dict[str, float]:
-    """Remove hashes older than ECHO_COOLDOWN_MINUTES."""
-    cooldown_sec = getattr(config, "ECHO_COOLDOWN_MINUTES", 30) * 60
-    cutoff = time.time() - cooldown_sec
+    """Remove hashes older than 24 hours (dedup window for seen headlines)."""
+    cutoff = time.time() - 86400  # 24 hours
     return {h: ts for h, ts in hashes.items() if ts > cutoff}
 
 
@@ -544,24 +543,56 @@ def run_echo_scan(
         for imp in important_alerts:
             log.info(f"[ECHO] IMPORTANT: {imp.title} | {imp.gold_impact}")
 
-    # 6. Record agent events for Trade Room feed
+    # 6. Record agent events for Trade Room feed (with dedup against recent events)
     try:
         from db_writer import record_agent_event
+        import sqlite3 as _sqlite3
+        from pathlib import Path as _Path
+
+        # Load recent Echo event titles from DB to prevent duplicates
+        _recent_titles = set()
+        try:
+            _db_path = _Path(__file__).parent / "data" / "history.db"
+            if _db_path.exists():
+                _conn = _sqlite3.connect(str(_db_path))
+                _rows = _conn.execute(
+                    "SELECT content FROM agent_events WHERE author='ECHO' AND timestamp > datetime('now', '-24 hours')"
+                ).fetchall()
+                _conn.close()
+                for _r in _rows:
+                    # Extract title from content like "CRITICAL: Title. IMPACT. Summary"
+                    _txt = (_r[0] or "")
+                    _colon = _txt.find(": ")
+                    if _colon >= 0:
+                        _title_part = _txt[_colon + 2:].split(".")[0].strip().lower()[:50]
+                    else:
+                        _title_part = _txt.lower()[:50]
+                    _recent_titles.add(_title_part)
+        except Exception:
+            pass
 
         for c in critical_alerts:
-            record_agent_event(
-                event_type="ECHO_CRITICAL",
-                content=f"CRITICAL: {c.title}. {c.gold_impact}. {c.summary}",
-                payload=asdict(c),
-                author="ECHO",
-            )
+            if c.title.lower()[:50] not in _recent_titles:
+                record_agent_event(
+                    event_type="ECHO_CRITICAL",
+                    content=f"CRITICAL: {c.title}. {c.gold_impact}. {c.summary}",
+                    payload=asdict(c),
+                    author="ECHO",
+                )
+                _recent_titles.add(c.title.lower()[:50])
+            else:
+                log.info(f"[ECHO] Skipped duplicate event: {c.title[:50]}")
         for imp in important_alerts:
-            record_agent_event(
-                event_type="ECHO_IMPORTANT",
-                content=f"IMPORTANT: {imp.title}. {imp.gold_impact}. {imp.summary}",
-                payload=asdict(imp),
-                author="ECHO",
-            )
+            if imp.title.lower()[:50] not in _recent_titles:
+                record_agent_event(
+                    event_type="ECHO_IMPORTANT",
+                    content=f"IMPORTANT: {imp.title}. {imp.gold_impact}. {imp.summary}",
+                    payload=asdict(imp),
+                    author="ECHO",
+                )
+                _recent_titles.add(imp.title.lower()[:50])
+            else:
+                log.info(f"[ECHO] Skipped duplicate event: {imp.title[:50]}")
     except Exception as e:
         log.error(f"[ECHO] Failed to record agent events: {e}")
 
