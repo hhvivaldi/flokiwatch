@@ -2087,13 +2087,53 @@
                 simbaMode.setAttribute('style', statusStyle);
               }
 
+              // Sage status override
+              var sagePill = document.getElementById('sage-status');
+              if (sagePill) {
+                sagePill.textContent = statusText;
+                sagePill.setAttribute('style', statusStyle);
+              }
+              var sageSummary = document.getElementById('sage-summary');
+              if (sageSummary) {
+                sageSummary.textContent = statusText;
+                sageSummary.setAttribute('style', statusStyle);
+              }
+
               // Echo: always ON WATCH
               var echoPill = document.getElementById('echo-status-pill');
               if (echoPill) {
                 echoPill.innerHTML = '<span class="dot-green"></span>\uD83D\uDC41 ON WATCH';
                 echoPill.setAttribute('style', 'background:rgba(0,188,212,0.15);color:#00BCD4');
               }
+
+              // Dim resting cards, keep Echo bright
+              var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card'];
+              restingCards.forEach(function(id) {
+                var card = document.getElementById(id);
+                if (card) {
+                  card.style.opacity = '0.45';
+                  card.style.borderColor = '#2a2a3e';
+                  card.style.filter = 'saturate(0.4)';
+                }
+              });
+              var echoCard = document.getElementById('echo-card');
+              if (echoCard) {
+                echoCard.style.opacity = '1';
+                echoCard.style.borderColor = '#00BCD4';
+                echoCard.style.filter = 'none';
+                echoCard.style.boxShadow = '0 0 12px rgba(0,188,212,0.15)';
+              }
             } else {
+              // Market open — restore full brightness on all cards
+              var allCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'echo-card'];
+              allCards.forEach(function(id) {
+                var card = document.getElementById(id);
+                if (card) {
+                  card.style.opacity = '1';
+                  card.style.filter = 'none';
+                  card.style.boxShadow = '';
+                }
+              });
               setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
               setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), flokiConf);
             }
