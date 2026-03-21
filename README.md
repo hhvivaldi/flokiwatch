@@ -1,98 +1,125 @@
-# 🤖 FlokiWatch — XAU/USD Trading Bot
+# FlokiWatch — XAU/USD Trading Bot
 
-Fully automated trading bot for XAU/USD (Gold) using technical analysis, news sentiment, machine learning, and a 5-pillar "Central Brain" decision engine.
+Autonomous multi-agent trading system for XAU/USD (Gold) on MetaTrader 5. Six specialized AI agents collaborate through the **Trading Office** architecture.
 
-## 📋 Overview
+## Overview
 
 The bot operates **100% autonomously** on MetaTrader 5:
-- Opens trades automatically based on multi-pillar analysis
-- Manages positions (breakeven, trailing stop)
-- Closes trades automatically (TP/SL/trailing)
-- Sends real-time alerts to Discord
+- AI agents analyze markets and decide trades (no manual intervention)
+- Position management via EA Bridge (tick-by-tick breakeven, trailing stop)
+- 25 RSS news feeds monitored 24/7 for breaking events
+- Real-time Trade Room dashboard + Discord alerts
+- Daily performance audit by independent Sage auditor
 
-**Just monitor via Discord and the FlokiWatch dashboard!**
+**Current state:** DEMO mode, ICMarkets. Balance: $1064.02, 81 trades (Population B).
 
-## 🏗️ Architecture
+## Architecture — Trading Office
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     FLOKIWATCH CENTRAL BRAIN                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
-│  │  TECHNICAL │ │  MOMENTUM  │ │    NEWS    │ │  CALENDAR  │   │
-│  │   (35%)    │ │   (20%)    │ │   (20%)    │ │   (10%)    │   │
-│  │            │ │            │ │            │ │            │   │
-│  │ - EMAs     │ │ - ADX/DI   │ │ - Headlines│ │ - Events   │   │
-│  │ - RSI/MACD │ │ - Volume   │ │ - DXY/VIX  │ │ - Phases   │   │
-│  │ - Bollinger│ │ - Breakout │ │ - Yields   │ │ - Bias     │   │
-│  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘   │
-│        │              │              │              │           │
-│        └──────────────┴──────┬───────┴──────────────┘           │
-│                              │                                   │
-│                    ┌─────────┴─────────┐                        │
-│                    │   ML ENSEMBLE     │                        │
-│                    │      (15%)        │                        │
-│                    │ XGB+LGB+CatBoost  │                        │
-│                    │   H1 + H4 blend   │                        │
-│                    └─────────┬─────────┘                        │
-│                              ▼                                   │
-│                    ┌───────────────────┐                        │
-│                    │  SCENARIO ENGINE  │                        │
-│                    │  Dynamic weights  │                        │
-│                    │  Score 0-100      │                        │
-│                    └─────────┬─────────┘                        │
-│                              ▼                                   │
-│                    ┌───────────────────┐                        │
-│                    │  GPT VALIDATOR    │                        │
-│                    │  Confidence ±15   │                        │
-│                    └─────────┬─────────┘                        │
-│                              ▼                                   │
-│                    ┌───────────────────┐                        │
-│                    │  SAFETY CHECKS    │                        │
-│                    │  + Volatility     │                        │
-│                    │    Guard          │                        │
-│                    └─────────┬─────────┘                        │
-│                              ▼                                   │
-│                    ┌───────────────────┐                        │
-│                    │  RISK MANAGER     │──────────► MT5         │
-│                    │  ATR-based SL/TP  │                        │
-│                    └───────────────────┘                        │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+                        ┌──────────────────────────┐
+                        │      TRADING OFFICE       │
+                        ├──────────────────────────┤
+                        │                          │
+  ┌─────────┐  ┌────────┴────────┐  ┌───────────┐ │
+  │  FLOKI  │  │    BRAIN        │  │   ECHO    │ │
+  │ Agent   │  │  Data Pipeline  │  │  News     │ │
+  │ Gemini  │  │  (Python, 60s)  │  │  Sentinel │ │
+  │ 3 Flash │  │  Tech/ML/News/  │  │  GPT-4o-  │ │
+  │         │  │  Calendar/S&R   │  │  mini     │ │
+  │ DECIDES │  │  NO DECISIONS   │  │  24/7 RSS │ │
+  └────┬────┘  └────────┬────────┘  └─────┬─────┘ │
+       │                │                  │       │
+       │  ┌─────────┐   │   ┌──────────┐   │       │
+       ├──│   REX   │   │   │  SIMBA   │   │       │
+       │  │ Debate  │   │   │ Watchdog │   │       │
+       │  │ GPT-4o  │   │   │ (Python) │───┘       │
+       │  └─────────┘   │   └──────────┘           │
+       │                │                          │
+       │  ┌─────────┐   │                          │
+       │  │  SAGE   │   │                          │
+       │  │ Auditor │   │                          │
+       │  │ Daily   │   │                          │
+       │  └─────────┘   │                          │
+       ▼                ▼                          │
+  ┌─────────────────────────────┐                  │
+  │  EXECUTOR + EA BRIDGE       │                  │
+  │  MT5 Orders (tick-by-tick)  │                  │
+  └─────────────────────────────┘                  │
+                        │                          │
+                        └──────────────────────────┘
 ```
 
-## 📁 Project Structure
+### Agent Roles
+
+| Agent | Model | Role | Cadence |
+|-------|-------|------|---------|
+| **Floki** | Gemini 3 Flash | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 5-30 min (self-scheduled via `set_next_check`) |
+| **Rex** | GPT-4o | Debate partner — challenges Floki's reasoning (AGREE/DISAGREE) | On each Floki decision |
+| **Simba** | Python (no AI cost) | Watchdog — monitors wake/watch conditions, wakes Floki | Every 30s |
+| **Sage** | Gemini | Performance auditor — daily trade review + recommendations | Daily at 21:00 UTC |
+| **Echo** | GPT-4o-mini | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | Every 5 min |
+| **Luna** | TBD | Macro analyst (planned Phase 3) | — |
+| **Atlas** | TBD | Technical analyst (planned Phase 3) | — |
+
+### Data Pipeline (Brain)
+
+The Brain runs every 60 seconds and feeds raw data to agents:
+- **Technical**: RSI, MACD, Bollinger, EMAs, ATR, S/R zones, Fibonacci
+- **ML Ensemble**: 6 models (XGBoost + LightGBM + CatBoost × H1 + H4)
+- **News**: 25 RSS feeds (14 Google News + 11 direct) + DXY/VIX/Yields
+- **Calendar**: Economic events from MQL5/FCS API
+- **Momentum**: ADX, volume, breakout detection
+
+The Brain does NOT make trading decisions — Floki is the sole decisor.
+
+### Scheduling & Triggers
+
+| Trigger | Who Fires | What Happens |
+|---------|-----------|-------------|
+| `SCHEDULED` | Timer (Floki's `set_next_check`) | Floki analyzes full market snapshot |
+| `SIMBA_WAKE` | Simba detects wake condition | Floki called immediately |
+| `SIMBA_WATCH` | Simba detects watch condition | Floki reviews open position |
+| `ECHO_CRITICAL` | Echo classifies breaking news | Floki called immediately (max 2/hr) |
+
+Legacy triggers (entry conditions, breakout, session change) are **disabled** — the allowlist gate in `agent_proactive_out_of_cycle()` only passes SCHEDULED, SIMBA_WAKE, SIMBA_WATCH, ECHO_CRITICAL.
+
+## Project Structure
 
 ```
 flokiwatch/
-├── main.py                 # Main bot loop
+├── main.py                 # Orchestrator — main loop, agent scheduling
 ├── config.py               # Configuration (loads from .env)
-├── central_brain.py        # 5-pillar decision engine
-├── confluence.py           # Legacy confluence system (fallback)
-├── risk_manager.py         # Position sizing, SL/TP calculation
-├── executor.py             # MT5 order execution
+├── ai_agent.py             # Floki agent (Gemini 3 Flash, tool-use)
+├── agent_tools.py          # Floki's 20+ tools (market data, trading, memory)
+├── agent_prompts.py        # System prompt builder
+├── rex_validator.py        # Rex debate partner (GPT-4o)
+├── echo_sentinel.py        # Echo news sentinel (GPT-4o-mini, RSS feeds)
+├── simba_watcher.py        # Simba watchdog (Python, zero AI cost)
+├── sage_auditor.py         # Sage daily auditor
+├── central_brain.py        # Data pipeline (5 pillars, no decisions)
 ├── monitor.py              # Position monitoring (breakeven, trailing)
-├── safety_checks.py        # Safety validations
-├── volatility_guard.py     # Extreme volatility detection
-├── technical_analyzer.py   # Technical indicators
-├── momentum_detector.py    # Momentum analysis
+├── executor.py             # MT5 order execution
+├── risk_manager.py         # Position sizing, SL/TP calculation
+├── safety_checks.py        # Safety validations + market hours
 ├── ml_predictor.py         # ML ensemble predictions
-├── news_score_hybrid.py    # GPT-powered news scoring
-├── economic_calendar.py    # Economic calendar integration
-├── gpt_confidence.py       # GPT confidence validator
-├── support_resistance.py   # S/R zone detection
-├── alerts.py               # Discord notifications
+├── news_score_hybrid.py    # News scoring + 25 RSS feeds
 ├── db_writer.py            # SQLite history database
-├── state_writer.py         # Dashboard state file
-├── dashboard/              # FlokiWatch web dashboard
-├── scripts/                # Training & analysis scripts
+├── state_writer.py         # Dashboard state file (bot_state.json)
+├── dashboard/
+│   ├── server.py           # FastAPI backend (port 8080)
+│   └── static/
+│       ├── index.html      # Main dashboard
+│       ├── trade_room.html # Trade Room (agent cards + live feed)
+│       ├── history.html    # Trade history + equity curve
+│       ├── app.js          # Dashboard frontend logic
+│       └── history.js      # History page logic
+├── data/                   # Runtime data (bot_state.json, alerts, etc.)
 ├── models/                 # ML model configs (JSON)
-├── data/                   # Runtime data (gitignored)
-└── logs/                   # Log files (gitignored)
+├── logs/                   # Log files
+└── mql5/                   # EA Bridge (FlokiBridge.mq5)
 ```
 
-## ⚙️ Setup
+## Setup
 
 ### 1. Clone and Install
 
@@ -104,149 +131,81 @@ pip install -r requirements.txt
 
 ### 2. Configure Environment
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Copy `.env.example` to `.env` and fill in credentials:
 
 ```bash
 cp .env.example .env
 ```
 
 Required variables:
-- `MT5_ACCOUNT` — Your MT5 account number
-- `MT5_PASSWORD` — Your MT5 password
-- `MT5_SERVER` — Broker server (e.g., ICMarkets-Demo)
-- `MT5_TERMINAL_PATH` — Path to terminal64.exe
-- `DISCORD_WEBHOOK_URL` — Discord webhook for alerts
-- `OPENAI_API_KEY` — OpenAI API key for GPT features
+- `MT5_ACCOUNT`, `MT5_PASSWORD`, `MT5_SERVER`, `MT5_TERMINAL_PATH`
+- `DISCORD_WEBHOOK_URL` (+ channel-specific webhooks)
+- `OPENAI_API_KEY` — For Rex (GPT-4o) and Echo (GPT-4o-mini)
+- `GEMINI_API_KEY` — For Floki (Gemini 3 Flash)
+- `ECHO_API_KEY` — Echo dedicated key (falls back to OPENAI_API_KEY)
 
-### 3. Configure MT5
-
-1. Open MetaTrader 5
-2. Tools → Options → Expert Advisors
-3. Enable "Allow algorithmic trading"
-4. Enable "Allow DLL imports"
-
-### 4. Train ML Models (Optional)
-
-Models are included, but to retrain:
-
-```bash
-python scripts/collect_training_data.py
-python scripts/train_ensemble.py
-```
-
-## 🚀 Usage
-
-### Start the Bot
+### 3. Start the Bot
 
 ```bash
 python main.py
 ```
 
-The bot will:
-1. Connect to MT5
-2. Run analysis every 5 minutes
-3. Execute trades when conditions are met
-4. Monitor positions every 10 seconds
-5. Send Discord alerts for all events
-
-### Start the Dashboard
+### 4. Start the Dashboard
 
 ```bash
-cd dashboard
-python server.py
+python -m uvicorn dashboard.server:app --host 0.0.0.0 --port 8080
 ```
 
-Checklist: restart the dashboard server after any change to dashboard/server.py.
+Access at `http://localhost:8080`
 
-Access at `http://localhost:5000`
+## Dashboard
 
-## 📊 Decision System
+- **Main Dashboard** (`/`): Balance, P&L, positions, Intel Feed with Echo badges
+- **Trade Room** (`/trade-room`): 6 agent cards, live feed with structured messages, NEWS filter
+- **History** (`/history`): Equity curve (anchored to real balance), stat cards (Population B), monthly breakdown
+- **About** (`/about`): System info and agent descriptions
 
-### Score Thresholds
+### Trade Room Features
 
-| Score | Decision | Action |
-|-------|----------|--------|
-| ≥ 65 | BUY | ✅ Opens BUY position |
-| 35-65 | HOLD | ⏸️ No action |
-| ≤ 35 | SELL | ✅ Opens SELL position |
+- Agent cards with animated avatars (GIF rotation every 60s)
+- Market hours personality: REST DAY (weekend) / COFFEE BREAK (daily pause) / ON WATCH (Echo)
+- Resting cards dimmed (opacity 0.45, desaturated) — Echo stays bright 24/7
+- Structured message rendering (Floki decisions, Rex debates, Simba patrols, Echo alerts)
+- Feed filter tabs: ALL / DECISIONS / CONFLICTS / ANALYSIS / NEWS / ALERTS
 
-### Confidence Gate
+## Performance (Population B)
 
-Trades only execute if confidence ≥ 55%. Lower confidence = forced HOLD.
+Stats filtered to ticket >= 8, open_time >= 2026-02-16:
 
-### Scenario Multipliers
+| Metric | Value |
+|--------|-------|
+| Trades | 81 |
+| Win Rate | 56.79% |
+| Profit Factor | 0.95 |
+| Total P&L | +$64.02 |
+| Balance | $1,064.02 |
+| Max Drawdown | $242.43 |
 
-The brain adjusts weights based on detected scenarios:
-- `alinhamento_perfeito` (1.15×) — All pillars agree
-- `momentum_forte` (1.10×) — Strong momentum detected
-- `lateralizacao` (0.85×) — Ranging market
-- `sinais_conflitantes` (0.80×) — Conflicting signals
-- `volatilidade_extrema` (0.00×) — Extreme volatility block
+Equity curve anchored to real balance from `bot_state.json` (accounts for swap/commission not in DB profit column).
 
-## 🛡️ Safety Features
+## Safety Features
 
-The bot **blocks trades** when:
-- ❌ MT5 disconnected
-- ❌ Market closed (weekend, daily pause 21:00-22:00 UTC)
-- ❌ 3+ consecutive losses (24h pause)
-- ❌ 3+ open positions
-- ❌ Daily loss > 6%
-- ❌ Extreme volatility (>1.8% M5 candle)
-- ❌ During high-impact news release
-- ❌ Spread > 5 pips
+- Max 1 position at a time
+- ATR-based SL/TP (1.5× ATR SL, 3.0× ATR TP)
+- 3 consecutive losses → 24h pause
+- Daily loss > 6% → block
+- Extreme volatility guard (>1.8% M5 candle)
+- High-impact news release → block
+- Spread > 5 pips → block
+- Echo: max 2 CRITICAL wakes per hour
+- Echo: daily cost cap ($1.00/day)
 
-## 💰 Risk Management
-
-### Position Sizing
-
-```
-Risk per trade: 2% of capital
-Lot size = (Capital × 2%) / (SL_pips × $10)
-```
-
-### Stop Loss / Take Profit
-
-ATR-based (Average True Range):
-- **SL**: 1.5 × ATR (min 150, max 800 pips)
-- **TP**: 3.0 × ATR
-
-### Position Management
-
-1. **Breakeven**: SL moves to entry at 0.7 × SL distance profit
-2. **Trailing**: Activates at 0.7 × SL distance, trails at 0.7 × ATR
-3. **Max Duration**: Auto-close after 24h if profit < 5 pips
-
-## 📱 Discord Alerts
-
-- 🤖 Bot started/stopped
-- 🟢 BUY signal detected
-- 🔴 SELL signal detected
-- ✅ Order executed
-- 🔒 Breakeven activated
-- � Trailing stop updated
-- � Trade closed (TP/SL/Trailing)
-- ⛔ Signal blocked (safety)
-- 💓 Hourly heartbeat (when idle)
-- ⚠️ Critical errors
-
-## 📈 Performance
-
-Backtest results (Jan-Feb 2026):
-
-| Metric | In-Sample | Out-of-Sample |
-|--------|-----------|---------------|
-| Trades | 33 | 56 |
-| Win Rate | 81.8% | 67.9% |
-| Profit Factor | 3.53 | 1.62 |
-| Max Drawdown | $137 | $123 |
-
-## ⚠️ Disclaimer
+## Disclaimer
 
 1. **Always test in DEMO mode first**
 2. **Start with small capital** in LIVE mode
-3. **Monitor via Discord** during initial weeks
-4. **Do not manually modify trades** — let the bot manage
-5. **Keep MT5 running** on VPS or dedicated machine
+3. **Monitor via Discord and Trade Room** during initial weeks
+4. **Keep MT5 running** on VPS or dedicated machine
 
 ---
 
