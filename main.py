@@ -299,7 +299,7 @@ class TradingBot:
             except Exception:
                 acquired = True
 
-            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH"}
+            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "ECHO_CRITICAL"}
             if str(trigger_type or "") not in allowed:
                 log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
                 return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
@@ -1070,7 +1070,54 @@ class TradingBot:
                                 threading.Thread(target=_run_sage_safe, daemon=True).start()
                 except Exception as e:
                     log.debug(f"SAGE | schedule check error (ignored): {e}")
-                
+
+                # Echo News Sentinel (non-blocking, every ECHO_SCAN_INTERVAL_SECONDS)
+                try:
+                    echo_enabled = bool(getattr(config, "ECHO_ENABLED", False))
+                    if echo_enabled:
+                        echo_interval = int(getattr(config, "ECHO_SCAN_INTERVAL_SECONDS", 300))
+                        now_ts = time.time()
+                        last_echo = getattr(self, "_echo_last_scan_ts", 0) or 0
+
+                        if (now_ts - last_echo) >= echo_interval:
+                            self._echo_last_scan_ts = now_ts
+
+                            def _run_echo_safe() -> None:
+                                try:
+                                    from echo_sentinel import run_echo_scan
+                                    result = run_echo_scan()
+
+                                    if result.critical_alerts:
+                                        # Safety: max ECHO_MAX_WAKES_PER_HOUR
+                                        max_wakes = int(getattr(config, "ECHO_MAX_WAKES_PER_HOUR", 2))
+                                        hour_key = datetime.utcnow().strftime("%Y-%m-%d-%H")
+                                        echo_wake_counts = getattr(self, "_echo_wake_counts", {})
+                                        wakes_this_hour = echo_wake_counts.get(hour_key, 0)
+
+                                        if wakes_this_hour < max_wakes:
+                                            echo_wake_counts[hour_key] = wakes_this_hour + 1
+                                            # Prune old hour keys
+                                            self._echo_wake_counts = {k: v for k, v in echo_wake_counts.items() if k >= datetime.utcnow().strftime("%Y-%m-%d-%H")}
+
+                                            trigger_data = {
+                                                "critical_count": len(result.critical_alerts),
+                                                "headlines": [c.title for c in result.critical_alerts[:3]],
+                                                "scan_time": result.scan_time,
+                                            }
+                                            log.info(f"ECHO | CRITICAL alert — waking Floki ({wakes_this_hour + 1}/{max_wakes} this hour)")
+                                            self.agent_proactive_out_of_cycle(
+                                                trigger_type="ECHO_CRITICAL",
+                                                trigger_data=trigger_data,
+                                            )
+                                        else:
+                                            log.warning(f"ECHO | CRITICAL alert suppressed — wake cap reached ({max_wakes}/hr)")
+                                except Exception as e_echo:
+                                    log.warning(f"ECHO | scheduler error (ignored): {e_echo}")
+
+                            threading.Thread(target=_run_echo_safe, daemon=True).start()
+                except Exception as e:
+                    log.debug(f"ECHO | schedule check error (ignored): {e}")
+
                 # Check if market is open
                 market_open, market_reason, next_open = is_market_open()
                 
@@ -3093,6 +3140,9 @@ class TradingBot:
 
         if trigger_type in ("SIMBA_WAKE", "SIMBA_WATCH"):
             log.info("FLOKI_SCHEDULE | Simba override — calling Floki now (wake/watch condition met)")
+
+        if trigger_type == "ECHO_CRITICAL":
+            log.info("FLOKI_SCHEDULE | Echo CRITICAL alert — calling Floki now (breaking news)")
 
         agent = get_agent()
         if not agent.is_enabled():

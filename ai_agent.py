@@ -682,6 +682,11 @@ class AIAgent:
                     "additionalProperties": False,
                 },
             },
+            {
+                "name": "get_echo_alerts",
+                "description": "Get pending news alerts from Echo News Sentinel (IMPORTANT/CRITICAL headlines). Marks alerts as read after retrieval.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
         ]
 
     def _gemini_function_declarations(self) -> List[Dict[str, Any]]:

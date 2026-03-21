@@ -1820,6 +1820,29 @@ class AgentTools:
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "agent_wake_conditions.json")
 
+    # ---------------------------------------------------------------------
+    # Echo News Sentinel alerts
+    # ---------------------------------------------------------------------
+
+    def get_echo_alerts(self) -> Dict[str, Any]:
+        """Read unread Echo alerts (IMPORTANT/CRITICAL). Marks as read."""
+        start = time.time()
+        try:
+            from echo_sentinel import get_unread_alerts
+            alerts = get_unread_alerts()
+            elapsed = round((time.time() - start) * 1000, 1)
+            if not alerts:
+                return {"success": True, "alerts": [], "count": 0, "latency_ms": elapsed}
+            return {
+                "success": True,
+                "alerts": alerts,
+                "count": len(alerts),
+                "latency_ms": elapsed,
+            }
+        except Exception as e:
+            elapsed = round((time.time() - start) * 1000, 1)
+            return {"success": False, "reason": f"echo_alerts_error: {e}", "latency_ms": elapsed}
+
     def _agent_monitor_events_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")
