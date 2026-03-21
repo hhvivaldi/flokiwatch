@@ -2088,7 +2088,7 @@
               var rexTextClosed = document.getElementById('rex-agree-text');
               if (rexTextClosed) rexTextClosed.textContent = '—';
 
-              // Dim resting cards, keep Echo bright
+              // Dim resting cards + hide metrics, keep Echo bright
               var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card'];
               restingCards.forEach(function(id) {
                 var card = document.getElementById(id);
@@ -2096,6 +2096,8 @@
                   card.style.opacity = '0.45';
                   card.style.borderColor = '#2a2a3e';
                   card.style.filter = 'saturate(0.4)';
+                  var row3 = card.querySelector('.bc-row3');
+                  if (row3) row3.style.display = 'none';
                 }
               });
               var echoCard = document.getElementById('echo-card');
@@ -2123,6 +2125,9 @@
                     children[c].style.display = '';
                   }
                 }
+                // Restore metrics row
+                var row3 = card.querySelector('.bc-row3');
+                if (row3) row3.style.display = '';
               });
               setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
               setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), flokiConf);
