@@ -1218,11 +1218,21 @@ def history_data():
         card_stats["best_trade_profit"] = round(best_trade["profit"], 2) if best_trade else 0.0
         card_stats["worst_trade_profit"] = round(worst_trade["profit"], 2) if worst_trade else 0.0
 
+        # Build equity curve from Population B trades only (balance view)
+        pop_b_balance = float(INITIAL_BALANCE)
+        pop_b_equity_curve = []
+        for t in live_trades:
+            pop_b_balance += float(t.get("profit") or 0.0)
+            pop_b_equity_curve.append({
+                "time": t.get("close_time"),
+                "equity": round(pop_b_balance, 2)
+            })
+
         return JSONResponse({
             "global_stats": card_stats,
             "live_stats": live_stats,
             "monthly_stats": monthly_stats,
-            "equity_curve": equity_curve,
+            "equity_curve": pop_b_equity_curve,
             "trades": trades
         })
         
