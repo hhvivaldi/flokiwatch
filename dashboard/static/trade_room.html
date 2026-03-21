@@ -95,6 +95,12 @@
         color: #f59e0b;
         box-shadow: 0 0 15px rgba(245, 158, 11, 0.12);
       }
+      .avatar-echo {
+        background: rgba(0, 188, 212, 0.1);
+        border: 1.5px solid rgba(0, 188, 212, 0.3);
+        color: #00BCD4;
+        box-shadow: 0 0 15px rgba(0, 188, 212, 0.12);
+      }
       .avatar-sm {
         width: 32px;
         height: 32px;
@@ -353,6 +359,21 @@
         border: 1px solid rgba(99, 102, 241, 0.15);
         border-top-right-radius: 2px;
       }
+      .bubble-echo {
+        background: rgba(0, 188, 212, 0.08);
+        border: 1px solid rgba(0, 188, 212, 0.2);
+        border-top-right-radius: 2px;
+      }
+      .bubble-echo-critical {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-top-right-radius: 2px;
+      }
+      .bubble-echo-important {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-top-right-radius: 2px;
+      }
 
       .msg-meta {
         display: flex;
@@ -363,6 +384,9 @@
       .msg-name { font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
       .name-floki { color: #10b981; }
       .name-rex   { color: #818cf8; }
+      .name-echo  { color: #00BCD4; }
+      .name-echo-critical  { color: #ef4444; font-weight: 900; }
+      .name-echo-important { color: #f59e0b; }
       .msg-time { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #475569; margin-left: auto; }
 
       /* ── Conflict inline banner ─────────────── */
@@ -882,18 +906,41 @@
               </div>
             </div>
 
-            <!-- ECHO — hiring -->
-            <div class="bc-card bc-card-hiring" id="echo-card" style="border-color:rgba(0,229,255,0.25)" aria-disabled="true">
-              <div class="bc-btn" style="cursor:default">
+            <!-- ECHO -->
+            <div class="bc-card" id="echo-card" style="border-color:#00BCD4">
+              <button type="button" class="bc-btn" data-expand-target="echo-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" style="border:2px dashed rgba(0,229,255,0.4);color:rgba(0,229,255,0.4)">?</div>
+                  <div class="bc-avatar" id="avatar-echo" style="border-color:#00BCD4;color:#00BCD4;font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center">E</div>
                   <div class="bc-identity">
-                    <span class="bc-name" style="color:rgba(0,229,255,0.6)">ECHO</span>
-                    <span class="bc-role">News sentinel</span>
+                    <span class="bc-name" style="color:#00BCD4">ECHO</span>
+                    <span class="bc-role">News Sentinel</span>
                   </div>
                 </div>
-                <div class="bc-hiring-row2">WE ARE HIRING</div>
-                <div class="bc-hiring-row3">+ open desk</div>
+                <div class="bc-row2">
+                  <span id="echo-status-pill" class="bc-pill" style="background:rgba(0,188,212,0.15);color:#00BCD4">STANDBY</span>
+                  <span id="echo-alert-pill" class="bc-pill" style="background:rgba(0,188,212,0.08);color:#8a8a9a">0 alerts</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Last scan</span>
+                    <span id="echo-last-scan" class="bc-metric-val" style="color:#00BCD4">—</span>
+                  </div>
+                  <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#00BCD4"></div></div>
+                </div>
+              </button>
+              <div id="echo-expand" class="agent-expand">
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">Headlines scanned</span>
+                  <span id="echo-scan-count" class="bc-metric-val" style="color:#00BCD4">—</span>
+                </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">CRITICAL today</span>
+                  <span id="echo-critical-count" class="bc-metric-val" style="color:#ef4444">0</span>
+                </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">IMPORTANT today</span>
+                  <span id="echo-important-count" class="bc-metric-val" style="color:#f59e0b">0</span>
+                </div>
               </div>
             </div>
 
@@ -1066,6 +1113,14 @@
           });
         }
 
+        function refreshEcho() {
+          return fetchJson('/api/echo').then(function(data) {
+            renderEcho(data);
+          }).catch(function() {
+            renderEcho(null);
+          });
+        }
+
         function refreshWatchConditions() {
           try {
             var now = Date.now();
@@ -1233,6 +1288,41 @@
           }
         }
 
+        function renderEcho(data) {
+          var statusPill = document.getElementById('echo-status-pill');
+          var alertPill = document.getElementById('echo-alert-pill');
+          var lastScan = document.getElementById('echo-last-scan');
+          var scanCount = document.getElementById('echo-scan-count');
+          var critCount = document.getElementById('echo-critical-count');
+          var impCount = document.getElementById('echo-important-count');
+
+          if (!data) {
+            if (statusPill) statusPill.textContent = 'STANDBY';
+            return;
+          }
+
+          var status = (data.status || 'STANDBY').toUpperCase();
+          if (statusPill) {
+            statusPill.innerHTML = status === 'ACTIVE'
+              ? '<span class="dot-green"></span>ACTIVE'
+              : '<span class="dot-gray"></span>' + status;
+          }
+          if (alertPill) {
+            var total = (data.critical_today || 0) + (data.important_today || 0);
+            alertPill.textContent = total + ' alert' + (total !== 1 ? 's' : '') + ' today';
+            alertPill.style.color = (data.critical_today > 0) ? '#ef4444' : '#8a8a9a';
+          }
+          if (lastScan && data.last_scan) {
+            try {
+              var d = new Date(data.last_scan);
+              lastScan.textContent = d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+            } catch(e) { lastScan.textContent = '—'; }
+          }
+          if (scanCount) scanCount.textContent = String(data.alerts_today || 0);
+          if (critCount) critCount.textContent = String(data.critical_today || 0);
+          if (impCount) impCount.textContent = String(data.important_today || 0);
+        }
+
         function fmtTime(ts) {
           try {
             if (!ts) return '—';
@@ -1327,12 +1417,16 @@
             var isRex = author === 'REX';
             var isSimba = author === 'SIMBA';
             var isSage = author === 'SAGE';
+            var isEcho = author === 'ECHO';
 
-            // Allow Simba events to display as feed messages.
-            if (!isFloki && !isRex && !isSimba && !isSage) {
-              // Unknown author: keep existing behavior (skip)
+            // Allow known agent events to display as feed messages.
+            if (!isFloki && !isRex && !isSimba && !isSage && !isEcho) {
               continue;
             }
+
+            var evtType = (m.event_type || m.type || '').toString().toUpperCase();
+            var isEchoCritical = isEcho && evtType.indexOf('CRITICAL') >= 0;
+            var isEchoImportant = isEcho && evtType.indexOf('IMPORTANT') >= 0;
 
             var sideCls = isRex ? 'msg-row msg-left' : 'msg-row msg-right';
             var bubbleCls = isRex ? 'msg-bubble bubble-rex' : 'msg-bubble bubble-floki';
@@ -1348,6 +1442,19 @@
               bubbleCls = 'msg-bubble bubble-floki';
               nameCls = 'name-floki';
             }
+            if (isEcho) {
+              sideCls = 'msg-row msg-left';
+              if (isEchoCritical) {
+                bubbleCls = 'msg-bubble bubble-echo-critical';
+                nameCls = 'name-echo-critical';
+              } else if (isEchoImportant) {
+                bubbleCls = 'msg-bubble bubble-echo-important';
+                nameCls = 'name-echo-important';
+              } else {
+                bubbleCls = 'msg-bubble bubble-echo';
+                nameCls = 'name-echo';
+              }
+            }
 
             var avatarClass = isRex ? 'avatar-rex' : 'avatar-floki';
             var avatarText = isRex ? 'RX' : 'FL';
@@ -1358,6 +1465,10 @@
             if (isSage) {
               avatarClass = 'avatar-sage';
               avatarText = 'SG';
+            }
+            if (isEcho) {
+              avatarClass = 'avatar-echo';
+              avatarText = 'EC';
             }
 
             var avatarImg = null;
@@ -1381,9 +1492,13 @@
 
             var msgId = (m.id || ('idx:' + i));
 
+            var avatarHtml = avatarImg
+              ? '<img alt="' + esc(author) + '" src="' + esc(avatarImg) + '" />'
+              : '<span class="' + avatarClass + '" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-weight:900;font-size:11px">' + esc(avatarText) + '</span>';
+
             html += '<div class="' + sideCls + '">' +
               '<div class="msg-avatar" aria-label="' + esc(author) + ' avatar">' +
-                '<img alt="' + esc(author) + '" src="' + esc(avatarImg) + '" />' +
+                avatarHtml +
               '</div>' +
               '<div class="msg-col">' +
                 '<div class="msg-meta">' +
@@ -2145,6 +2260,7 @@
             fetchJson('/api/state'),
             refreshTopPatterns(),
             refreshSage(),
+            refreshEcho(),
           ]).then(function(res) {
             var msgPayload = res[0] || {};
             latestMessages = (msgPayload.messages || []).slice();

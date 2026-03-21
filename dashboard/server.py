@@ -771,6 +771,69 @@ def sage_api():
         )
 
 
+@app.get("/api/echo")
+def echo_api():
+    """Return Echo News Sentinel status for Trade Room card."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        alerts_file = data_dir / "echo_alerts.json"
+        cost_file = data_dir / "echo_daily_cost.json"
+
+        alerts = []
+        if alerts_file.exists():
+            try:
+                alerts = json.loads(alerts_file.read_text(encoding="utf-8"))
+                if not isinstance(alerts, list):
+                    alerts = []
+            except Exception:
+                alerts = []
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_alerts = [a for a in alerts if (a.get("timestamp") or "").startswith(today)]
+        critical_today = sum(1 for a in today_alerts if a.get("classification") == "CRITICAL")
+        important_today = sum(1 for a in today_alerts if a.get("classification") == "IMPORTANT")
+
+        cost_data = {}
+        if cost_file.exists():
+            try:
+                cost_data = json.loads(cost_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        last_scan = None
+        if today_alerts:
+            last_scan = today_alerts[-1].get("timestamp")
+
+        enabled = bool(getattr(config, "ECHO_ENABLED", False)) if "config" in dir() else True
+        try:
+            from config import ECHO_ENABLED
+            enabled = bool(ECHO_ENABLED)
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "status": "ACTIVE" if enabled else "DISABLED",
+            "last_scan": last_scan,
+            "alerts_today": len(today_alerts),
+            "critical_today": critical_today,
+            "important_today": important_today,
+            "total_alerts": len(alerts),
+            "daily_cost": cost_data.get("total_usd", 0),
+            "daily_calls": cost_data.get("calls", 0),
+        })
+    except Exception:
+        return JSONResponse({
+            "status": "STANDBY",
+            "last_scan": None,
+            "alerts_today": 0,
+            "critical_today": 0,
+            "important_today": 0,
+            "total_alerts": 0,
+            "daily_cost": 0,
+            "daily_calls": 0,
+        })
+
+
 @app.get("/api/indicator-history")
 def indicator_history(hours: int = 6):
     if not HISTORY_DB.exists():
