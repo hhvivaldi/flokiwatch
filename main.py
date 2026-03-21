@@ -1270,6 +1270,9 @@ class TradingBot:
             try:
                 dp = agent_data if isinstance(agent_data, dict) else None
                 if dp is not None:
+                    # Wire candlestick patterns for Simba scanner_pattern conditions
+                    dp["patterns"] = getattr(self, '_last_candlestick_patterns', None)
+
                     tech_data = dp.get("tech_data") if isinstance(dp.get("tech_data"), dict) else {}
                     momentum_data = dp.get("momentum_data") if isinstance(dp.get("momentum_data"), dict) else {}
                     news_data = dp.get("news_data") if isinstance(dp.get("news_data"), dict) else {}

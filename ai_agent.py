@@ -592,7 +592,7 @@ class AIAgent:
             },
             {
                 "name": "set_watch_conditions",
-                "description": "After opening a trade, set watch conditions that trigger a callback later.",
+                "description": "After opening a trade, set watch conditions for Simba to monitor the position. Supported types: price_touch (level + optional tolerance fields — triggers when price reaches level), pnl_threshold (value in dollars — negative for loss alert e.g. -15, positive for profit alert e.g. 20). Example: {type: 'pnl_threshold', value: -15, description: 'Max acceptable loss'}.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -608,7 +608,7 @@ class AIAgent:
             },
             {
                 "name": "set_wake_conditions",
-                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor (every 30s) and wake you when conditions are met. Supported condition types: price_above, price_below (level field), rsi_above, rsi_below (value field, H1 RSI), volume_above (value field, H1 tick volume), adx_above (value field, H1 ADX). Example condition: {type: 'rsi_above', value: 70, description: 'RSI overbought'}.",
+                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor (every 30s) and wake you when conditions are met. Supported types: price_above/price_below (level field), rsi_above/rsi_below (value field, H1 RSI), volume_above (value field, H1 tick volume), adx_above (value field, H1 ADX), scanner_pattern (pattern field — e.g. 'engulfing', 'pin_bar', 'doji', 'hammer'), indicator_above/indicator_below (indicator + threshold fields — works for any cached indicator like 'macd', 'ema_9', 'atr'). Example: {type: 'scanner_pattern', pattern: 'engulfing', description: 'Reversal pattern'}.",
                 "input_schema": {
                     "type": "object",
                     "properties": {

@@ -271,15 +271,24 @@ Simba monitors every 30 seconds — faster than you can check. He will wake you 
 
 You still decide everything — Simba just watches and calls you when something happens. The more specific your wake conditions, the longer you can sleep between checks.
 
-Simba condition types you can use:
+WAKE CONDITIONS (set_wake_conditions — when you have NO open position):
 - price_above / price_below: {type: "price_above", level: 4550} ✅
 - rsi_above / rsi_below: {type: "rsi_above", value: 70} ✅ (H1 RSI, updated every 60s)
 - volume_above: {type: "volume_above", value: 15000} ✅ (H1 tick volume)
 - adx_above: {type: "adx_above", value: 25} ✅ (H1 ADX — trend strength)
+- scanner_pattern: {type: "scanner_pattern", pattern: "engulfing"} ✅ (detects engulfing, pin_bar, doji, hammer, shooting_star)
+- indicator_above / indicator_below: {type: "indicator_above", indicator: "macd", threshold: 0} ✅ (any cached indicator)
 - max_sleep_minutes: safety cap on how long you sleep ✅
 
-Combine price + indicator conditions for intelligent monitoring. Example for WAIT near support:
-- price_below 4477 (breakdown), rsi_below 30 (oversold bounce setup), volume_above 12000 (volume returns), max_sleep_minutes 60
+WATCH CONDITIONS (set_watch_conditions — when you have an OPEN position):
+- price_touch: {type: "price_touch", level: 4550, tolerance: 1.0} ✅ (triggers when price reaches level)
+- pnl_threshold: {type: "pnl_threshold", value: -15} ✅ (negative = loss alert, positive = profit alert, in dollars)
+
+Combine conditions for intelligent monitoring. Example for WAIT near support:
+- price_below 4477 (breakdown), rsi_below 30 (oversold), scanner_pattern "engulfing" (reversal), max_sleep_minutes 60
+
+Example for HOLD with open BUY at 4500:
+- set_watch_conditions: price_touch 4470 (SL area), pnl_threshold -15 (max loss), pnl_threshold 25 (take profit alert)
 </simba_delegation>
 
 <setup_evaluation>
