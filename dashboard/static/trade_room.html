@@ -1972,6 +1972,22 @@
           try {
             var marketClosed = (state && state.market && state.market.is_open === false);
 
+            // Detect market period: 'open', 'daily_pause' (21-22 UTC Mon-Thu), 'weekend'
+            var marketPeriod = 'open';
+            if (marketClosed) {
+              try {
+                var nowUtc = new Date();
+                var utcHour = nowUtc.getUTCHours();
+                var utcDay = nowUtc.getUTCDay(); // 0=Sun, 6=Sat
+                var reason = (state.market.reason || '').toLowerCase();
+                if (reason.indexOf('weekend') >= 0 || reason.indexOf('saturday') >= 0 || reason.indexOf('sunday') >= 0 || utcDay === 0 || utcDay === 6 || (utcDay === 5 && utcHour >= 21)) {
+                  marketPeriod = 'weekend';
+                } else {
+                  marketPeriod = 'daily_pause';
+                }
+              } catch(e) { marketPeriod = 'weekend'; }
+            }
+
             var flokiDecision = null;
             var flokiConf = null;
             var flokiTools = [];
@@ -2025,11 +2041,19 @@
             } catch(e) {}
 
             if (marketClosed) {
+              // Personality status based on market period
+              var isCoffee = marketPeriod === 'daily_pause';
+              var statusText = isCoffee ? '\u2615 COFFEE BREAK' : '\uD83D\uDE34 REST DAY';
+              var statusStyle = isCoffee
+                ? 'background:rgba(245,158,11,0.15);color:#f59e0b'
+                : 'background:rgba(107,114,128,0.15);color:#9ca3af';
+
               var flokiPill = document.getElementById('floki-decision-pill');
               if (flokiPill) {
                 flokiPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-                flokiPill.classList.add('pill-wait');
-                flokiPill.textContent = 'SLEEPING — market closed';
+                flokiPill.classList.add('pill-standby');
+                flokiPill.textContent = statusText;
+                flokiPill.setAttribute('style', statusStyle);
               }
 
               setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), null);
@@ -2037,8 +2061,9 @@
               var rexPillClosed = document.getElementById('rex-opinion-pill');
               if (rexPillClosed) {
                 rexPillClosed.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-                rexPillClosed.classList.add('pill-wait');
-                rexPillClosed.textContent = 'SLEEPING';
+                rexPillClosed.classList.add('pill-standby');
+                rexPillClosed.textContent = statusText;
+                rexPillClosed.setAttribute('style', statusStyle);
               }
 
               var rexTextClosed = document.getElementById('rex-agree-text');
@@ -2048,6 +2073,25 @@
                 rexBarClosed.style.width = '0%';
                 rexBarClosed.classList.remove('conf-low','conf-mid','conf-high');
                 rexBarClosed.classList.add('conf-mid');
+              }
+
+              // Simba status override
+              var simbaPill = document.getElementById('simba-status-pill');
+              if (simbaPill) {
+                simbaPill.textContent = statusText;
+                simbaPill.setAttribute('style', statusStyle);
+              }
+              var simbaMode = document.getElementById('simba-mode-tag');
+              if (simbaMode) {
+                simbaMode.textContent = statusText;
+                simbaMode.setAttribute('style', statusStyle);
+              }
+
+              // Echo: always ON WATCH
+              var echoPill = document.getElementById('echo-status-pill');
+              if (echoPill) {
+                echoPill.innerHTML = '<span class="dot-green"></span>\uD83D\uDC41 ON WATCH';
+                echoPill.setAttribute('style', 'background:rgba(0,188,212,0.15);color:#00BCD4');
               }
             } else {
               setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
