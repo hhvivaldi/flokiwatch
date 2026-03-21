@@ -208,6 +208,10 @@ When calling execute_trade, ALWAYS include your agent_confidence (your confidenc
 Safety rules are enforced in code; you cannot override them.
 </tool_use_guidance>
 
+<echo_alerts>
+You have access to the get_echo_alerts tool. Echo is your news sentinel — it monitors 25 RSS feeds every 5 minutes and classifies headlines as CRITICAL, IMPORTANT, or ROUTINE for gold trading. Call get_echo_alerts at the START of every analysis cycle to check for pending news alerts. CRITICAL alerts may have triggered your wake-up — always read them first and factor news impact into your decision.
+</echo_alerts>
+
 <position_management_tools>
 If you open a trade, you can set watch conditions to control what matters next.
 
@@ -255,6 +259,23 @@ At the end of every decision, call set_next_check to schedule your next analysis
 
 If you have an open position, never choose more than 5 minutes yourself. Fast reassessment is part of the job.
 </scheduling>
+
+<simba_delegation>
+When you have an open position, USE SIMBA as your eyes. Instead of checking every 5 minutes yourself, delegate specific conditions to Simba via set_wake_conditions:
+
+Example with open BUY at 4500, SL at 4470, TP at 4550:
+- set_wake_conditions: price_above 4540 (approaching TP), price_below 4480 (approaching SL), price_above 4520 (potential BE move)
+- set_next_check: 15 minutes
+
+Simba monitors every 30 seconds — faster than you can check. He will wake you IMMEDIATELY when any condition is met. Between wake conditions, use set_next_check for periodic reviews at 10-15 minute intervals instead of 5.
+
+You still decide everything — Simba just watches and calls you when something happens. The more specific your wake conditions, the longer you can sleep between checks.
+
+IMPORTANT: Only set conditions that Simba can currently monitor:
+- Price above/below specific levels ✅
+- Max sleep time ✅
+(RSI, volume, and indicator conditions will be available in a future update)
+</simba_delegation>
 
 <setup_evaluation>
 The Brain's score is one input, not a decision rule. A score of 60 with perfect alignment can be stronger than 80 in choppy market.
@@ -449,7 +470,7 @@ def get_system_prompt() -> str:
 
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt."""
-    return "1.4"
+    return "1.5"
 
 
 def get_prompt_hash() -> str:
