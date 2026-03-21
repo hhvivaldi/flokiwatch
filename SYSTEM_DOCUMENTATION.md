@@ -1,6 +1,6 @@
 # XAUUSD Trading Bot — Documentação Completa do Sistema
 
-> **Versão:** Fevereiro 2026 | **Modo:** DEMO (ICMarkets-Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1
+> **Versão:** Março 2026 | **Modo:** DEMO (ICMarkets-Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1 | **Balance:** $1,064.02 (81 trades Pop B)
 
 ---
 
@@ -8,11 +8,15 @@
 
 Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-first**. O sistema separa claramente:
 
-- **Brain (Python)**: pipeline de dados e cálculo (1 min). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
-- **Agent Proactive (Claude Sonnet)**: análise principal (a cada 30 min + triggers fora do ciclo). Analisa o pacote completo de dados brutos e decide **WAIT / OPEN / HOLD / CLOSE / ADJUST**. É o **único decisor**.
-- **Python Monitor (zero Claude cost)**: loop de 1 min para detetar triggers e chamar o agente certo.
-- **Agent Fast (Claude, só em trigger)**: gestão de emergência (CLOSE / ADJUST / HOLD / DISMISS). **Não pode abrir trades**.
+- **Brain (Python)**: pipeline de dados e cálculo (60s). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
+- **Floki (Gemini 3 Flash)**: portfolio manager e único decisor. Agenda o próprio ciclo via `set_next_check` (5-120 min). Decide **WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST**.
+- **Rex (GPT-4o)**: debate partner. Desafia o raciocínio do Floki em cada decisão (AGREE/DISAGREE).
+- **Simba (Python, zero AI cost)**: watchdog. Monitoriza condições wake/watch a cada 30s. Acorda o Floki quando condições são atingidas.
+- **Echo (GPT-4o-mini)**: news sentinel 24/7. Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Classifica headlines como CRITICAL/IMPORTANT/ROUTINE. CRITICAL acorda Floki imediatamente (max 2/hora).
+- **Sage (Gemini)**: auditor diário. Corre às 21:00 UTC com relatório de performance (win rate, profit factor, recomendações).
 - **EA Bridge (MQL5, tick-by-tick)**: execução e gestão intra-tick (breakeven, trailing stop).
+
+**Nota:** Agent Fast (gestão de emergência) e legacy triggers (Python Monitor) estão **desabilitados**. O allowlist gate em `agent_proactive_out_of_cycle()` só aceita: SCHEDULED, SIMBA_WAKE, SIMBA_WATCH, ECHO_CRITICAL.
 
 **O que faz:**
 - Brain atualiza o pacote de dados (1 min)
@@ -28,32 +32,39 @@ Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-fi
 ## 2. Arquitetura
 
 ```
-main.py (Orquestrador)
-  ├── Brain Cycle (1 min) → central_brain.py (Pipeline de dados)
+main.py (Orquestrador — Trading Office)
+  ├── Brain Cycle (60s) → central_brain.py (Pipeline de dados, não decide)
   │     ├── MT5 data fetch (rates, ticks, positions, account)
-  │     ├── calculate_indicators.py / calculate_technical_score.py (indicadores)
-  │     ├── ml_predictor.py (ML Ensemble)
-  │     ├── news_score_hybrid.py / news_sentiment.py (news + macro)
+  │     ├── calculate_indicators.py / calculate_technical_score.py
+  │     ├── ml_predictor.py (ML Ensemble — 6 models)
+  │     ├── news_score_hybrid.py (25 RSS feeds + DXY/VIX/Yields)
   │     ├── economic_calendar.py (calendário)
-  │     └── support_resistance.py (zonas S/R)
-  ├── Agent Proactive (30 min + out-of-cycle triggers) → ai_agent.py
-  │     └── decide: WAIT / OPEN / HOLD / CLOSE / ADJUST
-  ├── Python Monitor (1 min, zero Claude cost) → monitor.py / agent_monitor.py
-  │     ├── 6 triggers → chama Agent Proactive ou Agent Fast
-  │     └── balance_at_open tracking + profit drawdown guard
-  ├── Agent Fast (trigger-only) → ai_agent.py
-  │     └── decide: CLOSE / ADJUST / HOLD / DISMISS (nunca OPEN)
+  │     └── support_resistance.py (zonas S/R + Fibonacci)
+  ├── Floki (Gemini 3 Flash, self-scheduled 5-120 min) → ai_agent.py
+  │     ├── 20+ tools (market data, trading, memory, debate)
+  │     └── decide: WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST
+  ├── Rex (GPT-4o, on each Floki decision) → rex_validator.py
+  │     └── AGREE / DISAGREE + reasoning
+  ├── Echo (GPT-4o-mini, every 5 min) → echo_sentinel.py
+  │     ├── 25 RSS feeds → keyword pre-filter → GPT classification
+  │     ├── CRITICAL → Simba wake → Floki immediately (max 2/hr)
+  │     └── IMPORTANT → echo_alerts.json → Floki reads on next call
+  ├── Simba (Python, every 30s, zero AI cost) → simba_watcher.py
+  │     └── wake/watch conditions → triggers Floki out-of-cycle
+  ├── Sage (Gemini, daily 21:00 UTC) → sage_auditor.py
+  │     └── performance report + recommendations
   ├── Execution
   │     ├── EA Bridge (tick-by-tick) → ea_bridge.py ↔ mql5/FlokiBridge.mq5
-  │     └── executor.py (fallback/auxiliar via MT5 API)
+  │     └── executor.py (fallback via MT5 API)
   ├── Deal Resolution → deal_resolver.py (subprocess, MT5 reconnect)
   └── Output
-        ├── alerts.py → Discord
+        ├── alerts.py → Discord (10+ webhook channels)
         ├── state_writer.py → bot_state.json (Dashboard)
-        └── db_writer.py → history.db (SQLite)
+        ├── db_writer.py → history.db (SQLite)
+        └── dashboard/ → FastAPI (port 8080) — Trade Room, History, Intel Feed
 ```
 
-**Startup:** Conecta MT5 → Reconcilia estado (3-pass) → Lança dashboard (porta 8050) → Loop principal.
+**Startup:** Conecta MT5 → Reconcilia estado (3-pass) → Loop principal. Dashboard lançado separadamente (uvicorn, porta 8080).
 
 **Loop:** Verifica mercado aberto → Se sim: análise + monitor. Se não: só monitor + sleep diferenciado (weekend=300s, pausa=60s).
 
@@ -81,58 +92,78 @@ O output do Brain é consumido por:
 
 ---
 
-## 4. Agent Proactive — Decisor Principal (M30 + triggers)
+## 4. Floki — Portfolio Manager e Único Decisor
 
-O Agent Proactive é o componente que toma decisões estratégicas com base no pacote completo de dados.
-
-**Quando corre:**
-
-- A cada 30 minutos (snapshots periódicos)
-- Fora do ciclo quando triggers críticos disparam (ex.: entry conditions met, breakout)
-
-**O que recebe:**
-
-- Dados brutos e contexto do mercado (preço, candles multi-TF, indicadores, ML, news/macro, calendário, S/R)
-- Estado atual do bot (posições abertas, risco, eventos próximos, latências)
-
-**O que decide:**
-
-- `WAIT` (não agir)
-- `OPEN` (abrir BUY/SELL com plano)
-- `HOLD` (manter posição)
-- `CLOSE` (fechar posição)
-- `ADJUST` (ajustar SL/TP/gestão)
-
----
-
-## 5. Python Monitor — Triggers (1 min, zero Claude cost)
-
-O Monitor corre a cada 1 minuto e avalia **6 triggers**. Dependendo do trigger, chama o agente adequado.
-
-1. Entry condition met → chama **Agent Proactive**
-2. Trade at risk → chama **Agent Fast**
-3. Calendar event → chama **Agent Fast**
-4. Breakout → chama **Agent Proactive**
-5. Session change → chama **Agent Proactive**
-6. Profit drawdown → chama **Agent Fast**
-
-O monitor também mantém tracking para auditoria e proteções (inclui `balance_at_open` e drawdown relativo ao ponto de abertura).
-
----
-
-## 6. Agent Fast — Gestão de Emergência (trigger-only)
-
-O Agent Fast é chamado apenas por trigger e tem permissões limitadas.
+**Modelo:** Gemini 3 Flash (`gemini-3-flash-preview`)
+**Ficheiro:** `ai_agent.py`, `agent_tools.py`, `agent_prompts.py`
 
 **Quando corre:**
 
-- Apenas quando o Monitor deteta risco/alerta (trade at risk, calendar, profit drawdown, etc.)
+- Auto-agendado via `set_next_check` (5-120 min, default 5 min)
+- Fora do ciclo: SIMBA_WAKE (condição atingida), SIMBA_WATCH (posição em risco), ECHO_CRITICAL (breaking news)
 
-**O que pode decidir:**
+**20+ ferramentas disponíveis:**
 
-- `CLOSE` / `ADJUST` / `HOLD` / `DISMISS`
+- Dados: get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_headlines, get_macro, get_calendar, get_ml_prediction
+- Trading: execute_trade, close_trade, adjust_trade
+- Gestão: set_wake_conditions, set_watch_conditions, set_next_check
+- Memória: read_session_memory, write_session_memory, get_trade_patterns
+- Colaboração: debate_with_rex, get_echo_alerts
+- Contexto: get_open_positions, get_trade_history, get_account_info, get_position_events
 
-**Limitação crítica:** não pode emitir `OPEN`.
+**O que decide:** WAIT / OPEN_BUY / OPEN_SELL / HOLD_TRADE / CLOSE_TRADE / ADJUST_TRADE
+
+---
+
+## 5. Rex — Debate Partner
+
+**Modelo:** GPT-4o
+**Ficheiro:** `rex_validator.py`
+
+Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação.
+
+---
+
+## 6. Echo — News Sentinel (24/7)
+
+**Modelo:** GPT-4o-mini (env: ECHO_MODEL, swap sem code change)
+**Ficheiro:** `echo_sentinel.py`
+
+Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Pipeline:
+
+1. RSS fetch → 2. Dedup (MD5 hash, 24h expiry) → 3. Keyword pre-filter (~70% filtrado, $0) → 4. GPT classification (CRITICAL/IMPORTANT/ROUTINE)
+
+- **CRITICAL**: acorda Floki imediatamente via `ECHO_CRITICAL` trigger (max 2/hora)
+- **IMPORTANT**: guardado em `data/echo_alerts.json`, Floki lê no próximo ciclo via `get_echo_alerts`
+- **ROUTINE**: descartado
+- **Market closed**: só processa CRITICAL (IMPORTANT suprimido)
+
+---
+
+## 6b. Simba — Watchdog (Python, zero AI cost)
+
+**Ficheiro:** `simba_watcher.py`
+
+Corre a cada 30s. Monitoriza condições definidas pelo Floki:
+- **Wake conditions**: quando Floki decide WAIT, define condições para ser acordado (ex: price above 4550)
+- **Watch conditions**: quando Floki tem posição aberta, define condições para reavaliar
+
+Quando condição é atingida → `agent_proactive_out_of_cycle("SIMBA_WAKE")` ou `SIMBA_WATCH`.
+
+---
+
+## 6c. Sage — Auditor Diário
+
+**Modelo:** Gemini (SAGE_API_KEY)
+**Ficheiro:** `sage_auditor.py`
+
+Corre uma vez por dia às 21:00 UTC (Mon-Fri). Analisa trades recentes, calcula win rate e profit factor, gera recomendações. Relatório em `data/sage_report.json`.
+
+---
+
+## 6d. Agent Fast — DESABILITADO
+
+O Agent Fast (gestão de emergência) e os 6 triggers do Python Monitor estão desabilitados. O allowlist gate em `agent_proactive_out_of_cycle()` rejeita todos os triggers legacy. Floki + Simba + Echo cobrem todos os cenários.
 
 ---
 
