@@ -1090,6 +1090,7 @@
         'use strict';
 
         var POLL_MS = 30000;
+        var _marketClosedGlobal = false;
         var currentFilter = 'all';
         var latestMessages = [];
         var prevCtxPrice = null;
@@ -1260,6 +1261,7 @@
         }
 
         function renderSage(payload) {
+          if (_marketClosedGlobal) return; // REST DAY/COFFEE BREAK set by updatePanels
           var statusEl = document.getElementById('sage-status');
           var pillEl = document.getElementById('sage-summary');
           var lastRunEl = document.getElementById('sage-last-run');
@@ -1307,6 +1309,7 @@
         }
 
         function renderEcho(data) {
+          if (_marketClosedGlobal) return; // ON WATCH pill set by updatePanels
           var statusPill = document.getElementById('echo-status-pill');
           var alertPill = document.getElementById('echo-alert-pill');
           var lastScan = document.getElementById('echo-last-scan');
@@ -1756,6 +1759,7 @@
 
         function renderSimbaStatusFromWatchConditionsPayload(payload) {
           try {
+            if (_marketClosedGlobal) return; // REST DAY/COFFEE BREAK set by updatePanels
             var pill = document.getElementById('simba-status-pill');
             var condText = document.getElementById('simba-conditions-text');
             var condBar = document.getElementById('simba-conditions-bar');
@@ -1785,6 +1789,7 @@
 
         function renderSimbaFromState(state) {
           try {
+            if (_marketClosedGlobal) return; // REST DAY/COFFEE BREAK set by updatePanels
             var pill = document.getElementById('simba-status-pill');
             var condText = document.getElementById('simba-conditions-text');
             var condBar = document.getElementById('simba-conditions-bar');
@@ -1971,6 +1976,7 @@
         function updatePanels(messages, state) {
           try {
             var marketClosed = (state && state.market && state.market.is_open === false);
+            _marketClosedGlobal = marketClosed;
 
             // Detect market period: 'open', 'daily_pause' (21-22 UTC Mon-Thu), 'weekend'
             var marketPeriod = 'open';
