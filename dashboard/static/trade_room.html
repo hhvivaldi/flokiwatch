@@ -517,7 +517,7 @@
       .bc-card {
         flex: 1 1 180px;
         max-width: none;
-        height: 130px;
+        height: 132px;
         overflow: hidden;
         border-radius: 10px;
         background: #1a1a2e;
@@ -525,22 +525,23 @@
         display: flex;
         flex-direction: column;
         box-sizing: border-box;
+        transition: border-color 0.3s ease;
       }
       .bc-card:has(.agent-expand.open) {
         height: auto;
-        max-height: 215px;
+        max-height: 220px;
         overflow: visible;
       }
       .bc-btn {
         width: 100%;
-        height: 130px;
+        height: 132px;
         background: transparent;
         border: none;
-        padding: 10px 12px;
+        padding: 10px 14px;
         cursor: pointer;
         display: flex;
         flex-direction: column;
-        gap: 7px;
+        gap: 6px;
         text-align: left;
         color: inherit;
         box-sizing: border-box;
@@ -549,8 +550,8 @@
       .bc-btn:focus-visible { outline: 1px solid rgba(170,255,0,0.55); outline-offset: 4px; border-radius: 9px; }
       .bc-row1 { display: flex; align-items: center; gap: 8px; }
       .bc-avatar {
-        width: 36px;
-        height: 36px;
+        width: 38px;
+        height: 38px;
         border-radius: 50%;
         background: #2a2a3e;
         border: 2px solid;
@@ -561,46 +562,53 @@
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
         flex-shrink: 0;
+        overflow: hidden;
       }
-      .bc-identity { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+      .bc-identity { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
       .bc-name {
-        font-size: 14px;
-        font-weight: 500;
+        font-size: 13px;
+        font-weight: 700;
         font-family: 'JetBrains Mono', monospace;
         line-height: 1.1;
         white-space: nowrap;
+        letter-spacing: 0.04em;
       }
       .bc-role {
-        font-size: 11px;
-        color: #8a8a9a;
+        font-size: 10px;
+        color: #6a6a7a;
         font-family: 'JetBrains Mono', monospace;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
       }
-      .bc-row2 { display: flex; gap: 4px; align-items: center; }
+      .bc-row2 { display: flex; gap: 4px; align-items: center; margin-top: 1px; }
       .bc-pill {
-        font-size: 10px;
+        font-size: 9px;
         padding: 2px 8px;
         border-radius: 20px;
         white-space: nowrap;
         font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        letter-spacing: 0.04em;
       }
       .bc-row3 { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
       .bc-metric { display: flex; justify-content: space-between; align-items: center; }
-      .bc-metric-label { font-size: 10px; color: #6a6a7a; font-family: 'JetBrains Mono', monospace; }
-      .bc-metric-val { font-size: 12px; font-weight: 500; font-family: 'JetBrains Mono', monospace; }
-      .bc-bar-track { height: 3px; background: #2a2a3e; border-radius: 2px; overflow: hidden; }
+      .bc-metric-label { font-size: 9px; color: #6a6a7a; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+      .bc-metric-val { font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+      .bc-bar-track { height: 3px; background: #2a2a3e; border-radius: 2px; overflow: hidden; margin-top: 2px; }
       .bc-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
       .agent-expand {
         display: none;
-        padding: 6px 12px 10px;
+        padding: 8px 14px 10px;
         font-size: 10px;
         color: #8a8a9a;
         font-family: 'JetBrains Mono', monospace;
         line-height: 1.5;
         max-height: 80px;
         overflow: hidden;
+        border-top: 1px solid rgba(255,255,255,0.04);
       }
       .agent-expand.open {
         display: block;
@@ -877,7 +885,7 @@
             <div class="bc-card" id="sage-card" style="border-color:#FFB300">
               <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-sage" style="border-color:#FFB300;color:#FFB300">
+                  <div class="bc-avatar" id="avatar-sage" style="border-color:#FFB300">
                     <img class="avatar-img" id="avatar-sage-img" alt="SAGE" src="/image/sage-video-trade-room.gif" data-variant="1" />
                   </div>
                   <div class="bc-identity">
