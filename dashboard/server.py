@@ -1200,6 +1200,7 @@ def history_data():
 
         # Total P&L from bot_state.json balance minus INITIAL_BALANCE
         total_pnl = None
+        current_balance = None
         try:
             if STATE_FILE.exists():
                 with open(STATE_FILE, "r") as f:
@@ -1218,22 +1219,35 @@ def history_data():
         card_stats["best_trade_profit"] = round(best_trade["profit"], 2) if best_trade else 0.0
         card_stats["worst_trade_profit"] = round(worst_trade["profit"], 2) if worst_trade else 0.0
 
-        # Build equity curve from Population B trades only (balance view)
-        # live_trades is newest-first (reversed for UI), sort chronologically
-        pop_b_balance = float(INITIAL_BALANCE)
-        pop_b_equity_curve = []
-        for t in sorted(live_trades, key=lambda x: x.get("close_time") or ""):
-            pop_b_balance += float(t.get("profit") or 0.0)
-            pop_b_equity_curve.append({
+        # Build equity curve from ALL trades, anchored to real balance.
+        # DB profit doesn't include swap/commission, so sum(profit) != actual P&L.
+        # Distribute the discrepancy evenly so curve starts at $1000 and ends
+        # at the real balance from bot_state.json.
+        all_trades_chrono = sorted(trades, key=lambda x: x.get("close_time") or "")
+        sum_all_profits = sum(float(t.get("profit") or 0.0) for t in all_trades_chrono)
+        n_trades = len(all_trades_chrono)
+
+        if current_balance is not None and n_trades > 0:
+            real_pnl = current_balance - float(INITIAL_BALANCE)
+            offset = real_pnl - sum_all_profits  # untracked swap/commission
+            per_trade_adj = offset / n_trades
+        else:
+            per_trade_adj = 0.0
+
+        running_balance = float(INITIAL_BALANCE)
+        anchored_equity_curve = []
+        for t in all_trades_chrono:
+            running_balance += float(t.get("profit") or 0.0) + per_trade_adj
+            anchored_equity_curve.append({
                 "time": t.get("close_time"),
-                "equity": round(pop_b_balance, 2)
+                "equity": round(running_balance, 2)
             })
 
         return JSONResponse({
             "global_stats": card_stats,
             "live_stats": live_stats,
             "monthly_stats": monthly_stats,
-            "equity_curve": pop_b_equity_curve,
+            "equity_curve": anchored_equity_curve,
             "trades": trades
         })
         
