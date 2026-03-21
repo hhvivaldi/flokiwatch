@@ -2048,63 +2048,39 @@
                 ? 'background:rgba(245,158,11,0.15);color:#f59e0b'
                 : 'background:rgba(107,114,128,0.15);color:#9ca3af';
 
-              var flokiPill = document.getElementById('floki-decision-pill');
-              if (flokiPill) {
-                flokiPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-                flokiPill.classList.add('pill-standby');
-                flokiPill.textContent = statusText;
-                flokiPill.setAttribute('style', statusStyle);
+              // Helper: hide all children in a card's bc-row2, show single rest pill
+              function setRestPill(cardId, pillText, pillStyle) {
+                var card = document.getElementById(cardId);
+                if (!card) return;
+                var row2 = card.querySelector('.bc-row2');
+                if (!row2) return;
+                var children = row2.children;
+                for (var c = 0; c < children.length; c++) {
+                  children[c].style.display = 'none';
+                }
+                // Show first pill with rest status
+                if (children.length > 0) {
+                  children[0].style.display = '';
+                  children[0].textContent = pillText;
+                  children[0].setAttribute('style', pillStyle);
+                  children[0].className = 'bc-pill';
+                }
               }
+
+              // Resting agents: single pill
+              setRestPill('floki-card', statusText, statusStyle);
+              setRestPill('rex-card', statusText, statusStyle);
+              setRestPill('simba-card', statusText, statusStyle);
+              setRestPill('sage-card', statusText, statusStyle);
+
+              // Echo: always ON WATCH — single pill
+              setRestPill('echo-card', '\uD83D\uDC41 ON WATCH', 'background:rgba(0,188,212,0.15);color:#00BCD4');
 
               setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), null);
-
-              var rexPillClosed = document.getElementById('rex-opinion-pill');
-              if (rexPillClosed) {
-                rexPillClosed.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-                rexPillClosed.classList.add('pill-standby');
-                rexPillClosed.textContent = statusText;
-                rexPillClosed.setAttribute('style', statusStyle);
-              }
-
-              var rexTextClosed = document.getElementById('rex-agree-text');
               var rexBarClosed = document.getElementById('rex-agree-bar');
+              if (rexBarClosed) { rexBarClosed.style.width = '0%'; }
+              var rexTextClosed = document.getElementById('rex-agree-text');
               if (rexTextClosed) rexTextClosed.textContent = '—';
-              if (rexBarClosed) {
-                rexBarClosed.style.width = '0%';
-                rexBarClosed.classList.remove('conf-low','conf-mid','conf-high');
-                rexBarClosed.classList.add('conf-mid');
-              }
-
-              // Simba status override
-              var simbaPill = document.getElementById('simba-status-pill');
-              if (simbaPill) {
-                simbaPill.textContent = statusText;
-                simbaPill.setAttribute('style', statusStyle);
-              }
-              var simbaMode = document.getElementById('simba-mode-tag');
-              if (simbaMode) {
-                simbaMode.textContent = statusText;
-                simbaMode.setAttribute('style', statusStyle);
-              }
-
-              // Sage status override
-              var sagePill = document.getElementById('sage-status');
-              if (sagePill) {
-                sagePill.textContent = statusText;
-                sagePill.setAttribute('style', statusStyle);
-              }
-              var sageSummary = document.getElementById('sage-summary');
-              if (sageSummary) {
-                sageSummary.textContent = statusText;
-                sageSummary.setAttribute('style', statusStyle);
-              }
-
-              // Echo: always ON WATCH
-              var echoPill = document.getElementById('echo-status-pill');
-              if (echoPill) {
-                echoPill.innerHTML = '<span class="dot-green"></span>\uD83D\uDC41 ON WATCH';
-                echoPill.setAttribute('style', 'background:rgba(0,188,212,0.15);color:#00BCD4');
-              }
 
               // Dim resting cards, keep Echo bright
               var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card'];
@@ -2124,14 +2100,22 @@
                 echoCard.style.boxShadow = '0 0 12px rgba(0,188,212,0.15)';
               }
             } else {
-              // Market open — restore full brightness on all cards
+              // Market open — restore all pills visible, full brightness
               var allCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'echo-card'];
               allCards.forEach(function(id) {
                 var card = document.getElementById(id);
-                if (card) {
-                  card.style.opacity = '1';
-                  card.style.filter = 'none';
-                  card.style.boxShadow = '';
+                if (!card) return;
+                card.style.opacity = '1';
+                card.style.filter = 'none';
+                card.style.boxShadow = '';
+                card.style.borderColor = '';
+                // Restore all bc-row2 children visibility
+                var row2 = card.querySelector('.bc-row2');
+                if (row2) {
+                  var children = row2.children;
+                  for (var c = 0; c < children.length; c++) {
+                    children[c].style.display = '';
+                  }
                 }
               });
               setDecisionPill(document.getElementById('floki-decision-pill'), flokiDecision);
