@@ -1512,6 +1512,124 @@
             } catch (e) {}
             content = esc(content).replaceAll('\n', '<br>');
 
+            // ── Structured renderers for Floki / Rex / Simba ──
+            var structuredContent = null;
+            try {
+              if (isFloki && (type === 'FLOKI_DECISION' || type === 'DECISION')) {
+                // Parse: "WAIT (85%). Reasoning text..."
+                var raw = (m.content || '').toString();
+                var decMatch = raw.match(/^(WAIT|OPEN_BUY|OPEN_SELL|CLOSE_TRADE|HOLD_TRADE|HOLD|ADJUST_TRADE)\s*\((\d+)%?\)/i);
+                if (decMatch) {
+                  var dec = decMatch[1].toUpperCase();
+                  var conf = decMatch[2];
+                  var reasoning = raw.slice(decMatch[0].length).replace(/^\.\s*/, '').trim();
+                  // Truncate KEY DATA / KEY FACTORS
+                  var kdIdx = reasoning.indexOf('KEY DATA:');
+                  var kfIdx = reasoning.indexOf('KEY FACTORS:');
+                  if (kdIdx >= 0) reasoning = reasoning.slice(0, kdIdx).trim();
+                  if (kfIdx >= 0) reasoning = reasoning.slice(0, kfIdx).trim();
+                  // Split reasoning into ~2-3 sentences
+                  var sentences = reasoning.match(/[^.!]+[.!]+/g) || [reasoning];
+                  var lines = sentences.slice(0, 4).map(function(s) { return esc(s.trim()); }).join('<br>');
+                  // Decision badge color
+                  var dColor = '#f59e0b'; // amber default (WAIT)
+                  if (dec === 'OPEN_BUY') dColor = '#4ade80';
+                  else if (dec === 'OPEN_SELL') dColor = '#f87171';
+                  else if (dec === 'CLOSE_TRADE') dColor = '#c084fc';
+                  else if (dec.indexOf('HOLD') >= 0) dColor = '#60a5fa';
+                  structuredContent =
+                    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+                      '<span style="background:' + dColor + '22;color:' + dColor + ';border:1px solid ' + dColor + '44;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:900;letter-spacing:0.08em">' + dec.replace('_',' ') + '</span>' +
+                      '<span style="color:#AAFF00;font-size:11px;font-weight:700;font-family:monospace">' + conf + '%</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
+                }
+              }
+              else if (isFloki && type === 'DEBATE') {
+                var raw = (m.content || '').toString();
+                // Parse: "WAIT: reasoning..." or "SELL: reasoning..."
+                var debMatch = raw.match(/^(WAIT|OPEN_BUY|OPEN_SELL|SELL|BUY|CLOSE_TRADE|HOLD):\s*/i);
+                var reasoning = debMatch ? raw.slice(debMatch[0].length).trim() : raw;
+                var kdIdx = reasoning.indexOf('KEY DATA:');
+                if (kdIdx >= 0) reasoning = reasoning.slice(0, kdIdx).trim();
+                var sentences = reasoning.match(/[^.!]+[.!]+/g) || [reasoning];
+                var lines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                var stance = debMatch ? debMatch[1].toUpperCase() : '';
+                var stanceHtml = stance ? '<span style="color:#AAFF00;font-size:9px;font-weight:800;letter-spacing:0.1em;opacity:0.7">' + stance + '</span> ' : '';
+                structuredContent =
+                  '<div style="margin-bottom:3px">' + stanceHtml + '<span style="color:#6b7280;font-size:9px;font-weight:600;letter-spacing:0.08em">DEBATE</span></div>' +
+                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
+              }
+              else if (isRex && type === 'DEBATE') {
+                var meta = m.metadata || {};
+                var agrees = meta.agree;
+                var badge = agrees === true
+                  ? '<span style="background:rgba(74,222,128,0.2);color:#4ade80;border:1px solid rgba(74,222,128,0.3);padding:1px 7px;border-radius:4px;font-size:10px;font-weight:900;letter-spacing:0.08em">AGREE</span>'
+                  : agrees === false
+                    ? '<span style="background:rgba(248,113,113,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3);padding:1px 7px;border-radius:4px;font-size:10px;font-weight:900;letter-spacing:0.08em">DISAGREE</span>'
+                    : '<span style="color:#9C27B0;font-size:9px;font-weight:800;letter-spacing:0.1em">DEBATE</span>';
+                var raw = (m.content || '').toString();
+                var sentences = raw.match(/[^.!]+[.!]+/g) || [raw];
+                var lines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                structuredContent =
+                  '<div style="margin-bottom:5px">' + badge + '</div>' +
+                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
+              }
+              else if (isSimba) {
+                var meta = m.metadata || {};
+                var raw = (m.content || '').toString();
+                // Simba CHECK with structured metadata
+                if (meta.price != null && meta.met_count != null) {
+                  var price = Number(meta.price).toFixed(2);
+                  var lo = meta.range_low != null ? Number(meta.range_low).toFixed(2) : '?';
+                  var hi = meta.range_high != null ? Number(meta.range_high).toFixed(2) : '?';
+                  var met = meta.met_count || 0;
+                  var total = meta.checked_count || 0;
+                  var trend = (meta.trend || 'steady').toLowerCase();
+                  var tArrow = trend === 'up' ? '<span style="color:#4ade80">&#9650;</span>' : (trend === 'down' ? '<span style="color:#f87171">&#9660;</span>' : '<span style="color:#6b7280">&#9679;</span>');
+                  var levels = meta.nearest_levels || [];
+                  var levelsHtml = '';
+                  if (Array.isArray(levels) && levels.length > 0) {
+                    levelsHtml = levels.map(function(lv) {
+                      var p = lv.price != null ? Number(lv.price).toFixed(0) : '?';
+                      var d = lv.distance != null ? Number(lv.distance).toFixed(1) : '?';
+                      return p + ' (' + d + ' away)';
+                    }).join(' | ');
+                  }
+                  // Triggered?
+                  var triggered = meta.triggered;
+                  var isTriggered = Array.isArray(triggered) && triggered.length > 0;
+                  var headerLabel = isTriggered
+                    ? '<span style="color:#f59e0b;font-weight:900">&#9889; WAKE TRIGGER</span>'
+                    : '<span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">PATROL</span>';
+                  structuredContent =
+                    '<div style="margin-bottom:4px">' + headerLabel + '</div>' +
+                    '<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px;font-family:monospace">' +
+                      '<span style="color:#6b7280">Price</span><span style="color:#e2e8f0;font-weight:600">$' + price + ' <span style="color:#6b7280;font-weight:400">(' + lo + ' – ' + hi + ')</span></span>' +
+                      '<span style="color:#6b7280">Conditions</span><span style="color:' + (met > 0 ? '#f59e0b' : '#e2e8f0') + ';font-weight:600">' + met + '/' + total + ' met</span>' +
+                      '<span style="color:#6b7280">Trend</span><span style="font-weight:600">' + tArrow + ' ' + trend + '</span>' +
+                      (levelsHtml ? '<span style="color:#6b7280">Levels</span><span style="color:#9ca3af">' + levelsHtml + '</span>' : '') +
+                    '</div>';
+                }
+                // Simba ACK
+                else if (raw.indexOf('Got it boss') >= 0 || raw.indexOf('Monitoring:') >= 0) {
+                  var condMatch = raw.match(/Monitoring:\s*(.+?)(?:\.\s*Max|\s*$)/);
+                  var sleepMatch = raw.match(/Max sleep:\s*(.+?)\.?$/);
+                  structuredContent =
+                    '<div style="margin-bottom:4px"><span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">WATCH SET</span></div>' +
+                    '<div style="font-size:10px;font-family:monospace;color:#d1d5db;line-height:1.5">' +
+                      (condMatch ? '<span style="color:#6b7280">Watch: </span>' + esc(condMatch[1]) + '<br>' : '') +
+                      (sleepMatch ? '<span style="color:#6b7280">Sleep: </span>' + esc(sleepMatch[1]) : '') +
+                    '</div>';
+                }
+              }
+            } catch(e) {
+              // Fallback to plain content on any parse error
+              structuredContent = null;
+            }
+
+            if (structuredContent) content = structuredContent;
+
             var msgId = (m.id || ('idx:' + i));
 
             var avatarHtml = avatarImg
@@ -1569,7 +1687,7 @@
                   '<span class="msg-time">' + esc(fmtTime(m.timestamp)) + '</span>' +
                 '</div>' +
                 '<div class="' + bubbleCls + '">' +
-                  '<div class="msg-content' + (isEcho ? ' expanded' : '') + '" data-msg-id="' + esc(msgId) + '" data-expanded="' + (isEcho ? '1' : '0') + '">' + bubbleContent + '</div>' +
+                  '<div class="msg-content' + ((isEcho || structuredContent) ? ' expanded' : '') + '" data-msg-id="' + esc(msgId) + '" data-expanded="' + ((isEcho || structuredContent) ? '1' : '0') + '">' + bubbleContent + '</div>' +
                 '</div>' +
               '</div>' +
             '</div>';
