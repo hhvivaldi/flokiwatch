@@ -157,6 +157,7 @@
       }
       .badge-analysis { color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.2); }
       .badge-alert    { color: #fb923c; background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.2); }
+      .badge-sage-alert { color: #ef4444; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700; }
       .badge-decision { color: #10b981; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
       .badge-debate   { color: #f87171; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.2); }
       .badge-info     { color: #94a3b8; background: rgba(148, 163, 184, 0.05); border: 1px solid rgba(148, 163, 184, 0.1); }
@@ -941,6 +942,7 @@
                   <span class="bc-metric-label">Profit factor</span>
                   <span id="sage-report-profit-factor" class="bc-metric-val" style="color:#FFB300">—</span>
                 </div>
+                <div id="sage-today-pnl" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:3px"></div>
                 <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
                 <span id="sage-report-period" style="display:none"></span>
                 <span id="sage-report-trades" style="display:none"></span>
@@ -1671,6 +1673,7 @@
           var x = (t || '').toString().toUpperCase();
           if (x === 'ANALYSIS') return 'badge-analysis';
           if (x === 'ALERT') return 'badge-alert';
+          if (x === 'SAGE_ALERT') return 'badge-sage-alert';
           if (x === 'DECISION') return 'badge-decision';
           if (x === 'DEBATE') return 'badge-debate';
           if (x === 'TRADE_RESULT') return 'badge-info';
@@ -2999,6 +3002,28 @@
               } catch(e) {}
               var wlbeEl = document.getElementById('ctx-wlbe');
               if (wlbeEl) wlbeEl.textContent = wlbe;
+
+              // FLO-68: Sage today P&L summary
+              try {
+                var sagePnlEl = document.getElementById('sage-today-pnl');
+                if (sagePnlEl && state.daily_stats) {
+                  var ds = state.daily_stats;
+                  var sPnl = Number(ds.pnl || 0);
+                  var sW = ds.wins || 0;
+                  var sL = ds.losses || 0;
+                  var sTotal = (ds.trades || 0);
+                  if (sTotal > 0) {
+                    var drawdownThresh = -30;
+                    var isAlert = sPnl <= drawdownThresh;
+                    var isWarn = sPnl < 0 && !isAlert;
+                    var sColor = isAlert ? '#ef4444' : (isWarn ? '#f59e0b' : '#4ade80');
+                    var sIcon = isAlert ? ' \uD83D\uDEA8 ALERT SENT' : (isWarn ? ' \u26A0\uFE0F' : '');
+                    sagePnlEl.innerHTML = '<span style="color:' + sColor + '">Today: ' + (sPnl >= 0 ? '+' : '') + '$' + Math.abs(sPnl).toFixed(2) + ' (' + sW + 'W/' + sL + 'L)' + sIcon + '</span>';
+                  } else {
+                    sagePnlEl.innerHTML = '<span style="color:#6b7280">Today: no trades</span>';
+                  }
+                }
+              } catch(e) {}
 
               // Watch conditions (served from backend; always visible)
               try {

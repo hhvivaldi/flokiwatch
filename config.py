@@ -404,6 +404,10 @@ SAGE_RUN_TIME_UTC = "21:00"
 # Dedicated API key for Sage cost isolation (fallback to GEMINI_API_KEY in sage_auditor.py)
 SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
 
+# Intraday drawdown alerts (FLO-68)
+SAGE_INTRADAY_DRAWDOWN_ALERT = float(os.environ.get("SAGE_INTRADAY_DRAWDOWN_ALERT", "-30"))   # dollars — alert if daily P&L <= this
+SAGE_INTRADAY_LOSS_STREAK_ALERT = int(os.environ.get("SAGE_INTRADAY_LOSS_STREAK_ALERT", "3"))  # consecutive losses — alert if streak >= this
+
 # NOTE: FLOKI_CALL_INTERVAL controls the Agent's preferred scheduling cadence,
 # but the main loop analysis cadence remains governed by ANALYSIS_INTERVAL_SECONDS.
 

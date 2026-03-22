@@ -292,6 +292,190 @@ def _write_json_atomic(path: str, payload: Dict[str, Any]) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Intraday Drawdown Alerts (FLO-68)
+# ---------------------------------------------------------------------------
+
+def check_intraday_drawdown(db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Check today's cumulative P&L and loss streak after a trade close.
+    If drawdown exceeds threshold or loss streak is too long, fire alert.
+
+    Returns alert dict if triggered, None otherwise. Never raises.
+    """
+    try:
+        path = db_path or os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(path, timeout=5)
+        conn.row_factory = sqlite3.Row
+
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+        # All trades closed today with known P&L
+        rows = conn.execute(
+            """SELECT profit, close_time FROM trades
+               WHERE close_time IS NOT NULL
+                 AND profit IS NOT NULL
+                 AND close_time >= ?
+               ORDER BY close_time ASC""",
+            (today_str,),
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        # Daily P&L
+        profits = [float(r["profit"]) for r in rows]
+        daily_pnl = round(sum(profits), 2)
+        trades_today = len(profits)
+        wins = sum(1 for p in profits if p > 0)
+        losses = sum(1 for p in profits if p < 0)
+
+        # Consecutive loss streak (count from latest going backwards)
+        streak = 0
+        for p in reversed(profits):
+            if p < 0:
+                streak += 1
+            else:
+                break
+
+        # Check thresholds
+        drawdown_threshold = float(getattr(config, "SAGE_INTRADAY_DRAWDOWN_ALERT", -30))
+        streak_threshold = int(getattr(config, "SAGE_INTRADAY_LOSS_STREAK_ALERT", 3))
+
+        triggered_drawdown = daily_pnl <= drawdown_threshold
+        triggered_streak = streak >= streak_threshold
+
+        if not triggered_drawdown and not triggered_streak:
+            return None
+
+        # Build alert
+        reasons = []
+        if triggered_drawdown:
+            reasons.append(f"daily P&L ${daily_pnl:+.2f} (threshold: ${drawdown_threshold:.0f})")
+        if triggered_streak:
+            reasons.append(f"{streak} consecutive losses (threshold: {streak_threshold})")
+
+        alert = {
+            "daily_pnl": daily_pnl,
+            "trades_today": trades_today,
+            "wins": wins,
+            "losses": losses,
+            "streak": streak,
+            "triggered_drawdown": triggered_drawdown,
+            "triggered_streak": triggered_streak,
+            "reasons": reasons,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        log.warning(
+            f"SAGE | INTRADAY ALERT: daily P&L ${daily_pnl:+.2f}, "
+            f"streak {streak}, {trades_today} trades ({wins}W/{losses}L) — "
+            f"{'; '.join(reasons)}"
+        )
+
+        # 1. Write to session memory
+        try:
+            _write_sage_alert_to_memory(alert)
+        except Exception:
+            pass
+
+        # 2. Record agent event for Trade Room
+        try:
+            from db_writer import record_agent_event
+            record_agent_event(
+                event_type="SAGE_ALERT",
+                content=(
+                    f"INTRADAY DRAWDOWN ALERT: Daily P&L ${daily_pnl:+.2f} "
+                    f"({trades_today} trades, {wins}W/{losses}L, {streak} consecutive losses). "
+                    f"Consider reducing risk or pausing."
+                ),
+                payload=alert,
+                author="SAGE",
+            )
+        except Exception as e:
+            log.warning(f"SAGE | failed to record alert event: {e}")
+
+        # 3. Discord alert
+        try:
+            from alerts import discord
+            discord.send(
+                "errors",
+                f"🚨 **SAGE INTRADAY ALERT**\n"
+                f"Daily P&L: **${daily_pnl:+.2f}**\n"
+                f"Trades: {trades_today} ({wins}W/{losses}L)\n"
+                f"Loss streak: {streak}\n"
+                f"Trigger: {'; '.join(reasons)}",
+                alert_type="error",
+                title="Sage Drawdown Alert",
+            )
+        except Exception:
+            pass
+
+        return alert
+
+    except Exception as e:
+        log.warning(f"SAGE | intraday drawdown check failed (ignored): {e}")
+        return None
+
+
+def _write_sage_alert_to_memory(alert: Dict[str, Any]) -> None:
+    """Write Sage intraday alert to session memory so Floki sees it."""
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        mem_path = os.path.join(base_dir, "data", "agent_session_memory.json")
+
+        payload: Dict[str, Any] = {}
+        if os.path.exists(mem_path):
+            try:
+                with open(mem_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    payload = existing
+            except Exception:
+                pass
+
+        today = datetime.utcnow().date().isoformat()
+        if str(payload.get("session_date") or "") != today:
+            payload["session_date"] = today
+            payload["notes"] = []
+
+        if not isinstance(payload.get("notes"), list):
+            payload["notes"] = []
+
+        # Remove prior sage_alert notes (keep only latest)
+        payload["notes"] = [
+            n for n in payload["notes"]
+            if not (isinstance(n, dict) and n.get("source") == "sage_alert")
+        ]
+
+        now = datetime.utcnow()
+        pnl = alert["daily_pnl"]
+        streak = alert["streak"]
+        trades = alert["trades_today"]
+        wins = alert["wins"]
+        losses = alert["losses"]
+
+        payload["notes"].append({
+            "time": now.strftime("%H:%M"),
+            "note": (
+                f"SAGE ALERT: Daily drawdown ${pnl:+.2f} "
+                f"({trades} trades, {wins}W/{losses}L, {streak} consecutive losses). "
+                f"Consider reducing risk or pausing."
+            ),
+            "source": "sage_alert",
+        })
+        payload["last_updated"] = now.isoformat(timespec="seconds")
+
+        tmp = mem_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, mem_path)
+
+    except Exception as e:
+        log.warning(f"SAGE | failed to write alert to session memory: {e}")
+
+
 @dataclass
 class SageRunResult:
     ok: bool

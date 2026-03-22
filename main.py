@@ -5021,6 +5021,13 @@ class TradingBot:
                         run_reflection_async("trade_close")
                     except Exception:
                         pass
+
+                    # FLO-68: Sage intraday drawdown check after every confirmed close
+                    try:
+                        from sage_auditor import check_intraday_drawdown
+                        check_intraday_drawdown()
+                    except Exception:
+                        pass
                 
                 # Record for safety checks (cooldown applies even for pending)
                 record_trade_result(profit)
