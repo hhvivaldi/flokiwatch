@@ -2163,6 +2163,90 @@
 
                 structuredContent = l1 + l2 + l3 + l4 + l5;
               }
+              // ── Sage structured cards ──
+              else if (isSage && type === 'SAGE_WEEKLY' && m.metadata) {
+                var sw = m.metadata;
+                var tw = sw.this_week || {};
+                var lw = sw.last_week || {};
+                var cmp = sw.comparison || {};
+                var trend = (cmp.trend || 'STABLE').toUpperCase();
+                var tColor = trend === 'IMPROVING' ? '#4ade80' : (trend === 'DECLINING' ? '#f87171' : '#6b7280');
+                var tArrow = trend === 'IMPROVING' ? '\u25B2' : (trend === 'DECLINING' ? '\u25BC' : '\u2594');
+                var twWr = tw.win_rate != null ? Math.round(tw.win_rate * 100) : 0;
+                var lwWr = lw.win_rate != null ? Math.round(lw.win_rate * 100) : 0;
+                var wrChg = cmp.win_rate_change != null ? (cmp.win_rate_change > 0 ? '+' : '') + Math.round(cmp.win_rate_change * 100) + '%' : '';
+
+                var s1 = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+                  '<span style="color:#FFB300;font-size:10px;font-weight:900;letter-spacing:0.1em">SAGE</span>' +
+                  '<span style="background:rgba(255,179,0,0.15);color:#FFB300;border:1px solid rgba(255,179,0,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">WEEKLY REPORT</span>' +
+                '</div>';
+                var s2 = '<div style="font-size:11px;font-weight:700;color:' + tColor + ';margin-bottom:4px">' + trend + ' ' + tArrow + ' \u2014 ' + (tw.trades || 0) + ' trades, ' + twWr + '% WR, $' + (tw.pnl >= 0 ? '+' : '') + (tw.pnl || 0).toFixed(2) + '</div>';
+                var s3 = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:9px;font-family:monospace;color:#9ca3af;line-height:1.5">' +
+                  '<span>This wk: ' + (tw.trades || 0) + ' trades, ' + twWr + '% WR</span>' +
+                  '<span>Last wk: ' + (lw.trades || 0) + ' trades, ' + lwWr + '% WR</span>' +
+                  '<span>P&L: $' + (tw.pnl >= 0 ? '+' : '') + (tw.pnl || 0).toFixed(2) + '</span>' +
+                  '<span>P&L: $' + (lw.pnl >= 0 ? '+' : '') + (lw.pnl || 0).toFixed(2) + '</span>' +
+                '</div>';
+                // Session breakdown
+                var sess = tw.by_session || {};
+                var sParts = [];
+                var sKeys = ['ny', 'london', 'asian'];
+                for (var si2 = 0; si2 < sKeys.length; si2++) {
+                  var sk2 = sKeys[si2];
+                  var sv2 = sess[sk2];
+                  if (sv2 && sv2.trades > 0) {
+                    var sWr2 = Math.round(sv2.win_rate * 100);
+                    var sC2 = sWr2 >= 60 ? '#4ade80' : (sWr2 < 40 ? '#f87171' : '#fbbf24');
+                    sParts.push('<span style="color:' + sC2 + '">' + sk2.charAt(0).toUpperCase() + sk2.slice(1) + ' ' + sWr2 + '%</span>');
+                  }
+                }
+                var s4 = sParts.length > 0 ? '<div style="margin-top:3px;font-size:9px">' + sParts.join(' | ') + '</div>' : '';
+                structuredContent = s1 + s2 + s3 + s4;
+              }
+              else if (isSage && type === 'SAGE_ALERT' && m.metadata) {
+                var sa = m.metadata;
+                var s1a = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+                  '<span style="color:#FFB300;font-size:10px;font-weight:900;letter-spacing:0.1em">SAGE</span>' +
+                  '<span style="background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">DRAWDOWN ALERT</span>' +
+                '</div>';
+                var s2a = '<div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:4px">P&L $' + (sa.daily_pnl != null ? (sa.daily_pnl >= 0 ? '+' : '') + sa.daily_pnl.toFixed(2) : '?') + ' | ' + (sa.streak || 0) + ' consecutive losses</div>';
+                var s3a = '<div style="font-size:9px;font-family:monospace;color:#9ca3af;line-height:1.5">' +
+                  '<span>Trades: ' + (sa.trades_today || 0) + ' (' + (sa.wins || 0) + 'W/' + (sa.losses || 0) + 'L)</span>' +
+                '</div>';
+                structuredContent = s1a + s2a + s3a;
+              }
+              else if (isSage && m.metadata && m.metadata.trade_count_analyzed != null) {
+                // Daily report (from SAGE_REPORT or generic sage event with report data)
+                var sr = m.metadata;
+                var insights = sr.insights || [];
+                var recs = sr.recommendations || [];
+                var s1r = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+                  '<span style="color:#FFB300;font-size:10px;font-weight:900;letter-spacing:0.1em">SAGE</span>' +
+                  '<span style="background:rgba(255,179,0,0.15);color:#FFB300;border:1px solid rgba(255,179,0,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">DAILY REPORT</span>' +
+                '</div>';
+                var s2r = '<div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px">' + (sr.trade_count_analyzed || 0) + ' trades analyzed</div>';
+                // Show top 3 insights
+                var insHtml = '';
+                if (insights.length > 0) {
+                  insHtml = '<div style="font-size:9px;color:#9ca3af;line-height:1.5;margin-top:2px">';
+                  for (var ii = 0; ii < Math.min(insights.length, 3); ii++) {
+                    var ins = insights[ii];
+                    var finding = (typeof ins === 'object') ? (ins.finding || '') : String(ins);
+                    insHtml += '&bull; ' + esc(finding) + '<br>';
+                  }
+                  insHtml += '</div>';
+                }
+                // Show top 2 recommendations
+                var recHtml = '';
+                if (recs.length > 0) {
+                  recHtml = '<div style="font-size:9px;color:#fbbf24;line-height:1.5;margin-top:3px">';
+                  for (var ri = 0; ri < Math.min(recs.length, 2); ri++) {
+                    recHtml += '\u2022 ' + esc(String(recs[ri])) + '<br>';
+                  }
+                  recHtml += '</div>';
+                }
+                structuredContent = s1r + s2r + insHtml + recHtml;
+              }
             } catch(e) {
               // Fallback to plain content on any parse error
               structuredContent = null;
