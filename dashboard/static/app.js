@@ -1096,10 +1096,10 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     const scoreHtml = hasScore ? fmtNum(m.score, 0) : "";
 
     macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
+      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group" data-macro-key="${key}">
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
-          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)}</div>
+          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)} <span class="macro-trend-arrow" data-trend-key="${key}"></span></div>
           <div class="text-xs font-bold font-mono ${sc.text}">${scoreHtml}</div>
         </div>
         <div class="flex items-baseline gap-2 mt-2 relative z-10">
@@ -1123,6 +1123,27 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
       <div class="text-xs text-amber-400 mt-1">${anomalies.map(a => "&#9888; " + a).join("<br>")}</div>
     `);
   }
+
+  // 5d trend arrows (FLO-74)
+  fetch("/api/macro-history").then(r => r.json()).then(mh => {
+    if (!mh || typeof mh !== "object") return;
+    const dates = Object.keys(mh).sort();
+    if (dates.length < 2) return;
+    const oldest = mh[dates[0]] || {};
+    const newest = mh[dates[dates.length - 1]] || {};
+    document.querySelectorAll(".macro-trend-arrow").forEach(el => {
+      const k = el.dataset.trendKey;
+      if (!k || oldest[k] == null || newest[k] == null || oldest[k] === 0) return;
+      const pct = ((newest[k] - oldest[k]) / Math.abs(oldest[k])) * 100;
+      let arr = Math.abs(pct) < 0.5 ? "\u2594" : (pct > 0 ? "\u25B2" : "\u25BC");
+      if (Math.abs(pct) > 5) arr += arr;
+      const bullishDir = {dxy: -1, vix: 1, yields: -1, oil: 1, sp500: -1, gold: 1};
+      const isBullish = (bullishDir[k] || 0) * pct > 0;
+      const color = Math.abs(pct) < 0.5 ? "#6b7280" : (isBullish ? "#4ade80" : "#f87171");
+      el.style.color = color;
+      el.textContent = arr;
+    });
+  }).catch(() => {});
 
   // Calendar
   const calEl = el("intel-calendar");

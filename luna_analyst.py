@@ -43,6 +43,8 @@ LUNA_DAILY_COST_CAP = float(getattr(config, "LUNA_DAILY_COST_CAP", 1.00))
 DATA_DIR = Path(__file__).parent / "data"
 BRIEF_FILE = DATA_DIR / "luna_brief.json"
 COST_FILE = DATA_DIR / "luna_daily_cost.json"
+MACRO_HISTORY_FILE = DATA_DIR / "macro_history.json"
+MACRO_HISTORY_DAYS = 5  # Keep last 5 business days
 
 # ---------------------------------------------------------------------------
 # System Prompt
@@ -149,7 +151,14 @@ When assessing directional bias and confidence, consider how many of the 5 major
 
 When most factors point the same way, your confidence should be HIGH and your bias clear.
 When factors conflict (e.g. war headlines bullish but yields rising bearish), your confidence should be LOW and your summary must explain the conflict.
-The most dangerous scenario is when headlines say one thing but price action and macro factors say the opposite — this often means forced liquidation or delayed reaction. Always flag this."""
+The most dangerous scenario is when headlines say one thing but price action and macro factors say the opposite — this often means forced liquidation or delayed reaction. Always flag this.
+
+TREND ANALYSIS:
+Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
+- Escalating trends (VIX rising 3+ days, DXY accelerating) increase risk_level
+- Stabilizing trends (VIX falling from highs, yields flattening) decrease risk_level
+- "VIX at 26.78" means different things if it came from 18 (escalating) vs from 35 (recovering)
+- Always reference the trend direction in your summary when it contradicts the snapshot level"""
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +179,7 @@ class LunaAnalysisResult:
     summary: str = ""
     next_events: List[Dict[str, str]] = field(default_factory=list)
     data_snapshot: Dict[str, Any] = field(default_factory=dict)
+    macro_trend: Dict[str, Any] = field(default_factory=dict)
     source: str = "mimo"      # "mimo" or "local_fallback"
     error: Optional[str] = None
 
@@ -368,6 +378,12 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
 
     lines.append("</macro_data>")
 
+    # Macro trends (5-day rolling)
+    trends = _build_macro_trends(macro)
+    trend_text = _build_trend_context(trends)
+    if trend_text:
+        lines.append("\n" + trend_text)
+
     # Echo alerts
     critical_important = [a for a in echo_alerts
                           if a.get("classification") in ("CRITICAL", "IMPORTANT")]
@@ -447,6 +463,123 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
             "date": cpi.get("date"),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Macro History & Trends (FLO-74)
+# ---------------------------------------------------------------------------
+
+def _save_macro_snapshot(macro: Dict[str, Any]) -> None:
+    """Save today's macro snapshot to macro_history.json (one entry per day)."""
+    try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        history = _load_macro_history()
+
+        # Extract scalar values for history
+        snapshot = {}
+        for key in ("dxy", "vix", "yields", "oil", "sp500", "gold"):
+            src = macro.get(key, {})
+            val = src.get("current")
+            if val is not None:
+                snapshot[key] = round(float(val), 2)
+
+        if not snapshot:
+            return
+
+        history[today] = snapshot
+
+        # Keep only last N days (sorted desc, prune oldest)
+        sorted_dates = sorted(history.keys(), reverse=True)[:MACRO_HISTORY_DAYS]
+        pruned = {d: history[d] for d in sorted_dates}
+
+        MACRO_HISTORY_FILE.write_text(
+            json.dumps(pruned, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"LUNA: error saving macro history — {e}")
+
+
+def _load_macro_history() -> Dict[str, Dict[str, float]]:
+    """Load macro_history.json. Returns {date: {indicator: value}}."""
+    try:
+        if MACRO_HISTORY_FILE.exists():
+            data = json.loads(MACRO_HISTORY_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def _build_macro_trends(macro: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build macro_trend dict from macro_history.json.
+    Returns {indicator: {direction, 5d_change_pct, values}}.
+    """
+    history = _load_macro_history()
+    if len(history) < 2:
+        return {}
+
+    sorted_dates = sorted(history.keys())  # oldest first
+    trends = {}
+
+    for key in ("dxy", "vix", "yields", "oil", "sp500", "gold"):
+        values = []
+        for d in sorted_dates:
+            v = history[d].get(key)
+            if v is not None:
+                values.append(round(float(v), 2))
+
+        if len(values) < 2:
+            continue
+
+        oldest = values[0]
+        newest = values[-1]
+        if oldest == 0:
+            change_pct = 0.0
+        else:
+            change_pct = round(((newest - oldest) / abs(oldest)) * 100, 1)
+
+        # Direction classification
+        if abs(change_pct) < 0.5:
+            direction = "FLAT"
+        elif change_pct > 0:
+            direction = "UP"
+        else:
+            direction = "DOWN"
+
+        trends[key] = {
+            "direction": direction,
+            "5d_change_pct": change_pct,
+            "values": values,
+        }
+
+    return trends
+
+
+def _build_trend_context(trends: Dict[str, Any]) -> str:
+    """Build text block for trend data to inject into Luna's data context."""
+    if not trends:
+        return ""
+
+    labels = {
+        "dxy": "DXY", "vix": "VIX", "yields": "Yields 10Y",
+        "oil": "Oil WTI", "sp500": "S&P 500", "gold": "Gold",
+    }
+    arrows = {"UP": "▲", "DOWN": "▼", "FLAT": "▬"}
+    lines = ["<macro_trend_5d>"]
+    for key in ("dxy", "vix", "yields", "oil", "sp500", "gold"):
+        t = trends.get(key)
+        if not t:
+            continue
+        vals_str = " → ".join(str(v) for v in t["values"])
+        arrow = arrows.get(t["direction"], "")
+        lines.append(
+            f"{labels.get(key, key)}: {vals_str} {arrow}{t['5d_change_pct']:+.1f}%"
+        )
+    lines.append("</macro_trend_5d>")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +682,7 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         summary=parsed.get("summary", ""),
         next_events=parsed.get("next_events", []),
         data_snapshot=data_snapshot,
+        macro_trend=_build_macro_trends(macro),
         source="mimo",
     )
 
@@ -839,6 +973,7 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
         summary=summary,
         next_events=next_events,
         data_snapshot=data_snapshot,
+        macro_trend=_build_macro_trends(macro),
         source="local_fallback",
     )
 
@@ -909,7 +1044,10 @@ def run_luna_analysis() -> LunaAnalysisResult:
                 f"({result.bias_confidence}/10)"
             )
 
-        # 4. Save to luna_brief.json
+        # 4. Save macro history snapshot (one per day)
+        _save_macro_snapshot(macro)
+
+        # 5. Save to luna_brief.json
         _save_brief(result)
 
         # 5. Record agent event for Trade Room feed

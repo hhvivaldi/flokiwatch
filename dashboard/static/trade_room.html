@@ -1036,6 +1036,7 @@
                 </div>
                 <div id="luna-factors" style="font-size:9px;color:#6b7280;margin-top:4px"></div>
                 <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+                <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
               </div>
             </div>
 
@@ -1561,6 +1562,33 @@
             }
             if (rows.length > 0) {
               snapEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;line-height:1.6">' + rows.join('') + '</div>';
+            }
+          }
+
+          // Trend section (FLO-74)
+          var trendEl = document.getElementById('luna-trend-section');
+          if (trendEl && b.macro_trend) {
+            var mt = b.macro_trend;
+            var trendLabels = {dxy:'DXY', vix:'VIX', yields:'Yields', oil:'Oil', sp500:'S&P', gold:'Gold'};
+            var trendRows = [];
+            // Gold-bullish direction per indicator
+            var bullishDir = {dxy:'DOWN', vix:'UP', yields:'DOWN', oil:'UP', sp500:'DOWN', gold:'UP'};
+            var tKeys = ['dxy','vix','yields','oil','sp500','gold'];
+            for (var ti = 0; ti < tKeys.length; ti++) {
+              var tk = tKeys[ti];
+              var td = mt[tk];
+              if (!td) continue;
+              var vals = td.values || [];
+              var arrow = td.direction === 'UP' ? '&#9650;' : (td.direction === 'DOWN' ? '&#9660;' : '&#9644;');
+              var strong = Math.abs(td['5d_change_pct']) > 5;
+              if (strong) arrow = arrow + arrow;
+              var isBullish = td.direction === bullishDir[tk];
+              var tColor = td.direction === 'FLAT' ? '#6b7280' : (isBullish ? '#4ade80' : '#f87171');
+              var valsStr = vals.join(' &rarr; ');
+              trendRows.push('<span style="color:#6b7280">' + trendLabels[tk] + '</span> <span style="color:#9ca3af">' + valsStr + '</span> <span style="color:' + tColor + '">' + arrow + (td['5d_change_pct'] > 0 ? '+' : '') + td['5d_change_pct'].toFixed(1) + '%</span>');
+            }
+            if (trendRows.length > 0) {
+              trendEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Trend (5d)</div><div style="display:grid;grid-template-columns:1fr;gap:1px;line-height:1.6">' + trendRows.join('') + '</div>';
             }
           }
         }
@@ -2842,6 +2870,32 @@
                 var cnyVal = (usdcny.value != null) ? Number(usdcny.value) : null;
                 var cnyEl = document.getElementById('ctx-usdcny');
                 if (cnyEl) cnyEl.textContent = (cnyVal != null && isFinite(cnyVal)) ? cnyVal.toFixed(4) : '—';
+
+                // 5d trend arrows from macro_history (FLO-74)
+                try {
+                  fetchJson('/api/macro-history').then(function(mh) {
+                    if (!mh || typeof mh !== 'object') return;
+                    var dates = Object.keys(mh).sort();
+                    if (dates.length < 2) return;
+                    var oldest = mh[dates[0]] || {};
+                    var newest = mh[dates[dates.length - 1]] || {};
+                    var trendMap = {dxy:'ctx-dxy', vix:'ctx-vix', yields:'ctx-10y', oil:'ctx-oil', sp500:'ctx-sp500'};
+                    var trendKeys = Object.keys(trendMap);
+                    for (var tki = 0; tki < trendKeys.length; tki++) {
+                      var tKey = trendKeys[tki];
+                      var elId = trendMap[tKey];
+                      var tel = document.getElementById(elId);
+                      if (!tel) continue;
+                      var oldV = oldest[tKey];
+                      var newV = newest[tKey];
+                      if (oldV == null || newV == null || oldV === 0) continue;
+                      var pctChg = ((newV - oldV) / Math.abs(oldV)) * 100;
+                      var arrow = Math.abs(pctChg) < 0.5 ? ' \u2594' : (pctChg > 0 ? ' \u25B2' : ' \u25BC');
+                      if (Math.abs(pctChg) > 5) arrow += arrow.trim();
+                      tel.textContent = tel.textContent + arrow;
+                    }
+                  }).catch(function(){});
+                } catch(e2) {}
               } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';

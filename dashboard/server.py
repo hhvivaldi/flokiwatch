@@ -913,6 +913,20 @@ def luna_brief_api():
         return JSONResponse({"brief": None, "stale": True})
 
 
+@app.get("/api/macro-history")
+def macro_history_api():
+    """Return rolling 5-day macro history from macro_history.json."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        history_file = data_dir / "macro_history.json"
+        if not history_file.exists():
+            return JSONResponse({})
+        data = json.loads(history_file.read_text(encoding="utf-8"))
+        return JSONResponse(data if isinstance(data, dict) else {})
+    except Exception:
+        return JSONResponse({})
+
+
 @app.get("/api/indicator-history")
 def indicator_history(hours: int = 6):
     if not HISTORY_DB.exists():
