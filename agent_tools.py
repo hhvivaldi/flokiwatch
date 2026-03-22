@@ -1812,6 +1812,22 @@ class AgentTools:
             self._log_tool("get_trade_patterns", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_trade_lessons(self) -> Dict[str, Any]:
+        """Return dynamic lessons from past trades (FLO-63)."""
+        start = time.time()
+        try:
+            from trade_lessons import get_relevant_lessons
+            lessons = get_relevant_lessons(min_occurrences=3, limit=10)
+            self._log_tool("get_trade_lessons", start, f"lessons={len(lessons)}")
+            return {
+                "success": True,
+                "lessons": lessons,
+                "total": len(lessons),
+            }
+        except Exception as e:
+            self._log_tool("get_trade_lessons", start, f"error={e}")
+            return {"success": False, "reason": "lessons_unavailable"}
+
     def write_session_memory(self, thesis: str, note: str) -> Dict[str, Any]:
         start = time.time()
         try:

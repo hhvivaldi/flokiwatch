@@ -686,6 +686,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_trade_lessons",
+                "description": "Read dynamic lessons from your past trades. Shows AVOID patterns (setups that keep losing) and PREFERRED patterns (setups that keep winning). Call BEFORE opening any trade.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {

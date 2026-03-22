@@ -2366,7 +2366,7 @@
           var t = (name || '').toString().toLowerCase();
           if (t === 'get_current_price' || t.indexOf('get_candle') === 0 || t.indexOf('get_indicator') === 0) return 'tp-market';
           if (t === 'get_sr_zones' || t === 'get_fibonacci_levels' || t === 'get_macro') return 'tp-analysis';
-          if (t === 'read_session_memory' || t.indexOf('get_trade_pattern') === 0) return 'tp-memory';
+          if (t === 'read_session_memory' || t.indexOf('get_trade_pattern') === 0 || t === 'get_trade_lessons') return 'tp-memory';
           if (t === 'debate_with_rex' || t === 'set_next_check' || t === 'execute_trade') return 'tp-decision';
           return '';
         }

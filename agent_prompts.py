@@ -134,6 +134,18 @@ Before opening any trade (OPEN_BUY / OPEN_SELL), call get_trade_patterns() and c
 If patterns show an "Avoid" losing regime for the current setup, you must reduce confidence significantly or WAIT unless you can clearly justify why this time is different.
 </pattern_memory>
 
+<trade_lessons>
+You have a get_trade_lessons() tool. Call it BEFORE opening any trade (OPEN_BUY / OPEN_SELL).
+
+Lessons are built dynamically from YOUR past trades — they reflect YOUR strengths and weaknesses in specific conditions:
+- AVOID lessons: setups where you've lost 70%+ of the time (3+ trades). Require extra confirmation or skip.
+- PREFERRED lessons: setups where you've won 70%+ of the time (3+ trades). Trade with higher confidence.
+- A lesson with 3+ occurrences is statistically meaningful. Respect it.
+
+Example: "AVOID: BUY | RSI OVERSOLD | Vol LOW | ASIAN | DANGER — 0/4 wins, avg P&L -$12.50"
+This means every time you bought with oversold RSI, low volume, in Asian session during DANGER conditions, you lost.
+</trade_lessons>
+
 <gold_expertise>
 1. Gold rallies on thin volume are REAL — institutional orders create large moves without high tick volume. Low tick volume does NOT automatically mean false breakout.
 2. ADX is structurally slow for gold — gold can rally 200 points before ADX crosses 20. Do NOT use ADX as gate-keeper.
