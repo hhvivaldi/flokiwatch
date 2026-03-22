@@ -1035,6 +1035,7 @@
                   <span id="luna-source" class="bc-metric-val" style="color:#9ca3af">—</span>
                 </div>
                 <div id="luna-factors" style="font-size:9px;color:#6b7280;margin-top:4px"></div>
+                <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
               </div>
             </div>
 
@@ -1105,6 +1106,8 @@
           <div class="ctx-row"><span class="ctx-key">DXY</span><span id="ctx-dxy" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">VIX</span><span id="ctx-vix" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">10Y</span><span id="ctx-10y" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">Oil WTI</span><span id="ctx-oil" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">S&P 500</span><span id="ctx-sp500" class="ctx-val">—</span></div>
         </div>
 
         <!-- Floki last investigation -->
@@ -1514,6 +1517,30 @@
               }).join('');
             } else {
               factorsEl.innerHTML = '';
+            }
+          }
+
+          // Macro data snapshot from Luna brief
+          var snapEl = document.getElementById('luna-macro-snapshot');
+          if (snapEl && b.data_snapshot) {
+            var ds = b.data_snapshot;
+            var rows = [];
+            function _snapRow(label, obj, prefix, suffix) {
+              if (!obj) return;
+              var v = obj.value != null ? obj.value : (obj.price != null ? obj.price : null);
+              var c = obj.change_pct;
+              if (v == null) return;
+              var chgStr = c != null ? ' <span style="color:' + (c > 0 ? '#4ade80' : (c < 0 ? '#f87171' : '#6b7280')) + '">' + (c > 0 ? '+' : '') + Number(c).toFixed(2) + '%</span>' : '';
+              rows.push('<span style="color:#6b7280">' + label + '</span> <span style="color:#e2e8f0">' + (prefix||'') + Number(v).toFixed(2) + (suffix||'') + '</span>' + chgStr);
+            }
+            _snapRow('DXY', ds.dxy, '', '');
+            _snapRow('VIX', ds.vix, '', '');
+            _snapRow('10Y', ds.yields_10y, '', '%');
+            _snapRow('Oil', ds.oil, '$', '');
+            _snapRow('S&P', ds.sp500, '', '');
+            _snapRow('Gold', ds.gold, '$', '');
+            if (rows.length > 0) {
+              snapEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;line-height:1.6">' + rows.join('') + '</div>';
             }
           }
         }
@@ -2757,10 +2784,14 @@
                 var dxy = macro.dxy || {};
                 var vix = macro.vix || {};
                 var yields = macro.yields || {};
+                var oil = macro.oil || {};
+                var sp500 = macro.sp500 || {};
 
                 var dxyVal = (dxy.value != null) ? Number(dxy.value) : null;
                 var vixVal = (vix.value != null) ? Number(vix.value) : null;
                 var y10Val = (yields.value != null) ? Number(yields.value) : null;
+                var oilVal = (oil.value != null) ? Number(oil.value) : null;
+                var sp500Val = (sp500.value != null) ? Number(sp500.value) : null;
 
                 var dxyEl = document.getElementById('ctx-dxy');
                 if (dxyEl) dxyEl.textContent = (dxyVal != null && isFinite(dxyVal)) ? dxyVal.toFixed(2) : '—';
@@ -2770,6 +2801,12 @@
 
                 var y10El = document.getElementById('ctx-10y');
                 if (y10El) y10El.textContent = (y10Val != null && isFinite(y10Val)) ? y10Val.toFixed(2) + '%' : '—';
+
+                var oilEl = document.getElementById('ctx-oil');
+                if (oilEl) oilEl.textContent = (oilVal != null && isFinite(oilVal)) ? '$' + oilVal.toFixed(2) : '—';
+
+                var sp500El = document.getElementById('ctx-sp500');
+                if (sp500El) sp500El.textContent = (sp500Val != null && isFinite(sp500Val)) ? sp500Val.toFixed(0) : '—';
               } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';

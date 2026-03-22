@@ -954,6 +954,8 @@ function macroImpactText(key, changePct) {
   if (key === "dxy") return c < 0 ? "Bullish for gold" : "Bearish for gold";
   if (key === "yields") return c < 0 ? "Bullish for gold" : "Bearish for gold";
   if (key === "vix") return c > 0 ? "Bullish for gold" : "Bearish for gold";
+  if (key === "oil") return c > 3 ? "Geopolitical risk" : (c < -3 ? "Deflationary signal" : "Neutral");
+  if (key === "sp500") return c < 0 ? "Risk off — gold demand" : "Risk on";
   return "";
 }
 
@@ -961,11 +963,18 @@ function macroLabel(key) {
   if (key === "dxy") return "DXY";
   if (key === "yields") return "YIELDS 10Y";
   if (key === "vix") return "VIX";
+  if (key === "oil") return "OIL WTI";
+  if (key === "sp500") return "S&P 500";
   return key.toUpperCase();
 }
 
 function macroUnit(key) {
   if (key === "yields") return "%";
+  return "";
+}
+
+function macroPrefix(key) {
+  if (key === "oil") return "$";
   return "";
 }
 
@@ -1054,26 +1063,29 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const macroContainer = el("intel-macro");
   macroContainer.innerHTML = "";
   const macro = feed.macro || {};
-  for (const key of ["dxy", "yields", "vix"]) {
+  for (const key of ["dxy", "yields", "vix", "oil", "sp500"]) {
     const m = macro[key];
     if (!m) continue;
     const val = m.value;
     const chg = m.change_pct;
-    const sc = intelScoreColor(m.score);
+    const hasScore = m.score != null && Number.isFinite(m.score);
+    const sc = hasScore ? intelScoreColor(m.score) : intelScoreColor(50);
     const impact = macroImpactText(key, chg);
     const arrow = Number(chg) > 0 ? "&#9650;" : (Number(chg) < 0 ? "&#9660;" : "");
     const chgClass = Number(chg) > 0 ? "text-green-400" : (Number(chg) < 0 ? "text-red-400" : "text-gray-400");
     const unit = macroUnit(key);
+    const prefix = macroPrefix(key);
+    const scoreHtml = hasScore ? fmtNum(m.score, 0) : "";
 
     macroContainer.insertAdjacentHTML("beforeend", `
       <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         <div class="flex items-center justify-between relative z-10">
           <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)}</div>
-          <div class="text-xs font-bold font-mono ${sc.text}">${fmtNum(m.score, 0)}</div>
+          <div class="text-xs font-bold font-mono ${sc.text}">${scoreHtml}</div>
         </div>
         <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? prefix + fmtNum(val, 2) + unit : "—"}</span>
           <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
         <div class="intel-robot-bubble inline-flex mt-2 relative z-10">

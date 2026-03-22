@@ -4737,6 +4737,9 @@ class TradingBot:
             yields_comp = components.get("yields", {})
             vix_comp = components.get("vix", {})
 
+            oil_comp = components.get("oil", {})
+            sp500_comp = components.get("sp500", {})
+
             macro = {
                 "dxy": {
                     "value": dxy_comp.get("current"),
@@ -4753,6 +4756,14 @@ class TradingBot:
                     "change_pct": vix_comp.get("change_percent"),
                     "score": vix_comp.get("score", 50),
                     "is_extreme": vix_comp.get("is_extreme", False),
+                },
+                "oil": {
+                    "value": oil_comp.get("current"),
+                    "change_pct": oil_comp.get("change_percent"),
+                },
+                "sp500": {
+                    "value": sp500_comp.get("current"),
+                    "change_pct": sp500_comp.get("change_percent"),
                 },
             }
 
