@@ -1857,6 +1857,44 @@ class AgentTools:
             elapsed = round((time.time() - start) * 1000, 1)
             return {"success": False, "reason": f"echo_alerts_error: {e}", "latency_ms": elapsed}
 
+    # ---------------------------------------------------------------------
+    # Luna Macro Analyst brief
+    # ---------------------------------------------------------------------
+
+    def get_luna_brief(self) -> Dict[str, Any]:
+        """Read the latest Luna macro analysis brief."""
+        start = time.time()
+        try:
+            from luna_analyst import load_luna_brief
+            brief = load_luna_brief()
+            elapsed = round((time.time() - start) * 1000, 1)
+
+            if brief is None:
+                return {"success": True, "brief": None, "stale": True, "latency_ms": elapsed}
+
+            # Check freshness — flag if older than 30 min
+            stale = False
+            ts = brief.get("timestamp")
+            if ts:
+                try:
+                    from datetime import datetime, timezone
+                    brief_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    age_min = (datetime.now(timezone.utc) - brief_time).total_seconds() / 60
+                    stale = age_min > 30
+                    brief["age_minutes"] = round(age_min, 1)
+                except Exception:
+                    pass
+
+            return {
+                "success": True,
+                "brief": brief,
+                "stale": stale,
+                "latency_ms": elapsed,
+            }
+        except Exception as e:
+            elapsed = round((time.time() - start) * 1000, 1)
+            return {"success": False, "reason": f"luna_brief_error: {e}", "latency_ms": elapsed}
+
     def _agent_monitor_events_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")

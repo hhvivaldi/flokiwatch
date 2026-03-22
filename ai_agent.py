@@ -687,6 +687,11 @@ class AIAgent:
                 "description": "Get pending news alerts from Echo News Sentinel (IMPORTANT/CRITICAL headlines). Marks alerts as read after retrieval.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            {
+                "name": "get_luna_brief",
+                "description": "Get the latest Luna macro analysis brief (environment, risk level, directional bias, patterns, market regime). Returns stale=true if brief is older than 30 minutes.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
         ]
 
     def _gemini_function_declarations(self) -> List[Dict[str, Any]]:

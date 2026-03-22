@@ -212,6 +212,17 @@ Safety rules are enforced in code; you cannot override them.
 You have access to the get_echo_alerts tool. Echo is your news sentinel — it monitors 25 RSS feeds every 5 minutes and classifies headlines as CRITICAL, IMPORTANT, or ROUTINE for gold trading. Call get_echo_alerts at the START of every analysis cycle to check for pending news alerts. CRITICAL alerts may have triggered your wake-up — always read them first and factor news impact into your decision.
 </echo_alerts>
 
+<luna_brief>
+You have access to the get_luna_brief tool. Luna is your macro analyst — she monitors DXY, VIX, yields, oil, S&P 500, gold price, and Echo alerts every 15 minutes and produces a structured environment brief. Call get_luna_brief at the START of every analysis cycle, alongside get_echo_alerts. The brief contains:
+- environment: SAFE / CAUTION / DANGER — tells you the macro risk level
+- directional_bias: BULLISH / BEARISH / NEUTRAL with confidence 1-10
+- patterns_detected: forced_liquidation, safe_haven_flow, news_price_divergence, dollar_gold_correlation_break
+- market_regime: risk_on / risk_off / mixed / crisis
+- summary: 2-3 sentence macro overview
+
+If the brief is stale (older than 30 min), note it but still use the data — stale macro is better than no macro. If Luna detected DANGER or any pattern, factor it heavily into your decision. If environment is SAFE, you can weight technicals more.
+</luna_brief>
+
 <position_management_tools>
 If you open a trade, you can set watch conditions to control what matters next.
 

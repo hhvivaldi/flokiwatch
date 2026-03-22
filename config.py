@@ -423,3 +423,14 @@ ECHO_MAX_AGE_HOURS_GOOGLE = float(os.environ.get("ECHO_MAX_AGE_HOURS_GOOGLE", "1
 DISCORD_WEBHOOK_ECHO = os.environ.get("DISCORD_WEBHOOK_ECHO", "")                   # Echo alerts Discord channel
 
 # ============================================================================
+# LUNA MACRO ANALYST (AI-powered macro environment analysis)
+# ============================================================================
+LUNA_ENABLED = True                                                                  # Master switch for Luna agent
+LUNA_MODEL = "mimo-v2-flash"                                                         # MiMo-V2-Flash for macro interpretation
+LUNA_API_KEY = os.environ.get("LUNA_API_KEY", "")                                    # MiMo API key
+LUNA_API_BASE = "https://api.xiaomimimo.com/v1"                                      # MiMo API base URL
+LUNA_SCAN_INTERVAL_SECONDS = int(os.environ.get("LUNA_SCAN_INTERVAL_SECONDS", "900"))        # 15 min during market hours
+LUNA_SCAN_INTERVAL_CLOSED = int(os.environ.get("LUNA_SCAN_INTERVAL_CLOSED", "1800"))         # 30 min when market closed
+LUNA_DAILY_COST_CAP = float(os.environ.get("LUNA_DAILY_COST_CAP", "1.00"))                   # Daily cost cap in USD
+
+# ============================================================================
