@@ -231,9 +231,10 @@ def build_luna_brief_card(
     if sentiment:
         fields.append(_f("Sentiment", sentiment))
 
+    env_color = COLORS["alert"] if environment == "DANGER" else (COLORS["sage"] if environment == "CAUTION" else COLORS["luna"])
     return {
         "channel": "luna",
-        "color": COLORS["luna"],
+        "color": env_color,
         "author_name": "\U0001F43A LUNA \u2014 MACRO BRIEF",
         "title": f"{environment} \u2014 Risk {risk}/10 | {bias} | {regime.upper()}",
         "fields": fields,
