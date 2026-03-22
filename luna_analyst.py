@@ -494,8 +494,12 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     if critical_important:
         lines.append("\n<echo_alerts>")
         for a in critical_important[:10]:
+            headline = a.get("representative_headline") or a.get("title", "")
+            count = a.get("headline_count", 1)
+            sources = a.get("sources", [])
+            cluster_info = f" ({count} sources)" if count > 1 else ""
             lines.append(
-                f"[{a.get('classification')}] {a.get('title', '')} — "
+                f"[{a.get('classification')}] {headline}{cluster_info} — "
                 f"gold_impact: {a.get('gold_impact', 'N/A')} — {a.get('summary', '')}"
             )
         lines.append("</echo_alerts>")

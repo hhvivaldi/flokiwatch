@@ -993,6 +993,7 @@
                 </div>
                 <div id="echo-failing-feeds" style="font-size:9px;color:#6b7280;margin-top:2px"></div>
                 <div id="echo-sentiment" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:3px"></div>
+                <div id="echo-clusters" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:2px;color:#6b7280"></div>
               </div>
             </div>
 
@@ -1499,6 +1500,19 @@
           if (scanCount) scanCount.textContent = String(data.alerts_today || 0);
           if (critCount) critCount.textContent = String(data.critical_today || 0);
           if (impCount) impCount.textContent = String(data.important_today || 0);
+
+          // FLO-73: Cluster info
+          var clustEl = document.getElementById('echo-clusters');
+          if (clustEl && data.stories_today != null) {
+            var stories = data.stories_today || 0;
+            var clustered = data.clustered_stories || 0;
+            var totalHl = data.total_headlines_in_clusters || 0;
+            if (clustered > 0) {
+              clustEl.textContent = 'Stories: ' + stories + ' (' + totalHl + ' headlines clustered into ' + clustered + ')';
+            } else if (stories > 0) {
+              clustEl.textContent = 'Stories: ' + stories;
+            }
+          }
 
           // FLO-72: Sentiment aggregate
           var sentEl = document.getElementById('echo-sentiment');

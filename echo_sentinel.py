@@ -355,19 +355,115 @@ def _save_alerts(alerts: List[Dict]) -> None:
         log.error(f"[ECHO] Failed to save alerts: {e}")
 
 
+# FLO-73: Story clustering
+STOPWORDS = frozenset(
+    "the a an is are in on at to for of and or but with from by as it its "
+    "that this was were has have had will be been not no all any more most "
+    "than they them their there these those who what when where which how "
+    "could would should may might can do does did than also just after before "
+    "about over into new says said year years so very even still some other".split()
+)
+
+
+def _extract_keywords(title: str) -> set:
+    """Extract significant keywords from a headline for clustering."""
+    words = set()
+    for w in str(title).lower().split():
+        # Strip punctuation
+        w = w.strip(".,;:!?\"'()-[]{}#@&*")
+        if len(w) >= 4 and w not in STOPWORDS:
+            words.add(w)
+    return words
+
+
+def _keyword_overlap(kw_a: set, kw_b: set) -> float:
+    """Calculate keyword overlap ratio. 0.0 = no match, 1.0 = identical."""
+    if not kw_a or not kw_b:
+        return 0.0
+    shared = len(kw_a & kw_b)
+    return shared / min(len(kw_a), len(kw_b))
+
+
+_CLASSIFICATION_RANK = {"CRITICAL": 3, "IMPORTANT": 2, "ROUTINE": 1}
+
+
+def _find_matching_cluster(new_keywords: set, alerts: list, max_age_hours: float = 4.0) -> Optional[int]:
+    """Find an existing alert that matches the new headline's keywords (>50% overlap)."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(hours=max_age_hours)
+
+    for i in range(len(alerts) - 1, -1, -1):  # Search newest first
+        a = alerts[i]
+        try:
+            ts = datetime.fromisoformat(str(a.get("first_seen") or a.get("timestamp", "")).replace("Z", "+00:00"))
+            if ts.tzinfo:
+                ts = ts.replace(tzinfo=None)
+            if ts < cutoff:
+                continue
+        except Exception:
+            continue
+
+        existing_kw = _extract_keywords(a.get("representative_headline") or a.get("title", ""))
+        if _keyword_overlap(new_keywords, existing_kw) >= 0.4:
+            return i
+
+    return None
+
+
 def store_alert(headline: ClassifiedHeadline) -> None:
-    """Append an IMPORTANT or CRITICAL alert to echo_alerts.json."""
+    """Append an IMPORTANT or CRITICAL alert to echo_alerts.json, with story clustering (FLO-73)."""
     alerts = _load_alerts()
-    alerts.append({
-        "timestamp": datetime.utcnow().isoformat(),
-        "title": headline.title,
-        "source": headline.source,
-        "classification": headline.classification,
-        "relevance_score": headline.relevance_score,
-        "gold_impact": headline.gold_impact,
-        "summary": headline.summary,
-        "read": False,
-    })
+
+    new_kw = _extract_keywords(headline.title)
+    match_idx = _find_matching_cluster(new_kw, alerts)
+
+    if match_idx is not None:
+        # Update existing cluster
+        cluster = alerts[match_idx]
+        cluster["headline_count"] = cluster.get("headline_count", 1) + 1
+        cluster["latest"] = datetime.utcnow().isoformat()
+
+        # Add source if new
+        sources = cluster.get("sources", [])
+        if headline.source and headline.source not in sources:
+            sources.append(headline.source)
+        cluster["sources"] = sources[-10:]  # Cap at 10
+
+        # Upgrade classification if higher
+        new_rank = _CLASSIFICATION_RANK.get(headline.classification, 0)
+        old_rank = _CLASSIFICATION_RANK.get(cluster.get("classification", "ROUTINE"), 0)
+        if new_rank > old_rank:
+            cluster["classification"] = headline.classification
+
+        # Keep gold_impact from highest-ranked headline
+        if new_rank >= old_rank:
+            cluster["gold_impact"] = headline.gold_impact
+            cluster["summary"] = headline.summary
+
+        cluster["read"] = False  # Mark unread again
+
+        log.info(
+            f"[ECHO] Clustered into existing story: {cluster.get('representative_headline', '')[:60]} "
+            f"({cluster['headline_count']} headlines, {len(sources)} sources)"
+        )
+    else:
+        # Create new cluster entry
+        alerts.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "first_seen": datetime.utcnow().isoformat(),
+            "latest": datetime.utcnow().isoformat(),
+            "title": headline.title,
+            "representative_headline": headline.title,
+            "headline_count": 1,
+            "sources": [headline.source] if headline.source else [],
+            "source": headline.source,
+            "classification": headline.classification,
+            "relevance_score": headline.relevance_score,
+            "gold_impact": headline.gold_impact,
+            "summary": headline.summary,
+            "read": False,
+        })
+
     # Keep last 200 alerts max
     if len(alerts) > 200:
         alerts = alerts[-200:]
@@ -653,12 +749,26 @@ def run_echo_scan(
         except Exception:
             pass
 
+        # FLO-73: Read back cluster counts for event payloads
+        _alerts_for_count = _load_alerts()
+        def _cluster_count_for(title: str) -> int:
+            kw = _extract_keywords(title)
+            for a in reversed(_alerts_for_count):
+                a_kw = _extract_keywords(a.get("representative_headline") or a.get("title", ""))
+                if _keyword_overlap(kw, a_kw) >= 0.4:
+                    return a.get("headline_count", 1)
+            return 1
+
         for c in critical_alerts:
             if c.title.lower()[:50] not in _recent_titles:
+                pl = asdict(c)
+                hc = _cluster_count_for(c.title)
+                pl["headline_count"] = hc
+                suffix = f" ({hc} sources)" if hc > 1 else ""
                 record_agent_event(
                     event_type="ECHO_CRITICAL",
-                    content=f"CRITICAL: {c.title}. {c.gold_impact}. {c.summary}",
-                    payload=asdict(c),
+                    content=f"CRITICAL: {c.title}{suffix}. {c.gold_impact}. {c.summary}",
+                    payload=pl,
                     author="ECHO",
                 )
                 _recent_titles.add(c.title.lower()[:50])
@@ -666,10 +776,14 @@ def run_echo_scan(
                 log.info(f"[ECHO] Skipped duplicate event: {c.title[:50]}")
         for imp in important_alerts:
             if imp.title.lower()[:50] not in _recent_titles:
+                pl = asdict(imp)
+                hc = _cluster_count_for(imp.title)
+                pl["headline_count"] = hc
+                suffix = f" ({hc} sources)" if hc > 1 else ""
                 record_agent_event(
                     event_type="ECHO_IMPORTANT",
-                    content=f"IMPORTANT: {imp.title}. {imp.gold_impact}. {imp.summary}",
-                    payload=asdict(imp),
+                    content=f"IMPORTANT: {imp.title}{suffix}. {imp.gold_impact}. {imp.summary}",
+                    payload=pl,
                     author="ECHO",
                 )
                 _recent_titles.add(imp.title.lower()[:50])

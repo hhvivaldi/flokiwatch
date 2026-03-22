@@ -821,6 +821,11 @@ def echo_api():
         except Exception:
             pass
 
+        # FLO-73: Story cluster stats
+        clustered_count = sum(1 for a in today_alerts if a.get("headline_count", 1) > 1)
+        total_headlines_in_clusters = sum(a.get("headline_count", 1) for a in today_alerts if a.get("headline_count", 1) > 1)
+        stories_today = len(today_alerts)  # Each alert entry = one story (may contain multiple headlines)
+
         # FLO-72: Sentiment aggregate
         aggregate = None
         try:
@@ -840,6 +845,9 @@ def echo_api():
             "daily_cost": cost_data.get("total_usd", 0),
             "daily_calls": cost_data.get("calls", 0),
             "sentiment_aggregate": aggregate,
+            "stories_today": stories_today,
+            "clustered_stories": clustered_count,
+            "total_headlines_in_clusters": total_headlines_in_clusters,
         })
     except Exception:
         return JSONResponse({
