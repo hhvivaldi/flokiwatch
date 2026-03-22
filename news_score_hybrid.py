@@ -1293,10 +1293,17 @@ GLD_FLOWS_FILE = os.path.join(DATA_DIR, "gld_weekly_flows.json")
 
 def get_gld_weekly_flows():
     """
-    Calculate GLD ETF 7-day rolling flow proxy from volume × price.
-    Compares last 5 trading days vs previous 5 trading days.
+    GLD ETF volume-based sentiment indicator.
+    Compares last 5 vs previous 5 trading days: volume trend + price direction.
+
+    NOTE: This is a SENTIMENT proxy, not actual ETF flows. yfinance does not
+    provide historical shares outstanding, so real flow calculation is not
+    possible. Volume + price direction indicates institutional conviction:
+    - High volume + price rising = buying conviction (ACCUMULATION)
+    - High volume + price falling = selling conviction (DISTRIBUTION)
+    - Low volume = no strong conviction (QUIET)
+
     Stores result in gld_weekly_flows.json (updated once per day).
-    Returns: {direction, estimated_usd_millions, volume_change_pct, last_updated}
     """
     # Check cache — only recalculate once per day
     try:
@@ -1312,42 +1319,40 @@ def get_gld_weekly_flows():
         hist = ticker.history(period="1mo")
 
         if hist.empty or len(hist) < 10:
-            return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": "Insufficient GLD data"}
+            return {"direction": None, "volume_change_pct": None, "error": "Insufficient GLD data"}
 
         closes = hist["Close"].values
         volumes = hist["Volume"].values
 
-        # Last 5 trading days vs previous 5
-        last5_dollar_vol = sum(closes[-5:] * volumes[-5:])
-        prev5_dollar_vol = sum(closes[-10:-5] * volumes[-10:-5])
+        # Volume comparison: last 5 vs previous 5 trading days
+        last5_avg_vol = float(volumes[-5:].mean())
+        prev5_avg_vol = float(volumes[-10:-5].mean())
+        vol_change_pct = ((last5_avg_vol - prev5_avg_vol) / prev5_avg_vol) * 100 if prev5_avg_vol > 0 else 0
 
-        if prev5_dollar_vol == 0:
-            return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": "Zero previous volume"}
-
-        net_flow = last5_dollar_vol - prev5_dollar_vol
-        vol_change_pct = ((last5_dollar_vol - prev5_dollar_vol) / prev5_dollar_vol) * 100
-
-        # Volume trend as flow proxy: higher volume at rising prices = inflow
+        # Price direction
         last5_avg_price = float(closes[-5:].mean())
         prev5_avg_price = float(closes[-10:-5].mean())
+        price_change_pct = ((last5_avg_price - prev5_avg_price) / prev5_avg_price) * 100
+
         price_rising = last5_avg_price > prev5_avg_price
-        volume_rising = float(volumes[-5:].mean()) > float(volumes[-10:-5].mean())
+        volume_rising = last5_avg_vol > prev5_avg_vol * 1.1  # >10% increase = meaningful
 
         if volume_rising and price_rising:
-            direction = "INFLOW"
+            direction = "ACCUMULATION"
         elif volume_rising and not price_rising:
-            direction = "OUTFLOW"
+            direction = "DISTRIBUTION"
         elif not volume_rising and price_rising:
-            direction = "QUIET_INFLOW"
+            direction = "QUIET_BID"
         else:
-            direction = "QUIET_OUTFLOW"
+            direction = "QUIET"
 
         result = {
             "direction": direction,
-            "estimated_usd_millions": round(net_flow / 1_000_000, 0),
             "volume_change_pct": round(vol_change_pct, 1),
-            "last5_dollar_vol_millions": round(last5_dollar_vol / 1_000_000, 0),
-            "prev5_dollar_vol_millions": round(prev5_dollar_vol / 1_000_000, 0),
+            "price_change_pct": round(price_change_pct, 1),
+            "last5_avg_vol": int(last5_avg_vol),
+            "prev5_avg_vol": int(prev5_avg_vol),
+            "last5_avg_price": round(last5_avg_price, 2),
             "last_updated": datetime.utcnow().strftime("%Y-%m-%d"),
         }
 
@@ -1360,8 +1365,8 @@ def get_gld_weekly_flows():
 
         return result
     except Exception as e:
-        log.warning(f"GLD flows: error — {e}")
-        return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": str(e)}
+        log.warning(f"GLD sentiment: error — {e}")
+        return {"direction": None, "volume_change_pct": None, "error": str(e)}
 
 
 # ============================================================================

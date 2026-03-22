@@ -166,8 +166,13 @@ A broken gold-DXY correlation (normally -0.7 to -0.9, now positive) often signal
 forced liquidation, central bank intervention, or structural shift. "DXY falling = gold bullish"
 may be WRONG during a correlation break. Always check correlation status before applying standard rules.
 
-GLD ETF FLOWS:
-GLD flows = institutional conviction proxy. INFLOW (rising volume + rising price) = institutional gold buying. OUTFLOW (rising volume + falling price) = institutional selling. Multi-week inflows = structural gold support. Sudden outflows after long inflow streak = potential reversal warning.
+GLD ETF SENTIMENT:
+GLD sentiment is a volume-based conviction indicator, NOT actual ETF flows.
+ACCUMULATION = high volume + rising price (institutions buying with conviction).
+DISTRIBUTION = high volume + falling price (institutions selling with conviction).
+QUIET_BID = low volume + rising price (steady demand, no urgency).
+QUIET = low volume + no clear direction.
+This is a PROXY — it cannot measure actual fund inflows/outflows.
 
 REAL YIELD PROXY:
 Use the "Real Yield proxy (live)" for intraday decisions. The FRED DFII10 value is end-of-day (previous close). The proxy = nominal yield minus breakeven inflation gives a live estimate using real-time ^TNX data."""
@@ -404,7 +409,7 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
 
     gld_flows = macro.get("gld_flows", {})
     if gld_flows.get("direction"):
-        lines.append(f"GLD ETF flows (7d rolling): {gld_flows.get('direction')} | est ${gld_flows.get('estimated_usd_millions', 'N/A')}M | vol change {gld_flows.get('volume_change_pct', 'N/A')}%")
+        lines.append(f"GLD ETF sentiment (5d vs prev 5d): {gld_flows.get('direction')} | vol change {gld_flows.get('volume_change_pct', 'N/A')}% | price change {gld_flows.get('price_change_pct', 'N/A')}%")
 
     lines.append("</macro_data>")
 
@@ -488,8 +493,8 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
         },
         "gld_flows": {
             "direction": gld_flows.get("direction"),
-            "estimated_usd_millions": gld_flows.get("estimated_usd_millions"),
             "volume_change_pct": gld_flows.get("volume_change_pct"),
+            "price_change_pct": gld_flows.get("price_change_pct"),
         },
         "usdcny": {
             "value": usdcny.get("current"),

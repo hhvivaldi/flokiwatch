@@ -4811,8 +4811,8 @@ class TradingBot:
                     if isinstance(_gld_flows, dict) and _gld_flows.get("direction"):
                         macro["gld_flows"] = {
                             "direction": _gld_flows.get("direction"),
-                            "estimated_usd_millions": _gld_flows.get("estimated_usd_millions"),
                             "volume_change_pct": _gld_flows.get("volume_change_pct"),
+                            "price_change_pct": _gld_flows.get("price_change_pct"),
                         }
             except Exception:
                 pass

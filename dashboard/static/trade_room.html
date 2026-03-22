@@ -1575,10 +1575,10 @@
             }
             if (ds.gld_flows && ds.gld_flows.direction) {
               var gf = ds.gld_flows;
-              var gfColor = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '#4ade80' : '#f87171';
-              var gfLabel = gf.direction === 'INFLOW' ? '\u25B2 Inflow' : (gf.direction === 'OUTFLOW' ? '\u25BC Outflow' : (gf.direction === 'QUIET_INFLOW' ? '\u25B2 Quiet' : '\u25BC Quiet'));
-              var gfAmt = gf.estimated_usd_millions != null ? ' $' + Number(gf.estimated_usd_millions).toLocaleString() + 'M' : '';
-              rows.push('<span style="color:#6b7280">GLD Flow</span> <span style="color:' + gfColor + '">' + gfLabel + gfAmt + '</span>');
+              var gfBull = gf.direction === 'ACCUMULATION' || gf.direction === 'QUIET_BID';
+              var gfColor = gfBull ? '#4ade80' : (gf.direction === 'DISTRIBUTION' ? '#f87171' : '#6b7280');
+              var gfVol = gf.volume_change_pct != null ? ' vol ' + (gf.volume_change_pct > 0 ? '+' : '') + gf.volume_change_pct.toFixed(0) + '%' : '';
+              rows.push('<span style="color:#6b7280">GLD</span> <span style="color:' + gfColor + '">' + gf.direction + gfVol + '</span>');
             }
             if (rows.length > 0) {
               snapEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;line-height:1.6">' + rows.join('') + '</div>';
@@ -2924,10 +2924,10 @@
                 var gf = macro.gld_flows || {};
                 var gfEl = document.getElementById('ctx-gld-flows');
                 if (gfEl && gf.direction) {
-                  var gfArrow = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '\u25B2' : '\u25BC';
-                  var gfAmt = gf.estimated_usd_millions != null ? ' $' + Number(gf.estimated_usd_millions).toLocaleString() + 'M' : '';
-                  gfEl.textContent = gfArrow + ' ' + gf.direction + gfAmt;
-                  gfEl.style.color = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '#4ade80' : '#f87171';
+                  var gfBull = gf.direction === 'ACCUMULATION' || gf.direction === 'QUIET_BID';
+                  var gfVol = gf.volume_change_pct != null ? ' vol ' + (gf.volume_change_pct > 0 ? '+' : '') + Number(gf.volume_change_pct).toFixed(0) + '%' : '';
+                  gfEl.textContent = gf.direction + gfVol;
+                  gfEl.style.color = gfBull ? '#4ade80' : (gf.direction === 'DISTRIBUTION' ? '#f87171' : '#6b7280');
                 } else if (gfEl) {
                   gfEl.textContent = '\u2014';
                 }
