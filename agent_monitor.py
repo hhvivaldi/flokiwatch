@@ -970,6 +970,30 @@ class AgentMonitor:
                 self._fire_proactive_out_of_cycle("SIMBA_WAKE", dict(trigger_data))
             except Exception as e:
                 log.debug(f"AGENT_MONITOR | simba wake fire failed (ignored): {e}")
+
+            # FLO-78: Discord card for Simba wake
+            try:
+                from discord_cards import build_simba_wake_card, send_built_card
+                # Find first triggered condition details
+                _first_cond = None
+                for _ci, _c in enumerate(conditions or [], start=1):
+                    _cid = str(_c.get("id") or f"c{_ci}").strip() or f"c{_ci}"
+                    if _cid in triggered_ids:
+                        _first_cond = _c
+                        break
+                if _first_cond:
+                    _vel_info = velocity_data.get(str(_first_cond.get("id") or ""), {})
+                    _grp = _first_cond.get("group")
+                    _grp_str = f"Group {_grp}" if _grp else None
+                    send_built_card(build_simba_wake_card(
+                        condition_type=_first_cond.get("type", "unknown"),
+                        threshold=_first_cond.get("value") or _first_cond.get("level") or _first_cond.get("threshold"),
+                        current=_vel_info.get("current"),
+                        velocity=_vel_info.get("velocity"),
+                        group_info=_grp_str,
+                    ))
+            except Exception:
+                pass
         except Exception as e:
             try:
                 log.debug(f"AGENT_MONITOR | simba wake call failed (ignored): {e}")

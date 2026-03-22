@@ -396,19 +396,15 @@ def check_intraday_drawdown(db_path: Optional[str] = None) -> Optional[Dict[str,
         except Exception as e:
             log.warning(f"SAGE | failed to record alert event: {e}")
 
-        # 3. Discord alert
+        # 3. Discord alert (card to sage + errors channels)
         try:
-            from alerts import discord
-            discord.send(
-                "errors",
-                f"🚨 **SAGE INTRADAY ALERT**\n"
-                f"Daily P&L: **${daily_pnl:+.2f}**\n"
-                f"Trades: {trades_today} ({wins}W/{losses}L)\n"
-                f"Loss streak: {streak}\n"
-                f"Trigger: {'; '.join(reasons)}",
-                alert_type="error",
-                title="Sage Drawdown Alert",
-            )
+            from discord_cards import build_sage_alert_card, send_built_card, send_card, COLORS
+            card = build_sage_alert_card(daily_pnl, streak, trades_today, wins=wins, losses=losses)
+            send_built_card(card)
+            # Also send to errors channel
+            card_errors = dict(card)
+            card_errors["channel"] = "errors"
+            send_built_card(card_errors)
         except Exception:
             pass
 
@@ -669,6 +665,13 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
                 payload=report,
                 author="SAGE",
             )
+        except Exception:
+            pass
+
+        # FLO-78: Discord card for weekly report
+        try:
+            from discord_cards import build_sage_weekly_card, send_built_card
+            send_built_card(build_sage_weekly_card(tw, lw, report.get("comparison", {})))
         except Exception:
             pass
 

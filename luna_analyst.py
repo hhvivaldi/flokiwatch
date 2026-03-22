@@ -1318,6 +1318,32 @@ def run_luna_analysis() -> LunaAnalysisResult:
         except Exception as e:
             log.warning(f"LUNA: error recording event — {e}")
 
+        # 6. Discord card for DANGER/CAUTION (FLO-78)
+        if result.environment in ("DANGER", "CAUTION"):
+            try:
+                from discord_cards import build_luna_brief_card, send_built_card
+                # Get echo aggregate for sentiment field
+                agg = _get_echo_aggregate()
+                sentiment = None
+                if agg:
+                    w4h = agg.get("4h", {})
+                    if w4h.get("total", 0) > 0:
+                        sentiment = f"{w4h.get('dominant', 'N/A')} ({int(w4h.get('bullish', 0) / w4h['total'] * 100)}% bullish, {w4h['total']} headlines)"
+
+                card = build_luna_brief_card(
+                    environment=result.environment,
+                    risk=result.risk_level,
+                    bias=result.directional_bias,
+                    regime=result.market_regime,
+                    patterns=result.patterns_detected or None,
+                    summary=result.summary,
+                    macro_data=result.data_snapshot,
+                    sentiment=sentiment,
+                )
+                send_built_card(card)
+            except Exception:
+                pass
+
         return result
 
     except Exception as e:

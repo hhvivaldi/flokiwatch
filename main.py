@@ -2586,11 +2586,10 @@ class TradingBot:
             pass
 
         try:
-            discord.send(
-                f"Agent requested CLOSE | ticket={t} | reason={reason_str}",
-                alert_type="warning",
-                title="Agent Close",
-            )
+            from discord_cards import build_floki_close_card, send_built_card
+            send_built_card(build_floki_close_card(
+                ticket=t, direction="CLOSE", pnl=0, close_reason=reason_str,
+            ))
         except Exception:
             pass
 
@@ -2731,11 +2730,15 @@ class TradingBot:
             return {"success": False, "ticket": t, "reason": msg}
 
         try:
-            discord.send(
-                f"Agent requested ADJUST | ticket={t} | SL={sl_f} TP={tp_f} | reason={reason_str}",
-                alert_type="info",
-                title="Agent Adjust",
-            )
+            from discord_cards import send_card, COLORS
+            send_card("floki", COLORS["floki"], "\U0001F415 FLOKI \u2014 ADJUST",
+                      f"ADJUST #{t} \u2014 SL ${sl_f:,.2f} TP ${tp_f:,.2f}",
+                      fields=[
+                          {"name": "Ticket", "value": str(t), "inline": True},
+                          {"name": "New SL", "value": f"${sl_f:,.2f}", "inline": True},
+                          {"name": "New TP", "value": f"${tp_f:,.2f}", "inline": True},
+                          {"name": "Reason", "value": reason_str[:200], "inline": False},
+                      ])
         except Exception:
             pass
 
@@ -5185,7 +5188,8 @@ def run_single_analysis():
 def test_discord_connection():
     """Test Discord connection"""
     print("🧪 Testing Discord connection...")
-    result = discord.send("🤖 XAU/USD Trading Bot connection test", alert_type="info")
+    from discord_cards import send_card, COLORS
+    result = send_card("floki", COLORS["system"], "\u2699\uFE0F SYSTEM", "\U0001F916 Connection test", description="FlokiWatch bot connection test")
     print(f"   Result: {'✅ OK' if result else '❌ Failed'}")
 
 

@@ -134,6 +134,16 @@ DISCORD_WEBHOOK_BACKTEST = os.environ.get("DISCORD_WEBHOOK_BACKTEST", "")
 DISCORD_WEBHOOK_ERRORS = os.environ.get("DISCORD_WEBHOOK_ERRORS", "")
 DISCORD_WEBHOOK_CHANGELOG = os.environ.get("DISCORD_WEBHOOK_CHANGELOG", "")
 
+# New agent-specific webhooks (FLO-78)
+DISCORD_WEBHOOK_FLOKI = os.environ.get("DISCORD_WEBHOOK_FLOKI", "")
+DISCORD_WEBHOOK_REX = os.environ.get("DISCORD_WEBHOOK_REX", "")
+DISCORD_WEBHOOK_LUNA = os.environ.get("DISCORD_WEBHOOK_LUNA", "")
+DISCORD_WEBHOOK_ECHO = os.environ.get("DISCORD_WEBHOOK_ECHO", "")
+DISCORD_WEBHOOK_SIMBA = os.environ.get("DISCORD_WEBHOOK_SIMBA", "")
+DISCORD_WEBHOOK_SAGE = os.environ.get("DISCORD_WEBHOOK_SAGE", "")
+DISCORD_WEBHOOK_BACKTESTS = os.environ.get("DISCORD_WEBHOOK_BACKTESTS", "")
+DISCORD_WEBHOOK_ANNOUNCEMENTS = os.environ.get("DISCORD_WEBHOOK_ANNOUNCEMENTS", "")
+
 # ============================================================================
 # SYMBOL AND TIMEFRAME
 # ============================================================================
