@@ -4802,6 +4802,21 @@ class TradingBot:
                 },
             }
 
+            # FLO-77: GLD weekly flows from cached file
+            try:
+                _gld_flows_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gld_weekly_flows.json")
+                if os.path.exists(_gld_flows_path):
+                    with open(_gld_flows_path, "r", encoding="utf-8") as _gf:
+                        _gld_flows = json.loads(_gf.read())
+                    if isinstance(_gld_flows, dict) and _gld_flows.get("direction"):
+                        macro["gld_flows"] = {
+                            "direction": _gld_flows.get("direction"),
+                            "estimated_usd_millions": _gld_flows.get("estimated_usd_millions"),
+                            "volume_change_pct": _gld_flows.get("volume_change_pct"),
+                        }
+            except Exception:
+                pass
+
             # Cache age
             cache_age_minutes = cached.get("cache_age_minutes", 0)
 

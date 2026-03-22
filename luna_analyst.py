@@ -160,6 +160,9 @@ Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
 - "VIX at 26.78" means different things if it came from 18 (escalating) vs from 35 (recovering)
 - Always reference the trend direction in your summary when it contradicts the snapshot level
 
+GLD ETF FLOWS:
+GLD flows = institutional conviction proxy. INFLOW (rising volume + rising price) = institutional gold buying. OUTFLOW (rising volume + falling price) = institutional selling. Multi-week inflows = structural gold support. Sudden outflows after long inflow streak = potential reversal warning.
+
 REAL YIELD PROXY:
 Use the "Real Yield proxy (live)" for intraday decisions. The FRED DFII10 value is end-of-day (previous close). The proxy = nominal yield minus breakeven inflation gives a live estimate using real-time ^TNX data."""
 
@@ -233,6 +236,7 @@ def _get_macro_data() -> Dict[str, Any]:
         get_fed_funds_rate,
         get_breakeven_inflation,
         get_cpi_data,
+        get_gld_weekly_flows,
     )
 
     dxy = get_dxy_data()
@@ -247,6 +251,7 @@ def _get_macro_data() -> Dict[str, Any]:
     fed_funds = get_fed_funds_rate()
     breakeven = get_breakeven_inflation()
     cpi = get_cpi_data()
+    gld_flows = get_gld_weekly_flows()
 
     return {
         "dxy": dxy,
@@ -261,6 +266,7 @@ def _get_macro_data() -> Dict[str, Any]:
         "fed_funds": fed_funds,
         "breakeven": breakeven,
         "cpi": cpi,
+        "gld_flows": gld_flows,
     }
 
 
@@ -389,6 +395,10 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     cpi = macro.get("cpi", {})
     lines.append(f"CPI (All Urban): {cpi.get('current', 'N/A')} (change: {cpi.get('change', 'N/A')}, date: {cpi.get('date', 'N/A')})")
 
+    gld_flows = macro.get("gld_flows", {})
+    if gld_flows.get("direction"):
+        lines.append(f"GLD ETF flows (7d rolling): {gld_flows.get('direction')} | est ${gld_flows.get('estimated_usd_millions', 'N/A')}M | vol change {gld_flows.get('volume_change_pct', 'N/A')}%")
+
     lines.append("</macro_data>")
 
     # Macro trends (5-day rolling)
@@ -442,6 +452,7 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     gld = macro.get("gld", {})
+    gld_flows = macro.get("gld_flows", {})
     usdcny = macro.get("usdcny", {})
     ry = macro.get("real_yields", {})
     ff = macro.get("fed_funds", {})
@@ -462,6 +473,11 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
             "value": gld.get("current"),
             "volume": gld.get("volume"),
             "change_pct": gld.get("change_percent", 0),
+        },
+        "gld_flows": {
+            "direction": gld_flows.get("direction"),
+            "estimated_usd_millions": gld_flows.get("estimated_usd_millions"),
+            "volume_change_pct": gld_flows.get("volume_change_pct"),
         },
         "usdcny": {
             "value": usdcny.get("current"),

@@ -1110,6 +1110,7 @@
           <div class="ctx-row"><span class="ctx-key">Oil WTI</span><span id="ctx-oil" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">S&P 500</span><span id="ctx-sp500" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">GLD Vol</span><span id="ctx-gld" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">GLD Flows</span><span id="ctx-gld-flows" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">Real Yields</span><span id="ctx-real-yields" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">USD/CNY</span><span id="ctx-usdcny" class="ctx-val">—</span></div>
         </div>
@@ -1562,6 +1563,13 @@
             }
             if (ds.cpi && ds.cpi.value != null) {
               rows.push('<span style="color:#6b7280">CPI</span> <span style="color:#e2e8f0">' + Number(ds.cpi.value).toFixed(1) + '</span>');
+            }
+            if (ds.gld_flows && ds.gld_flows.direction) {
+              var gf = ds.gld_flows;
+              var gfColor = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '#4ade80' : '#f87171';
+              var gfLabel = gf.direction === 'INFLOW' ? '\u25B2 Inflow' : (gf.direction === 'OUTFLOW' ? '\u25BC Outflow' : (gf.direction === 'QUIET_INFLOW' ? '\u25B2 Quiet' : '\u25BC Quiet'));
+              var gfAmt = gf.estimated_usd_millions != null ? ' $' + Number(gf.estimated_usd_millions).toLocaleString() + 'M' : '';
+              rows.push('<span style="color:#6b7280">GLD Flow</span> <span style="color:' + gfColor + '">' + gfLabel + gfAmt + '</span>');
             }
             if (rows.length > 0) {
               snapEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;line-height:1.6">' + rows.join('') + '</div>';
@@ -2863,6 +2871,17 @@
                 var gldVal = (gld.value != null) ? Number(gld.value) : null;
                 var gldEl = document.getElementById('ctx-gld');
                 if (gldEl) gldEl.textContent = (gldVal != null && isFinite(gldVal)) ? Number(gldVal).toLocaleString() : '—';
+
+                var gf = macro.gld_flows || {};
+                var gfEl = document.getElementById('ctx-gld-flows');
+                if (gfEl && gf.direction) {
+                  var gfArrow = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '\u25B2' : '\u25BC';
+                  var gfAmt = gf.estimated_usd_millions != null ? ' $' + Number(gf.estimated_usd_millions).toLocaleString() + 'M' : '';
+                  gfEl.textContent = gfArrow + ' ' + gf.direction + gfAmt;
+                  gfEl.style.color = (gf.direction === 'INFLOW' || gf.direction === 'QUIET_INFLOW') ? '#4ade80' : '#f87171';
+                } else if (gfEl) {
+                  gfEl.textContent = '\u2014';
+                }
 
                 var ry = macro.real_yields || {};
                 var ryVal = (ry.value != null) ? Number(ry.value) : null;

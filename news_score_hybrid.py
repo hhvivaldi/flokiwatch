@@ -1285,6 +1285,86 @@ def get_usdcny_data():
 
 
 # ============================================================================
+# PART 4e: GLD WEEKLY FLOWS (FLO-77)
+# ============================================================================
+
+GLD_FLOWS_FILE = os.path.join(DATA_DIR, "gld_weekly_flows.json")
+
+
+def get_gld_weekly_flows():
+    """
+    Calculate GLD ETF 7-day rolling flow proxy from volume × price.
+    Compares last 5 trading days vs previous 5 trading days.
+    Stores result in gld_weekly_flows.json (updated once per day).
+    Returns: {direction, estimated_usd_millions, volume_change_pct, last_updated}
+    """
+    # Check cache — only recalculate once per day
+    try:
+        if os.path.exists(GLD_FLOWS_FILE):
+            cached = json.loads(open(GLD_FLOWS_FILE, "r", encoding="utf-8").read())
+            if cached.get("last_updated") == datetime.utcnow().strftime("%Y-%m-%d"):
+                return cached
+    except Exception:
+        pass
+
+    try:
+        ticker = yf.Ticker("GLD")
+        hist = ticker.history(period="1mo")
+
+        if hist.empty or len(hist) < 10:
+            return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": "Insufficient GLD data"}
+
+        closes = hist["Close"].values
+        volumes = hist["Volume"].values
+
+        # Last 5 trading days vs previous 5
+        last5_dollar_vol = sum(closes[-5:] * volumes[-5:])
+        prev5_dollar_vol = sum(closes[-10:-5] * volumes[-10:-5])
+
+        if prev5_dollar_vol == 0:
+            return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": "Zero previous volume"}
+
+        net_flow = last5_dollar_vol - prev5_dollar_vol
+        vol_change_pct = ((last5_dollar_vol - prev5_dollar_vol) / prev5_dollar_vol) * 100
+
+        # Volume trend as flow proxy: higher volume at rising prices = inflow
+        last5_avg_price = float(closes[-5:].mean())
+        prev5_avg_price = float(closes[-10:-5].mean())
+        price_rising = last5_avg_price > prev5_avg_price
+        volume_rising = float(volumes[-5:].mean()) > float(volumes[-10:-5].mean())
+
+        if volume_rising and price_rising:
+            direction = "INFLOW"
+        elif volume_rising and not price_rising:
+            direction = "OUTFLOW"
+        elif not volume_rising and price_rising:
+            direction = "QUIET_INFLOW"
+        else:
+            direction = "QUIET_OUTFLOW"
+
+        result = {
+            "direction": direction,
+            "estimated_usd_millions": round(net_flow / 1_000_000, 0),
+            "volume_change_pct": round(vol_change_pct, 1),
+            "last5_dollar_vol_millions": round(last5_dollar_vol / 1_000_000, 0),
+            "prev5_dollar_vol_millions": round(prev5_dollar_vol / 1_000_000, 0),
+            "last_updated": datetime.utcnow().strftime("%Y-%m-%d"),
+        }
+
+        # Save to file
+        try:
+            with open(GLD_FLOWS_FILE, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2)
+        except Exception:
+            pass
+
+        return result
+    except Exception as e:
+        log.warning(f"GLD flows: error — {e}")
+        return {"direction": None, "estimated_usd_millions": None, "volume_change_pct": None, "error": str(e)}
+
+
+# ============================================================================
 # PART 5: COMBINE ALL
 # ============================================================================
 
