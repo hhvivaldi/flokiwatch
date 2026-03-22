@@ -3489,6 +3489,45 @@ class TradingBot:
                     payload={"trigger": trigger_type, "timestamp": snapshot_time_iso},
                     author="FLOKI",
                 )
+
+                # FLO-78: Discord card for OPEN decisions only
+                if d in ("OPEN_BUY", "OPEN_SELL"):
+                    try:
+                        from discord_cards import build_floki_open_card, send_built_card
+                        _tp = getattr(agent_result, "trade_plan", None) or {}
+                        if isinstance(_tp, dict):
+                            _entry = float(_tp.get("entry") or _tp.get("entry_price") or 0)
+                            _sl = float(_tp.get("stop_loss") or 0)
+                            _tpv = float(_tp.get("take_profit") or 0)
+                        else:
+                            _entry, _sl, _tpv = 0, 0, 0
+                        _rex_v = getattr(agent_result, "rex_verdict", None)
+                        _luna_b = None
+                        _luna_r = None
+                        try:
+                            from luna_analyst import load_luna_brief
+                            _lb = load_luna_brief()
+                            if _lb:
+                                _luna_b = _lb.get("environment")
+                                _luna_r = _lb.get("risk_level")
+                        except Exception:
+                            pass
+                        _sess = None
+                        try:
+                            _h = datetime.utcnow().hour
+                            _sess = "Asian" if _h < 7 else ("London" if _h < 13 else ("NY" if _h < 22 else "Off"))
+                        except Exception:
+                            pass
+                        send_built_card(build_floki_open_card(
+                            direction="BUY" if d == "OPEN_BUY" else "SELL",
+                            price=_entry,
+                            confidence=float(agent_result.confidence or 0),
+                            sl=_sl, tp=_tpv,
+                            rex_verdict=str(_rex_v) if _rex_v else None,
+                            luna_env=_luna_b, luna_risk=_luna_r, session=_sess,
+                        ))
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -4981,7 +5020,22 @@ class TradingBot:
                     else:
                         self.daily_stats['breakevens'] = self.daily_stats.get('breakevens', 0) + 1
                     self.daily_stats['pnl'] += profit
-                
+
+                    # FLO-78: Discord card for confirmed trade close
+                    try:
+                        from discord_cards import build_floki_close_card, send_built_card
+                        send_built_card(build_floki_close_card(
+                            ticket=action.get("ticket", 0),
+                            direction=action.get("direction", ""),
+                            pnl=profit,
+                            entry=action.get("open_price"),
+                            exit_price=action.get("close_price"),
+                            close_reason=action.get("reason", ""),
+                            day_pnl=self.daily_stats.get("pnl"),
+                        ))
+                    except Exception:
+                        pass
+
                 # Save to dashboard history
                 add_closed_trade(self, {
                     "ticket": action.get("ticket"),

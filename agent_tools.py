@@ -732,6 +732,19 @@ class AgentTools:
                         payload={"turn": turns, "agree": bool(agree), "data_verified": True},
                         author="REX",
                     )
+
+                # FLO-78: Discord card for Rex debate
+                try:
+                    from discord_cards import build_rex_debate_card, send_built_card
+                    send_built_card(build_rex_debate_card(
+                        floki_wants=f"{dir_s} {int(round(conf_f))}% conf",
+                        rex_says=rex_text[:200],
+                        agree=bool(agree),
+                        data_verified=True,
+                        suggestion=suggested_adjustment or None,
+                    ))
+                except Exception:
+                    pass
             except Exception:
                 pass
 
