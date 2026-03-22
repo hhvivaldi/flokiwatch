@@ -844,6 +844,38 @@ def echo_api():
         })
 
 
+@app.get("/api/luna-brief")
+def luna_brief_api():
+    """Return Luna macro analyst brief for Trade Room card."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        brief_file = data_dir / "luna_brief.json"
+
+        if not brief_file.exists():
+            return JSONResponse({"brief": None, "stale": True})
+
+        brief = json.loads(brief_file.read_text(encoding="utf-8"))
+        if not isinstance(brief, dict):
+            return JSONResponse({"brief": None, "stale": True})
+
+        # Check freshness — stale if older than 30 min
+        stale = False
+        ts = brief.get("timestamp")
+        if ts:
+            try:
+                brief_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                now_utc = datetime.now(tz=brief_time.tzinfo) if brief_time.tzinfo else datetime.utcnow()
+                age_min = (now_utc - brief_time).total_seconds() / 60
+                stale = age_min > 30
+                brief["age_minutes"] = round(age_min, 1)
+            except Exception:
+                pass
+
+        return JSONResponse({"brief": brief, "stale": stale})
+    except Exception:
+        return JSONResponse({"brief": None, "stale": True})
+
+
 @app.get("/api/indicator-history")
 def indicator_history(hours: int = 6):
     if not HISTORY_DB.exists():
