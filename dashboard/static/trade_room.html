@@ -2052,9 +2052,10 @@
                   var levelsHtml = '';
                   if (Array.isArray(levels) && levels.length > 0) {
                     levelsHtml = levels.map(function(lv) {
-                      var p = lv.price != null ? Number(lv.price).toFixed(0) : '?';
+                      var p = (lv.level != null ? lv.level : lv.price);
+                      var pStr = p != null ? Number(p).toFixed(0) : '?';
                       var d = lv.distance != null ? Number(lv.distance).toFixed(1) : '?';
-                      return p + ' (' + d + ' away)';
+                      return pStr + ' (' + d + ' away)';
                     }).join(' | ');
                   }
                   var triggered = meta.triggered;
@@ -2070,6 +2071,19 @@
                       '<span style="color:#6b7280">Trend</span><span style="font-weight:600">' + tArrow + ' ' + trend + '</span>' +
                       (levelsHtml ? '<span style="color:#6b7280">Levels</span><span style="color:#9ca3af">' + levelsHtml + '</span>' : '') +
                     '</div>';
+                  // Show condition details if available from nearest_levels
+                  if (Array.isArray(levels) && levels.length > 0) {
+                    structuredContent += '<div style="margin-top:3px;font-size:9px;color:#6b7280;line-height:1.5">';
+                    for (var li = 0; li < levels.length; li++) {
+                      var lv = levels[li];
+                      var lvType = lv.type || '?';
+                      var lvLevel = (lv.level != null ? lv.level : lv.price);
+                      var lvDist = lv.distance != null ? Number(lv.distance).toFixed(1) : '?';
+                      var lvIcon = lvType.indexOf('above') >= 0 ? '\u25B2' : (lvType.indexOf('below') >= 0 ? '\u25BC' : '\u25CF');
+                      structuredContent += lvIcon + ' ' + lvType + ': ' + (lvLevel != null ? Number(lvLevel).toFixed(0) : '?') + ' (' + lvDist + ' away)<br>';
+                    }
+                    structuredContent += '</div>';
+                  }
                   // If triggered, show which condition fired
                   if (isTriggered) {
                     structuredContent += '<div style="margin-top:4px;font-size:10px;color:#f59e0b;font-weight:700">Waking Floki!</div>';
