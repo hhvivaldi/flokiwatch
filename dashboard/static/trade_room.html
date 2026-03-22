@@ -2187,15 +2187,16 @@
                 '</div>';
                 // Line 2: trend title with WR change
                 var s2 = '<div style="font-size:11px;font-weight:700;color:' + tColor + ';margin-bottom:5px">' + trend + ' ' + tArrow + ' \u2014 ' + (tw.trades || 0) + ' trades, ' + twWr + '% WR' + (wrChg ? ' (' + wrChg + ')' : '') + ', $' + (tw.pnl >= 0 ? '+' : '') + (tw.pnl || 0).toFixed(2) + '</div>';
-                // 3-column comparison grid
-                var s3 = '<div style="display:grid;grid-template-columns:auto auto auto;gap:1px 10px;font-size:9px;font-family:\'JetBrains Mono\',monospace;line-height:1.6">' +
-                  '<span style="color:#6b7280"></span><span style="color:#6b7280">This wk</span><span style="color:#6b7280">Last wk</span>' +
-                  '<span style="color:#6b7280">Trades</span><span style="color:#e2e8f0">' + (tw.trades || 0) + '</span><span style="color:#9ca3af">' + (lw.trades || 0) + '</span>' +
-                  '<span style="color:#6b7280">WR</span><span style="color:#e2e8f0">' + twWr + '%</span><span style="color:#9ca3af">' + lwWr + '%</span>' +
-                  '<span style="color:#6b7280">P&L</span><span style="color:' + (tw.pnl >= 0 ? '#4ade80' : '#f87171') + '">$' + (tw.pnl >= 0 ? '+' : '') + (tw.pnl || 0).toFixed(2) + '</span><span style="color:' + (lw.pnl >= 0 ? '#4ade80' : '#f87171') + '">$' + (lw.pnl >= 0 ? '+' : '') + (lw.pnl || 0).toFixed(2) + '</span>' +
+                // 4-column comparison grid (label / this wk / last wk / change)
+                var wrChgColor = cmp.win_rate_change != null ? (cmp.win_rate_change >= 0 ? '#4ade80' : '#f87171') : '#6b7280';
+                var s3 = '<div style="display:grid;grid-template-columns:max-content max-content max-content max-content;gap:2px 14px;font-size:11px;font-family:\'JetBrains Mono\',monospace;line-height:1.6">' +
+                  '<span style="color:#6b7280"></span><span style="color:#6b7280">This wk</span><span style="color:#6b7280">Last wk</span><span style="color:#6b7280">Change</span>' +
+                  '<span style="color:#6b7280">Trades</span><span style="color:#e2e8f0">' + (tw.trades || 0) + '</span><span style="color:#9ca3af">' + (lw.trades || 0) + '</span><span></span>' +
+                  '<span style="color:#6b7280">WR</span><span style="color:#e2e8f0">' + twWr + '%</span><span style="color:#9ca3af">' + lwWr + '%</span><span style="color:' + wrChgColor + ';font-weight:700">' + (wrChg || '') + '</span>' +
+                  '<span style="color:#6b7280">P&L</span><span style="color:' + (tw.pnl >= 0 ? '#4ade80' : '#f87171') + '">$' + (tw.pnl >= 0 ? '+' : '') + (tw.pnl || 0).toFixed(2) + '</span><span style="color:' + (lw.pnl >= 0 ? '#4ade80' : '#f87171') + '">$' + (lw.pnl >= 0 ? '+' : '') + (lw.pnl || 0).toFixed(2) + '</span><span style="color:' + pnlChgColor + ';font-weight:700">' + pnlChgStr + '</span>' +
                 '</div>';
-                // P&L change highlight
-                var s3b = pnlChgStr ? '<div style="margin-top:3px;font-size:10px;font-weight:700;color:' + pnlChgColor + '">P&L change: ' + pnlChgStr + ' vs last week</div>' : '';
+                // P&L change highlight (larger)
+                var s3b = pnlChgStr ? '<div style="margin-top:3px;font-size:12px;font-weight:700;color:' + pnlChgColor + '">P&L change: ' + pnlChgStr + ' vs last week</div>' : '';
                 // Separator
                 var s3c = '<div style="border-top:1px solid rgba(107,114,128,0.2);margin:5px 0 4px"></div>';
                 // Session breakdown
@@ -2211,7 +2212,7 @@
                     sParts.push('<span style="color:' + sC2 + '">' + sk2.charAt(0).toUpperCase() + sk2.slice(1) + ' ' + sWr2 + '%</span>');
                   }
                 }
-                var s4 = sParts.length > 0 ? '<div style="font-size:10px">' + sParts.join(' <span style="color:#374151">|</span> ') + '</div>' : '';
+                var s4 = sParts.length > 0 ? '<div style="font-size:11px">' + sParts.join(' <span style="color:#374151">|</span> ') + '</div>' : '';
                 structuredContent = s1 + s2 + s3 + s3b + s3c + s4;
               }
               else if (isSage && type === 'SAGE_ALERT' && m.metadata) {
