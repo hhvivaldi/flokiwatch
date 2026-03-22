@@ -1088,6 +1088,13 @@ class TradingBot:
                                     result = run_echo_scan()
 
                                     if result.critical_alerts:
+                                        # FLO-62: Filter out stale headlines (>1h old) from wake trigger
+                                        fresh_critical = [c for c in result.critical_alerts if c.age_hours < 1.0]
+                                        stale_critical = [c for c in result.critical_alerts if c.age_hours >= 1.0]
+                                        for sc in stale_critical:
+                                            log.info(f"ECHO | CRITICAL classified but wake suppressed — headline is {sc.age_hours:.1f}h old (threshold: 1h): {sc.title[:60]}")
+
+                                    if result.critical_alerts and fresh_critical:
                                         # Safety: max ECHO_MAX_WAKES_PER_HOUR
                                         max_wakes = int(getattr(config, "ECHO_MAX_WAKES_PER_HOUR", 2))
                                         hour_key = datetime.utcnow().strftime("%Y-%m-%d-%H")
@@ -1100,8 +1107,8 @@ class TradingBot:
                                             self._echo_wake_counts = {k: v for k, v in echo_wake_counts.items() if k >= datetime.utcnow().strftime("%Y-%m-%d-%H")}
 
                                             trigger_data = {
-                                                "critical_count": len(result.critical_alerts),
-                                                "headlines": [c.title for c in result.critical_alerts[:3]],
+                                                "critical_count": len(fresh_critical),
+                                                "headlines": [c.title for c in fresh_critical[:3]],
                                                 "scan_time": result.scan_time,
                                             }
                                             log.info(f"ECHO | CRITICAL alert — waking Floki ({wakes_this_hour + 1}/{max_wakes} this hour)")

@@ -72,6 +72,7 @@ class ClassifiedHeadline:
     category: str = ""
     timestamp: str = ""
     method: str = "ai"  # "ai" or "keyword_fallback"
+    age_hours: float = 0.0
 
 
 @dataclass
@@ -524,6 +525,7 @@ def run_echo_scan(
             category=headline.get("category", ""),
             timestamp=headline.get("timestamp", ""),
             method=method,
+            age_hours=float(headline.get("age_hours", 0)),
         )
 
         if classified.classification == "CRITICAL":
