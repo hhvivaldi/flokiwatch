@@ -913,6 +913,20 @@ def luna_brief_api():
         return JSONResponse({"brief": None, "stale": True})
 
 
+@app.get("/api/sage-weekly")
+def sage_weekly_api():
+    """Return Sage weekly trending report."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        weekly_file = data_dir / "sage_weekly_report.json"
+        if not weekly_file.exists():
+            return JSONResponse({})
+        data = json.loads(weekly_file.read_text(encoding="utf-8"))
+        return JSONResponse(data if isinstance(data, dict) else {})
+    except Exception:
+        return JSONResponse({})
+
+
 @app.get("/api/macro-history")
 def macro_history_api():
     """Return rolling 5-day macro history from macro_history.json."""

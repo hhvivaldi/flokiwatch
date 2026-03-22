@@ -476,6 +476,213 @@ def _write_sage_alert_to_memory(alert: Dict[str, Any]) -> None:
         log.warning(f"SAGE | failed to write alert to session memory: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Weekly Trending Reports (FLO-69)
+# ---------------------------------------------------------------------------
+
+WEEKLY_REPORT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "sage_weekly_report.json"
+)
+
+
+def _session_from_utc_hour(h: Optional[int]) -> str:
+    if h is None:
+        return "unknown"
+    if 0 <= h < 7:
+        return "asian"
+    if 7 <= h < 13:
+        return "london"
+    if 13 <= h < 22:
+        return "ny"
+    return "off_hours"
+
+
+def _utc_hour_from_iso(ts: str) -> Optional[int]:
+    try:
+        s = (ts or "").replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.astimezone(timezone.utc).hour)
+    except Exception:
+        return None
+
+
+def _week_stats(rows: list) -> Dict[str, Any]:
+    """Compute stats for a list of trade rows."""
+    if not rows:
+        return {
+            "trades": 0, "wins": 0, "losses": 0, "win_rate": 0,
+            "pnl": 0, "avg_pnl": 0, "best": 0, "worst": 0,
+            "max_consecutive_losses": 0, "by_session": {},
+        }
+
+    profits = [_safe_float(r["profit"], 0) for r in rows]
+    wins = sum(1 for p in profits if p > 0)
+    losses = sum(1 for p in profits if p < 0)
+    decisive = wins + losses
+    win_rate = round(wins / decisive, 2) if decisive else 0
+    total_pnl = round(sum(profits), 2)
+    avg_pnl = round(total_pnl / len(profits), 2) if profits else 0
+    best = round(max(profits), 2) if profits else 0
+    worst = round(min(profits), 2) if profits else 0
+
+    # Max consecutive losses
+    max_streak = 0
+    streak = 0
+    for p in profits:
+        if p < 0:
+            streak += 1
+            max_streak = max(max_streak, streak)
+        else:
+            streak = 0
+
+    # By session
+    by_session: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        h = _utc_hour_from_iso(str(r["open_time"] or ""))
+        sess = _session_from_utc_hour(h)
+        if sess not in by_session:
+            by_session[sess] = {"trades": 0, "wins": 0, "pnl": 0}
+        pnl = _safe_float(r["profit"], 0)
+        by_session[sess]["trades"] += 1
+        if pnl > 0:
+            by_session[sess]["wins"] += 1
+        by_session[sess]["pnl"] = round(by_session[sess]["pnl"] + pnl, 2)
+    for sess, s in by_session.items():
+        s["win_rate"] = round(s["wins"] / s["trades"], 2) if s["trades"] else 0
+
+    return {
+        "trades": len(profits),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
+        "pnl": total_pnl,
+        "avg_pnl": avg_pnl,
+        "best": best,
+        "worst": worst,
+        "max_consecutive_losses": max_streak,
+        "by_session": by_session,
+    }
+
+
+def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Generate week-over-week comparison report.
+    This week (last 7 days) vs last week (7-14 days ago).
+    Returns report dict or None on failure. Never raises.
+    """
+    try:
+        path = db_path or os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(path, timeout=5)
+        conn.row_factory = sqlite3.Row
+
+        now = datetime.utcnow()
+        this_week_start = (now - __import__("datetime").timedelta(days=7)).isoformat()
+        last_week_start = (now - __import__("datetime").timedelta(days=14)).isoformat()
+
+        this_week_rows = conn.execute(
+            """SELECT ticket, direction, profit, open_time, close_time, close_reason
+               FROM trades
+               WHERE close_time IS NOT NULL AND profit IS NOT NULL
+                 AND close_time >= ?
+               ORDER BY close_time ASC""",
+            (this_week_start,),
+        ).fetchall()
+
+        last_week_rows = conn.execute(
+            """SELECT ticket, direction, profit, open_time, close_time, close_reason
+               FROM trades
+               WHERE close_time IS NOT NULL AND profit IS NOT NULL
+                 AND close_time >= ? AND close_time < ?
+               ORDER BY close_time ASC""",
+            (last_week_start, this_week_start),
+        ).fetchall()
+
+        conn.close()
+
+        tw = _week_stats(this_week_rows)
+        lw = _week_stats(last_week_rows)
+
+        # Comparison
+        wr_change = round(tw["win_rate"] - lw["win_rate"], 2) if lw["trades"] > 0 else None
+        pnl_change = round(tw["pnl"] - lw["pnl"], 2) if lw["trades"] > 0 else None
+        avg_change = round(tw["avg_pnl"] - lw["avg_pnl"], 2) if lw["trades"] > 0 else None
+
+        if wr_change is not None and pnl_change is not None:
+            if wr_change > 0.03 and pnl_change > 0:
+                trend = "IMPROVING"
+            elif wr_change < -0.03 and pnl_change < 0:
+                trend = "DECLINING"
+            else:
+                trend = "STABLE"
+        else:
+            trend = "INSUFFICIENT_DATA"
+
+        report = {
+            "generated": now.isoformat(),
+            "this_week": tw,
+            "last_week": lw,
+            "comparison": {
+                "win_rate_change": wr_change,
+                "pnl_change": pnl_change,
+                "avg_pnl_change": avg_change,
+                "trend": trend,
+            },
+        }
+
+        # Save
+        _write_json_atomic(WEEKLY_REPORT_FILE, report)
+
+        # Session memory
+        try:
+            from agent_memory import write_sage_insights
+
+            best_sess = max(tw["by_session"].items(), key=lambda x: x[1].get("win_rate", 0))[0] if tw["by_session"] else "N/A"
+            worst_sess = min(tw["by_session"].items(), key=lambda x: x[1].get("win_rate", 1))[0] if tw["by_session"] else "N/A"
+            wr_pct = int(tw["win_rate"] * 100)
+            wr_chg_str = f" ({wr_change:+.0%} vs last week)" if wr_change is not None else ""
+            pnl_chg_str = f" ({pnl_change:+.2f} vs last week)" if pnl_change is not None else ""
+
+            summary = (
+                f"SAGE WEEKLY: {tw['trades']} trades, {wr_pct}% WR{wr_chg_str}, "
+                f"P&L ${tw['pnl']:+.2f}{pnl_chg_str}. "
+                f"Best session: {best_sess}. Worst: {worst_sess}. Trend: {trend}."
+            )
+            write_sage_insights(
+                recommendations=[summary],
+                trade_count=tw["trades"],
+                report_date=now.date().isoformat(),
+            )
+        except Exception:
+            pass
+
+        # Agent event
+        try:
+            from db_writer import record_agent_event
+            record_agent_event(
+                event_type="SAGE_WEEKLY",
+                content=(
+                    f"Weekly report: {tw['trades']} trades, {int(tw['win_rate']*100)}% WR, "
+                    f"P&L ${tw['pnl']:+.2f}. Trend: {trend}."
+                ),
+                payload=report,
+                author="SAGE",
+            )
+        except Exception:
+            pass
+
+        log.info(
+            f"SAGE | weekly report: {tw['trades']} trades, "
+            f"{int(tw['win_rate']*100)}% WR, P&L ${tw['pnl']:+.2f}, trend={trend}"
+        )
+        return report
+
+    except Exception as e:
+        log.warning(f"SAGE | weekly report failed (ignored): {e}")
+        return None
+
+
 @dataclass
 class SageRunResult:
     ok: bool
@@ -761,6 +968,14 @@ def run_sage_auditor() -> SageRunResult:
             pass
 
         log.info(f"SAGE | report_written | trades={len(trades)} | path={out_path}")
+
+        # FLO-69: Weekly report on Fridays (weekday 4)
+        try:
+            if datetime.utcnow().weekday() == 4:
+                generate_weekly_report()
+        except Exception:
+            pass
+
         return SageRunResult(ok=True, report_path=out_path, trade_count_analyzed=len(trades))
     except Exception as e:
         log.warning(f"SAGE | run_failed (ignored): {e}")

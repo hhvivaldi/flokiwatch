@@ -943,6 +943,7 @@
                   <span id="sage-report-profit-factor" class="bc-metric-val" style="color:#FFB300">—</span>
                 </div>
                 <div id="sage-today-pnl" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:3px"></div>
+                <div id="sage-weekly-summary" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-bottom:3px;color:#9ca3af"></div>
                 <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
                 <span id="sage-report-period" style="display:none"></span>
                 <span id="sage-report-trades" style="display:none"></span>
@@ -1205,6 +1206,40 @@
         }
 
         function refreshSage() {
+          // FLO-69: Also fetch weekly report
+          fetchJson('/api/sage-weekly').then(function(wr) {
+            var el = document.getElementById('sage-weekly-summary');
+            if (!el || !wr || !wr.this_week) return;
+            var tw = wr.this_week;
+            var cmp = wr.comparison || {};
+            var trend = cmp.trend || 'N/A';
+            var tArrow = trend === 'IMPROVING' ? ' \u25B2' : (trend === 'DECLINING' ? ' \u25BC' : ' \u2594');
+            var tColor = trend === 'IMPROVING' ? '#4ade80' : (trend === 'DECLINING' ? '#f87171' : '#6b7280');
+            var wrChg = cmp.win_rate_change != null ? ' (' + (cmp.win_rate_change > 0 ? '+' : '') + (cmp.win_rate_change * 100).toFixed(0) + '% vs last)' : '';
+            var lines = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px">Weekly</div>';
+            lines += '<div>This wk: ' + tw.trades + ' trades, ' + Math.round(tw.win_rate * 100) + '% WR' + wrChg + ', $' + (tw.pnl >= 0 ? '+' : '') + tw.pnl.toFixed(2) + '</div>';
+            if (wr.last_week && wr.last_week.trades > 0) {
+              var lw = wr.last_week;
+              lines += '<div style="color:#6b7280">Last wk: ' + lw.trades + ' trades, ' + Math.round(lw.win_rate * 100) + '% WR, $' + (lw.pnl >= 0 ? '+' : '') + lw.pnl.toFixed(2) + '</div>';
+            }
+            lines += '<div style="color:' + tColor + '">Trend: ' + trend + tArrow + '</div>';
+            // Session comparison
+            var sess = tw.by_session || {};
+            var sParts = [];
+            var sKeys = ['ny', 'london', 'asian'];
+            for (var si = 0; si < sKeys.length; si++) {
+              var sk = sKeys[si];
+              var sv = sess[sk];
+              if (sv && sv.trades > 0) {
+                var sWr = Math.round(sv.win_rate * 100);
+                var sCol = sWr >= 60 ? '#4ade80' : (sWr < 40 ? '#f87171' : '#fbbf24');
+                sParts.push('<span style="color:' + sCol + '">' + sk.charAt(0).toUpperCase() + sk.slice(1) + ' ' + sWr + '%</span>');
+              }
+            }
+            if (sParts.length > 0) lines += '<div>' + sParts.join(' | ') + '</div>';
+            el.innerHTML = lines;
+          }).catch(function() {});
+
           return fetchJson('/api/sage').then(function(payload) {
             cachedSagePayload = payload || null;
             renderSage(cachedSagePayload);
@@ -1674,6 +1709,7 @@
           if (x === 'ANALYSIS') return 'badge-analysis';
           if (x === 'ALERT') return 'badge-alert';
           if (x === 'SAGE_ALERT') return 'badge-sage-alert';
+          if (x === 'SAGE_WEEKLY') return 'badge-analysis';
           if (x === 'DECISION') return 'badge-decision';
           if (x === 'DEBATE') return 'badge-debate';
           if (x === 'TRADE_RESULT') return 'badge-info';
