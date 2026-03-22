@@ -1582,7 +1582,7 @@
               else if (isSimba) {
                 var meta = m.metadata || {};
                 var raw = (m.content || '').toString();
-                // Simba CHECK with structured metadata
+                // Simba CHECK with structured metadata (patrol report)
                 if (meta.price != null && meta.met_count != null) {
                   var price = Number(meta.price).toFixed(2);
                   var lo = meta.range_low != null ? Number(meta.range_low).toFixed(2) : '?';
@@ -1600,31 +1600,54 @@
                       return p + ' (' + d + ' away)';
                     }).join(' | ');
                   }
-                  // Triggered?
                   var triggered = meta.triggered;
                   var isTriggered = Array.isArray(triggered) && triggered.length > 0;
                   var headerLabel = isTriggered
-                    ? '<span style="color:#f59e0b;font-weight:900">&#9889; WAKE TRIGGER</span>'
+                    ? '<span style="color:#f59e0b;font-weight:900">\uD83D\uDEA8 WAKE TRIGGER</span>'
                     : '<span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">PATROL</span>';
                   structuredContent =
                     '<div style="margin-bottom:4px">' + headerLabel + '</div>' +
                     '<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px;font-family:monospace">' +
-                      '<span style="color:#6b7280">Price</span><span style="color:#e2e8f0;font-weight:600">$' + price + ' <span style="color:#6b7280;font-weight:400">(' + lo + ' – ' + hi + ')</span></span>' +
+                      '<span style="color:#6b7280">Price</span><span style="color:#e2e8f0;font-weight:600">$' + price + ' <span style="color:#6b7280;font-weight:400">(' + lo + ' \u2013 ' + hi + ')</span></span>' +
                       '<span style="color:#6b7280">Conditions</span><span style="color:' + (met > 0 ? '#f59e0b' : '#e2e8f0') + ';font-weight:600">' + met + '/' + total + ' met</span>' +
                       '<span style="color:#6b7280">Trend</span><span style="font-weight:600">' + tArrow + ' ' + trend + '</span>' +
                       (levelsHtml ? '<span style="color:#6b7280">Levels</span><span style="color:#9ca3af">' + levelsHtml + '</span>' : '') +
                     '</div>';
+                  // If triggered, show which condition fired
+                  if (isTriggered) {
+                    structuredContent += '<div style="margin-top:4px;font-size:10px;color:#f59e0b;font-weight:700">Waking Floki!</div>';
+                  }
                 }
-                // Simba ACK
+                // Simba ACK — show structured conditions from metadata
                 else if (raw.indexOf('Got it boss') >= 0 || raw.indexOf('Monitoring:') >= 0) {
-                  var condMatch = raw.match(/Monitoring:\s*(.+?)(?:\.\s*Max|\s*$)/);
-                  var sleepMatch = raw.match(/Max sleep:\s*(.+?)\.?$/);
+                  var ackConds = (meta.conditions || []);
+                  var maxSleep = meta.max_sleep_minutes;
+                  if (Array.isArray(ackConds) && ackConds.length > 0) {
+                    var condLines = ackConds.map(function(c) {
+                      return '<div style="color:#d1d5db;line-height:1.6">' + formatCondition(c) + '</div>';
+                    }).join('');
+                    structuredContent =
+                      '<div style="margin-bottom:4px"><span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">WATCH SET</span></div>' +
+                      '<div style="font-size:10px;font-family:monospace">' + condLines +
+                      (maxSleep ? '<div style="color:#6b7280;line-height:1.6">\u23F0 Max sleep: ' + maxSleep + ' min</div>' : '') +
+                      '</div>';
+                  } else {
+                    // Fallback: parse from text
+                    var condMatch = raw.match(/Monitoring:\s*(.+?)(?:\.\s*Max|\s*$)/);
+                    var sleepMatch = raw.match(/Max sleep:\s*(.+?)\.?$/);
+                    structuredContent =
+                      '<div style="margin-bottom:4px"><span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">WATCH SET</span></div>' +
+                      '<div style="font-size:10px;font-family:monospace;color:#d1d5db;line-height:1.5">' +
+                        (condMatch ? '<span style="color:#6b7280">Watch: </span>' + esc(condMatch[1]) + '<br>' : '') +
+                        (sleepMatch ? '<span style="color:#6b7280">Sleep: </span>' + esc(sleepMatch[1]) : '') +
+                      '</div>';
+                  }
+                }
+                // Simba triggered alert (punched through)
+                else if (raw.indexOf('heads up') >= 0 || raw.indexOf('punched through') >= 0) {
                   structuredContent =
-                    '<div style="margin-bottom:4px"><span style="color:#00E5FF;font-size:9px;font-weight:700;letter-spacing:0.08em">WATCH SET</span></div>' +
-                    '<div style="font-size:10px;font-family:monospace;color:#d1d5db;line-height:1.5">' +
-                      (condMatch ? '<span style="color:#6b7280">Watch: </span>' + esc(condMatch[1]) + '<br>' : '') +
-                      (sleepMatch ? '<span style="color:#6b7280">Sleep: </span>' + esc(sleepMatch[1]) : '') +
-                    '</div>';
+                    '<div style="margin-bottom:4px"><span style="color:#f59e0b;font-weight:900">\uD83D\uDEA8 WAKE TRIGGER</span></div>' +
+                    '<div style="font-size:11px;color:#e2e8f0;font-weight:600;line-height:1.4">' + esc(raw) + '</div>';
                 }
               }
             } catch(e) {
@@ -1757,6 +1780,38 @@
           }
         }
 
+        function conditionIcon(type) {
+          if (type === 'price_above' || type === 'price_below' || type === 'price_touch') return '\uD83D\uDCCD';
+          if (type === 'rsi_above' || type === 'rsi_below') return '\uD83D\uDCCA';
+          if (type === 'volume_above' || type === 'h1_volume_above') return '\uD83D\uDCC8';
+          if (type === 'adx_above') return '\uD83D\uDCC8';
+          if (type === 'scanner_pattern') return '\uD83D\uDD6F';
+          if (type === 'indicator_above' || type === 'indicator_below') return '\uD83D\uDCCA';
+          if (type === 'pnl_threshold') return '\uD83D\uDCB0';
+          return '\u2022';
+        }
+
+        function formatCondition(c) {
+          var type = (c.type || '').toString();
+          var icon = conditionIcon(type);
+          var desc = c.description ? ' (' + c.description + ')' : '';
+          if (type === 'price_above') return icon + ' price > ' + (c.level || '?') + desc;
+          if (type === 'price_below') return icon + ' price < ' + (c.level || '?') + desc;
+          if (type === 'price_touch') return icon + ' price @ ' + (c.level || '?') + desc;
+          if (type === 'rsi_above') return icon + ' RSI > ' + (c.value || c.threshold || '?') + desc;
+          if (type === 'rsi_below') return icon + ' RSI < ' + (c.value || c.threshold || '?') + desc;
+          if (type === 'volume_above' || type === 'h1_volume_above') return icon + ' vol > ' + (c.value || c.threshold || '?') + desc;
+          if (type === 'adx_above') return icon + ' ADX > ' + (c.value || c.threshold || '?') + desc;
+          if (type === 'scanner_pattern') return icon + ' pattern: ' + (c.pattern || '?') + desc;
+          if (type === 'indicator_above') return icon + ' ' + (c.indicator || '?') + ' > ' + (c.threshold || '?') + desc;
+          if (type === 'indicator_below') return icon + ' ' + (c.indicator || '?') + ' < ' + (c.threshold || '?') + desc;
+          if (type === 'pnl_threshold') {
+            var v = parseFloat(c.value);
+            return icon + ' P&L ' + (v < 0 ? '< ' : '> ') + '$' + (c.value || '?') + desc;
+          }
+          return '\u2022 ' + type + desc;
+        }
+
         function renderSimbaStatusFromWatchConditionsPayload(payload) {
           try {
             if (_marketClosedGlobal) return; // REST DAY/COFFEE BREAK set by updatePanels
@@ -1772,7 +1827,6 @@
             condText.textContent = 'CONDITIONS: ' + String(n);
             condBar.style.width = watching ? '100%' : '0%';
 
-            // Never show OFF while bot is running.
             if (watching) {
               pill.textContent = 'WATCHING';
               pill.className = 'decision-pill pill-buy';
@@ -1781,6 +1835,28 @@
               pill.textContent = 'PATROL';
               pill.className = 'decision-pill pill-hold';
               modeTag.innerHTML = '<span class="dot-gray"></span>PATROL';
+            }
+
+            // Render condition details in expand panel
+            var expandEl = document.getElementById('simba-watch-conditions');
+            if (expandEl && payload && payload.conditions) {
+              var conds = payload.conditions;
+              if (Array.isArray(conds) && conds.length > 0) {
+                var maxSleep = payload.max_sleep_minutes;
+                var html = conds.map(function(c) {
+                  return '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace">' + formatCondition(c) + '</div>';
+                }).join('');
+                if (maxSleep) {
+                  html += '<div style="font-size:10px;color:#6b7280;line-height:1.6;font-family:monospace">\u23F0 Max sleep: ' + maxSleep + ' min</div>';
+                }
+                expandEl.innerHTML = html;
+                expandEl.style.display = 'block';
+                expandEl.style.overflow = 'visible';
+                expandEl.style.webkitLineClamp = 'initial';
+                expandEl.style.lineClamp = 'initial';
+              } else {
+                expandEl.textContent = 'No active conditions.';
+              }
             }
           } catch (e) {
             // silent
