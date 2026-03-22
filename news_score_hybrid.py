@@ -963,6 +963,75 @@ def get_vix_data():
 
 
 # ============================================================================
+# PART 4b: OIL + S&P 500 (for Luna Macro Analyst)
+# ============================================================================
+
+def get_oil_data():
+    """
+    Fetch Crude Oil price via Yahoo Finance.
+    Symbol: CL=F (WTI Crude Futures).
+    Returns: current, change_percent (24h), change_1h_percent.
+    """
+    try:
+        ticker = yf.Ticker("CL=F")
+        hist = ticker.history(period="5d", interval="1h")
+
+        if hist.empty or len(hist) < 2:
+            return {"current": None, "change_percent": 0, "change_1h_percent": 0, "error": "Oil data unavailable"}
+
+        current = float(hist['Close'].iloc[-1])
+        prev_1h = float(hist['Close'].iloc[-2])
+        change_1h = ((current - prev_1h) / prev_1h) * 100
+
+        # 24h change: find bar ~24h ago
+        daily = ticker.history(period="5d")
+        if len(daily) >= 2:
+            prev_day = float(daily['Close'].iloc[-2])
+            change_24h = ((current - prev_day) / prev_day) * 100
+        else:
+            change_24h = change_1h
+
+        return {
+            "current": round(current, 2),
+            "change_percent": round(change_24h, 2),
+            "change_1h_percent": round(change_1h, 2),
+        }
+    except Exception as e:
+        log.warning(f"OIL: error fetching data — {e}")
+        return {"current": None, "change_percent": 0, "change_1h_percent": 0, "error": str(e)}
+
+
+def get_sp500_data():
+    """
+    Fetch S&P 500 data via Yahoo Finance.
+    Symbol: ^GSPC (index) with ES=F (futures) fallback.
+    Returns: current, change_percent (24h).
+    """
+    for symbol in ["^GSPC", "ES=F"]:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="5d")
+
+            if hist.empty or len(hist) < 2:
+                continue
+
+            current = float(hist['Close'].iloc[-1])
+            previous = float(hist['Close'].iloc[-2])
+            change_percent = ((current - previous) / previous) * 100
+
+            return {
+                "current": round(current, 2),
+                "change_percent": round(change_percent, 2),
+                "symbol": symbol,
+            }
+        except Exception as e:
+            log.warning(f"S&P500: error with {symbol} — {e}")
+            continue
+
+    return {"current": None, "change_percent": 0, "error": "S&P 500 data unavailable"}
+
+
+# ============================================================================
 # PART 5: COMBINE ALL
 # ============================================================================
 
@@ -1020,14 +1089,18 @@ def calculate_news_score_hybrid():
     # 4. VIX
     print("  Fetching VIX...")
     vix_data = get_vix_data()
-    
+
     if verbose and vix_data.get("current"):
         chg = vix_data.get("change_percent", 0)
         impact = "bullish for gold" if chg > 0.5 else ("bearish for gold" if chg < -0.5 else "neutral")
         log.info(f'  VIX: {vix_data["current"]} ({chg:+.2f}% today) -> {impact} (score: {vix_data["score"]})')
     elif not vix_data.get("current"):
         log.warning(f'  VIX: unavailable - neutral fallback (score {vix_data["score"]})')
-    
+
+    # 5. Oil + S&P 500 (for Luna, not weighted into news score)
+    oil_data = get_oil_data()
+    sp500_data = get_sp500_data()
+
     # Calculate weighted final score
     final_score = (
         headlines_data["score"] * WEIGHTS["headlines"] +
@@ -1091,6 +1164,15 @@ def calculate_news_score_hybrid():
                 "weight": WEIGHTS["vix"],
                 "current": vix_data.get("current"),
                 "change_percent": vix_data.get("change_percent"),
+            },
+            "oil": {
+                "current": oil_data.get("current"),
+                "change_percent": oil_data.get("change_percent"),
+                "change_1h_percent": oil_data.get("change_1h_percent"),
+            },
+            "sp500": {
+                "current": sp500_data.get("current"),
+                "change_percent": sp500_data.get("change_percent"),
             },
         },
         "anomalies": anomalies,
