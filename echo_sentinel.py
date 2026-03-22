@@ -14,6 +14,7 @@ Flow:
 
 import json
 import hashlib
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -145,8 +146,8 @@ def _save_daily_cost(cost_data: Dict) -> None:
 
 
 def _estimate_cost(input_tokens: int, output_tokens: int) -> float:
-    """Estimate cost for gpt-4o-mini ($0.15/M input, $0.60/M output)."""
-    return (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
+    """Estimate cost for MiMo-V2-Flash ($0.10/M input, $0.30/M output)."""
+    return (input_tokens * 0.10 + output_tokens * 0.30) / 1_000_000
 
 
 # ============================================================================
@@ -230,10 +231,12 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
         log.warning("[ECHO] openai package not installed")
         return None
 
-    api_key = getattr(config, "ECHO_API_KEY", "")
+    api_key = getattr(config, "ECHO_API_KEY", "") or os.environ.get("LUNA_API_KEY", "")
     if not api_key:
-        log.warning("[ECHO] No ECHO_API_KEY configured")
+        log.warning("[ECHO] No ECHO_API_KEY / LUNA_API_KEY configured")
         return None
+
+    base_url = getattr(config, "ECHO_API_BASE", "https://api.xiaomimimo.com/v1")
 
     # Cost cap check
     cost_data = _load_daily_cost()
@@ -242,7 +245,7 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
         log.warning(f"[ECHO] Daily cost cap reached (${cost_data['total_usd']:.2f} >= ${cap:.2f})")
         return None
 
-    model = getattr(config, "ECHO_MODEL", "gpt-4o-mini")
+    model = getattr(config, "ECHO_MODEL", "mimo-v2-flash")
 
     # Build prompt
     headline_lines = []
@@ -257,7 +260,7 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
     )
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url=base_url)
         response = client.chat.completions.create(
             model=model,
             messages=[

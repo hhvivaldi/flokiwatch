@@ -411,8 +411,9 @@ SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
 # ECHO NEWS SENTINEL (24/7 breaking news monitor)
 # ============================================================================
 ECHO_ENABLED = True                                                           # Master switch for Echo agent
-ECHO_MODEL = os.environ.get("ECHO_MODEL", "gpt-4o-mini")                     # Classification model (swap to gpt-5-nano when available)
-ECHO_API_KEY = os.environ.get("ECHO_API_KEY", os.environ.get("OPENAI_API_KEY", ""))  # Dedicated key; falls back to OPENAI_API_KEY
+ECHO_MODEL = os.environ.get("ECHO_MODEL", "mimo-v2-flash")                   # Classification model (MiMo-V2-Flash via Xiaomi API)
+ECHO_API_KEY = os.environ.get("ECHO_API_KEY", os.environ.get("LUNA_API_KEY", ""))    # Shared Xiaomi API key; falls back to LUNA_API_KEY
+ECHO_API_BASE = os.environ.get("ECHO_API_BASE", "https://api.xiaomimimo.com/v1")    # MiMo API base URL
 ECHO_MAX_WAKES_PER_HOUR = int(os.environ.get("ECHO_MAX_WAKES_PER_HOUR", "2"))       # Safety cap on CRITICAL → Simba wake
 ECHO_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_SCAN_INTERVAL_SECONDS", "300"))       # 5 min for direct RSS feeds
 ECHO_GOOGLE_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_GOOGLE_SCAN_INTERVAL_SECONDS", "600"))  # 10 min for Google News feeds
