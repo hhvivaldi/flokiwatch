@@ -174,6 +174,9 @@ QUIET_BID = low volume + rising price (steady demand, no urgency).
 QUIET = low volume + no clear direction.
 This is a PROXY — it cannot measure actual fund inflows/outflows.
 
+ECHO SENTIMENT AGGREGATE:
+Echo sentiment aggregate shows the TREND of news coverage across 1h and 4h windows. When 80%+ of headlines point one direction, that's strong news confirmation. When sentiment is MIXED, headlines conflict — trust macro data more than news. Individual CRITICAL alerts still matter regardless of aggregate direction.
+
 SAGE PERFORMANCE CONTEXT:
 You receive historical performance insights from Sage showing Floki's actual win rates by session, direction, and day-of-week (last 14 days). Consider this when assessing risk:
 - If current session has historically low win rate (< 35%), note it in your summary and increase risk_level
@@ -348,6 +351,19 @@ def _get_echo_alerts() -> List[Dict[str, Any]]:
         return []
 
 
+def _get_echo_aggregate() -> Optional[Dict[str, Any]]:
+    """Load Echo sentiment aggregate from echo_aggregate.json (FLO-72)."""
+    try:
+        agg_file = DATA_DIR / "echo_aggregate.json"
+        if agg_file.exists():
+            data = json.loads(agg_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return None
+
+
 def _get_calendar_events() -> List[Dict[str, str]]:
     """Load upcoming economic calendar events."""
     try:
@@ -485,6 +501,24 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
         lines.append("</echo_alerts>")
     else:
         lines.append("\n<echo_alerts>No CRITICAL or IMPORTANT alerts.</echo_alerts>")
+
+    # FLO-72: Echo sentiment aggregate
+    echo_agg = _get_echo_aggregate()
+    if echo_agg:
+        lines.append("\n<echo_sentiment>")
+        for window in ("1h", "4h"):
+            w = echo_agg.get(window)
+            if w and w.get("total", 0) > 0:
+                t = w["total"]
+                bull_pct = int(w.get("bullish", 0) / t * 100) if t else 0
+                bear_pct = int(w.get("bearish", 0) / t * 100) if t else 0
+                neut_pct = 100 - bull_pct - bear_pct
+                lines.append(
+                    f"Echo sentiment ({window}): {t} headlines — "
+                    f"{bull_pct}% BULLISH, {bear_pct}% BEARISH, {neut_pct}% NEUTRAL. "
+                    f"Dominant: {w.get('dominant', 'N/A')}"
+                )
+        lines.append("</echo_sentiment>")
 
     # Calendar
     if calendar_events:

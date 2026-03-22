@@ -374,6 +374,83 @@ def store_alert(headline: ClassifiedHeadline) -> None:
     _save_alerts(alerts)
 
 
+AGGREGATE_FILE = DATA_DIR / "echo_aggregate.json"
+
+
+def _calculate_sentiment_aggregate() -> Dict[str, Any]:
+    """
+    Calculate aggregate sentiment from echo_alerts.json across 1h and 4h windows.
+    Returns aggregate dict. Never raises.
+    """
+    try:
+        alerts = _load_alerts()
+        now = datetime.utcnow()
+
+        def _count_window(max_age_hours: float) -> Dict[str, Any]:
+            cutoff = now - timedelta(hours=max_age_hours)
+            bullish = 0
+            bearish = 0
+            neutral = 0
+            for a in alerts:
+                try:
+                    ts = datetime.fromisoformat(str(a.get("timestamp", "")).replace("Z", "+00:00"))
+                    if ts.tzinfo:
+                        ts = ts.replace(tzinfo=None)
+                    if ts < cutoff:
+                        continue
+                except Exception:
+                    continue
+                impact = str(a.get("gold_impact", "")).upper()
+                if impact == "BULLISH":
+                    bullish += 1
+                elif impact == "BEARISH":
+                    bearish += 1
+                else:
+                    neutral += 1
+
+            total = bullish + bearish + neutral
+            if total == 0:
+                return {"total": 0, "bullish": 0, "bearish": 0, "neutral": 0, "dominant": "NEUTRAL"}
+
+            bull_pct = bullish / total
+            bear_pct = bearish / total
+            if bull_pct > 0.6:
+                dominant = "BULLISH"
+            elif bear_pct > 0.6:
+                dominant = "BEARISH"
+            elif total <= 2:
+                dominant = "NEUTRAL"
+            else:
+                dominant = "MIXED"
+
+            return {
+                "total": total,
+                "bullish": bullish,
+                "bearish": bearish,
+                "neutral": neutral,
+                "dominant": dominant,
+            }
+
+        aggregate = {
+            "1h": _count_window(1.0),
+            "4h": _count_window(4.0),
+            "updated": now.isoformat(),
+        }
+
+        try:
+            AGGREGATE_FILE.write_text(
+                json.dumps(aggregate, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+        return aggregate
+    except Exception as e:
+        log.warning(f"[ECHO] Sentiment aggregate failed: {e}")
+        return {}
+
+
 def get_unread_alerts() -> List[Dict]:
     """Get unread alerts for Floki to consume. Marks them as read."""
     alerts = _load_alerts()
@@ -610,6 +687,12 @@ def run_echo_scan(
         important_alerts=important_alerts,
         routine_count=routine_count,
     )
+
+    # FLO-72: Calculate sentiment aggregate after every scan
+    try:
+        _calculate_sentiment_aggregate()
+    except Exception:
+        pass
 
     # Write status on every scan (even when no new alerts)
     try:

@@ -992,6 +992,7 @@
                   <span id="echo-feed-health" class="bc-metric-val" style="color:#4ade80">—</span>
                 </div>
                 <div id="echo-failing-feeds" style="font-size:9px;color:#6b7280;margin-top:2px"></div>
+                <div id="echo-sentiment" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:3px"></div>
               </div>
             </div>
 
@@ -1498,6 +1499,27 @@
           if (scanCount) scanCount.textContent = String(data.alerts_today || 0);
           if (critCount) critCount.textContent = String(data.critical_today || 0);
           if (impCount) impCount.textContent = String(data.important_today || 0);
+
+          // FLO-72: Sentiment aggregate
+          var sentEl = document.getElementById('echo-sentiment');
+          if (sentEl && data.sentiment_aggregate) {
+            var agg = data.sentiment_aggregate;
+            var lines = [];
+            var windows = ['1h', '4h'];
+            for (var wi = 0; wi < windows.length; wi++) {
+              var wk = windows[wi];
+              var w = agg[wk];
+              if (!w || !w.total) continue;
+              var t = w.total;
+              var bullPct = Math.round(w.bullish / t * 100);
+              var dom = w.dominant || 'NEUTRAL';
+              var domColor = dom === 'BULLISH' ? '#4ade80' : (dom === 'BEARISH' ? '#f87171' : '#6b7280');
+              lines.push('<span style="color:#6b7280">Sentiment (' + wk + '):</span> <span style="color:' + domColor + '">' + bullPct + '% BULLISH (' + t + ' headlines) — ' + dom + '</span>');
+            }
+            if (lines.length > 0) {
+              sentEl.innerHTML = lines.join('<br>');
+            }
+          }
         }
 
         function renderLuna(data) {

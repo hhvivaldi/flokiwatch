@@ -821,6 +821,15 @@ def echo_api():
         except Exception:
             pass
 
+        # FLO-72: Sentiment aggregate
+        aggregate = None
+        try:
+            agg_file = data_dir / "echo_aggregate.json"
+            if agg_file.exists():
+                aggregate = json.loads(agg_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
         return JSONResponse({
             "status": "ACTIVE" if enabled else "DISABLED",
             "last_scan": last_scan,
@@ -830,6 +839,7 @@ def echo_api():
             "total_alerts": len(alerts),
             "daily_cost": cost_data.get("total_usd", 0),
             "daily_calls": cost_data.get("calls", 0),
+            "sentiment_aggregate": aggregate,
         })
     except Exception:
         return JSONResponse({
