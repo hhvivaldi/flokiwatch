@@ -220,6 +220,10 @@ You have access to the get_luna_brief tool. Luna is your macro analyst — she m
 - market_regime: risk_on / risk_off / mixed / crisis
 - summary: 2-3 sentence macro overview
 
+Do NOT call get_macro or get_headlines — Luna already processed this data with pattern detection you do not have (forced liquidation, safe haven flows, news-price divergence, dollar-gold correlation breaks). Use get_calendar only for timing decisions (is there an event in the next 30 minutes?).
+
+EXCEPTION: When woken by Simba due to Echo CRITICAL, call get_echo_alerts FIRST to see the urgent headline, then call get_luna_brief for full macro context. Luna is triggered immediately on CRITICAL and will have a fresh brief within 60 seconds.
+
 If the brief is stale (older than 30 min), note it but still use the data — stale macro is better than no macro. If Luna detected DANGER or any pattern, factor it heavily into your decision. If environment is SAFE, you can weight technicals more.
 </luna_brief>
 

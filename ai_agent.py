@@ -479,6 +479,43 @@ class AIAgent:
             logger.error(f"Agent error: {e}")
             return self._fallback_result(str(e))
 
+    def _luna_brief_is_fresh(self) -> bool:
+        """Check if Luna brief exists, is enabled, and is fresh (< 30 min)."""
+        try:
+            import config
+            if not bool(getattr(config, "LUNA_ENABLED", False)):
+                return False
+            from luna_analyst import load_luna_brief
+            brief = load_luna_brief()
+            if not brief or not brief.get("timestamp"):
+                return False
+            from datetime import datetime, timezone
+            brief_time = datetime.fromisoformat(brief["timestamp"].replace("Z", "+00:00"))
+            age_min = (datetime.now(timezone.utc) - brief_time).total_seconds() / 60
+            if age_min > 30:
+                log.info("LUNA | Brief stale — Floki using raw macro tools (fallback)")
+                return False
+            return True
+        except Exception:
+            return False
+
+    def _macro_tools_if_needed(self) -> List[Dict[str, Any]]:
+        """Return get_headlines + get_macro tools only if Luna brief is NOT fresh."""
+        if self._luna_brief_is_fresh():
+            return []
+        return [
+            {
+                "name": "get_headlines",
+                "description": "Get cached news headlines (max 10)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_macro",
+                "description": "Get cached macro snapshot (DXY, VIX, yields, etc.)",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        ]
+
     def _tool_schemas(self) -> List[Dict[str, Any]]:
         return [
             {
@@ -519,16 +556,8 @@ class AIAgent:
                 "description": "Get cached Fibonacci levels and swing high/low",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-            {
-                "name": "get_headlines",
-                "description": "Get cached news headlines (max 10)",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
-            {
-                "name": "get_macro",
-                "description": "Get cached macro snapshot (DXY, VIX, yields, etc.)",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
+            # get_headlines + get_macro: conditionally excluded when Luna is active
+            *self._macro_tools_if_needed(),
             {
                 "name": "get_calendar",
                 "description": "Get cached economic calendar phase + next event",
