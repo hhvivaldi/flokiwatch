@@ -844,6 +844,43 @@ def echo_api():
         })
 
 
+@app.get("/api/echo-health")
+def echo_health_api():
+    """Return Echo RSS feed health for Trade Room."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        health_file = data_dir / "echo_feed_health.json"
+
+        if not health_file.exists():
+            return JSONResponse({"total_feeds": 0, "healthy": 0, "failing": 0, "failing_feeds": [], "feeds": {}})
+
+        health = json.loads(health_file.read_text(encoding="utf-8"))
+        if not isinstance(health, dict):
+            return JSONResponse({"total_feeds": 0, "healthy": 0, "failing": 0, "failing_feeds": [], "feeds": {}})
+
+        total = len(health)
+        failing_feeds = []
+        for name, entry in health.items():
+            if isinstance(entry, dict) and entry.get("consecutive_failures", 0) >= 3:
+                failing_feeds.append({
+                    "name": name,
+                    "consecutive_failures": entry["consecutive_failures"],
+                    "last_error": entry.get("last_error", "unknown"),
+                    "last_success": entry.get("last_success"),
+                    "last_failure": entry.get("last_failure"),
+                })
+
+        return JSONResponse({
+            "total_feeds": total,
+            "healthy": total - len(failing_feeds),
+            "failing": len(failing_feeds),
+            "failing_feeds": failing_feeds,
+            "feeds": health,
+        })
+    except Exception:
+        return JSONResponse({"total_feeds": 0, "healthy": 0, "failing": 0, "failing_feeds": [], "feeds": {}})
+
+
 @app.get("/api/luna-brief")
 def luna_brief_api():
     """Return Luna macro analyst brief for Trade Room card."""

@@ -984,6 +984,11 @@
                   <span class="bc-metric-label">IMPORTANT today</span>
                   <span id="echo-important-count" class="bc-metric-val" style="color:#f59e0b">0</span>
                 </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">Feed health</span>
+                  <span id="echo-feed-health" class="bc-metric-val" style="color:#4ade80">—</span>
+                </div>
+                <div id="echo-failing-feeds" style="font-size:9px;color:#6b7280;margin-top:2px"></div>
               </div>
             </div>
 
@@ -1196,6 +1201,30 @@
           }).catch(function() {
             renderEcho(null);
           });
+        }
+
+        function refreshEchoHealth() {
+          return fetchJson('/api/echo-health').then(function(data) {
+            var el = document.getElementById('echo-feed-health');
+            var failEl = document.getElementById('echo-failing-feeds');
+            if (!data || !el) return;
+            var total = data.total_feeds || 0;
+            var healthy = data.healthy || 0;
+            var failing = data.failing || 0;
+            if (failing > 0) {
+              el.textContent = healthy + '/' + total + ' healthy';
+              el.style.color = '#f59e0b';
+              if (failEl && Array.isArray(data.failing_feeds)) {
+                failEl.innerHTML = data.failing_feeds.map(function(f) {
+                  return '<div style="color:#f87171">&bull; ' + (f.name || '?').replace(/</g, '&lt;') + ' (' + (f.consecutive_failures || 0) + ' fails: ' + (f.last_error || '?').replace(/</g, '&lt;') + ')</div>';
+                }).join('');
+              }
+            } else if (total > 0) {
+              el.textContent = total + '/' + total + ' healthy';
+              el.style.color = '#4ade80';
+              if (failEl) failEl.innerHTML = '';
+            }
+          }).catch(function() {});
         }
 
         function refreshLuna() {
@@ -2825,6 +2854,7 @@
             refreshTopPatterns(),
             refreshSage(),
             refreshEcho(),
+            refreshEchoHealth(),
             refreshLuna(),
           ]).then(function(res) {
             var msgPayload = res[0] || {};

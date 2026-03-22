@@ -38,6 +38,7 @@ except ImportError:
 
 DATA_DIR = "data"
 HYBRID_HISTORY_FILE = os.path.join(DATA_DIR, "news_hybrid_history.json")
+FEED_HEALTH_FILE = os.path.join(DATA_DIR, "echo_feed_health.json")
 
 # Cache settings
 CACHE_MINUTES = 30  # Updates every 30 min
@@ -157,6 +158,90 @@ BEARISH_KEYWORDS = {
 
 
 # ============================================================================
+# FEED HEALTH TRACKING
+# ============================================================================
+
+def _load_feed_health() -> dict:
+    """Load feed health data from disk."""
+    try:
+        if os.path.exists(FEED_HEALTH_FILE):
+            with open(FEED_HEALTH_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_feed_health(health: dict) -> None:
+    """Save feed health data to disk."""
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(FEED_HEALTH_FILE, "w", encoding="utf-8") as f:
+            json.dump(health, f, indent=2, default=str)
+    except Exception:
+        pass
+
+
+def record_feed_success(feed_name: str, headlines_count: int) -> None:
+    """Record a successful feed fetch."""
+    health = _load_feed_health()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    entry = health.get(feed_name, {})
+    entry["last_success"] = datetime.utcnow().isoformat()
+    entry["consecutive_failures"] = 0
+    # Daily headline counter
+    if entry.get("_count_date") != today:
+        entry["headlines_delivered_today"] = 0
+        entry["_count_date"] = today
+    entry["headlines_delivered_today"] = entry.get("headlines_delivered_today", 0) + headlines_count
+    health[feed_name] = entry
+    _save_feed_health(health)
+
+
+def record_feed_failure(feed_name: str, error_type: str) -> None:
+    """Record a feed fetch failure. Logs warning at 3+ consecutive failures."""
+    health = _load_feed_health()
+    entry = health.get(feed_name, {})
+    entry["last_failure"] = datetime.utcnow().isoformat()
+    entry["last_error"] = error_type
+    consec = entry.get("consecutive_failures", 0) + 1
+    entry["consecutive_failures"] = consec
+    health[feed_name] = entry
+    _save_feed_health(health)
+
+    if consec >= 3:
+        first_fail = entry.get("last_success", "unknown")
+        log.warning(
+            f"ECHO_HEALTH | WARN: feed {feed_name} has {consec} consecutive "
+            f"failures since {first_fail}"
+        )
+
+
+def get_feed_health_summary() -> dict:
+    """Return feed health summary for API/dashboard."""
+    health = _load_feed_health()
+    total = len(health) if health else 0
+    failing = []
+    for name, entry in health.items():
+        if entry.get("consecutive_failures", 0) >= 3:
+            failing.append({
+                "name": name,
+                "consecutive_failures": entry["consecutive_failures"],
+                "last_error": entry.get("last_error", "unknown"),
+                "last_success": entry.get("last_success"),
+                "last_failure": entry.get("last_failure"),
+            })
+    healthy = total - len(failing)
+    return {
+        "total_feeds": total,
+        "healthy": healthy,
+        "failing": len(failing),
+        "failing_feeds": failing,
+        "feeds": health,
+    }
+
+
+# ============================================================================
 # PART 1: HEADLINE WEB SCRAPING
 # ============================================================================
 
@@ -220,16 +305,18 @@ def get_rss_headlines(max_headlines=20, max_age_hours=24):
     feeds_failed = 0
     
     for feed_url, source, category in rss_feeds:
+        _feed_label = f"google:{category}"
+        _feed_headlines_count = 0
         try:
             response = requests.get(feed_url, headers=HEADERS, timeout=FEED_TIMEOUT)
             response.raise_for_status()
             feeds_ok += 1
-            
+
             # Sanitize response to strip UTF-16 surrogates that break downstream encoding
             clean_text = response.text.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
             soup = BeautifulSoup(clean_text, 'lxml-xml')
             items = soup.find_all('item')
-            
+
             for item in items[:10]:  # Check more items for filtering
                 title = item.find('title')
                 pub_date = item.find('pubDate')
@@ -285,16 +372,20 @@ def get_rss_headlines(max_headlines=20, max_age_hours=24):
                     "timestamp": timestamp_str,
                     "age_hours": round(age_hours, 1),
                 })
-                
+                _feed_headlines_count += 1
+
+            record_feed_success(_feed_label, _feed_headlines_count)
         except requests.exceptions.Timeout:
             feeds_failed += 1
+            record_feed_failure(_feed_label, "timeout")
             print(f"⚠️ RSS timeout ({FEED_TIMEOUT}s) {category}: skipped")
             continue
         except Exception as e:
             feeds_failed += 1
+            record_feed_failure(_feed_label, str(type(e).__name__))
             print(f"⚠️ RSS error {category}: {e}")
             continue
-    
+
     # Remove duplicates
     seen = set()
     unique = []
@@ -354,6 +445,8 @@ def get_direct_rss_headlines(max_headlines=30, max_age_hours=None):
     filtered_out = 0
 
     for feed_url, source, category in ECHO_DIRECT_FEEDS:
+        _feed_label = f"direct:{source}"
+        _feed_headlines_count = 0
         try:
             response = requests.get(feed_url, headers=HEADERS, timeout=FEED_TIMEOUT)
             response.raise_for_status()
@@ -413,12 +506,16 @@ def get_direct_rss_headlines(max_headlines=30, max_age_hours=None):
                     "timestamp": timestamp_str,
                     "age_hours": round(age_hours, 1),
                 })
+                _feed_headlines_count += 1
 
+            record_feed_success(_feed_label, _feed_headlines_count)
         except requests.exceptions.Timeout:
             feeds_failed += 1
+            record_feed_failure(_feed_label, "timeout")
             continue
-        except Exception:
+        except Exception as e:
             feeds_failed += 1
+            record_feed_failure(_feed_label, str(type(e).__name__))
             continue
 
     # Deduplicate
