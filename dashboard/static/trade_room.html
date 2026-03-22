@@ -2183,20 +2183,34 @@
           return '\u2022';
         }
 
+        // FLO-66: velocity suffix for condition display
+        var _simbaVelocityData = {};
+        function _velSuffix(cid) {
+          var v = _simbaVelocityData[cid];
+          if (!v || !v.velocity || v.velocity === 'STABLE') return '';
+          var arrow = v.velocity_per_min > 0 ? ' \u25B2' : ' \u25BC';
+          var color = v.velocity === 'RAPID' ? '#ef4444' : '#f59e0b';
+          var curStr = v.current != null ? ', current: ' + (typeof v.current === 'number' ? Number(v.current).toFixed(1) : v.current) : '';
+          var eta = v.eta_cycles != null ? ' (~' + v.eta_cycles + ' cycles)' : '';
+          return curStr + ' <span style="color:' + color + '">' + arrow + ' ' + v.velocity + eta + '</span>';
+        }
+
         function formatCondition(c) {
           var type = (c.type || '').toString();
           var icon = conditionIcon(type);
           var desc = c.description ? ' (' + c.description + ')' : '';
-          if (type === 'price_above') return icon + ' price > ' + (c.level || '?') + desc;
-          if (type === 'price_below') return icon + ' price < ' + (c.level || '?') + desc;
-          if (type === 'price_touch') return icon + ' price @ ' + (c.level || '?') + desc;
-          if (type === 'rsi_above') return icon + ' RSI > ' + (c.value || c.threshold || '?') + desc;
-          if (type === 'rsi_below') return icon + ' RSI < ' + (c.value || c.threshold || '?') + desc;
-          if (type === 'volume_above' || type === 'h1_volume_above') return icon + ' vol > ' + (c.value || c.threshold || '?') + desc;
-          if (type === 'adx_above') return icon + ' ADX > ' + (c.value || c.threshold || '?') + desc;
+          var cid = c.id || '';
+          var vel = _velSuffix(cid);
+          if (type === 'price_above') return icon + ' price > ' + (c.level || '?') + vel + desc;
+          if (type === 'price_below') return icon + ' price < ' + (c.level || '?') + vel + desc;
+          if (type === 'price_touch') return icon + ' price @ ' + (c.level || '?') + vel + desc;
+          if (type === 'rsi_above') return icon + ' RSI > ' + (c.value || c.threshold || '?') + vel + desc;
+          if (type === 'rsi_below') return icon + ' RSI < ' + (c.value || c.threshold || '?') + vel + desc;
+          if (type === 'volume_above' || type === 'h1_volume_above') return icon + ' vol > ' + (c.value || c.threshold || '?') + vel + desc;
+          if (type === 'adx_above') return icon + ' ADX > ' + (c.value || c.threshold || '?') + vel + desc;
           if (type === 'scanner_pattern') return icon + ' pattern: ' + (c.pattern || '?') + desc;
-          if (type === 'indicator_above') return icon + ' ' + (c.indicator || '?') + ' > ' + (c.threshold || '?') + desc;
-          if (type === 'indicator_below') return icon + ' ' + (c.indicator || '?') + ' < ' + (c.threshold || '?') + desc;
+          if (type === 'indicator_above') return icon + ' ' + (c.indicator || '?') + ' > ' + (c.threshold || '?') + vel + desc;
+          if (type === 'indicator_below') return icon + ' ' + (c.indicator || '?') + ' < ' + (c.threshold || '?') + vel + desc;
           if (type === 'pnl_threshold') {
             var v = parseFloat(c.value);
             return icon + ' P&L ' + (v < 0 ? '< ' : '> ') + '$' + (c.value || '?') + desc;
@@ -2268,6 +2282,11 @@
 
             var last = (state && state.last_analysis) ? state.last_analysis : {};
             var simba = last.simba || null;
+
+            // FLO-66: Update velocity data for condition display
+            if (simba && simba.velocity_data) {
+              _simbaVelocityData = simba.velocity_data;
+            }
 
             if (!simba || !simba.decision) {
               // Fallback renderer (legacy). Actual status is driven by /api/agent-watch-conditions.

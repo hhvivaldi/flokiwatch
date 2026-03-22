@@ -25,6 +25,7 @@ class AgentMonitor:
         self._simba_5m_low: Optional[float] = None
         self._simba_5m_first_price: Optional[float] = None
         self._last_stale_db_active_trade_log_ts: float = 0.0
+        self._condition_velocity: Dict[str, Dict[str, float]] = {}  # FLO-66: {key: {"prev_value": X, "prev_time": ts}}
 
     def check(self) -> None:
         """Run Agent monitor checks (called every ~60 seconds)."""
@@ -559,6 +560,26 @@ class AgentMonitor:
                 checked_count = 0
                 met_count = 0
 
+        # FLO-66: Collect velocity data from evaluated conditions
+        velocity_data = {}
+        try:
+            for i, c in enumerate(conditions or [], start=1):
+                if not isinstance(c, dict):
+                    continue
+                vel = c.pop("_velocity", None)
+                cur = c.pop("_current", None)
+                if vel is None:
+                    continue
+                cid = str(c.get("id") or f"c{i}").strip() or f"c{i}"
+                velocity_data[cid] = {
+                    "current": cur,
+                    "velocity": vel.get("status"),
+                    "eta_cycles": vel.get("eta_cycles"),
+                    "velocity_per_min": vel.get("velocity_per_min"),
+                }
+        except Exception:
+            pass
+
         simba_result: Dict[str, Any] = {
             "decision": "WAKE" if triggered_ids else "SLEEP",
             "triggered": triggered_ids,
@@ -567,6 +588,7 @@ class AgentMonitor:
             "summary": "python_eval",
             "model": "python",
             "latency_ms": 0,
+            "velocity_data": velocity_data,
         }
 
         raw_wake = bool(expired or triggered_ids)
@@ -906,6 +928,7 @@ class AgentMonitor:
                 "price": price_f,
                 "cooldown": bool(in_cooldown),
                 "has_conditions": bool(any_orders_active),
+                "velocity_data": velocity_data,
             }
         except Exception:
             pass
@@ -953,6 +976,66 @@ class AgentMonitor:
             except Exception:
                 pass
 
+    # FLO-66: Approach velocity tracking
+    def _calc_velocity(self, cond_key: str, current_value: float, threshold: float, is_above: bool) -> Dict[str, Any]:
+        """
+        Calculate approach velocity and ETA for a condition.
+        Returns: {"velocity_per_min": float, "status": "STABLE"|"APPROACHING"|"RAPID", "eta_cycles": int|None}
+        """
+        import time as _time
+
+        now = _time.time()
+        prev = self._condition_velocity.get(cond_key)
+        self._condition_velocity[cond_key] = {"prev_value": current_value, "prev_time": now}
+
+        if prev is None:
+            return {"velocity_per_min": 0, "status": "STABLE", "eta_cycles": None}
+
+        elapsed_min = (now - prev["prev_time"]) / 60.0
+        if elapsed_min < 0.1:  # Less than 6 seconds — skip
+            return {"velocity_per_min": 0, "status": "STABLE", "eta_cycles": None}
+
+        delta = current_value - prev["prev_value"]
+        velocity = delta / elapsed_min
+
+        # Distance to threshold
+        if is_above:
+            distance = threshold - current_value  # positive = not yet reached
+        else:
+            distance = current_value - threshold  # positive = not yet reached
+
+        # Already met or velocity moving away
+        if distance <= 0 or (is_above and velocity <= 0) or (not is_above and velocity >= 0):
+            return {"velocity_per_min": round(velocity, 3), "status": "STABLE", "eta_cycles": None}
+
+        # ETA in cycles (each cycle ~ 1 min for Simba checks)
+        approach_speed = abs(velocity)
+        if approach_speed < 0.001:
+            return {"velocity_per_min": round(velocity, 3), "status": "STABLE", "eta_cycles": None}
+
+        eta_minutes = distance / approach_speed
+        eta_cycles = int(round(eta_minutes))
+
+        if eta_cycles <= 3:
+            status = "RAPID"
+        elif eta_cycles <= 10:
+            status = "APPROACHING"
+        else:
+            status = "STABLE"
+
+        return {"velocity_per_min": round(velocity, 3), "status": status, "eta_cycles": eta_cycles}
+
+    def _velocity_log_suffix(self, vel: Dict[str, Any]) -> str:
+        """Format velocity info for log line."""
+        v = vel.get("velocity_per_min", 0)
+        status = vel.get("status", "STABLE")
+        eta = vel.get("eta_cycles")
+        if status == "STABLE":
+            return ""
+        sign = "+" if v > 0 else ""
+        eta_str = f" (~{eta} cycles)" if eta is not None else ""
+        return f" | velocity {sign}{v:.2f}/min {status}{eta_str}"
+
     def _evaluate_wake_conditions(
         self,
         conditions: List[Dict[str, Any]],
@@ -996,6 +1079,9 @@ class AgentMonitor:
                     level = self._safe_float(c.get("level"))
                     if level is None or price is None:
                         continue
+                    vel = self._calc_velocity(f"price_above_{cid}", float(price), float(level), True)
+                    c["_velocity"] = vel
+                    c["_current"] = price
                     if float(price) > float(level):
                         met += 1
                         triggered.append(cid)
@@ -1004,6 +1090,9 @@ class AgentMonitor:
                     level = self._safe_float(c.get("level"))
                     if level is None or price is None:
                         continue
+                    vel = self._calc_velocity(f"price_below_{cid}", float(price), float(level), False)
+                    c["_velocity"] = vel
+                    c["_current"] = price
                     if float(price) < float(level):
                         met += 1
                         triggered.append(cid)
@@ -1071,10 +1160,15 @@ class AgentMonitor:
                     if cur is None:
                         continue
 
-                    if ctype == "indicator_above" and float(cur) > float(thr):
+                    is_above = ctype == "indicator_above"
+                    vel = self._calc_velocity(f"ind_{ind}_{cid}", float(cur), float(thr), is_above)
+                    c["_velocity"] = vel
+                    c["_current"] = cur
+
+                    if is_above and float(cur) > float(thr):
                         met += 1
                         triggered.append(cid)
-                    elif ctype == "indicator_below" and float(cur) < float(thr):
+                    elif not is_above and float(cur) < float(thr):
                         met += 1
                         triggered.append(cid)
 
@@ -1084,9 +1178,13 @@ class AgentMonitor:
                     if cur_rsi is None or thr is None:
                         continue
                     is_met = (cur_rsi > thr) if ctype == "rsi_above" else (cur_rsi < thr)
+                    is_above = ctype == "rsi_above"
+                    vel = self._calc_velocity(f"rsi_{cid}", cur_rsi, thr, is_above)
+                    c["_velocity"] = vel
+                    c["_current"] = cur_rsi
                     status = "MET" if is_met else "NOT MET"
                     try:
-                        log.info(f"SIMBA_CHECK | RSI H1: {cur_rsi:.1f} | condition {ctype}({thr:.0f}): {status}")
+                        log.info(f"SIMBA_CHECK | RSI H1: {cur_rsi:.1f} → {ctype}({thr:.0f}): {status}{self._velocity_log_suffix(vel)}")
                     except Exception:
                         pass
                     if is_met:
@@ -1099,9 +1197,12 @@ class AgentMonitor:
                     if cur_vol is None or thr is None:
                         continue
                     is_met = float(cur_vol) > float(thr)
+                    vel = self._calc_velocity(f"vol_{cid}", float(cur_vol), float(thr), True)
+                    c["_velocity"] = vel
+                    c["_current"] = cur_vol
                     status = "MET" if is_met else "NOT MET"
                     try:
-                        log.info(f"SIMBA_CHECK | Volume H1: {cur_vol:.0f} | condition volume_above({thr:.0f}): {status}")
+                        log.info(f"SIMBA_CHECK | Volume H1: {cur_vol:.0f} → volume_above({thr:.0f}): {status}{self._velocity_log_suffix(vel)}")
                     except Exception:
                         pass
                     if is_met:
@@ -1114,9 +1215,12 @@ class AgentMonitor:
                     if cur_adx is None or thr is None:
                         continue
                     is_met = float(cur_adx) > float(thr)
+                    vel = self._calc_velocity(f"adx_{cid}", float(cur_adx), float(thr), True)
+                    c["_velocity"] = vel
+                    c["_current"] = cur_adx
                     status = "MET" if is_met else "NOT MET"
                     try:
-                        log.info(f"SIMBA_CHECK | ADX H1: {cur_adx:.1f} | condition adx_above({thr:.0f}): {status}")
+                        log.info(f"SIMBA_CHECK | ADX H1: {cur_adx:.1f} → adx_above({thr:.0f}): {status}{self._velocity_log_suffix(vel)}")
                     except Exception:
                         pass
                     if is_met:
