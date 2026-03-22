@@ -1,6 +1,6 @@
 # FlokiWatch — XAU/USD Trading Bot
 
-Autonomous multi-agent trading system for XAU/USD (Gold) on MetaTrader 5. Six specialized AI agents collaborate through the **Trading Office** architecture.
+Autonomous multi-agent trading system for XAU/USD (Gold) on MetaTrader 5. Seven specialized AI agents collaborate through the **Trading Office** architecture.
 
 ## Overview
 
@@ -24,22 +24,22 @@ The bot operates **100% autonomously** on MetaTrader 5:
   │  FLOKI  │  │    BRAIN        │  │   ECHO    │ │
   │ Agent   │  │  Data Pipeline  │  │  News     │ │
   │ Gemini  │  │  (Python, 60s)  │  │  Sentinel │ │
-  │ 3 Flash │  │  Tech/ML/News/  │  │  GPT-4o-  │ │
-  │         │  │  Calendar/S&R   │  │  mini     │ │
+  │ 3 Flash │  │  Tech/ML/News/  │  │  MiMo-V2  │ │
+  │         │  │  Calendar/S&R   │  │  Flash    │ │
   │ DECIDES │  │  NO DECISIONS   │  │  24/7 RSS │ │
   └────┬────┘  └────────┬────────┘  └─────┬─────┘ │
        │                │                  │       │
        │  ┌─────────┐   │   ┌──────────┐   │       │
-       ├──│   REX   │   │   │  SIMBA   │   │       │
-       │  │ Debate  │   │   │ Watchdog │   │       │
-       │  │ GPT-4o  │   │   │ (Python) │───┘       │
+       ├──│   REX   │   │   │  SIMBA   │───┘       │
+       │  │ Debate  │   │   │ Watchdog │           │
+       │  │ GPT-4o  │   │   │ (Python) │           │
        │  └─────────┘   │   └──────────┘           │
        │                │                          │
-       │  ┌─────────┐   │                          │
-       │  │  SAGE   │   │                          │
-       │  │ Auditor │   │                          │
-       │  │ Daily   │   │                          │
-       │  └─────────┘   │                          │
+       │  ┌─────────┐   │   ┌──────────┐           │
+       │  │  SAGE   │   │   │  LUNA    │           │
+       │  │ Auditor │   │   │  Macro   │           │
+       │  │ Daily   │   │   │  MiMo-V2 │           │
+       │  └─────────┘   │   └──────────┘           │
        ▼                ▼                          │
   ┌─────────────────────────────┐                  │
   │  EXECUTOR + EA BRIDGE       │                  │
@@ -54,11 +54,11 @@ The bot operates **100% autonomously** on MetaTrader 5:
 | Agent | Model | Role | Cadence |
 |-------|-------|------|---------|
 | **Floki** | Gemini 3 Flash | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 5-30 min (self-scheduled via `set_next_check`) |
-| **Rex** | GPT-4o | Debate partner — challenges Floki's reasoning (AGREE/DISAGREE) | On each Floki decision |
-| **Simba** | Python (no AI cost) | Watchdog — monitors wake/watch conditions, wakes Floki | Every 30s |
+| **Rex** | GPT-4o | Debate partner — challenges OPEN/CLOSE decisions only (AGREE/DISAGREE) | On OPEN/CLOSE decisions |
+| **Simba** | Python (no AI cost) | Watchdog — monitors 10 condition types, wakes Floki | Every 30s |
 | **Sage** | Gemini | Performance auditor — daily trade review + recommendations | Daily at 21:00 UTC |
-| **Echo** | GPT-4o-mini | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | Every 5 min |
-| **Luna** | TBD | Macro analyst (planned Phase 3) | — |
+| **Echo** | MiMo-V2-Flash | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | Every 5 min |
+| **Luna** | MiMo-V2-Flash | Macro analyst — DXY, VIX, yields, oil, S&P 500, gold, patterns | Every 15 min |
 | **Atlas** | TBD | Technical analyst (planned Phase 3) | — |
 
 ### Data Pipeline (Brain)
@@ -66,7 +66,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
 The Brain runs every 60 seconds and feeds raw data to agents:
 - **Technical**: RSI, MACD, Bollinger, EMAs, ATR, S/R zones, Fibonacci
 - **ML Ensemble**: 6 models (XGBoost + LightGBM + CatBoost × H1 + H4)
-- **News**: 25 RSS feeds (14 Google News + 11 direct) + DXY/VIX/Yields
+- **News**: 25 RSS feeds (14 Google News + 11 direct) + DXY/VIX/Yields + Oil/S&P 500
 - **Calendar**: Economic events from MQL5/FCS API
 - **Momentum**: ADX, volume, breakout detection
 
@@ -93,7 +93,8 @@ flokiwatch/
 ├── agent_tools.py          # Floki's 20+ tools (market data, trading, memory)
 ├── agent_prompts.py        # System prompt builder
 ├── rex_validator.py        # Rex debate partner (GPT-4o)
-├── echo_sentinel.py        # Echo news sentinel (GPT-4o-mini, RSS feeds)
+├── echo_sentinel.py        # Echo news sentinel (MiMo-V2-Flash, RSS feeds)
+├── luna_analyst.py         # Luna macro analyst (MiMo-V2-Flash)
 ├── simba_watcher.py        # Simba watchdog (Python, zero AI cost)
 ├── sage_auditor.py         # Sage daily auditor
 ├── central_brain.py        # Data pipeline (5 pillars, no decisions)
@@ -140,9 +141,9 @@ cp .env.example .env
 Required variables:
 - `MT5_ACCOUNT`, `MT5_PASSWORD`, `MT5_SERVER`, `MT5_TERMINAL_PATH`
 - `DISCORD_WEBHOOK_URL` (+ channel-specific webhooks)
-- `OPENAI_API_KEY` — For Rex (GPT-4o) and Echo (GPT-4o-mini)
+- `OPENAI_API_KEY` — For Rex (GPT-4o)
 - `GEMINI_API_KEY` — For Floki (Gemini 3 Flash)
-- `ECHO_API_KEY` — Echo dedicated key (falls back to OPENAI_API_KEY)
+- `LUNA_API_KEY` — For Luna + Echo (MiMo-V2-Flash via Xiaomi API)
 
 ### 3. Start the Bot
 
@@ -161,17 +162,19 @@ Access at `http://localhost:8080`
 ## Dashboard
 
 - **Main Dashboard** (`/`): Balance, P&L, positions, Intel Feed with Echo badges
-- **Trade Room** (`/trade-room`): 6 agent cards, live feed with structured messages, NEWS filter
+- **Trade Room** (`/trade-room`): 7 agent cards (incl. Luna), live feed with structured messages, feed filter tabs
 - **History** (`/history`): Equity curve (anchored to real balance), stat cards (Population B), monthly breakdown
 - **About** (`/about`): System info and agent descriptions
 
 ### Trade Room Features
 
 - Agent cards with animated avatars (GIF rotation every 60s)
-- Market hours personality: REST DAY (weekend) / COFFEE BREAK (daily pause) / ON WATCH (Echo)
+- Market hours personality: REST DAY (weekend) / COFFEE BREAK (daily pause) / ON WATCH (Echo only)
 - Resting cards dimmed (opacity 0.45, desaturated) — Echo stays bright 24/7
-- Structured message rendering (Floki decisions, Rex debates, Simba patrols, Echo alerts)
-- Feed filter tabs: ALL / DECISIONS / CONFLICTS / ANALYSIS / NEWS / ALERTS
+- Structured message rendering (Floki decisions, Rex debates, Simba patrols, Echo alerts, Luna briefs)
+- Feed filter tabs: ALL / DECISIONS / CONFLICTS / ANALYSIS / NEWS / MACRO / ALERTS
+- Luna card: environment badge (SAFE/CAUTION/DANGER), risk bar, bias, patterns
+- Simba card: condition details visible in expand panel
 
 ## Performance (Population B)
 
@@ -199,6 +202,9 @@ Equity curve anchored to real balance from `bot_state.json` (accounts for swap/c
 - Spread > 5 pips → block
 - Echo: max 2 CRITICAL wakes per hour
 - Echo: daily cost cap ($1.00/day)
+- Luna: daily cost cap ($1.00/day)
+- Luna: sleeps during weekend, wakes 1h before market open
+- RSS feed health monitoring: warns at 3+ consecutive failures per feed
 
 ## Disclaimer
 
