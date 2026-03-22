@@ -2249,13 +2249,41 @@
               var conds = payload.conditions;
               if (Array.isArray(conds) && conds.length > 0) {
                 var maxSleep = payload.max_sleep_minutes;
-                var html = conds.map(function(c) {
-                  return '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace">' + formatCondition(c) + '</div>';
-                }).join('');
-                if (maxSleep) {
-                  html += '<div style="font-size:10px;color:#6b7280;line-height:1.6;font-family:monospace">\u23F0 Max sleep: ' + maxSleep + ' min</div>';
+                // FLO-67: Group conditions for display
+                var grouped = {};
+                var ungrouped = [];
+                for (var gi = 0; gi < conds.length; gi++) {
+                  var gc = conds[gi];
+                  var grp = gc.group;
+                  if (grp != null && String(grp).trim()) {
+                    var gk = String(grp).trim();
+                    if (!grouped[gk]) grouped[gk] = [];
+                    grouped[gk].push(gc);
+                  } else {
+                    ungrouped.push(gc);
+                  }
                 }
-                expandEl.innerHTML = html;
+                var html = '';
+                var groupKeys = Object.keys(grouped);
+                for (var gki = 0; gki < groupKeys.length; gki++) {
+                  var gName = groupKeys[gki];
+                  var gConds = grouped[gName];
+                  html += '<div style="font-size:9px;color:#6b7280;margin-top:3px;letter-spacing:0.05em">Group ' + gName + ' (AND):</div>';
+                  for (var gci = 0; gci < gConds.length; gci++) {
+                    html += '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace;padding-left:8px">' + formatCondition(gConds[gci]) + '</div>';
+                  }
+                }
+                if (ungrouped.length > 0 && groupKeys.length > 0) {
+                  html += '<div style="font-size:9px;color:#6b7280;margin-top:3px;letter-spacing:0.05em">Standalone:</div>';
+                }
+                for (var ui = 0; ui < ungrouped.length; ui++) {
+                  html += '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace">' + formatCondition(ungrouped[ui]) + '</div>';
+                }
+                var html_final = html;
+                if (maxSleep) {
+                  html_final += '<div style="font-size:10px;color:#6b7280;line-height:1.6;font-family:monospace">\u23F0 Max sleep: ' + maxSleep + ' min</div>';
+                }
+                expandEl.innerHTML = html_final;
                 expandEl.style.display = 'block';
                 expandEl.style.overflow = 'visible';
                 expandEl.style.webkitLineClamp = 'initial';

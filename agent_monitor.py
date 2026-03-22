@@ -1045,6 +1045,7 @@ class AgentMonitor:
         triggered: List[str] = []
         checked = 0
         met = 0
+        met_ids: set = set()  # FLO-67: track which conditions are met by cid
 
         price = self._safe_float(scanner_data.get("current_price"))
         indicators = scanner_data.get("indicators") if isinstance(scanner_data.get("indicators"), dict) else {}
@@ -1084,7 +1085,7 @@ class AgentMonitor:
                     c["_current"] = price
                     if float(price) > float(level):
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "price_below":
                     level = self._safe_float(c.get("level"))
@@ -1095,13 +1096,13 @@ class AgentMonitor:
                     c["_current"] = price
                     if float(price) < float(level):
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "price_touch":
                     ok, _ = self._is_simba_condition_met(c, ctx_shared, source="wake")
                     if ok:
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "h1_volume_above":
                     thr = self._safe_float(c.get("threshold"))
@@ -1112,7 +1113,7 @@ class AgentMonitor:
                         continue
                     if float(v) > float(thr):
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "scanner_pattern":
                     target = str(c.get("pattern") or "").strip().lower()
@@ -1140,7 +1141,7 @@ class AgentMonitor:
 
                     if found:
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype in ("indicator_above", "indicator_below"):
                     ind = str(c.get("indicator") or "").strip().lower()
@@ -1167,10 +1168,10 @@ class AgentMonitor:
 
                     if is_above and float(cur) > float(thr):
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
                     elif not is_above and float(cur) < float(thr):
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype in ("rsi_above", "rsi_below"):
                     thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
@@ -1189,7 +1190,7 @@ class AgentMonitor:
                         pass
                     if is_met:
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "volume_above":
                     thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
@@ -1207,7 +1208,7 @@ class AgentMonitor:
                         pass
                     if is_met:
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 elif ctype == "adx_above":
                     thr = self._safe_float(c.get("value") if c.get("value") is not None else c.get("threshold"))
@@ -1225,7 +1226,7 @@ class AgentMonitor:
                         pass
                     if is_met:
                         met += 1
-                        triggered.append(cid)
+                        met_ids.add(cid)
 
                 else:
                     try:
@@ -1238,6 +1239,46 @@ class AgentMonitor:
                 except Exception:
                     pass
                 continue
+
+        # FLO-67: Composite AND groups
+        # Group conditions by "group" field. Conditions without group = standalone (OR).
+        # Within a group: ALL must be met (AND). Between groups/standalone: OR.
+        groups: Dict[str, List[str]] = {}  # group_id -> [cid, ...]
+        standalone: List[str] = []
+
+        for idx, c in enumerate(conditions or [], start=1):
+            if not isinstance(c, dict):
+                continue
+            cid = str(c.get("id") or f"c{idx}").strip() or f"c{idx}"
+            group = c.get("group")
+            if group is not None and str(group).strip():
+                g = str(group).strip()
+                if g not in groups:
+                    groups[g] = []
+                groups[g].append(cid)
+            else:
+                standalone.append(cid)
+
+        # Standalone conditions: any met = triggered (backwards compatible OR)
+        for cid in standalone:
+            if cid in met_ids:
+                triggered.append(cid)
+
+        # Grouped conditions: ALL in group must be met
+        for g, cids in groups.items():
+            all_met = all(cid in met_ids for cid in cids)
+            if all_met:
+                triggered.extend(cids)
+                try:
+                    log.info(f"SIMBA_CHECK | Group {g}: ALL {len(cids)} conditions met (AND)")
+                except Exception:
+                    pass
+            else:
+                met_in_group = sum(1 for cid in cids if cid in met_ids)
+                try:
+                    log.info(f"SIMBA_CHECK | Group {g}: {met_in_group}/{len(cids)} met (AND — not triggered)")
+                except Exception:
+                    pass
 
         return triggered, checked, met
 

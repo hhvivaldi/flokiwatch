@@ -317,6 +317,12 @@ WATCH CONDITIONS (set_watch_conditions — when you have an OPEN position):
 - price_touch: {type: "price_touch", level: 4550, tolerance: 1.0} ✅ (triggers when price reaches level)
 - pnl_threshold: {type: "pnl_threshold", value: -15} ✅ (negative = loss alert, positive = profit alert, in dollars)
 
+You can group conditions with the 'group' field for AND logic:
+- Conditions in the SAME group ALL must be met (AND) before Simba wakes you
+- Different groups or ungrouped conditions use OR (any one triggers wake)
+- Example AND: {type: "rsi_above", value: 70, group: "A"} + {type: "volume_above", value: 15000, group: "A"} = wake only when BOTH RSI > 70 AND volume > 15K
+- Ungrouped conditions (no group field) work as before — any single one triggers wake
+
 Combine conditions for intelligent monitoring. Example for WAIT near support:
 - price_below 4477 (breakdown), rsi_below 30 (oversold), scanner_pattern "engulfing" (reversal), max_sleep_minutes 60
 
