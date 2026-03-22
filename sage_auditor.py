@@ -683,6 +683,146 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
         return None
 
 
+# ---------------------------------------------------------------------------
+# Sage → Luna Feedback (FLO-70)
+# ---------------------------------------------------------------------------
+
+LUNA_INSIGHTS_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "sage_insights_for_luna.json"
+)
+
+
+def generate_luna_insights(db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Extract performance insights for Luna from last 14 days of trades.
+    Session + day-of-week + direction performance. No AI calls.
+    Returns insights dict or None on failure. Never raises.
+    """
+    try:
+        from datetime import timedelta
+
+        path = db_path or os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(path, timeout=5)
+        conn.row_factory = sqlite3.Row
+
+        cutoff = (datetime.utcnow() - timedelta(days=14)).isoformat()
+        rows = conn.execute(
+            """SELECT ticket, direction, profit, open_time, close_time
+               FROM trades
+               WHERE close_time IS NOT NULL AND profit IS NOT NULL
+                 AND close_time >= ?
+               ORDER BY close_time ASC""",
+            (cutoff,),
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        # Session performance
+        session_perf: Dict[str, Dict[str, Any]] = {}
+        # Direction performance
+        dir_perf: Dict[str, Dict[str, Any]] = {}
+        # Day-of-week performance
+        dow_perf: Dict[str, Dict[str, Any]] = {}
+
+        for r in rows:
+            pnl = _safe_float(r["profit"], 0)
+            is_win = pnl > 0
+            direction = str(r["direction"] or "").upper().strip() or "UNKNOWN"
+
+            # Session
+            h = _utc_hour_from_iso(str(r["open_time"] or ""))
+            sess = _session_from_utc_hour(h)
+            if sess not in session_perf:
+                session_perf[sess] = {"wins": 0, "total": 0, "pnl": 0}
+            session_perf[sess]["total"] += 1
+            if is_win:
+                session_perf[sess]["wins"] += 1
+            session_perf[sess]["pnl"] = round(session_perf[sess]["pnl"] + pnl, 2)
+
+            # Direction
+            if direction not in dir_perf:
+                dir_perf[direction] = {"wins": 0, "total": 0, "pnl": 0}
+            dir_perf[direction]["total"] += 1
+            if is_win:
+                dir_perf[direction]["wins"] += 1
+            dir_perf[direction]["pnl"] = round(dir_perf[direction]["pnl"] + pnl, 2)
+
+            # Day of week + AM/PM
+            try:
+                ot = str(r["open_time"] or "").replace("Z", "+00:00")
+                dt = datetime.fromisoformat(ot)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                day_name = dt.strftime("%A").lower()
+                period = "am" if dt.hour < 14 else "pm"
+                dow_key = f"{day_name}_{period}"
+                if dow_key not in dow_perf:
+                    dow_perf[dow_key] = {"wins": 0, "total": 0}
+                dow_perf[dow_key]["total"] += 1
+                if is_win:
+                    dow_perf[dow_key]["wins"] += 1
+            except Exception:
+                pass
+
+        # Build output
+        session_out = {}
+        for sess, s in session_perf.items():
+            wr = round(s["wins"] / s["total"], 2) if s["total"] else 0
+            session_out[sess] = {
+                "win_rate": wr,
+                "sample": s["total"],
+                "avg_pnl": round(s["pnl"] / s["total"], 2) if s["total"] else 0,
+            }
+
+        dir_out = {}
+        for d, s in dir_perf.items():
+            wr = round(s["wins"] / s["total"], 2) if s["total"] else 0
+            dir_out[d] = {"win_rate": wr, "sample": s["total"]}
+
+        dow_out = {}
+        for key, s in dow_perf.items():
+            if s["total"] >= 3:  # Only include with meaningful sample
+                wr = round(s["wins"] / s["total"], 2) if s["total"] else 0
+                dow_out[key] = {"win_rate": wr, "sample": s["total"]}
+
+        # Danger patterns (< 35% WR with 3+ trades)
+        danger = []
+        for sess, s in session_out.items():
+            if s["win_rate"] < 0.35 and s["sample"] >= 3:
+                danger.append(f"{sess.capitalize()} session: {int(s['win_rate']*100)}% WR ({s['sample']} trades)")
+        for key, s in dow_out.items():
+            if s["win_rate"] < 0.35 and s["sample"] >= 3:
+                danger.append(f"{key.replace('_', ' ').title()}: {int(s['win_rate']*100)}% WR ({s['sample']} trades)")
+
+        # Best conditions (> 65% WR with 3+ trades)
+        best = []
+        for sess, s in session_out.items():
+            if s["win_rate"] > 0.65 and s["sample"] >= 3:
+                best.append(f"{sess.capitalize()} session: {int(s['win_rate']*100)}% WR ({s['sample']} trades)")
+        for d, s in dir_out.items():
+            if s["win_rate"] > 0.65 and s["sample"] >= 5:
+                best.append(f"{d} direction: {int(s['win_rate']*100)}% WR ({s['sample']} trades)")
+
+        insights = {
+            "updated": datetime.utcnow().isoformat(),
+            "session_performance": session_out,
+            "direction_performance": dir_out,
+            "day_of_week": dow_out,
+            "danger_patterns": danger,
+            "best_conditions": best,
+        }
+
+        _write_json_atomic(LUNA_INSIGHTS_FILE, insights)
+        log.info(f"SAGE | Luna insights written | {len(danger)} dangers, {len(best)} best conditions")
+        return insights
+
+    except Exception as e:
+        log.warning(f"SAGE | Luna insights generation failed (ignored): {e}")
+        return None
+
+
 @dataclass
 class SageRunResult:
     ok: bool
@@ -968,6 +1108,12 @@ def run_sage_auditor() -> SageRunResult:
             pass
 
         log.info(f"SAGE | report_written | trades={len(trades)} | path={out_path}")
+
+        # FLO-70: Generate Luna insights (every daily run)
+        try:
+            generate_luna_insights()
+        except Exception:
+            pass
 
         # FLO-69: Weekly report on Fridays (weekday 4)
         try:

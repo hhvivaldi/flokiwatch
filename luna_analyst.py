@@ -174,6 +174,12 @@ QUIET_BID = low volume + rising price (steady demand, no urgency).
 QUIET = low volume + no clear direction.
 This is a PROXY — it cannot measure actual fund inflows/outflows.
 
+SAGE PERFORMANCE CONTEXT:
+You receive historical performance insights from Sage showing Floki's actual win rates by session, direction, and day-of-week (last 14 days). Consider this when assessing risk:
+- If current session has historically low win rate (< 35%), note it in your summary and increase risk_level
+- If Sage flags a danger pattern matching current conditions, mention it
+- This data reflects Floki's ACTUAL performance, not theoretical — respect it
+
 REAL YIELD PROXY:
 Use the "Real Yield proxy (live)" for intraday decisions. The FRED DFII10 value is end-of-day (previous close). The proxy = nominal yield minus breakeven inflation gives a live estimate using real-time ^TNX data."""
 
@@ -265,6 +271,17 @@ def _get_macro_data() -> Dict[str, Any]:
     cpi = get_cpi_data()
     gld_flows = get_gld_weekly_flows()
 
+    # FLO-70: Sage performance insights
+    sage_insights = None
+    try:
+        _sage_file = DATA_DIR / "sage_insights_for_luna.json"
+        if _sage_file.exists():
+            sage_insights = json.loads(_sage_file.read_text(encoding="utf-8"))
+            if not isinstance(sage_insights, dict):
+                sage_insights = None
+    except Exception:
+        pass
+
     return {
         "dxy": dxy,
         "vix": vix,
@@ -279,6 +296,7 @@ def _get_macro_data() -> Dict[str, Any]:
         "breakeven": breakeven,
         "cpi": cpi,
         "gld_flows": gld_flows,
+        "sage_insights": sage_insights,
     }
 
 
@@ -424,6 +442,36 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     corr_text = _build_correlation_context(correlations)
     lines.append("\n" + corr_text)
 
+    # FLO-70: Sage performance insights
+    sage = macro.get("sage_insights")
+    if sage and isinstance(sage, dict):
+        lines.append("\n<sage_performance_context>")
+        sp = sage.get("session_performance", {})
+        if sp:
+            sess_parts = []
+            for s in ("ny", "london", "asian"):
+                sv = sp.get(s)
+                if sv and sv.get("sample", 0) >= 3:
+                    sess_parts.append(f"{s.capitalize()} {int(sv['win_rate']*100)}% WR ({sv['sample']} trades)")
+            if sess_parts:
+                lines.append(f"Session: {', '.join(sess_parts)}")
+        dp = sage.get("direction_performance", {})
+        if dp:
+            dir_parts = []
+            for d in ("BUY", "SELL"):
+                dv = dp.get(d)
+                if dv and dv.get("sample", 0) >= 3:
+                    dir_parts.append(f"{d} {int(dv['win_rate']*100)}% WR ({dv['sample']})")
+            if dir_parts:
+                lines.append(f"Direction: {', '.join(dir_parts)}")
+        danger = sage.get("danger_patterns", [])
+        if danger:
+            lines.append(f"Danger: {'; '.join(danger[:3])}")
+        best = sage.get("best_conditions", [])
+        if best:
+            lines.append(f"Best: {'; '.join(best[:3])}")
+        lines.append("</sage_performance_context>")
+
     # Echo alerts
     critical_important = [a for a in echo_alerts
                           if a.get("classification") in ("CRITICAL", "IMPORTANT")]
@@ -521,6 +569,11 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
             "change": cpi.get("change"),
             "date": cpi.get("date"),
         },
+        "sage_insights": {
+            "session_performance": (macro.get("sage_insights") or {}).get("session_performance"),
+            "danger_patterns": (macro.get("sage_insights") or {}).get("danger_patterns"),
+            "best_conditions": (macro.get("sage_insights") or {}).get("best_conditions"),
+        } if macro.get("sage_insights") else None,
     }
 
 

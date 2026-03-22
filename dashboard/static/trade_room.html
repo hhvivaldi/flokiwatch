@@ -1041,6 +1041,7 @@
                 <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
                 <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
                 <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+                <div id="luna-sage-insights" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
               </div>
             </div>
 
@@ -1117,6 +1118,12 @@
           <div class="ctx-row"><span class="ctx-key">GLD Flows</span><span id="ctx-gld-flows" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">Real Yields</span><span id="ctx-real-yields" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">USD/CNY</span><span id="ctx-usdcny" class="ctx-val">—</span></div>
+        </div>
+
+        <!-- Session win rate -->
+        <div class="ctx-block">
+          <div class="ctx-label">SESSION WR</div>
+          <div class="ctx-row"><span id="ctx-session-wr" class="ctx-val" style="font-size:10px">—</span></div>
         </div>
 
         <!-- Correlations block -->
@@ -1670,6 +1677,48 @@
               }
             } else {
               corrEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Correlations</div><div style="color:#6b7280">Insufficient data (' + (cr.days || 0) + 'd, need 3+)</div>';
+            }
+          }
+
+          // FLO-70: Session win rate in right panel
+          try {
+            var swrEl = document.getElementById('ctx-session-wr');
+            if (swrEl && b.data_snapshot && b.data_snapshot.sage_insights) {
+              var sp = b.data_snapshot.sage_insights.session_performance || {};
+              // Determine current session from UTC hour
+              var nowH = new Date().getUTCHours();
+              var curSess = nowH < 7 ? 'asian' : (nowH < 13 ? 'london' : (nowH < 22 ? 'ny' : 'off_hours'));
+              var curSv = sp[curSess];
+              if (curSv && curSv.sample >= 3) {
+                var wr = Math.round(curSv.win_rate * 100);
+                swrEl.textContent = wr + '% (' + curSess.charAt(0).toUpperCase() + curSess.slice(1) + ', ' + curSv.sample + ' trades)';
+                swrEl.style.color = wr >= 60 ? '#4ade80' : (wr < 40 ? '#f87171' : '#fbbf24');
+              } else {
+                swrEl.textContent = curSess.charAt(0).toUpperCase() + curSess.slice(1) + ' — insufficient data';
+                swrEl.style.color = '#6b7280';
+              }
+            }
+          } catch(e) {}
+
+          // FLO-70: Sage insights in Luna card
+          var sageEl = document.getElementById('luna-sage-insights');
+          if (sageEl && b.data_snapshot && b.data_snapshot.sage_insights) {
+            var si = b.data_snapshot.sage_insights;
+            var sp = si.session_performance || {};
+            var siRows = [];
+            var sKeys = ['ny', 'london', 'asian'];
+            for (var ski = 0; ski < sKeys.length; ski++) {
+              var sk = sKeys[ski];
+              var sv = sp[sk];
+              if (sv && sv.sample >= 3) {
+                var wr = Math.round(sv.win_rate * 100);
+                var sColor = wr >= 60 ? '#4ade80' : (wr < 40 ? '#f87171' : '#fbbf24');
+                var sIcon = wr >= 60 ? '\u2713' : (wr < 40 ? '\u26A0' : '~');
+                siRows.push('<span style="color:' + sColor + '">' + sk.charAt(0).toUpperCase() + sk.slice(1) + ' ' + wr + '% ' + sIcon + '</span>');
+              }
+            }
+            if (siRows.length > 0) {
+              sageEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Sage Insights (14d)</div><div>' + siRows.join(' | ') + '</div>';
             }
           }
 
