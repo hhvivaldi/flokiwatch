@@ -125,7 +125,19 @@ CALIBRATION RULES:
 - Every claim must reference a number from the data you received.
 - If data is missing (null), say so. Do not invent values.
 - Patterns require ALL criteria to be met. Do not flag partial matches.
-- Keep summary under 3 sentences. Floki reads this every 15 minutes — be concise."""
+- Keep summary under 3 sentences. Floki reads this every 15 minutes — be concise.
+
+FACTOR ALIGNMENT:
+When assessing directional bias and confidence, consider how many of the 5 major macro forces align:
+- DXY direction (falling favors gold, rising pressures gold)
+- VIX direction (rising = fear = gold demand, falling = calm = gold less needed)
+- Yields direction (falling = gold attractive, rising = gold less attractive)
+- Oil context (rising during crisis = geopolitical safe haven; rising without crisis = inflation pressure)
+- Equities direction (S&P falling = risk off = gold demand; S&P rising = risk on)
+
+When most factors point the same way, your confidence should be HIGH and your bias clear.
+When factors conflict (e.g. war headlines bullish but yields rising bearish), your confidence should be LOW and your summary must explain the conflict.
+The most dangerous scenario is when headlines say one thing but price action and macro factors say the opposite — this often means forced liquidation or delayed reaction. Always flag this."""
 
 
 # ---------------------------------------------------------------------------
