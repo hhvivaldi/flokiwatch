@@ -5028,6 +5028,13 @@ class TradingBot:
                         check_intraday_drawdown()
                     except Exception:
                         pass
+
+                    # FLO-63: Extract trade lesson after confirmed close
+                    try:
+                        from trade_lessons import extract_trade_lesson
+                        extract_trade_lesson(action.get("ticket"))
+                    except Exception:
+                        pass
                 
                 # Record for safety checks (cooldown applies even for pending)
                 record_trade_result(profit)

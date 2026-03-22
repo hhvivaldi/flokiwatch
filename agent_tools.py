@@ -1555,6 +1555,63 @@ class AgentTools:
             fill_price = self._safe_float(getattr(res, "price", None))
             ticket = getattr(res, "ticket", None)
 
+            # FLO-63: Save trade conditions snapshot at open time
+            if ticket is not None:
+                try:
+                    from trade_lessons import save_trade_conditions
+                    indicators = self.get_indicators() if dp else {}
+                    luna_ctx = {}
+                    try:
+                        from luna_analyst import load_luna_brief
+                        lb = load_luna_brief()
+                        if lb:
+                            luna_ctx = {
+                                "luna_environment": lb.get("environment"),
+                                "luna_risk_level": lb.get("risk_level"),
+                                "luna_bias": lb.get("directional_bias"),
+                            }
+                    except Exception:
+                        pass
+
+                    utc_hour = None
+                    try:
+                        utc_hour = datetime.utcnow().hour
+                    except Exception:
+                        pass
+
+                    rex_agreed = None
+                    try:
+                        hist = getattr(self, "_rex_debate_history", [])
+                        if hist:
+                            rex_agreed = hist[-1].get("agree")
+                    except Exception:
+                        pass
+
+                    conds = {
+                        "rsi_h1": self._safe_float((indicators.get("rsi") or {}).get("value") if isinstance(indicators.get("rsi"), dict) else indicators.get("rsi")),
+                        "macd_h1": self._safe_float((indicators.get("macd") or {}).get("value") if isinstance(indicators.get("macd"), dict) else indicators.get("macd")),
+                        "adx_h1": self._safe_float((indicators.get("adx") or {}).get("value") if isinstance(indicators.get("adx"), dict) else indicators.get("adx")),
+                        "atr_h1": self._safe_float((indicators.get("atr") or {}).get("value") if isinstance(indicators.get("atr"), dict) else indicators.get("atr")),
+                        "ema50_distance_pct": None,
+                        "volume_h1": self._safe_float(indicators.get("volume")),
+                        "session": self._infer_session_from_utc_hour(utc_hour),
+                        "utc_hour": utc_hour,
+                        "confidence": self._safe_float(agent_confidence),
+                        "rex_agreed": rex_agreed,
+                    }
+                    # EMA50 distance %
+                    try:
+                        ema50 = self._safe_float(indicators.get("ema50"))
+                        if ema50 and fill_price:
+                            conds["ema50_distance_pct"] = round(((fill_price - ema50) / ema50) * 100, 2)
+                    except Exception:
+                        pass
+                    conds.update(luna_ctx)
+
+                    save_trade_conditions(ticket, dir_s, conds)
+                except Exception:
+                    pass
+
             try:
                 last_ts = getattr(self, "_rex_debate_last_ts", None)
                 turns = int(getattr(self, "_rex_debate_turns", 0) or 0)
