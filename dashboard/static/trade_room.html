@@ -2381,8 +2381,8 @@
 
               // Echo: always ON WATCH — single pill
               setRestPill('echo-card', '\uD83D\uDC41 ON WATCH', 'background:rgba(0,188,212,0.15);color:#00BCD4');
-              // Luna: ON WATCH (macro runs 24/7 at reduced interval)
-              setRestPill('luna-card', '\uD83D\uDC41 ON WATCH', 'background:rgba(224,64,251,0.15);color:#E040FB');
+              // Luna: REST DAY / COFFEE BREAK (sleeps during weekend, no token waste)
+              setRestPill('luna-card', statusText, statusStyle);
 
               setConfBar(document.getElementById('floki-conf-bar'), document.getElementById('floki-conf-text'), null);
               var rexBarClosed = document.getElementById('rex-agree-bar');
@@ -2391,7 +2391,7 @@
               if (rexTextClosed) rexTextClosed.textContent = '—';
 
               // Dim resting cards + hide metrics, keep Echo bright
-              var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card'];
+              var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'luna-card'];
               restingCards.forEach(function(id) {
                 var card = document.getElementById(id);
                 if (card) {
@@ -2409,13 +2409,7 @@
                 echoCard.style.filter = 'none';
                 echoCard.style.boxShadow = '0 0 12px rgba(0,188,212,0.15)';
               }
-              var lunaCard = document.getElementById('luna-card');
-              if (lunaCard) {
-                lunaCard.style.opacity = '1';
-                lunaCard.style.borderColor = '#E040FB';
-                lunaCard.style.filter = 'none';
-                lunaCard.style.boxShadow = '0 0 12px rgba(224,64,251,0.15)';
-              }
+              // Luna dims like other resting agents during market closed
             } else {
               // Market open — restore all pills visible, full brightness
               var allCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'echo-card', 'luna-card'];

@@ -1132,31 +1132,51 @@ class TradingBot:
                 try:
                     luna_enabled = bool(getattr(config, "LUNA_ENABLED", False))
                     if luna_enabled:
-                        # Use shorter interval when market is closed
-                        _luna_market_open, _, _ = is_market_open()
-                        luna_interval = int(getattr(
-                            config,
-                            "LUNA_SCAN_INTERVAL_SECONDS" if _luna_market_open else "LUNA_SCAN_INTERVAL_CLOSED",
-                            900 if _luna_market_open else 1800,
-                        ))
-                        now_ts = time.time()
-                        last_luna = getattr(self, "_luna_last_scan_ts", 0) or 0
+                        _luna_market_open, _luna_reason, _luna_next_open = is_market_open()
+                        _luna_is_weekend = (not _luna_market_open
+                                            and 'weekend' in (_luna_reason or '').lower())
 
-                        if (now_ts - last_luna) >= luna_interval:
-                            self._luna_last_scan_ts = now_ts
+                        # Weekend: sleep completely unless within 1h of market open (pre-market brief)
+                        _luna_skip = False
+                        if _luna_is_weekend:
+                            if _luna_next_open is not None:
+                                _seconds_to_open = (_luna_next_open - datetime.utcnow()).total_seconds()
+                                if _seconds_to_open > 3600:
+                                    _luna_skip = True
+                                    # Log once per hour max
+                                    _luna_last_weekend_log = getattr(self, "_luna_last_weekend_log", 0) or 0
+                                    if (time.time() - _luna_last_weekend_log) > 3600:
+                                        self._luna_last_weekend_log = time.time()
+                                        _open_str = _luna_next_open.strftime('%A %H:%M UTC') if _luna_next_open else 'unknown'
+                                        log.info(f"LUNA | Weekend — sleeping (next run at {_open_str})")
+                            else:
+                                _luna_skip = True
 
-                            def _run_luna_safe() -> None:
-                                try:
-                                    from luna_analyst import run_luna_analysis
-                                    result = run_luna_analysis()
-                                    log.info(
-                                        f"LUNA | {result.source} — {result.environment} | "
-                                        f"risk {result.risk_level}/10 | bias {result.directional_bias}"
-                                    )
-                                except Exception as e_luna:
-                                    log.warning(f"LUNA | scheduler error (ignored): {e_luna}")
+                        if not _luna_skip:
+                            # Market open: 15 min. Daily pause / pre-market: 30 min
+                            luna_interval = int(getattr(
+                                config,
+                                "LUNA_SCAN_INTERVAL_SECONDS" if _luna_market_open else "LUNA_SCAN_INTERVAL_CLOSED",
+                                900 if _luna_market_open else 1800,
+                            ))
+                            now_ts = time.time()
+                            last_luna = getattr(self, "_luna_last_scan_ts", 0) or 0
 
-                            threading.Thread(target=_run_luna_safe, daemon=True).start()
+                            if (now_ts - last_luna) >= luna_interval:
+                                self._luna_last_scan_ts = now_ts
+
+                                def _run_luna_safe() -> None:
+                                    try:
+                                        from luna_analyst import run_luna_analysis
+                                        result = run_luna_analysis()
+                                        log.info(
+                                            f"LUNA | {result.source} — {result.environment} | "
+                                            f"risk {result.risk_level}/10 | bias {result.directional_bias}"
+                                        )
+                                    except Exception as e_luna:
+                                        log.warning(f"LUNA | scheduler error (ignored): {e_luna}")
+
+                                threading.Thread(target=_run_luna_safe, daemon=True).start()
                 except Exception as e:
                     log.debug(f"LUNA | schedule check error (ignored): {e}")
 
