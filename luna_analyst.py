@@ -160,6 +160,12 @@ Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
 - "VIX at 26.78" means different things if it came from 18 (escalating) vs from 35 (recovering)
 - Always reference the trend direction in your summary when it contradicts the snapshot level
 
+CORRELATION ANALYSIS:
+When correlation breaks from historical norm (status = BROKEN), flag it and adjust interpretation.
+A broken gold-DXY correlation (normally -0.7 to -0.9, now positive) often signals regime change:
+forced liquidation, central bank intervention, or structural shift. "DXY falling = gold bullish"
+may be WRONG during a correlation break. Always check correlation status before applying standard rules.
+
 GLD ETF FLOWS:
 GLD flows = institutional conviction proxy. INFLOW (rising volume + rising price) = institutional gold buying. OUTFLOW (rising volume + falling price) = institutional selling. Multi-week inflows = structural gold support. Sudden outflows after long inflow streak = potential reversal warning.
 
@@ -186,6 +192,7 @@ class LunaAnalysisResult:
     next_events: List[Dict[str, str]] = field(default_factory=list)
     data_snapshot: Dict[str, Any] = field(default_factory=dict)
     macro_trend: Dict[str, Any] = field(default_factory=dict)
+    correlations: Dict[str, Any] = field(default_factory=dict)
     source: str = "mimo"      # "mimo" or "local_fallback"
     error: Optional[str] = None
 
@@ -407,6 +414,11 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     if trend_text:
         lines.append("\n" + trend_text)
 
+    # Correlations (FLO-75)
+    correlations = _build_correlations(macro)
+    corr_text = _build_correlation_context(correlations)
+    lines.append("\n" + corr_text)
+
     # Echo alerts
     critical_important = [a for a in echo_alerts
                           if a.get("classification") in ("CRITICAL", "IMPORTANT")]
@@ -625,6 +637,110 @@ def _build_trend_context(trends: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Correlation Tracking (FLO-75)
+# ---------------------------------------------------------------------------
+
+def _calc_pearson(x: list, y: list) -> Optional[float]:
+    """Calculate Pearson correlation coefficient for two lists of equal length."""
+    n = len(x)
+    if n < 3 or len(y) != n:
+        return None
+    mean_x = sum(x) / n
+    mean_y = sum(y) / n
+    num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+    den_x = sum((xi - mean_x) ** 2 for xi in x) ** 0.5
+    den_y = sum((yi - mean_y) ** 2 for yi in y) ** 0.5
+    if den_x == 0 or den_y == 0:
+        return None
+    return round(num / (den_x * den_y), 2)
+
+
+def _classify_correlation(value: float, normal_low: float, normal_high: float) -> str:
+    """Classify correlation as NORMAL, WEAK, or BROKEN."""
+    if normal_low <= value <= normal_high:
+        return "NORMAL"
+    # Check if sign flipped from expected
+    if (normal_high < 0 and value > 0) or (normal_low > 0 and value < 0):
+        return "BROKEN"
+    return "WEAK"
+
+
+def _build_correlations(macro: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calculate 5-day rolling Pearson correlations: gold vs DXY, yields, S&P.
+    Uses macro_history.json from FLO-74.
+    """
+    history = _load_macro_history()
+    sorted_dates = sorted(history.keys())
+
+    if len(sorted_dates) < 3:
+        return {"status": "insufficient_data", "days": len(sorted_dates), "min_required": 3}
+
+    # Extract series
+    gold_vals, dxy_vals, yields_vals, sp500_vals = [], [], [], []
+    for d in sorted_dates:
+        entry = history[d]
+        g = entry.get("gold")
+        dx = entry.get("dxy")
+        yd = entry.get("yields")
+        sp = entry.get("sp500")
+        if all(v is not None for v in [g, dx, yd, sp]):
+            gold_vals.append(g)
+            dxy_vals.append(dx)
+            yields_vals.append(yd)
+            sp500_vals.append(sp)
+
+    if len(gold_vals) < 3:
+        return {"status": "insufficient_data", "days": len(gold_vals), "min_required": 3}
+
+    # Normal ranges (typical long-term correlations)
+    pairs = {
+        "gold_dxy": {"series": dxy_vals, "normal": (-0.9, -0.3)},
+        "gold_yields": {"series": yields_vals, "normal": (-0.8, -0.2)},
+        "gold_sp500": {"series": sp500_vals, "normal": (-0.5, 0.5)},
+    }
+
+    result = {"status": "ok", "days": len(gold_vals)}
+    for name, cfg in pairs.items():
+        corr = _calc_pearson(gold_vals, cfg["series"])
+        if corr is None:
+            result[name] = {"value": None, "status": "N/A"}
+            continue
+        status = _classify_correlation(corr, cfg["normal"][0], cfg["normal"][1])
+        result[name] = {
+            "value": corr,
+            "status": status,
+            "normal_range": list(cfg["normal"]),
+        }
+
+    return result
+
+
+def _build_correlation_context(correlations: Dict[str, Any]) -> str:
+    """Build text block for correlations to inject into Luna's data context."""
+    if correlations.get("status") != "ok":
+        days = correlations.get("days", 0)
+        return f"<correlations>Insufficient data ({days} days, need 3+)</correlations>"
+
+    labels = {
+        "gold_dxy": "Gold-DXY",
+        "gold_yields": "Gold-Yields",
+        "gold_sp500": "Gold-S&P500",
+    }
+    lines = ["<correlations>"]
+    for name in ("gold_dxy", "gold_yields", "gold_sp500"):
+        c = correlations.get(name, {})
+        val = c.get("value")
+        status = c.get("status", "N/A")
+        if val is not None:
+            nr = c.get("normal_range", [])
+            nr_str = f" (normal: {nr[0]} to {nr[1]})" if nr else ""
+            lines.append(f"{labels.get(name, name)}: {val:+.2f} ({status}{nr_str})")
+    lines.append("</correlations>")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # MiMo AI Analysis (PRIMARY path)
 # ---------------------------------------------------------------------------
 
@@ -725,6 +841,7 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         next_events=parsed.get("next_events", []),
         data_snapshot=data_snapshot,
         macro_trend=_build_macro_trends(macro),
+        correlations=_build_correlations(macro),
         source="mimo",
     )
 
@@ -1016,6 +1133,7 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
         next_events=next_events,
         data_snapshot=data_snapshot,
         macro_trend=_build_macro_trends(macro),
+        correlations=_build_correlations(macro),
         source="local_fallback",
     )
 

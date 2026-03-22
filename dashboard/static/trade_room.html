@@ -1037,6 +1037,7 @@
                 <div id="luna-factors" style="font-size:9px;color:#6b7280;margin-top:4px"></div>
                 <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
                 <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+                <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
               </div>
             </div>
 
@@ -1113,6 +1114,14 @@
           <div class="ctx-row"><span class="ctx-key">GLD Flows</span><span id="ctx-gld-flows" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">Real Yields</span><span id="ctx-real-yields" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">USD/CNY</span><span id="ctx-usdcny" class="ctx-val">—</span></div>
+        </div>
+
+        <!-- Correlations block -->
+        <div class="ctx-block">
+          <div class="ctx-label">CORRELATIONS</div>
+          <div class="ctx-row"><span class="ctx-key">Gold-DXY</span><span id="ctx-corr-dxy" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">Gold-Yields</span><span id="ctx-corr-yields" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">Gold-S&P</span><span id="ctx-corr-sp500" class="ctx-val">—</span></div>
         </div>
 
         <!-- Floki last investigation -->
@@ -1600,6 +1609,46 @@
             }
             if (trendRows.length > 0) {
               trendEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Trend (5d)</div><div style="display:grid;grid-template-columns:1fr;gap:1px;line-height:1.6">' + trendRows.join('') + '</div>';
+            }
+          }
+
+          // Correlations (FLO-75)
+          var corrEl = document.getElementById('luna-correlations');
+          if (corrEl && b.correlations) {
+            var cr = b.correlations;
+            if (cr.status === 'ok') {
+              var corrLabels = {gold_dxy: 'Gold-DXY', gold_yields: 'Gold-Yld', gold_sp500: 'Gold-S&P'};
+              var corrRows = [];
+              var corrKeys = ['gold_dxy', 'gold_yields', 'gold_sp500'];
+              for (var ci = 0; ci < corrKeys.length; ci++) {
+                var ck = corrKeys[ci];
+                var cv = cr[ck];
+                if (!cv || cv.value == null) continue;
+                var cColor = cv.status === 'NORMAL' ? '#4ade80' : (cv.status === 'BROKEN' ? '#f87171' : '#fbbf24');
+                var cIcon = cv.status === 'NORMAL' ? '\u2713' : (cv.status === 'BROKEN' ? '\u26A0' : '~');
+                corrRows.push('<span style="color:#6b7280">' + corrLabels[ck] + '</span> <span style="color:' + cColor + '">' + (cv.value > 0 ? '+' : '') + cv.value.toFixed(2) + ' ' + cIcon + ' ' + cv.status + '</span>');
+              }
+              if (corrRows.length > 0) {
+                corrEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Correlations (' + cr.days + 'd)</div><div style="display:grid;grid-template-columns:1fr;gap:1px;line-height:1.6">' + corrRows.join('') + '</div>';
+              }
+            } else {
+              corrEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Correlations</div><div style="color:#6b7280">Insufficient data (' + (cr.days || 0) + 'd, need 3+)</div>';
+            }
+          }
+
+          // Populate right panel correlation values (FLO-75)
+          if (b.correlations && b.correlations.status === 'ok') {
+            var corrMap = {gold_dxy: 'ctx-corr-dxy', gold_yields: 'ctx-corr-yields', gold_sp500: 'ctx-corr-sp500'};
+            var cmKeys = Object.keys(corrMap);
+            for (var cmi = 0; cmi < cmKeys.length; cmi++) {
+              var cmk = cmKeys[cmi];
+              var cel = document.getElementById(corrMap[cmk]);
+              if (!cel) continue;
+              var cd = b.correlations[cmk];
+              if (!cd || cd.value == null) { cel.textContent = '—'; continue; }
+              var cIcon = cd.status === 'NORMAL' ? ' \u2713' : (cd.status === 'BROKEN' ? ' \u26A0' : ' ~');
+              cel.textContent = (cd.value > 0 ? '+' : '') + cd.value.toFixed(2) + cIcon;
+              cel.style.color = cd.status === 'NORMAL' ? '#4ade80' : (cd.status === 'BROKEN' ? '#f87171' : '#fbbf24');
             }
           }
         }

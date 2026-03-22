@@ -1146,6 +1146,19 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     });
   }).catch(() => {});
 
+  // FLO-75: Correlation break warning
+  fetch("/api/luna-brief").then(r => r.json()).then(data => {
+    const brief = data && data.brief;
+    if (!brief || !brief.correlations || brief.correlations.status !== "ok") return;
+    const cr = brief.correlations;
+    const broken = ["gold_dxy", "gold_yields", "gold_sp500"].filter(k => cr[k] && cr[k].status === "BROKEN");
+    if (broken.length > 0) {
+      macroContainer.insertAdjacentHTML("beforeend", `
+        <div class="text-xs text-red-400 mt-1 font-bold">&#9888; CORRELATION BREAK: ${broken.map(k => k.replace("gold_", "Gold-").toUpperCase()).join(", ")}</div>
+      `);
+    }
+  }).catch(() => {});
+
   // Calendar
   const calEl = el("intel-calendar");
   const calClockEl = el("calendar-market-watch");
