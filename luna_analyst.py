@@ -158,7 +158,10 @@ Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
 - Escalating trends (VIX rising 3+ days, DXY accelerating) increase risk_level
 - Stabilizing trends (VIX falling from highs, yields flattening) decrease risk_level
 - "VIX at 26.78" means different things if it came from 18 (escalating) vs from 35 (recovering)
-- Always reference the trend direction in your summary when it contradicts the snapshot level"""
+- Always reference the trend direction in your summary when it contradicts the snapshot level
+
+REAL YIELD PROXY:
+Use the "Real Yield proxy (live)" for intraday decisions. The FRED DFII10 value is end-of-day (previous close). The proxy = nominal yield minus breakeven inflation gives a live estimate using real-time ^TNX data."""
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +370,16 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     ry = macro.get("real_yields", {})
     lines.append(f"Real Yields (TIPS 10Y): {ry.get('current', 'N/A')}% (change: {ry.get('change', 'N/A')}, date: {ry.get('date', 'N/A')})")
 
+    # FLO-76: Real yield intraday proxy = nominal yield - breakeven inflation
+    nominal = yields.get("current")
+    breakeven_val = macro.get("breakeven", {}).get("current")
+    if nominal is not None and breakeven_val is not None:
+        try:
+            proxy = round(float(nominal) - float(breakeven_val), 2)
+            lines.append(f"Real Yield proxy (live): {proxy}% (nominal {nominal}% - breakeven {breakeven_val}%)")
+        except (TypeError, ValueError):
+            pass
+
     ff = macro.get("fed_funds", {})
     lines.append(f"Fed Funds Rate: {ff.get('current', 'N/A')}% (change: {ff.get('change', 'N/A')}, date: {ff.get('date', 'N/A')})")
 
@@ -408,6 +421,18 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     return "\n".join(lines)
 
 
+def _calc_real_yield_proxy(macro: Dict[str, Any]) -> Optional[float]:
+    """Real yield proxy = nominal 10Y yield - breakeven inflation (FLO-76)."""
+    nominal = macro.get("yields", {}).get("current")
+    breakeven_val = macro.get("breakeven", {}).get("current")
+    if nominal is not None and breakeven_val is not None:
+        try:
+            return round(float(nominal) - float(breakeven_val), 2)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
     """Build the data_snapshot dict for the output JSON."""
     def _snap(source: Dict, value_key: str = "current", change_key: str = "change_percent"):
@@ -446,6 +471,7 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
             "value": ry.get("current"),
             "change": ry.get("change"),
             "date": ry.get("date"),
+            "proxy": _calc_real_yield_proxy(macro),
         },
         "fed_funds": {
             "value": ff.get("current"),

@@ -969,7 +969,7 @@ function macroLabel(key) {
   if (key === "oil") return "OIL WTI";
   if (key === "sp500") return "S&P 500";
   if (key === "gld") return "GLD VOL";
-  if (key === "real_yields") return "REAL YIELDS";
+  if (key === "real_yields") return "REAL YIELDS \u2248";
   if (key === "usdcny") return "USD/CNY";
   return key.toUpperCase();
 }
@@ -1084,7 +1084,8 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   for (const key of ["dxy", "yields", "vix", "oil", "sp500", "gld", "real_yields", "usdcny"]) {
     const m = macro[key];
     if (!m) continue;
-    const val = m.value;
+    // FLO-76: prefer proxy for real_yields when available
+    const val = (key === "real_yields" && m.proxy != null) ? m.proxy : m.value;
     const chg = m.change_pct;
     const hasScore = m.score != null && Number.isFinite(m.score);
     const sc = hasScore ? intelScoreColor(m.score) : intelScoreColor(50);

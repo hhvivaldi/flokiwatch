@@ -1549,7 +1549,10 @@
             _snapRow('USD/CNY', ds.usdcny, '', '');
             if (ds.real_yields && ds.real_yields.value != null) {
               var ryChg = ds.real_yields.change;
-              rows.push('<span style="color:#6b7280">Real Yld</span> <span style="color:#e2e8f0">' + Number(ds.real_yields.value).toFixed(2) + '%</span>' + (ryChg != null ? ' <span style="color:' + (ryChg > 0 ? '#f87171' : (ryChg < 0 ? '#4ade80' : '#6b7280')) + '">' + (ryChg > 0 ? '+' : '') + Number(ryChg).toFixed(3) + '</span>' : ''));
+              rows.push('<span style="color:#6b7280">Real Yld</span> <span style="color:#9ca3af">' + Number(ds.real_yields.value).toFixed(2) + '%</span>' + (ryChg != null ? ' <span style="color:' + (ryChg > 0 ? '#f87171' : (ryChg < 0 ? '#4ade80' : '#6b7280')) + '">' + (ryChg > 0 ? '+' : '') + Number(ryChg).toFixed(3) + '</span>' : ''));
+            }
+            if (ds.real_yields && ds.real_yields.proxy != null) {
+              rows.push('<span style="color:#6b7280">Real Yld</span> <span style="color:#22d3ee">\u2248' + Number(ds.real_yields.proxy).toFixed(2) + '%</span> <span style="color:#6b7280">live</span>');
             }
             if (ds.fed_funds && ds.fed_funds.value != null) {
               rows.push('<span style="color:#6b7280">Fed Rate</span> <span style="color:#e2e8f0">' + Number(ds.fed_funds.value).toFixed(2) + '%</span>');
@@ -2864,7 +2867,17 @@
                 var ry = macro.real_yields || {};
                 var ryVal = (ry.value != null) ? Number(ry.value) : null;
                 var ryEl = document.getElementById('ctx-real-yields');
-                if (ryEl) ryEl.textContent = (ryVal != null && isFinite(ryVal)) ? ryVal.toFixed(2) + '%' : '—';
+                if (ryEl) {
+                  // FLO-76: prefer proxy (live) over FRED (end-of-day)
+                  var ryProxy = (ry.proxy != null) ? Number(ry.proxy) : null;
+                  if (ryProxy != null && isFinite(ryProxy)) {
+                    ryEl.textContent = '\u2248' + ryProxy.toFixed(2) + '%';
+                  } else if (ryVal != null && isFinite(ryVal)) {
+                    ryEl.textContent = ryVal.toFixed(2) + '%';
+                  } else {
+                    ryEl.textContent = '\u2014';
+                  }
+                }
 
                 var usdcny = macro.usdcny || {};
                 var cnyVal = (usdcny.value != null) ? Number(usdcny.value) : null;

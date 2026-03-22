@@ -4750,6 +4750,17 @@ class TradingBot:
             gld_comp = components.get("gld", {})
             real_yields_comp = components.get("real_yields", {})
             usdcny_comp = components.get("usdcny", {})
+            breakeven_comp = components.get("breakeven", {})
+
+            # FLO-76: Real yield intraday proxy
+            _ry_proxy = None
+            _nom = yields_comp.get("current")
+            _be = breakeven_comp.get("current")
+            if _nom is not None and _be is not None:
+                try:
+                    _ry_proxy = round(float(_nom) - float(_be), 2)
+                except (TypeError, ValueError):
+                    pass
 
             macro = {
                 "dxy": {
@@ -4783,6 +4794,7 @@ class TradingBot:
                 "real_yields": {
                     "value": real_yields_comp.get("current"),
                     "change_pct": real_yields_comp.get("change"),
+                    "proxy": _ry_proxy,
                 },
                 "usdcny": {
                     "value": usdcny_comp.get("current"),
