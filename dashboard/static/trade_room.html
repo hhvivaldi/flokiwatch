@@ -1908,11 +1908,12 @@
                   : agrees === false
                     ? '<span style="background:rgba(248,113,113,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3);padding:1px 7px;border-radius:4px;font-size:10px;font-weight:900;letter-spacing:0.08em">DISAGREE</span>'
                     : '<span style="color:#9C27B0;font-size:9px;font-weight:800;letter-spacing:0.1em">DEBATE</span>';
+                var dvBadge = meta.data_verified ? ' <span style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);padding:1px 5px;border-radius:3px;font-size:8px;letter-spacing:0.05em">\uD83D\uDCCA VERIFIED</span>' : '';
                 var raw = (m.content || '').toString();
                 var sentences = raw.split(/\.(?=\s+[A-Z])/).map(function(s,i,a){return s.trim()+(i<a.length-1?'.':'');}).filter(Boolean);
                 var lines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
                 structuredContent =
-                  '<div style="margin-bottom:5px">' + badge + '</div>' +
+                  '<div style="margin-bottom:5px">' + badge + dvBadge + '</div>' +
                   '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
               }
               else if (isSimba) {

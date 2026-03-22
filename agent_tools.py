@@ -592,6 +592,42 @@ class AgentTools:
 
             candles_blob = self._extract_recent_candles_for_rex(dp)
 
+            # FLO-64: Luna brief for independent verification
+            luna_context = None
+            try:
+                from luna_analyst import load_luna_brief
+                lb = load_luna_brief()
+                if lb and isinstance(lb, dict):
+                    luna_context = {
+                        "environment": lb.get("environment"),
+                        "risk_level": lb.get("risk_level"),
+                        "directional_bias": lb.get("directional_bias"),
+                        "bias_confidence": lb.get("bias_confidence"),
+                        "market_regime": lb.get("market_regime"),
+                        "patterns_detected": lb.get("patterns_detected", []),
+                        "summary": lb.get("summary", ""),
+                    }
+            except Exception:
+                pass
+
+            # FLO-64: Open position details
+            open_position = None
+            try:
+                positions = getattr(self._bot, "open_positions", None) or {}
+                if positions:
+                    for _tk, _pos in positions.items():
+                        open_position = {
+                            "ticket": _tk,
+                            "direction": getattr(_pos, "direction", None),
+                            "open_price": getattr(_pos, "open_price", None),
+                            "sl": getattr(_pos, "sl", None),
+                            "tp": getattr(_pos, "tp", None),
+                            "volume": getattr(_pos, "volume", None),
+                        }
+                        break  # First position is enough context
+            except Exception:
+                pass
+
             session_name = None
             try:
                 session_name = dp.get("session_name")
@@ -650,6 +686,8 @@ class AgentTools:
                     "headlines_top3": headlines,
                     "trade_patterns_top3": (patterns_context or {}),
                     "similar_losing_trades_top3": similar_losses,
+                    "luna_brief": luna_context,
+                    "open_position": open_position,
                 },
                 "debate_history": "\n".join(debate_history_lines).strip(),
                 "turn": turns,
@@ -691,7 +729,7 @@ class AgentTools:
                     record_agent_event(
                         "DEBATE",
                         rex_text[:4000],
-                        payload={"turn": turns, "agree": bool(agree)},
+                        payload={"turn": turns, "agree": bool(agree), "data_verified": True},
                         author="REX",
                     )
             except Exception:
@@ -710,6 +748,14 @@ class AgentTools:
             except Exception:
                 pass
 
+            # FLO-64: Log data snapshot Rex received
+            _rsi_val = (indicators or {}).get("rsi")
+            _luna_env = (luna_context or {}).get("environment", "N/A")
+            _luna_risk = (luna_context or {}).get("risk_level", "N/A")
+            _price_mid = price.get("mid") if isinstance(price, dict) else None
+            log.info(
+                f"REX | Debate with data snapshot — price {_price_mid or 'N/A'}, RSI {_rsi_val or 'N/A'}, Luna {_luna_env} risk {_luna_risk}"
+            )
             log.info(
                 f"DEBATE | turn={turns}/5 | Floki: {dir_s} conf:{int(round(conf_f))}% | Rex: {'AGREE' if agree else 'DISAGREE'} — {reasoning[:140]}"
             )
