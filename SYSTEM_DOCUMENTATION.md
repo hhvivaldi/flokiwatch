@@ -10,9 +10,10 @@ Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-fi
 
 - **Brain (Python)**: pipeline de dados e cálculo (60s). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
 - **Floki (Gemini 3 Flash)**: portfolio manager e único decisor. Agenda o próprio ciclo via `set_next_check` (5-120 min). Decide **WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST**.
-- **Rex (GPT-4o)**: debate partner. Desafia o raciocínio do Floki em cada decisão (AGREE/DISAGREE).
-- **Simba (Python, zero AI cost)**: watchdog. Monitoriza condições wake/watch a cada 30s. Acorda o Floki quando condições são atingidas.
-- **Echo (GPT-4o-mini)**: news sentinel 24/7. Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Classifica headlines como CRITICAL/IMPORTANT/ROUTINE. CRITICAL acorda Floki imediatamente (max 2/hora).
+- **Rex (GPT-4o)**: debate partner. Desafia o raciocínio do Floki apenas em decisões OPEN/CLOSE (AGREE/DISAGREE). HOLD/WAIT/ADJUST são skippados (FLO-50).
+- **Simba (Python, zero AI cost)**: watchdog. Monitoriza 10 tipos de condições (price, RSI, volume, ADX, scanner_pattern, pnl_threshold, indicator) a cada 30s. Acorda o Floki quando condições são atingidas.
+- **Luna (MiMo-V2-Flash)**: macro analyst. Analisa DXY, VIX, yields, oil, S&P 500, gold, Echo alerts + calendário a cada 15 min. Produz `luna_brief.json` com environment (SAFE/CAUTION/DANGER), padrões (forced_liquidation, safe_haven_flow, etc.), bias direcional. Quando Luna está ativa, Floki perde acesso a `get_macro` e `get_headlines` (Luna já processou esses dados).
+- **Echo (MiMo-V2-Flash)**: news sentinel 24/7. Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Classifica headlines como CRITICAL/IMPORTANT/ROUTINE. CRITICAL acorda Floki imediatamente (max 2/hora) + trigger Luna out-of-cycle. Feed health tracking com alerta a 3+ falhas consecutivas.
 - **Sage (Gemini)**: auditor diário. Corre às 21:00 UTC com relatório de performance (win rate, profit factor, recomendações).
 - **EA Bridge (MQL5, tick-by-tick)**: execução e gestão intra-tick (breakeven, trailing stop).
 
@@ -43,14 +44,18 @@ main.py (Orquestrador — Trading Office)
   ├── Floki (Gemini 3 Flash, self-scheduled 5-120 min) → ai_agent.py
   │     ├── 20+ tools (market data, trading, memory, debate)
   │     └── decide: WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST
-  ├── Rex (GPT-4o, on each Floki decision) → rex_validator.py
-  │     └── AGREE / DISAGREE + reasoning
-  ├── Echo (GPT-4o-mini, every 5 min) → echo_sentinel.py
-  │     ├── 25 RSS feeds → keyword pre-filter → GPT classification
-  │     ├── CRITICAL → Simba wake → Floki immediately (max 2/hr)
-  │     └── IMPORTANT → echo_alerts.json → Floki reads on next call
+  ├── Rex (GPT-4o, on OPEN/CLOSE only) → rex_validator.py
+  │     └── AGREE / DISAGREE + reasoning (HOLD/WAIT/ADJUST skipped)
+  ├── Luna (MiMo-V2-Flash, every 15 min) → luna_analyst.py
+  │     ├── DXY/VIX/yields/oil/S&P 500/gold + Echo alerts + calendar
+  │     ├── Environment: SAFE/CAUTION/DANGER + pattern detection
+  │     └── luna_brief.json → Floki reads via get_luna_brief
+  ├── Echo (MiMo-V2-Flash, every 5 min) → echo_sentinel.py
+  │     ├── 25 RSS feeds → keyword pre-filter → MiMo classification
+  │     ├── CRITICAL → Simba wake → Floki immediately (max 2/hr) + Luna out-of-cycle
+  │     └── IMPORTANT → echo_alerts.json → Luna reads on next cycle
   ├── Simba (Python, every 30s, zero AI cost) → simba_watcher.py
-  │     └── wake/watch conditions → triggers Floki out-of-cycle
+  │     └── 10 condition types → triggers Floki out-of-cycle
   ├── Sage (Gemini, daily 21:00 UTC) → sage_auditor.py
   │     └── performance report + recommendations
   ├── Execution
@@ -120,23 +125,55 @@ O output do Brain é consumido por:
 **Modelo:** GPT-4o
 **Ficheiro:** `rex_validator.py`
 
-Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação.
+Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação. **Apenas decisões OPEN/CLOSE ativam o Rex** — HOLD/WAIT/ADJUST são skippados (FLO-50, otimização de custo).
 
 ---
 
 ## 6. Echo — News Sentinel (24/7)
 
-**Modelo:** GPT-4o-mini (env: ECHO_MODEL, swap sem code change)
+**Modelo:** MiMo-V2-Flash (Xiaomi API, env: ECHO_MODEL, base: ECHO_API_BASE)
 **Ficheiro:** `echo_sentinel.py`
 
 Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Pipeline:
 
-1. RSS fetch → 2. Dedup (MD5 hash, 24h expiry) → 3. Keyword pre-filter (~70% filtrado, $0) → 4. GPT classification (CRITICAL/IMPORTANT/ROUTINE)
+1. RSS fetch → 2. Dedup (MD5 hash, 24h expiry) → 3. Keyword pre-filter (~70% filtrado, $0) → 4. MiMo classification (CRITICAL/IMPORTANT/ROUTINE)
 
-- **CRITICAL**: acorda Floki imediatamente via `ECHO_CRITICAL` trigger (max 2/hora)
-- **IMPORTANT**: guardado em `data/echo_alerts.json`, Floki lê no próximo ciclo via `get_echo_alerts`
+- **CRITICAL**: acorda Floki imediatamente via `ECHO_CRITICAL` trigger (max 2/hora) + trigger Luna out-of-cycle
+- **IMPORTANT**: guardado em `data/echo_alerts.json`, Luna lê no próximo ciclo
 - **ROUTINE**: descartado
 - **Market closed**: só processa CRITICAL (IMPORTANT suprimido)
+- **Feed health**: tracking por feed em `data/echo_feed_health.json`, alerta a 3+ falhas consecutivas
+- **Custo**: ~$0.10-0.30/M tokens via MiMo. Daily cap $1.00.
+- **API Key**: `LUNA_API_KEY` (partilhada com Luna — mesma conta Xiaomi)
+
+---
+
+## 6a. Luna — Macro Analyst
+
+**Modelo:** MiMo-V2-Flash (Xiaomi API)
+**Ficheiro:** `luna_analyst.py`
+
+Analisa o ambiente macro a cada 15 min (market open) ou 30 min (daily pause). **Não corre durante o weekend** — acorda 1h antes do market open (Domingo 21:00 UTC).
+
+**Dados de entrada:** DXY, VIX, Treasury Yields 10Y, Oil (WTI), S&P 500, Gold (preço + change), Echo alerts (CRITICAL/IMPORTANT), calendário económico.
+
+**Output:** `data/luna_brief.json` com:
+- `environment`: SAFE / CAUTION / DANGER
+- `risk_level`: 1-10 (calibrado por environment)
+- `directional_bias`: BULLISH / BEARISH / NEUTRAL com `bias_confidence` 1-10
+- `patterns_detected`: forced_liquidation, safe_haven_flow, news_price_divergence, dollar_gold_correlation_break
+- `market_regime`: risk_on / risk_off / mixed / crisis
+- `data_snapshot`: valores atuais de todos os indicadores macro
+
+**Integração com Floki:**
+- Floki chama `get_luna_brief` no início de cada ciclo
+- Quando Luna brief é fresh (< 30 min): `get_macro` e `get_headlines` são **removidos** da tool list do Floki (FLO-59)
+- Quando Luna brief é stale (> 30 min): fallback — tools macro restaurados automaticamente
+- `get_echo_alerts` mantém-se **sempre** (para CRITICAL emergencies via Simba wake)
+
+**Fallback:** Se MiMo API falha, Luna usa análise determinística local (regras if/else).
+
+**Custo:** ~$0.10-0.30/M tokens. Daily cap $1.00.
 
 ---
 
@@ -144,11 +181,13 @@ Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Pipeline:
 
 **Ficheiro:** `simba_watcher.py`
 
-Corre a cada 30s. Monitoriza condições definidas pelo Floki:
-- **Wake conditions**: quando Floki decide WAIT, define condições para ser acordado (ex: price above 4550)
-- **Watch conditions**: quando Floki tem posição aberta, define condições para reavaliar
+Corre a cada 30s. Monitoriza condições definidas pelo Floki via 10 tipos de condição:
 
-Quando condição é atingida → `agent_proactive_out_of_cycle("SIMBA_WAKE")` ou `SIMBA_WATCH`.
+**Wake conditions** (sem posição aberta): `price_above`, `price_below`, `rsi_above`, `rsi_below`, `volume_above`, `adx_above`, `scanner_pattern`, `indicator_above`, `indicator_below`, `max_sleep_minutes`
+
+**Watch conditions** (com posição aberta): `price_touch`, `pnl_threshold`, `indicator_threshold`
+
+Quando condição é atingida → `agent_proactive_out_of_cycle("SIMBA_WAKE")` ou `SIMBA_WATCH`. Detalhes das condições visíveis no Trade Room card expand panel.
 
 ---
 
@@ -190,7 +229,7 @@ Ajuste dinâmico: momentum ≥80 + forte → ML perde 5-15% peso, momentum ganha
 Score 0-100 baseado em ADX (+30 max), Volume (+20 max), Velas Consecutivas (+20 max), ATR Trend (+15 max), Breakout (+15 max). Direção por votação multi-sinal. Força: very_strong/strong/moderate/weak/very_weak.
 
 ### 4.4 News Híbrido (20%)
-Score 0-100 = Headlines 40% (GPT-4o-mini ou keywords fallback, RSS Google News) + DXY 30% (Yahoo Finance, inverso) + Yields 20% (Yahoo Finance, inverso) + VIX 10% (Yahoo Finance, direto). Cache 30 min.
+Score 0-100 = Headlines 40% (keywords, RSS Google News) + DXY 30% (Yahoo Finance, inverso) + Yields 20% (Yahoo Finance, inverso) + VIX 10% (Yahoo Finance, direto). Cache 30 min. Também recolhe Oil (WTI CL=F) + S&P 500 (^GSPC/ES=F) para Luna macro analyst (não pesam no score).
 
 ### 4.5 Calendário (10%)
 Score 0-100. Fontes: MQL5 Bridge JSON → FCS API → Hardcoded. Fases: NORMAL(50), PRE_EVENT(20), DURING(0), POST_EVENT(15-85 conforme bias). Eventos: NFP, CPI, FOMC, Jobless Claims, GDP, etc. Nunca bloqueia — score 0 puxa final para HOLD organicamente.
