@@ -956,6 +956,9 @@ function macroImpactText(key, changePct) {
   if (key === "vix") return c > 0 ? "Bullish for gold" : "Bearish for gold";
   if (key === "oil") return c > 3 ? "Geopolitical risk" : (c < -3 ? "Deflationary signal" : "Neutral");
   if (key === "sp500") return c < 0 ? "Risk off — gold demand" : "Risk on";
+  if (key === "gld") return c > 0 ? "Gold demand confirmed" : "Gold selling pressure";
+  if (key === "real_yields") return c < 0 ? "Bullish for gold" : "Bearish for gold";
+  if (key === "usdcny") return c > 0 ? "Yuan weak — gold demand" : "Yuan strong — less gold demand";
   return "";
 }
 
@@ -965,17 +968,32 @@ function macroLabel(key) {
   if (key === "vix") return "VIX";
   if (key === "oil") return "OIL WTI";
   if (key === "sp500") return "S&P 500";
+  if (key === "gld") return "GLD VOL";
+  if (key === "real_yields") return "REAL YIELDS";
+  if (key === "usdcny") return "USD/CNY";
   return key.toUpperCase();
 }
 
 function macroUnit(key) {
   if (key === "yields") return "%";
+  if (key === "real_yields") return "%";
   return "";
 }
 
 function macroPrefix(key) {
   if (key === "oil") return "$";
   return "";
+}
+
+function macroFmtVal(key, val) {
+  if (key === "gld") {
+    // Format volume as compact number (e.g. 26.1M)
+    const n = Number(val);
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + "K";
+    return n.toLocaleString();
+  }
+  return fmtNum(val, 2);
 }
 
 function categoryBadge(cat) {
@@ -1063,7 +1081,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
   const macroContainer = el("intel-macro");
   macroContainer.innerHTML = "";
   const macro = feed.macro || {};
-  for (const key of ["dxy", "yields", "vix", "oil", "sp500"]) {
+  for (const key of ["dxy", "yields", "vix", "oil", "sp500", "gld", "real_yields", "usdcny"]) {
     const m = macro[key];
     if (!m) continue;
     const val = m.value;
@@ -1085,7 +1103,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
           <div class="text-xs font-bold font-mono ${sc.text}">${scoreHtml}</div>
         </div>
         <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? prefix + fmtNum(val, 2) + unit : "—"}</span>
+          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? prefix + macroFmtVal(key, val) + unit : "—"}</span>
           <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
         </div>
         <div class="intel-robot-bubble inline-flex mt-2 relative z-10">

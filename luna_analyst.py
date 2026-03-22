@@ -59,6 +59,12 @@ DATA YOU RECEIVE:
 - Oil (Crude WTI): price + 24h change + 1h change
 - S&P 500: value + 24h change
 - Gold price: current price + 24h change + 1h change
+- GLD ETF: price + volume + 24h change (gold proxy with real volume — high volume confirms conviction, low volume flags divergence risk)
+- USD/CNY: exchange rate + 24h change (yuan weakness signals capital flight into gold; strengthening yuan reduces gold demand from China)
+- Real Yields (TIPS 10Y, FRED DFII10): current value + change (higher real yields = gold less attractive as non-yielding asset; falling real yields = bullish gold)
+- Fed Funds Rate (FRED FEDFUNDS): current value + change (rate cuts = dovish = bullish gold; rate hikes = hawkish = bearish gold)
+- Breakeven Inflation 10Y (FRED T10YIE): current value + change (rising breakevens = inflation expectations up = bullish gold as inflation hedge)
+- CPI All Urban (FRED CPIAUCSL): current value + change (rising CPI = inflation reality = bullish gold; falling CPI = less need for gold hedge)
 - Echo classified news alerts: each has classification (CRITICAL/IMPORTANT/ROUTINE), gold_impact (BULLISH/BEARISH/NEUTRAL), and a summary. CRITICAL alerts indicate immediate market-moving events — factor them heavily. IMPORTANT alerts provide context. ROUTINE alerts can be ignored.
 - Economic calendar: upcoming events with impact level and time
 
@@ -114,7 +120,13 @@ OUTPUT FORMAT — Return ONLY valid JSON:
     "yields_10y": {"value": X, "change_pct": Y},
     "oil": {"value": X, "change_pct": Y},
     "sp500": {"value": X, "change_pct": Y},
-    "gold": {"price": X, "change_pct": Y}
+    "gold": {"price": X, "change_pct": Y},
+    "gld": {"value": X, "volume": N, "change_pct": Y},
+    "usdcny": {"value": X, "change_pct": Y},
+    "real_yields": {"value": X, "change": Y},
+    "fed_funds": {"value": X, "change": Y},
+    "breakeven": {"value": X, "change": Y},
+    "cpi": {"value": X, "change": Y}
   }
 }
 
@@ -202,6 +214,12 @@ def _get_macro_data() -> Dict[str, Any]:
         get_yields_data,
         get_oil_data,
         get_sp500_data,
+        get_gld_data,
+        get_usdcny_data,
+        get_real_yields,
+        get_fed_funds_rate,
+        get_breakeven_inflation,
+        get_cpi_data,
     )
 
     dxy = get_dxy_data()
@@ -210,6 +228,12 @@ def _get_macro_data() -> Dict[str, Any]:
     oil = get_oil_data()
     sp500 = get_sp500_data()
     gold = _get_gold_data()
+    gld = get_gld_data()
+    usdcny = get_usdcny_data()
+    real_yields = get_real_yields()
+    fed_funds = get_fed_funds_rate()
+    breakeven = get_breakeven_inflation()
+    cpi = get_cpi_data()
 
     return {
         "dxy": dxy,
@@ -218,6 +242,12 @@ def _get_macro_data() -> Dict[str, Any]:
         "oil": oil,
         "sp500": sp500,
         "gold": gold,
+        "gld": gld,
+        "usdcny": usdcny,
+        "real_yields": real_yields,
+        "fed_funds": fed_funds,
+        "breakeven": breakeven,
+        "cpi": cpi,
     }
 
 
@@ -318,6 +348,24 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     gold = macro.get("gold", {})
     lines.append(f"Gold: ${gold.get('current', 'N/A')} (24h: {gold.get('change_percent', 'N/A')}%, 1h: {gold.get('change_1h_percent', 'N/A')}%)")
 
+    gld = macro.get("gld", {})
+    lines.append(f"GLD ETF: ${gld.get('current', 'N/A')} (vol: {gld.get('volume', 'N/A')}, 24h: {gld.get('change_percent', 'N/A')}%)")
+
+    usdcny = macro.get("usdcny", {})
+    lines.append(f"USD/CNY: {usdcny.get('current', 'N/A')} (24h: {usdcny.get('change_percent', 'N/A')}%)")
+
+    ry = macro.get("real_yields", {})
+    lines.append(f"Real Yields (TIPS 10Y): {ry.get('current', 'N/A')}% (change: {ry.get('change', 'N/A')}, date: {ry.get('date', 'N/A')})")
+
+    ff = macro.get("fed_funds", {})
+    lines.append(f"Fed Funds Rate: {ff.get('current', 'N/A')}% (change: {ff.get('change', 'N/A')}, date: {ff.get('date', 'N/A')})")
+
+    be = macro.get("breakeven", {})
+    lines.append(f"Breakeven Inflation 10Y: {be.get('current', 'N/A')}% (change: {be.get('change', 'N/A')}, date: {be.get('date', 'N/A')})")
+
+    cpi = macro.get("cpi", {})
+    lines.append(f"CPI (All Urban): {cpi.get('current', 'N/A')} (change: {cpi.get('change', 'N/A')}, date: {cpi.get('date', 'N/A')})")
+
     lines.append("</macro_data>")
 
     # Echo alerts
@@ -352,6 +400,13 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
             "change_pct": source.get(change_key, 0),
         }
 
+    gld = macro.get("gld", {})
+    usdcny = macro.get("usdcny", {})
+    ry = macro.get("real_yields", {})
+    ff = macro.get("fed_funds", {})
+    be = macro.get("breakeven", {})
+    cpi = macro.get("cpi", {})
+
     return {
         "dxy": _snap(macro.get("dxy", {})),
         "vix": _snap(macro.get("vix", {})),
@@ -361,6 +416,35 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
         "gold": {
             "price": macro.get("gold", {}).get("current"),
             "change_pct": macro.get("gold", {}).get("change_percent", 0),
+        },
+        "gld": {
+            "value": gld.get("current"),
+            "volume": gld.get("volume"),
+            "change_pct": gld.get("change_percent", 0),
+        },
+        "usdcny": {
+            "value": usdcny.get("current"),
+            "change_pct": usdcny.get("change_percent", 0),
+        },
+        "real_yields": {
+            "value": ry.get("current"),
+            "change": ry.get("change"),
+            "date": ry.get("date"),
+        },
+        "fed_funds": {
+            "value": ff.get("current"),
+            "change": ff.get("change"),
+            "date": ff.get("date"),
+        },
+        "breakeven": {
+            "value": be.get("current"),
+            "change": be.get("change"),
+            "date": be.get("date"),
+        },
+        "cpi": {
+            "value": cpi.get("current"),
+            "change": cpi.get("change"),
+            "date": cpi.get("date"),
         },
     }
 

@@ -1129,6 +1129,162 @@ def get_sp500_data():
 
 
 # ============================================================================
+# PART 4c: FRED API (Real Yields, Fed Funds, Breakeven Inflation, CPI)
+# ============================================================================
+
+FRED_API_KEY = os.environ.get("FRED_API_KEY", getattr(config, "FRED_API_KEY", ""))
+FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+
+def get_fred_series(series_id, limit=2):
+    """
+    Fetch a FRED series. Returns latest + previous observation.
+    Graceful fallback if key missing or API fails.
+    """
+    if not FRED_API_KEY:
+        return {"current": None, "previous": None, "change": None, "date": None, "error": "FRED_API_KEY not set"}
+
+    try:
+        params = {
+            "series_id": series_id,
+            "api_key": FRED_API_KEY,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": limit,
+        }
+        resp = requests.get(FRED_BASE, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        obs = data.get("observations", [])
+        if not obs:
+            return {"current": None, "previous": None, "change": None, "date": None, "error": f"No observations for {series_id}"}
+
+        # FRED returns "." for missing values
+        current_raw = obs[0].get("value", ".")
+        current = float(current_raw) if current_raw != "." else None
+
+        previous = None
+        if len(obs) >= 2:
+            prev_raw = obs[1].get("value", ".")
+            previous = float(prev_raw) if prev_raw != "." else None
+
+        change = None
+        if current is not None and previous is not None:
+            change = round(current - previous, 4)
+
+        return {
+            "current": current,
+            "previous": previous,
+            "change": change,
+            "date": obs[0].get("date"),
+        }
+    except Exception as e:
+        log.warning(f"FRED {series_id}: error — {e}")
+        return {"current": None, "previous": None, "change": None, "date": None, "error": str(e)}
+
+
+def get_real_yields():
+    """10-Year Real Yield (TIPS) — FRED series DFII10."""
+    result = get_fred_series("DFII10")
+    return {
+        "current": result.get("current"),
+        "change": result.get("change"),
+        "date": result.get("date"),
+        "error": result.get("error"),
+    }
+
+
+def get_fed_funds_rate():
+    """Effective Federal Funds Rate — FRED series FEDFUNDS."""
+    result = get_fred_series("FEDFUNDS")
+    return {
+        "current": result.get("current"),
+        "change": result.get("change"),
+        "date": result.get("date"),
+        "error": result.get("error"),
+    }
+
+
+def get_breakeven_inflation():
+    """10-Year Breakeven Inflation Rate — FRED series T10YIE."""
+    result = get_fred_series("T10YIE")
+    return {
+        "current": result.get("current"),
+        "change": result.get("change"),
+        "date": result.get("date"),
+        "error": result.get("error"),
+    }
+
+
+def get_cpi_data():
+    """Consumer Price Index (All Urban) — FRED series CPIAUCSL."""
+    result = get_fred_series("CPIAUCSL")
+    return {
+        "current": result.get("current"),
+        "change": result.get("change"),
+        "date": result.get("date"),
+        "error": result.get("error"),
+    }
+
+
+# ============================================================================
+# PART 4d: YAHOO FINANCE EXTRAS (GLD ETF, USD/CNY)
+# ============================================================================
+
+def get_gld_data():
+    """
+    GLD ETF — gold proxy with real volume data.
+    Returns: price, volume, change_24h_pct.
+    """
+    try:
+        ticker = yf.Ticker("GLD")
+        hist = ticker.history(period="5d")
+
+        if hist.empty or len(hist) < 2:
+            return {"current": None, "volume": None, "change_percent": 0, "error": "GLD data unavailable"}
+
+        current = float(hist["Close"].iloc[-1])
+        previous = float(hist["Close"].iloc[-2])
+        volume = int(hist["Volume"].iloc[-1])
+        change = ((current - previous) / previous) * 100
+
+        return {
+            "current": round(current, 2),
+            "volume": volume,
+            "change_percent": round(change, 2),
+        }
+    except Exception as e:
+        log.warning(f"GLD: error — {e}")
+        return {"current": None, "volume": None, "change_percent": 0, "error": str(e)}
+
+
+def get_usdcny_data():
+    """
+    USD/CNY exchange rate — yuan weakness signals capital flight → gold demand.
+    Returns: value, change_24h_pct.
+    """
+    try:
+        ticker = yf.Ticker("CNY=X")
+        hist = ticker.history(period="5d")
+
+        if hist.empty or len(hist) < 2:
+            return {"current": None, "change_percent": 0, "error": "USD/CNY data unavailable"}
+
+        current = float(hist["Close"].iloc[-1])
+        previous = float(hist["Close"].iloc[-2])
+        change = ((current - previous) / previous) * 100
+
+        return {
+            "current": round(current, 4),
+            "change_percent": round(change, 2),
+        }
+    except Exception as e:
+        log.warning(f"USD/CNY: error — {e}")
+        return {"current": None, "change_percent": 0, "error": str(e)}
+
+
+# ============================================================================
 # PART 5: COMBINE ALL
 # ============================================================================
 
@@ -1197,6 +1353,14 @@ def calculate_news_score_hybrid():
     # 5. Oil + S&P 500 (for Luna, not weighted into news score)
     oil_data = get_oil_data()
     sp500_data = get_sp500_data()
+
+    # 6. Extended macro feeds (for Luna + dashboards, not weighted into news score)
+    gld_data = get_gld_data()
+    usdcny_data = get_usdcny_data()
+    real_yields_data = get_real_yields()
+    fed_funds_data = get_fed_funds_rate()
+    breakeven_data = get_breakeven_inflation()
+    cpi_data_result = get_cpi_data()
 
     # Calculate weighted final score
     final_score = (
@@ -1270,6 +1434,35 @@ def calculate_news_score_hybrid():
             "sp500": {
                 "current": sp500_data.get("current"),
                 "change_percent": sp500_data.get("change_percent"),
+            },
+            "gld": {
+                "current": gld_data.get("current"),
+                "volume": gld_data.get("volume"),
+                "change_percent": gld_data.get("change_percent"),
+            },
+            "usdcny": {
+                "current": usdcny_data.get("current"),
+                "change_percent": usdcny_data.get("change_percent"),
+            },
+            "real_yields": {
+                "current": real_yields_data.get("current"),
+                "change": real_yields_data.get("change"),
+                "date": real_yields_data.get("date"),
+            },
+            "fed_funds": {
+                "current": fed_funds_data.get("current"),
+                "change": fed_funds_data.get("change"),
+                "date": fed_funds_data.get("date"),
+            },
+            "breakeven": {
+                "current": breakeven_data.get("current"),
+                "change": breakeven_data.get("change"),
+                "date": breakeven_data.get("date"),
+            },
+            "cpi": {
+                "current": cpi_data_result.get("current"),
+                "change": cpi_data_result.get("change"),
+                "date": cpi_data_result.get("date"),
             },
         },
         "anomalies": anomalies,

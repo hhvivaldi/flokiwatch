@@ -4740,6 +4740,10 @@ class TradingBot:
             oil_comp = components.get("oil", {})
             sp500_comp = components.get("sp500", {})
 
+            gld_comp = components.get("gld", {})
+            real_yields_comp = components.get("real_yields", {})
+            usdcny_comp = components.get("usdcny", {})
+
             macro = {
                 "dxy": {
                     "value": dxy_comp.get("current"),
@@ -4764,6 +4768,18 @@ class TradingBot:
                 "sp500": {
                     "value": sp500_comp.get("current"),
                     "change_pct": sp500_comp.get("change_percent"),
+                },
+                "gld": {
+                    "value": gld_comp.get("volume"),
+                    "change_pct": gld_comp.get("change_percent"),
+                },
+                "real_yields": {
+                    "value": real_yields_comp.get("current"),
+                    "change_pct": real_yields_comp.get("change"),
+                },
+                "usdcny": {
+                    "value": usdcny_comp.get("current"),
+                    "change_pct": usdcny_comp.get("change_percent"),
                 },
             }
 

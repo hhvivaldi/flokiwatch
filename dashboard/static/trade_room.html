@@ -996,7 +996,7 @@
             <div class="bc-card" id="luna-card" style="border-color:#E040FB">
               <button type="button" class="bc-btn" data-expand-target="luna-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-luna" style="border-color:#E040FB;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#E040FB">L</div>
+                  <div class="bc-avatar" id="avatar-luna" style="border-color:#E040FB"><img src="/image/luna-video-trade-room.gif" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div>
                   <div class="bc-identity">
                     <span class="bc-name" style="color:#E040FB">LUNA</span>
                     <span class="bc-role">Macro Analyst</span>
@@ -1108,6 +1108,9 @@
           <div class="ctx-row"><span class="ctx-key">10Y</span><span id="ctx-10y" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">Oil WTI</span><span id="ctx-oil" class="ctx-val">—</span></div>
           <div class="ctx-row"><span class="ctx-key">S&P 500</span><span id="ctx-sp500" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">GLD Vol</span><span id="ctx-gld" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">Real Yields</span><span id="ctx-real-yields" class="ctx-val">—</span></div>
+          <div class="ctx-row"><span class="ctx-key">USD/CNY</span><span id="ctx-usdcny" class="ctx-val">—</span></div>
         </div>
 
         <!-- Floki last investigation -->
@@ -1539,6 +1542,23 @@
             _snapRow('Oil', ds.oil, '$', '');
             _snapRow('S&P', ds.sp500, '', '');
             _snapRow('Gold', ds.gold, '$', '');
+            if (ds.gld && ds.gld.volume != null) {
+              rows.push('<span style="color:#6b7280">GLD Vol</span> <span style="color:#e2e8f0">' + Number(ds.gld.volume).toLocaleString() + '</span>' + (ds.gld.change_pct != null ? ' <span style="color:' + (ds.gld.change_pct > 0 ? '#4ade80' : (ds.gld.change_pct < 0 ? '#f87171' : '#6b7280')) + '">' + (ds.gld.change_pct > 0 ? '+' : '') + Number(ds.gld.change_pct).toFixed(2) + '%</span>' : ''));
+            }
+            _snapRow('USD/CNY', ds.usdcny, '', '');
+            if (ds.real_yields && ds.real_yields.value != null) {
+              var ryChg = ds.real_yields.change;
+              rows.push('<span style="color:#6b7280">Real Yld</span> <span style="color:#e2e8f0">' + Number(ds.real_yields.value).toFixed(2) + '%</span>' + (ryChg != null ? ' <span style="color:' + (ryChg > 0 ? '#f87171' : (ryChg < 0 ? '#4ade80' : '#6b7280')) + '">' + (ryChg > 0 ? '+' : '') + Number(ryChg).toFixed(3) + '</span>' : ''));
+            }
+            if (ds.fed_funds && ds.fed_funds.value != null) {
+              rows.push('<span style="color:#6b7280">Fed Rate</span> <span style="color:#e2e8f0">' + Number(ds.fed_funds.value).toFixed(2) + '%</span>');
+            }
+            if (ds.breakeven && ds.breakeven.value != null) {
+              rows.push('<span style="color:#6b7280">BkEven</span> <span style="color:#e2e8f0">' + Number(ds.breakeven.value).toFixed(2) + '%</span>');
+            }
+            if (ds.cpi && ds.cpi.value != null) {
+              rows.push('<span style="color:#6b7280">CPI</span> <span style="color:#e2e8f0">' + Number(ds.cpi.value).toFixed(1) + '</span>');
+            }
             if (rows.length > 0) {
               snapEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;line-height:1.6">' + rows.join('') + '</div>';
             }
@@ -1726,7 +1746,7 @@
             else if (isSimba) avatarImg = '/image/simba-trade-room.png';
             else if (isSage) avatarImg = '/image/sage-trade-room.png';
             else if (isEcho) avatarImg = '/image/echo-trade-room.png';
-            // Luna: letter avatar (no image yet)
+            else if (isLuna) avatarImg = '/image/luna-trade-room.png';
 
             var content = (m.content || '').toString();
             // Hide internal technical metadata in Trade Room display (still preserved in backend/tool trace)
@@ -2807,6 +2827,21 @@
 
                 var sp500El = document.getElementById('ctx-sp500');
                 if (sp500El) sp500El.textContent = (sp500Val != null && isFinite(sp500Val)) ? sp500Val.toFixed(0) : '—';
+
+                var gld = macro.gld || {};
+                var gldVal = (gld.value != null) ? Number(gld.value) : null;
+                var gldEl = document.getElementById('ctx-gld');
+                if (gldEl) gldEl.textContent = (gldVal != null && isFinite(gldVal)) ? Number(gldVal).toLocaleString() : '—';
+
+                var ry = macro.real_yields || {};
+                var ryVal = (ry.value != null) ? Number(ry.value) : null;
+                var ryEl = document.getElementById('ctx-real-yields');
+                if (ryEl) ryEl.textContent = (ryVal != null && isFinite(ryVal)) ? ryVal.toFixed(2) + '%' : '—';
+
+                var usdcny = macro.usdcny || {};
+                var cnyVal = (usdcny.value != null) ? Number(usdcny.value) : null;
+                var cnyEl = document.getElementById('ctx-usdcny');
+                if (cnyEl) cnyEl.textContent = (cnyVal != null && isFinite(cnyVal)) ? cnyVal.toFixed(4) : '—';
               } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
