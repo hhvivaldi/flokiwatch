@@ -395,7 +395,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                 tool_trace = []
             tools_used = _extract_tools_used(tool_trace)
 
-            reasoning = _as_clean_text(a.get("agent_reasoning"), max_len=3000).strip()
+            reasoning = _as_clean_text(a.get("agent_reasoning"), max_len=6000).strip()
             factors = _safe_json_loads(a.get("agent_key_factors"), default=[])
             concerns = _safe_json_loads(a.get("agent_concerns"), default=[])
 
@@ -419,7 +419,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                         "timestamp": ts,
                         "author": "FLOKI",
                         "type": "ANALYSIS",
-                        "content": analysis_content[:4000],
+                        "content": analysis_content[:6000],
                         "metadata": {
                             "decision": decision,
                             "confidence": confidence,
@@ -442,7 +442,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                     inp = (entry or {}).get("input") or {}
                     res = (entry or {}).get("result") or {}
 
-                    my_reasoning = _as_clean_text(inp.get("my_reasoning"), max_len=3000).strip()
+                    my_reasoning = _as_clean_text(inp.get("my_reasoning"), max_len=6000).strip()
                     my_dir = _as_clean_text(inp.get("my_direction"), max_len=50).strip()
                     my_conf = inp.get("my_confidence")
                     key_data = _as_clean_text(inp.get("key_data"), max_len=1200).strip()
@@ -454,7 +454,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                         floki_debate = (floki_debate + "\n\nKEY DATA:\n" + key_data).strip()
 
                     rex_agree = res.get("agree")
-                    rex_reasoning = _as_clean_text(res.get("reasoning"), max_len=3000).strip()
+                    rex_reasoning = _as_clean_text(res.get("reasoning"), max_len=6000).strip()
                     rex_concerns = res.get("concerns") or []
                     if not isinstance(rex_concerns, list):
                         rex_concerns = []
@@ -473,7 +473,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                             "timestamp": ts,
                             "author": "FLOKI",
                             "type": "DEBATE",
-                            "content": floki_debate[:4000],
+                            "content": floki_debate[:6000],
                             "metadata": {
                                 "decision": decision,
                                 "confidence": my_conf,
@@ -489,7 +489,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                             "timestamp": ts,
                             "author": "REX",
                             "type": "DEBATE",
-                            "content": rex_content[:4000],
+                            "content": rex_content[:6000],
                             "metadata": {
                                 "rex_agrees": rex_agree,
                                 "concerns": rex_concerns,
