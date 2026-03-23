@@ -471,31 +471,39 @@ class TradingBot:
                 ).fetchall()
                 conn.close()
                 
-                # Historical orphans → SQLite only
-                orphan_count = 0
-                for deal in historical_deals:
+                # ============================================================
+                # FLO-97: Backfill today's AND historical deals missing from SQLite
+                # Catches trades where ticket=0 was returned at execution time
+                # ============================================================
+                backfill_count = 0
+                for deal in today_deals:
                     pos_id = deal['position_id']
-                    comment = deal.get('comment', '')
-                    if not comment.startswith('Bot-'):
+                    if pos_id <= 0 or pos_id in all_sqlite_tickets:
                         continue
-                    if pos_id in all_sqlite_tickets:
-                        continue
-                    orphan_count += 1
-                    log.info(
-                        f"  Historical #{pos_id}: {deal['direction']} | "
-                        f"open={deal.get('open_price', '?')} → close={deal['close_price']:.2f} | "
-                        f"P&L=${deal['profit']:+.2f} | {deal['reason']} | "
-                        f"{deal['close_time'].strftime('%m-%d %H:%M')} → SQLite"
-                    )
-                    from db_writer import record_trade_open
+
+                    # Derive decision_source from comment
+                    deal_comment = deal.get('comment', '') or ''
+                    if deal_comment.startswith('Brain-') or deal_comment.startswith('Bot-') or deal_comment.startswith('Agent-'):
+                        dec_source = 'agent_gemini'
+                    else:
+                        dec_source = None
+
+                    # Open price from entry deal; warn if missing
+                    open_px = deal.get('open_price')
+                    recon_comment = f"reconciled:{deal_comment}"
+                    if open_px is None:
+                        open_px = deal['close_price']
+                        recon_comment = f"reconciled(estimated):{deal_comment}"
+                        log.warning(f"RECONCILIATION | #{pos_id}: open_price unavailable, using close_price as estimate")
+
                     record_trade_open(
                         ticket=pos_id, direction=deal['direction'],
                         volume=deal['volume'],
-                        open_price=deal.get('open_price') or deal['close_price'],
+                        open_price=open_px,
                         sl=0, tp=0,
                         open_time=deal['close_time'].isoformat(),
-                        comment=deal.get('comment', 'recovered'),
-                        decision_source=None,
+                        comment=recon_comment,
+                        decision_source=dec_source,
                     )
                     record_trade_close(
                         ticket=pos_id, close_price=deal['close_price'],
@@ -503,10 +511,70 @@ class TradingBot:
                         close_time=deal['close_time'].isoformat(),
                     )
                     all_sqlite_tickets.add(pos_id)
-                
-                if orphan_count:
-                    log.info(f"  → {orphan_count} historical orphan trades registered in SQLite")
-                
+                    backfill_count += 1
+                    log.info(
+                        f"RECONCILIATION | Backfilled #{pos_id}: {deal['direction']} | "
+                        f"open={open_px} → close={deal['close_price']:.2f} | "
+                        f"P&L=${deal['profit']:+.2f} | {deal['reason']} | source=MT5 deal history"
+                    )
+                    try:
+                        alert_error(
+                            "Trade Backfill",
+                            f"Trade #{pos_id} ({deal['direction']}) was missing from DB — backfilled from MT5. P&L=${deal['profit']:+.2f}",
+                            impact="Trade now visible to Sage, reflection engine, and performance tracking",
+                            severity="warning",
+                        )
+                    except Exception:
+                        pass
+
+                # Also backfill historical deals not limited to Bot- comments
+                for deal in historical_deals:
+                    pos_id = deal['position_id']
+                    if pos_id <= 0 or pos_id in all_sqlite_tickets:
+                        continue
+                    deal_comment = deal.get('comment', '') or ''
+                    if not (deal_comment.startswith('Brain-') or deal_comment.startswith('Bot-') or deal_comment.startswith('Agent-')):
+                        continue
+
+                    dec_source = 'agent_gemini'
+                    open_px = deal.get('open_price')
+                    recon_comment = f"reconciled:{deal_comment}"
+                    if open_px is None:
+                        open_px = deal['close_price']
+                        recon_comment = f"reconciled(estimated):{deal_comment}"
+
+                    record_trade_open(
+                        ticket=pos_id, direction=deal['direction'],
+                        volume=deal['volume'],
+                        open_price=open_px,
+                        sl=0, tp=0,
+                        open_time=deal['close_time'].isoformat(),
+                        comment=recon_comment,
+                        decision_source=dec_source,
+                    )
+                    record_trade_close(
+                        ticket=pos_id, close_price=deal['close_price'],
+                        profit=deal['profit'], close_reason=deal['reason'],
+                        close_time=deal['close_time'].isoformat(),
+                    )
+                    all_sqlite_tickets.add(pos_id)
+                    backfill_count += 1
+                    log.info(
+                        f"RECONCILIATION | Backfilled historical #{pos_id}: {deal['direction']} | "
+                        f"P&L=${deal['profit']:+.2f} | {deal['reason']} | {deal['close_time'].strftime('%m-%d %H:%M')}"
+                    )
+
+                if backfill_count:
+                    log.info(f"RECONCILIATION | {backfill_count} trades backfilled from MT5 deal history")
+                    try:
+                        alert_error(
+                            "Reconciliation Summary",
+                            f"{backfill_count} trade(s) were missing from history.db and have been backfilled from MT5 deal history",
+                            severity="warning",
+                        )
+                    except Exception:
+                        pass
+
                 # ============================================================
                 # PASS 3: Fix trades in SQLite without correct close
                 # ============================================================
