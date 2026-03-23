@@ -672,29 +672,32 @@ def _offline_state(reason: str, file_age_seconds: float) -> Dict[str, Any]:
     }
 
 
+_NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+
 @app.get("/")
 def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"), headers=_NO_CACHE)
 
 
 @app.get("/about")
 def about():
-    return FileResponse(str(STATIC_DIR / "about.html"))
+    return FileResponse(str(STATIC_DIR / "about.html"), headers=_NO_CACHE)
 
 
 @app.get("/roadmap")
 def roadmap():
-    return FileResponse(str(STATIC_DIR / "roadmap.html"))
+    return FileResponse(str(STATIC_DIR / "roadmap.html"), headers=_NO_CACHE)
 
 
 @app.get("/history")
 def history():
-    return FileResponse(str(STATIC_DIR / "history.html"))
+    return FileResponse(str(STATIC_DIR / "history.html"), headers=_NO_CACHE)
 
 
 @app.get("/trade-room")
 def trade_room():
-    return FileResponse(str(STATIC_DIR / "trade_room.html"))
+    return FileResponse(str(STATIC_DIR / "trade_room.html"), headers=_NO_CACHE)
 
 
 @app.get("/api/health")
