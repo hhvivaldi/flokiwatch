@@ -513,7 +513,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                         "timestamp": ts,
                         "author": "FLOKI",
                         "type": "DECISION",
-                        "content": decision_content[:1000],
+                        "content": decision_content[:2500],
                         "metadata": {
                             "decision": decision,
                             "confidence": confidence,
@@ -551,7 +551,7 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                     "timestamp": close_time,
                     "author": "FLOKI",
                     "type": "TRADE_RESULT",
-                    "content": content[:1000],
+                    "content": content[:2000],
                     "metadata": {
                         "ticket": ticket,
                         "direction": direction,
