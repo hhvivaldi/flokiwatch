@@ -388,6 +388,26 @@ safety = SafetyChecker()
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 
+def is_bot_paused() -> bool:
+    """FLO-92: Check if bot is paused (consecutive losses or daily loss limit).
+    Used to kill all agent cycles when paused — zero API spend."""
+    safety.reset_daily_stats()
+    if safety.pause_until and datetime.now() < safety.pause_until:
+        return True
+    if safety.daily_loss > 0:
+        try:
+            from mt5_interface import get_account_info
+            info = get_account_info()
+            balance = info.get("balance", 0) if isinstance(info, dict) else 0
+        except Exception:
+            balance = 0
+        if balance > 0:
+            daily_loss_pct = (safety.daily_loss / balance) * 100
+            if daily_loss_pct >= config.MAX_DAILY_LOSS:
+                return True
+    return False
+
+
 def is_safe_to_trade(
     account_balance: float,
     open_positions: int,

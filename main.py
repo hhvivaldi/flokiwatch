@@ -39,7 +39,7 @@ from confluence import analyze_confluence
 from confluence import is_actionable_signal as confluence_is_actionable
 from confluence import get_trade_direction as confluence_get_direction
 from risk_manager import calculate_position_size, calculate_sl_tp
-from safety_checks import is_safe_to_trade, record_trade_result, record_trade_opened, record_close_type, get_safety_status, is_market_open
+from safety_checks import is_safe_to_trade, record_trade_result, record_trade_opened, record_close_type, get_safety_status, is_market_open, is_bot_paused
 from executor import (
     connect_mt5, disconnect_mt5, is_mt5_connected,
     get_account_balance, execute_buy, execute_sell, get_positions, close_position, executor,
@@ -292,6 +292,14 @@ class TradingBot:
             log.debug(f"Failed to load persisted dashboard state: {e}")
 
     def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
+        # FLO-92: When paused, kill ALL agent cycles — zero API spend
+        try:
+            if is_bot_paused():
+                log.info(f"FLOKI_SCHEDULE | Cycle skipped — bot is paused | trigger={trigger_type}")
+                return {"success": False, "reason": "bot_paused"}
+        except Exception:
+            pass
+
         acquired = False
         try:
             try:
@@ -1073,9 +1081,10 @@ class TradingBot:
                     log.debug(f"SAGE | schedule check error (ignored): {e}")
 
                 # Echo News Sentinel (non-blocking, every ECHO_SCAN_INTERVAL_SECONDS)
+                # FLO-92: Skip Echo scans when bot is paused
                 try:
                     echo_enabled = bool(getattr(config, "ECHO_ENABLED", False))
-                    if echo_enabled:
+                    if echo_enabled and not is_bot_paused():
                         echo_interval = int(getattr(config, "ECHO_SCAN_INTERVAL_SECONDS", 300))
                         now_ts = time.time()
                         last_echo = getattr(self, "_echo_last_scan_ts", 0) or 0
@@ -1104,9 +1113,10 @@ class TradingBot:
                     log.debug(f"ECHO | schedule check error (ignored): {e}")
 
                 # Luna Macro Analyst (non-blocking, every LUNA_SCAN_INTERVAL_SECONDS)
+                # FLO-92: Skip Luna scans when bot is paused
                 try:
                     luna_enabled = bool(getattr(config, "LUNA_ENABLED", False))
-                    if luna_enabled:
+                    if luna_enabled and not is_bot_paused():
                         _luna_market_open, _luna_reason, _luna_next_open = is_market_open()
                         _luna_is_weekend = (not _luna_market_open
                                             and 'weekend' in (_luna_reason or '').lower())
@@ -1226,7 +1236,8 @@ class TradingBot:
                         try:
                             now_ts = time.time()
                             last_ts = self._last_agent_monitor_tick or 0
-                            if (now_ts - last_ts) >= 30:
+                            # FLO-92: Skip Simba monitor ticks when bot is paused
+                            if (now_ts - last_ts) >= 30 and not is_bot_paused():
                                 if self._agent_monitor is None:
                                     from agent_monitor import AgentMonitor
                                     self._agent_monitor = AgentMonitor(bot=self)
