@@ -650,6 +650,11 @@
       .priority-medium { color: #fde68a; }
       .priority-low { color: #cbd5e1; }
 
+      /* Card summary scrollbars */
+      #floki-summary::-webkit-scrollbar, #rex-last-debate::-webkit-scrollbar, #simba-watch-conditions::-webkit-scrollbar { width: 3px; }
+      #floki-summary::-webkit-scrollbar-track, #rex-last-debate::-webkit-scrollbar-track, #simba-watch-conditions::-webkit-scrollbar-track { background: transparent; }
+      #floki-summary::-webkit-scrollbar-thumb, #rex-last-debate::-webkit-scrollbar-thumb, #simba-watch-conditions::-webkit-scrollbar-thumb { background: rgba(138,138,154,0.3); border-radius: 2px; }
+
       /* Terminal Focus Glows */
       .focus-glow-emerald {
         position: relative;
@@ -828,7 +833,7 @@
                 </div>
               </button>
               <div id="floki-expand" class="agent-expand">
-                <div id="floki-summary" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;line-clamp:5;-webkit-box-orient:vertical">—</div>
+                <div id="floki-summary" style="max-height:80px;overflow-y:auto">—</div>
                 <span id="floki-thesis-tag" style="display:none"></span>
                 <div id="floki-session-notes" style="display:none"></div>
               </div>
@@ -860,7 +865,7 @@
               </button>
               <div id="rex-expand" class="agent-expand">
                 <div id="rex-debate-summary" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:4px"></div>
-                <div id="rex-last-debate" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;line-clamp:5;-webkit-box-orient:vertical;font-size:10px;color:#9ca3af">No debate yet.</div>
+                <div id="rex-last-debate" style="max-height:80px;overflow-y:auto;font-size:10px;color:#9ca3af">No debate yet.</div>
               </div>
             </div>
 
@@ -890,7 +895,7 @@
                 </div>
               </button>
               <div id="simba-expand" class="agent-expand">
-                <div id="simba-watch-conditions" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;line-clamp:5;-webkit-box-orient:vertical">No active conditions.</div>
+                <div id="simba-watch-conditions" style="max-height:80px;overflow-y:auto">No active conditions.</div>
                 <div id="simba-patrol-report" style="display:none"></div>
               </div>
             </div>
