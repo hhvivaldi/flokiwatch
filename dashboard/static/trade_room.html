@@ -1758,18 +1758,27 @@
           }
 
           // Populate right panel correlation values (FLO-75)
-          if (b.correlations && b.correlations.status === 'ok') {
+          if (b.correlations) {
             var corrMap = {gold_dxy: 'ctx-corr-dxy', gold_yields: 'ctx-corr-yields', gold_sp500: 'ctx-corr-sp500'};
             var cmKeys = Object.keys(corrMap);
-            for (var cmi = 0; cmi < cmKeys.length; cmi++) {
-              var cmk = cmKeys[cmi];
-              var cel = document.getElementById(corrMap[cmk]);
-              if (!cel) continue;
-              var cd = b.correlations[cmk];
-              if (!cd || cd.value == null) { cel.textContent = '—'; continue; }
-              var cIcon = cd.status === 'NORMAL' ? ' \u2713' : (cd.status === 'BROKEN' ? ' \u26A0' : ' ~');
-              cel.textContent = (cd.value > 0 ? '+' : '') + cd.value.toFixed(2) + cIcon;
-              cel.style.color = cd.status === 'NORMAL' ? '#4ade80' : (cd.status === 'BROKEN' ? '#f87171' : '#fbbf24');
+            if (b.correlations.status === 'ok') {
+              for (var cmi = 0; cmi < cmKeys.length; cmi++) {
+                var cmk = cmKeys[cmi];
+                var cel = document.getElementById(corrMap[cmk]);
+                if (!cel) continue;
+                var cd = b.correlations[cmk];
+                if (!cd || cd.value == null) { cel.textContent = '—'; continue; }
+                var cIcon = cd.status === 'NORMAL' ? ' \u2713' : (cd.status === 'BROKEN' ? ' \u26A0' : ' ~');
+                cel.textContent = (cd.value > 0 ? '+' : '') + cd.value.toFixed(2) + cIcon;
+                cel.style.color = cd.status === 'NORMAL' ? '#4ade80' : (cd.status === 'BROKEN' ? '#f87171' : '#fbbf24');
+              }
+            } else if (b.correlations.status === 'insufficient_data') {
+              var days = b.correlations.days || 0;
+              var minReq = b.correlations.min_required || 3;
+              for (var cmi = 0; cmi < cmKeys.length; cmi++) {
+                var cel = document.getElementById(corrMap[cmKeys[cmi]]);
+                if (cel) { cel.textContent = days + '/' + minReq + 'd'; cel.style.color = '#6b7280'; }
+              }
             }
           }
         }
@@ -1988,9 +1997,16 @@
                   var kfIdx = reasoning.indexOf('KEY FACTORS:');
                   if (kdIdx >= 0) reasoning = reasoning.slice(0, kdIdx).trim();
                   if (kfIdx >= 0) reasoning = reasoning.slice(0, kfIdx).trim();
-                  // Split reasoning into ~2-3 sentences
+                  // Split reasoning into sentences — show 4 with expand for rest
                   var sentences = reasoning.split(/\.(?=\s+[A-Z])/).map(function(s,i,a){return s.trim()+(i<a.length-1?'.':'');}).filter(Boolean);
-                  var lines = sentences.slice(0, 4).map(function(s) { return esc(s.trim()); }).join('<br>');
+                  var shortLines = sentences.slice(0, 4).map(function(s) { return esc(s.trim()); }).join('<br>');
+                  var lines = shortLines;
+                  if (sentences.length > 4) {
+                    var fullLines = sentences.map(function(s) { return esc(s.trim()); }).join('<br>');
+                    var eid = 'expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+                    lines = '<span id="' + eid + '-short">' + shortLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-short\').style.display=\'none\';document.getElementById(\'' + eid + '-full\').style.display=\'inline\';return false">Show more</a></span>' +
+                            '<span id="' + eid + '-full" style="display:none">' + fullLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-full\').style.display=\'none\';document.getElementById(\'' + eid + '-short\').style.display=\'inline\';return false">Show less</a></span>';
+                  }
                   // Decision badge color
                   var dColor = '#f59e0b'; // amber default (WAIT)
                   if (dec === 'OPEN_BUY') dColor = '#4ade80';
@@ -2013,7 +2029,14 @@
                 var kdIdx = reasoning.indexOf('KEY DATA:');
                 if (kdIdx >= 0) reasoning = reasoning.slice(0, kdIdx).trim();
                 var sentences = reasoning.split(/\.(?=\s+[A-Z])/).map(function(s,i,a){return s.trim()+(i<a.length-1?'.':'');}).filter(Boolean);
-                var lines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                var shortLines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                var lines = shortLines;
+                if (sentences.length > 3) {
+                  var fullLines = sentences.map(function(s) { return esc(s.trim()); }).join('<br>');
+                  var eid = 'expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+                  lines = '<span id="' + eid + '-short">' + shortLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-short\').style.display=\'none\';document.getElementById(\'' + eid + '-full\').style.display=\'inline\';return false">Show more</a></span>' +
+                          '<span id="' + eid + '-full" style="display:none">' + fullLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-full\').style.display=\'none\';document.getElementById(\'' + eid + '-short\').style.display=\'inline\';return false">Show less</a></span>';
+                }
                 var stance = debMatch ? debMatch[1].toUpperCase() : '';
                 var stanceHtml = stance ? '<span style="color:#AAFF00;font-size:9px;font-weight:800;letter-spacing:0.1em;opacity:0.7">' + stance + '</span> ' : '';
                 structuredContent =
@@ -2031,7 +2054,14 @@
                 var dvBadge = meta.data_verified ? ' <span style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);padding:1px 5px;border-radius:3px;font-size:8px;letter-spacing:0.05em">\uD83D\uDCCA VERIFIED</span>' : '';
                 var raw = (m.content || '').toString();
                 var sentences = raw.split(/\.(?=\s+[A-Z])/).map(function(s,i,a){return s.trim()+(i<a.length-1?'.':'');}).filter(Boolean);
-                var lines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                var shortLines = sentences.slice(0, 3).map(function(s) { return esc(s.trim()); }).join('<br>');
+                var lines = shortLines;
+                if (sentences.length > 3) {
+                  var fullLines = sentences.map(function(s) { return esc(s.trim()); }).join('<br>');
+                  var eid = 'expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+                  lines = '<span id="' + eid + '-short">' + shortLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-short\').style.display=\'none\';document.getElementById(\'' + eid + '-full\').style.display=\'inline\';return false">Show more</a></span>' +
+                          '<span id="' + eid + '-full" style="display:none">' + fullLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-full\').style.display=\'none\';document.getElementById(\'' + eid + '-short\').style.display=\'inline\';return false">Show less</a></span>';
+                }
                 structuredContent =
                   '<div style="margin-bottom:5px">' + badge + dvBadge + '</div>' +
                   '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
