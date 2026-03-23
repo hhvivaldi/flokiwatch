@@ -3567,32 +3567,62 @@ class TradingBot:
                             f"PROACTIVE_H1 | Agent OPEN executed via tool | {exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
                     else:
-                        # Safety net: Floki decided OPEN but didn't call execute_trade
+                        # FLO-81: Natural decision flow — ask Floki to confirm
                         log.warning(
-                            f"FLOKI | CRITICAL: {agent_result.decision} intent without execute_trade call — forcing execution | "
+                            f"FLOKI | Indecision detected: {agent_result.decision} without execute_trade | "
                             f"{exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
                         try:
-                            from agent_tools import AgentTools
-                            _tools = getattr(self, "_agent_tools", None)
-                            if _tools is None:
-                                _tools = AgentTools(self)
-                            _exec_result = _tools.execute_trade(
-                                direction=exec_direction,
-                                sl=float(stop_loss),
-                                tp=float(take_profit),
-                                agent_confidence=float(agent_result.confidence or 0),
+                            _agent = get_agent()
+                            # STEP 1: Give 3 options
+                            _followup_msg = (
+                                f"You decided {agent_result.decision} but did not call execute_trade. You haven't committed yet.\n"
+                                f"Choose ONE:\n"
+                                f"A) Call execute_trade now (direction={exec_direction}, sl={stop_loss}, tp={take_profit})\n"
+                                f"B) Call debate_with_rex one more time to reconsider\n"
+                                f"C) Do nothing — your decision becomes WAIT\n\n"
+                                f"You must choose. If you don't call execute_trade or debate_with_rex in this turn, your decision becomes WAIT."
                             )
-                            if isinstance(_exec_result, dict) and _exec_result.get("success"):
-                                log.info(
-                                    f"FLOKI | SAFETY NET: Trade executed successfully | ticket={_exec_result.get('ticket')} | "
-                                    f"{exec_direction} @ {_exec_result.get('fill_price')} | SL={stop_loss} TP={take_profit}"
+                            _followup_resp = loop.run_until_complete(
+                                asyncio.wait_for(
+                                    _agent._call_gemini_with_tools(_followup_msg, tools=tools_obj),
+                                    timeout=60,
                                 )
+                            )
+                            _fu_trace = _followup_resp.get("tool_trace", []) if isinstance(_followup_resp, dict) else []
+                            _fu_exec = any(str(t.get("name", "")).lower() == "execute_trade" for t in _fu_trace if isinstance(t, dict))
+                            _fu_debate = any(str(t.get("name", "")).lower() == "debate_with_rex" for t in _fu_trace if isinstance(t, dict))
+
+                            if _fu_exec:
+                                log.info(f"FLOKI | Indecision resolved — executed after confirmation | {exec_direction}")
+                            elif _fu_debate:
+                                # STEP 2: After retry debate, final chance
+                                log.info(f"FLOKI | Indecision — chose to debate again, giving final chance")
+                                _final_msg = (
+                                    f"You've now debated with Rex twice. Final decision — choose ONE:\n"
+                                    f"A) Call execute_trade now (direction={exec_direction}, sl={stop_loss}, tp={take_profit})\n"
+                                    f"B) Do nothing — decision becomes WAIT\n\n"
+                                    f"No more chances after this."
+                                )
+                                _final_resp = loop.run_until_complete(
+                                    asyncio.wait_for(
+                                        _agent._call_gemini_with_tools(_final_msg, tools=tools_obj),
+                                        timeout=60,
+                                    )
+                                )
+                                _fn_trace = _final_resp.get("tool_trace", []) if isinstance(_final_resp, dict) else []
+                                _fn_exec = any(str(t.get("name", "")).lower() == "execute_trade" for t in _fn_trace if isinstance(t, dict))
+                                if _fn_exec:
+                                    log.info(f"FLOKI | Executed after second debate | {exec_direction}")
+                                else:
+                                    log.info(f"FLOKI | Final indecision — defaulting to WAIT")
+                                    agent_result.decision = "WAIT"
                             else:
-                                reason = _exec_result.get("reason", "unknown") if isinstance(_exec_result, dict) else "unknown"
-                                log.warning(f"FLOKI | SAFETY NET: execute_trade failed — {reason}")
-                        except Exception as e_exec:
-                            log.warning(f"FLOKI | SAFETY NET: execute_trade exception — {e_exec}")
+                                log.info(f"FLOKI | Indecision not resolved — defaulting to WAIT")
+                                agent_result.decision = "WAIT"
+                        except Exception as e_fu:
+                            log.warning(f"FLOKI | Indecision follow-up failed — defaulting to WAIT: {e_fu}")
+                            agent_result.decision = "WAIT"
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
                 log.info(
