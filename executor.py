@@ -262,9 +262,41 @@ class MT5Executor:
                     )
 
                     if ok:
+                        # FLO-89: Poll EA status for real ticket instead of returning 0.
+                        # The EA processes signals within seconds; poll up to 10s.
+                        real_ticket = 0
+                        try:
+                            from ea_bridge import read_ea_status
+                            import time as _time
+
+                            # Snapshot positions BEFORE the EA processes the signal
+                            pre_status = read_ea_status(stale_threshold_seconds=120)
+                            pre_tickets = set()
+                            if pre_status and pre_status.positions:
+                                pre_tickets = {p.ticket for p in pre_status.positions}
+
+                            for _poll in range(10):
+                                _time.sleep(1)
+                                post_status = read_ea_status(stale_threshold_seconds=120)
+                                if not post_status:
+                                    continue
+                                # Look for a new position not in the pre-snapshot
+                                for p in post_status.positions:
+                                    if p.ticket not in pre_tickets and p.ticket > 0:
+                                        if p.direction.upper() == direction.upper():
+                                            real_ticket = p.ticket
+                                            log.info(f"EA_BRIDGE | Real ticket resolved: {real_ticket} (poll {_poll + 1}s)")
+                                            break
+                                if real_ticket > 0:
+                                    break
+                            if real_ticket == 0:
+                                log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — returning ticket=0")
+                        except Exception as e_poll:
+                            log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
+
                         return OrderResult(
                             success=True,
-                            ticket=0,
+                            ticket=real_ticket,
                             error_code=None,
                             error_message=None,
                             price=ref_price,
