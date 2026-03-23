@@ -655,6 +655,11 @@
       #floki-summary::-webkit-scrollbar-track, #rex-last-debate::-webkit-scrollbar-track, #simba-watch-conditions::-webkit-scrollbar-track { background: transparent; }
       #floki-summary::-webkit-scrollbar-thumb, #rex-last-debate::-webkit-scrollbar-thumb, #simba-watch-conditions::-webkit-scrollbar-thumb { background: rgba(138,138,154,0.3); border-radius: 2px; }
 
+      /* Floki expand-in-place scrollbars */
+      [id^="floki-expand-"][id$="-full"]::-webkit-scrollbar { width: 3px; }
+      [id^="floki-expand-"][id$="-full"]::-webkit-scrollbar-track { background: transparent; }
+      [id^="floki-expand-"][id$="-full"]::-webkit-scrollbar-thumb { background: rgba(138,138,154,0.3); border-radius: 2px; }
+
       /* Terminal Focus Glows */
       .focus-glow-emerald {
         position: relative;
@@ -1856,6 +1861,37 @@
           var list = buildConflictStrips(latestMessages || []);
           var html = '';
 
+          // FLO-94: Build ANALYSIS lookup by timestamp (10s window) for expand-in-place
+          var analysisMap = {};  // timestamp_key -> full content
+          var analysisLinked = {};  // analysis msg id -> true (hide from feed)
+          for (var ai = 0; ai < list.length; ai++) {
+            var am = list[ai];
+            if ((am.author || '').toUpperCase() === 'FLOKI' && (am.type || '').toUpperCase() === 'ANALYSIS' && am.content) {
+              var aTs = am.timestamp || '';
+              // Store with second-precision key for matching
+              var aKey = aTs.slice(0, 19);  // "2026-03-23T14:52:51"
+              analysisMap[aKey] = am.content;
+              analysisMap['__id__' + aKey] = am.id;
+            }
+          }
+          // Link FLOKI_DECISION to nearest ANALYSIS within 10s window
+          function findAnalysis(decTs) {
+            if (!decTs) return null;
+            var dKey = decTs.slice(0, 19);
+            if (analysisMap[dKey]) return { key: dKey, content: analysisMap[dKey] };
+            // Try +/- 10 seconds
+            try {
+              var dDate = new Date(decTs);
+              if (isNaN(dDate.getTime())) return null;
+              for (var offset = -10; offset <= 10; offset++) {
+                var tryDate = new Date(dDate.getTime() + offset * 1000);
+                var tryKey = tryDate.toISOString().slice(0, 19);
+                if (analysisMap[tryKey]) return { key: tryKey, content: analysisMap[tryKey] };
+              }
+            } catch(e) {}
+            return null;
+          }
+
           if (!list.length) {
             feed.innerHTML = '<div class="text-xs font-mono text-gray-600 p-4">NO MESSAGES IN FEED</div>';
             return;
@@ -1874,6 +1910,9 @@
 
             var author = (m.author || '').toString().toUpperCase();
             var type = (m.type || '').toString().toUpperCase();
+
+            // FLO-94: Hide ANALYSIS messages that are linked to a FLOKI_DECISION (shown via expand)
+            if (author === 'FLOKI' && type === 'ANALYSIS' && m.id && analysisLinked[m.id]) continue;
 
             var isFloki = author === 'FLOKI';
             var isRex = author === 'REX';
@@ -2005,12 +2044,38 @@
                   else if (dec === 'OPEN_SELL') dColor = '#f87171';
                   else if (dec === 'CLOSE_TRADE') dColor = '#c084fc';
                   else if (dec.indexOf('HOLD') >= 0) dColor = '#60a5fa';
+
+                  // FLO-94: Link to matching ANALYSIS for expand-in-place
+                  var linked = findAnalysis(m.timestamp);
+                  var expandHtml = '';
+                  if (linked) {
+                    // Mark the ANALYSIS message for hiding
+                    var linkedId = analysisMap['__id__' + linked.key];
+                    if (linkedId) analysisLinked[linkedId] = true;
+                    var eid = 'floki-expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+                    // Strip KEY FACTORS from full analysis for cleaner display
+                    var fullText = linked.content;
+                    var kfCut = fullText.indexOf('KEY FACTORS:');
+                    if (kfCut >= 0) fullText = fullText.slice(0, kfCut).trim();
+                    var fullHtml = esc(fullText).replace(/\n/g, '<br>');
+                    expandHtml =
+                      '<div id="' + eid + '-toggle" style="margin-top:4px;cursor:pointer;user-select:none" onclick="' +
+                        'var s=document.getElementById(\'' + eid + '-short\'),f=document.getElementById(\'' + eid + '-full\'),t=document.getElementById(\'' + eid + '-lbl\');' +
+                        'if(f.style.display===\'none\'){f.style.display=\'block\';s.style.display=\'none\';t.textContent=\'▾ Hide full analysis\';}' +
+                        'else{f.style.display=\'none\';s.style.display=\'block\';t.textContent=\'▸ Show full analysis\';}return false;">' +
+                        '<span id="' + eid + '-lbl" style="color:#60a5fa;font-size:10px;font-weight:600">▸ Show full analysis</span>' +
+                      '</div>' +
+                      '<div id="' + eid + '-short" style="display:block"></div>' +
+                      '<div id="' + eid + '-full" style="display:none;max-height:200px;overflow-y:auto;font-size:11px;color:#d1d5db;line-height:1.5;margin-top:4px;padding-right:4px">' + fullHtml + '</div>';
+                  }
+
                   structuredContent =
                     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
                       '<span style="background:' + dColor + '22;color:' + dColor + ';border:1px solid ' + dColor + '44;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:900;letter-spacing:0.08em">' + dec.replace('_',' ') + '</span>' +
                       '<span style="color:#AAFF00;font-size:11px;font-weight:700;font-family:monospace">' + conf + '%</span>' +
                     '</div>' +
-                    '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
+                    '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>' +
+                    expandHtml;
                 }
               }
               else if (isFloki && type === 'DEBATE') {
