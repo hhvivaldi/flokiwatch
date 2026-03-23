@@ -1457,6 +1457,7 @@ class AgentTools:
             try:
                 spread_pips = float(price.get("spread") or 0.0)
                 if spread_pips > max_spread:
+                    self._log_tool("execute_trade", start, f"{str(direction).upper()} | REJECTED | spread {spread_pips:.1f} > max {max_spread:.1f}")
                     return {
                         "success": False,
                         "reason": f"spread too high: {spread_pips:.1f} pips > max {max_spread:.1f} pips",
@@ -1499,15 +1500,18 @@ class AgentTools:
 
             sl_pips = self._sl_pips_from_prices(entry_ref, sl_f)
             if sl_pips is None:
+                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | could not compute sl pips")
                 return {"success": False, "reason": "could not compute sl pips"}
 
             if sl_pips < 150 or sl_pips > 800:
+                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | sl out of range ({sl_pips:.1f} pips)")
                 return {"success": False, "reason": f"sl out of range ({sl_pips:.1f} pips)"}
 
             # Safety checks (max positions, daily loss, market open buffers, etc.)
             acct = self._executor.get_account_info() or {}
             balance = self._safe_float(acct.get("balance"))
             if balance is None:
+                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | account balance unavailable")
                 return {"success": False, "reason": "account balance unavailable"}
 
             open_positions_list = []
@@ -1525,6 +1529,7 @@ class AgentTools:
                 open_positions_list=open_positions_list,
             )
             if not is_safe:
+                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | safety: {'; '.join(reasons[:3])}")
                 return {"success": False, "reason": "; ".join(reasons[:3])}
 
             # Risk sizing (max 2% enforced by config via caller; we use configured RISK_PER_TRADE)

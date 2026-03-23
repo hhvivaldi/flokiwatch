@@ -3563,16 +3563,36 @@ class TradingBot:
                 else:
                     exec_direction = "BUY" if agent_result.decision == "OPEN_BUY" else "SELL"
 
-                    # FLO-81: Check if execute_trade was actually called
+                    # FLO-81: Check if execute_trade was called AND succeeded
                     _tool_trace = getattr(agent_result, "tool_trace", None) or []
-                    _exec_called = any(
-                        str(t.get("name", "")).lower() == "execute_trade"
-                        for t in _tool_trace if isinstance(t, dict)
-                    )
+                    _exec_called = False
+                    _exec_succeeded = False
+                    for _t in _tool_trace:
+                        if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
+                            _exec_called = True
+                            _r = _t.get("result")
+                            if isinstance(_r, dict) and _r.get("success"):
+                                _exec_succeeded = True
+                            break
 
-                    if _exec_called:
+                    if _exec_succeeded:
                         log.info(
                             f"PROACTIVE_H1 | Agent OPEN executed via tool | {exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
+                        )
+                    elif _exec_called and not _exec_succeeded:
+                        # execute_trade was called but FAILED (safety check, spread, etc.)
+                        _fail_reason = "unknown"
+                        try:
+                            for _t in _tool_trace:
+                                if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
+                                    _r = _t.get("result", {})
+                                    _fail_reason = _r.get("reason", "unknown") if isinstance(_r, dict) else "unknown"
+                                    break
+                        except Exception:
+                            pass
+                        log.warning(
+                            f"FLOKI | execute_trade called but FAILED: {_fail_reason} | "
+                            f"{exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
                     else:
                         # FLO-81: Natural decision flow — ask Floki to confirm
@@ -3636,16 +3656,34 @@ class TradingBot:
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
 
-                # FLO-81: Check if close_trade was actually called
+                # FLO-81: Check if close_trade was called AND succeeded
                 _tool_trace_c = getattr(agent_result, "tool_trace", None) or []
-                _close_called = any(
-                    str(t.get("name", "")).lower() == "close_trade"
-                    for t in _tool_trace_c if isinstance(t, dict)
-                )
+                _close_called = False
+                _close_succeeded = False
+                for _tc in _tool_trace_c:
+                    if isinstance(_tc, dict) and str(_tc.get("name", "")).lower() == "close_trade":
+                        _close_called = True
+                        _rc = _tc.get("result")
+                        if isinstance(_rc, dict) and _rc.get("success"):
+                            _close_succeeded = True
+                        break
 
-                if _close_called:
+                if _close_succeeded:
                     log.info(
                         f"PROACTIVE_H1 | Agent CLOSE executed via tool | reason={close_reason} | conf={agent_result.confidence}"
+                    )
+                elif _close_called and not _close_succeeded:
+                    _cfail = "unknown"
+                    try:
+                        for _tc in _tool_trace_c:
+                            if isinstance(_tc, dict) and str(_tc.get("name", "")).lower() == "close_trade":
+                                _rc = _tc.get("result", {})
+                                _cfail = _rc.get("reason", "unknown") if isinstance(_rc, dict) else "unknown"
+                                break
+                    except Exception:
+                        pass
+                    log.warning(
+                        f"FLOKI | close_trade called but FAILED: {_cfail} | reason={close_reason} | conf={agent_result.confidence}"
                     )
                 else:
                     # FLO-81: Natural decision flow for CLOSE_TRADE
