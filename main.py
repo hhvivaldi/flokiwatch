@@ -3483,10 +3483,18 @@ class TradingBot:
 
             content = f"{d}{conf_s}. {reason_s}".strip()
             if content:
+                # Extract tool names from trace for investigation panel
+                _tt = getattr(agent_result, "tool_trace", None) or []
+                _tools_used = []
+                try:
+                    _tools_used = [t.get("name") for t in _tt if isinstance(t, dict) and t.get("name")]
+                except Exception:
+                    pass
+
                 record_agent_event(
                     "FLOKI_DECISION",
                     content[:4000],
-                    payload={"trigger": trigger_type, "timestamp": snapshot_time_iso},
+                    payload={"trigger": trigger_type, "timestamp": snapshot_time_iso, "tools_used": _tools_used},
                     author="FLOKI",
                 )
 

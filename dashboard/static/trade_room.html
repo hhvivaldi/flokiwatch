@@ -3012,7 +3012,8 @@
                 for (var z = 0; z < (messages || []).length; z++) {
                   var m2 = messages[z];
                   var isFloki = (m2.author || '').toString().toUpperCase() === 'FLOKI';
-                  var isDecision = (m2.type || '').toString().toUpperCase() === 'DECISION';
+                  var m2type = (m2.type || '').toString().toUpperCase();
+                  var isDecision = m2type === 'DECISION' || m2type === 'FLOKI_DECISION';
                   if (!isFloki || !isDecision) continue;
                   var toolsUsed = m2.metadata ? m2.metadata.tools_used : null;
                   if (Array.isArray(toolsUsed) && toolsUsed.length) {
