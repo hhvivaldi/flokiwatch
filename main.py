@@ -3554,9 +3554,45 @@ class TradingBot:
                     log.warning("PROACTIVE_H1 | Agent OPEN without valid trade plan — skipping execution")
                 else:
                     exec_direction = "BUY" if agent_result.decision == "OPEN_BUY" else "SELL"
-                    log.info(
-                        f"PROACTIVE_H1 | Agent OPEN intent logged (tool executes) | {exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
+
+                    # FLO-81: Check if execute_trade was actually called
+                    _tool_trace = getattr(agent_result, "tool_trace", None) or []
+                    _exec_called = any(
+                        str(t.get("name", "")).lower() == "execute_trade"
+                        for t in _tool_trace if isinstance(t, dict)
                     )
+
+                    if _exec_called:
+                        log.info(
+                            f"PROACTIVE_H1 | Agent OPEN executed via tool | {exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
+                        )
+                    else:
+                        # Safety net: Floki decided OPEN but didn't call execute_trade
+                        log.warning(
+                            f"FLOKI | CRITICAL: {agent_result.decision} intent without execute_trade call — forcing execution | "
+                            f"{exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
+                        )
+                        try:
+                            from agent_tools import AgentTools
+                            _tools = getattr(self, "_agent_tools", None)
+                            if _tools is None:
+                                _tools = AgentTools(self)
+                            _exec_result = _tools.execute_trade(
+                                direction=exec_direction,
+                                sl=float(stop_loss),
+                                tp=float(take_profit),
+                                agent_confidence=float(agent_result.confidence or 0),
+                            )
+                            if isinstance(_exec_result, dict) and _exec_result.get("success"):
+                                log.info(
+                                    f"FLOKI | SAFETY NET: Trade executed successfully | ticket={_exec_result.get('ticket')} | "
+                                    f"{exec_direction} @ {_exec_result.get('fill_price')} | SL={stop_loss} TP={take_profit}"
+                                )
+                            else:
+                                reason = _exec_result.get("reason", "unknown") if isinstance(_exec_result, dict) else "unknown"
+                                log.warning(f"FLOKI | SAFETY NET: execute_trade failed — {reason}")
+                        except Exception as e_exec:
+                            log.warning(f"FLOKI | SAFETY NET: execute_trade exception — {e_exec}")
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
                 log.info(
