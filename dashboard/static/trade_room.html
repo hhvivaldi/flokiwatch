@@ -2464,7 +2464,7 @@
             condBar.style.width = watching ? '100%' : '0%';
 
             if (watching) {
-              pill.textContent = 'WATCHING';
+              pill.textContent = n + ' condition' + (n !== 1 ? 's' : '');
               pill.className = 'decision-pill pill-buy';
               modeTag.innerHTML = '<span class="dot-green"></span>WATCHING';
             } else {
@@ -2569,7 +2569,9 @@
             condBar.style.width = pct + '%';
 
             var summary = (simba.summary || '').toString();
-            summaryTag.textContent = summary ? summary : '—';
+            // Hide internal labels (python_eval, etc.)
+            if (summary === 'python_eval' || summary === 'python') summary = '';
+            summaryTag.textContent = summary ? summary : '';
 
             if (decision === 'WAKE') {
               pill.textContent = 'ALERT';
