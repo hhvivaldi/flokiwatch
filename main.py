@@ -3560,64 +3560,12 @@ class TradingBot:
                             f"{exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
                     else:
-                        # FLO-81: Natural decision flow — ask Floki to confirm
-                        log.warning(
-                            f"FLOKI | Indecision detected: {agent_result.decision} without execute_trade | "
+                        # FLO-91: Log indecision for analysis, don't pressure or follow up
+                        log.info(
+                            f"FLOKI | {agent_result.decision} without execute_trade call — treating as WAIT | "
                             f"{exec_direction} | SL={stop_loss} TP={take_profit} conf={agent_result.confidence}"
                         )
-                        try:
-                            _agent = get_agent()
-                            # STEP 1: Give 3 options
-                            _followup_msg = (
-                                f"You decided {agent_result.decision} but did not call execute_trade. You haven't committed yet.\n"
-                                f"Choose ONE:\n"
-                                f"A) Call execute_trade now (direction={exec_direction}, sl={stop_loss}, tp={take_profit})\n"
-                                f"B) Call debate_with_rex one more time to reconsider\n"
-                                f"C) Do nothing — your decision becomes WAIT\n\n"
-                                f"You must choose. If you don't call execute_trade or debate_with_rex in this turn, your decision becomes WAIT."
-                            )
-                            _fu_loop = asyncio.new_event_loop()
-                            _followup_resp = _fu_loop.run_until_complete(
-                                asyncio.wait_for(
-                                    _agent._call_gemini_with_tools(_followup_msg, tools=tools_obj),
-                                    timeout=60,
-                                )
-                            )
-                            _fu_trace = _followup_resp.get("tool_trace", []) if isinstance(_followup_resp, dict) else []
-                            _fu_exec = any(str(t.get("name", "")).lower() == "execute_trade" for t in _fu_trace if isinstance(t, dict))
-                            _fu_debate = any(str(t.get("name", "")).lower() == "debate_with_rex" for t in _fu_trace if isinstance(t, dict))
-
-                            if _fu_exec:
-                                log.info(f"FLOKI | Indecision resolved — executed after confirmation | {exec_direction}")
-                            elif _fu_debate:
-                                # STEP 2: After retry debate, final chance
-                                log.info(f"FLOKI | Indecision — chose to debate again, giving final chance")
-                                _final_msg = (
-                                    f"You've now debated with Rex twice. Final decision — choose ONE:\n"
-                                    f"A) Call execute_trade now (direction={exec_direction}, sl={stop_loss}, tp={take_profit})\n"
-                                    f"B) Do nothing — decision becomes WAIT\n\n"
-                                    f"No more chances after this."
-                                )
-                                _fn_loop = asyncio.new_event_loop()
-                                _final_resp = _fn_loop.run_until_complete(
-                                    asyncio.wait_for(
-                                        _agent._call_gemini_with_tools(_final_msg, tools=tools_obj),
-                                        timeout=60,
-                                    )
-                                )
-                                _fn_trace = _final_resp.get("tool_trace", []) if isinstance(_final_resp, dict) else []
-                                _fn_exec = any(str(t.get("name", "")).lower() == "execute_trade" for t in _fn_trace if isinstance(t, dict))
-                                if _fn_exec:
-                                    log.info(f"FLOKI | Executed after second debate | {exec_direction}")
-                                else:
-                                    log.info(f"FLOKI | Final indecision — defaulting to WAIT")
-                                    agent_result.decision = "WAIT"
-                            else:
-                                log.info(f"FLOKI | Indecision not resolved — defaulting to WAIT")
-                                agent_result.decision = "WAIT"
-                        except Exception as e_fu:
-                            log.warning(f"FLOKI | Indecision follow-up failed — defaulting to WAIT: {e_fu}")
-                            agent_result.decision = "WAIT"
+                        agent_result.decision = "WAIT"
             elif agent_result.decision == "CLOSE_TRADE":
                 close_reason = getattr(agent_result, "close_reason", None) or "agent_close"
 
@@ -3651,64 +3599,12 @@ class TradingBot:
                         f"FLOKI | close_trade called but FAILED: {_cfail} | reason={close_reason} | conf={agent_result.confidence}"
                     )
                 else:
-                    # FLO-81: Natural decision flow for CLOSE_TRADE
-                    log.warning(
-                        f"FLOKI | Indecision detected: CLOSE_TRADE without close_trade call | "
+                    # FLO-91: Log indecision for analysis, don't pressure or follow up
+                    log.info(
+                        f"FLOKI | CLOSE_TRADE without close_trade call — treating as HOLD_TRADE | "
                         f"reason={close_reason} | conf={agent_result.confidence}"
                     )
-                    try:
-                        _agent = get_agent()
-                        # STEP 1: Give 3 options
-                        _close_followup = (
-                            f"You decided CLOSE_TRADE but did not call close_trade. You haven't committed.\n"
-                            f"Choose ONE:\n"
-                            f"A) Call close_trade now to close the position\n"
-                            f"B) Call debate_with_rex one more time to reconsider (last chance)\n"
-                            f"C) Do nothing — your decision becomes HOLD_TRADE\n\n"
-                            f"You must choose. If you don't call close_trade or debate_with_rex, your decision becomes HOLD_TRADE."
-                        )
-                        _cf_loop = asyncio.new_event_loop()
-                        _cf_resp = _cf_loop.run_until_complete(
-                            asyncio.wait_for(
-                                _agent._call_gemini_with_tools(_close_followup, tools=tools_obj),
-                                timeout=60,
-                            )
-                        )
-                        _cf_trace = _cf_resp.get("tool_trace", []) if isinstance(_cf_resp, dict) else []
-                        _cf_close = any(str(t.get("name", "")).lower() == "close_trade" for t in _cf_trace if isinstance(t, dict))
-                        _cf_debate = any(str(t.get("name", "")).lower() == "debate_with_rex" for t in _cf_trace if isinstance(t, dict))
-
-                        if _cf_close:
-                            log.info(f"FLOKI | Indecision resolved — closed after confirmation")
-                        elif _cf_debate:
-                            # STEP 2: After retry debate, final chance
-                            log.info(f"FLOKI | Indecision — chose to debate again, giving final chance")
-                            _cf_final = (
-                                f"You've now debated with Rex twice. Final decision — choose ONE:\n"
-                                f"A) Call close_trade now\n"
-                                f"B) Do nothing — decision becomes HOLD_TRADE\n\n"
-                                f"No more chances after this."
-                            )
-                            _cf_fn_loop = asyncio.new_event_loop()
-                            _cf_final_resp = _cf_fn_loop.run_until_complete(
-                                asyncio.wait_for(
-                                    _agent._call_gemini_with_tools(_cf_final, tools=tools_obj),
-                                    timeout=60,
-                                )
-                            )
-                            _cf_fn_trace = _cf_final_resp.get("tool_trace", []) if isinstance(_cf_final_resp, dict) else []
-                            _cf_fn_close = any(str(t.get("name", "")).lower() == "close_trade" for t in _cf_fn_trace if isinstance(t, dict))
-                            if _cf_fn_close:
-                                log.info(f"FLOKI | Closed after second debate")
-                            else:
-                                log.info(f"FLOKI | Final indecision on CLOSE — defaulting to HOLD_TRADE")
-                                agent_result.decision = "HOLD_TRADE"
-                        else:
-                            log.info(f"FLOKI | Indecision on CLOSE not resolved — defaulting to HOLD_TRADE")
-                            agent_result.decision = "HOLD_TRADE"
-                    except Exception as e_cf:
-                        log.warning(f"FLOKI | CLOSE indecision follow-up failed — defaulting to HOLD_TRADE: {e_cf}")
-                        agent_result.decision = "HOLD_TRADE"
+                    agent_result.decision = "HOLD_TRADE"
             elif agent_result.decision == "ADJUST_TRADE":
                 adj = getattr(agent_result, "adjustment", None)
                 if not isinstance(adj, dict):
