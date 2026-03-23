@@ -119,7 +119,13 @@ class SafetyChecker:
             pyramid_ok, pyramid_reason = self.check_pyramid_allowed(trade_direction, open_positions_list)
             if not pyramid_ok:
                 reasons.append(pyramid_reason)
-        
+
+        # 11. FLO-85: Hard gate — no opposing positions allowed
+        if trade_direction and open_positions_list:
+            opposing_ok, opposing_reason = self.check_no_opposing_position(trade_direction, open_positions_list)
+            if not opposing_ok:
+                reasons.append(opposing_reason)
+
         is_safe = len(reasons) == 0
         return is_safe, reasons
     
@@ -163,6 +169,23 @@ class SafetyChecker:
         # All positions in same direction have sufficient profit → allow pyramid
         return True, ""
     
+    def check_no_opposing_position(self, direction: str, positions_list: list) -> Tuple[bool, str]:
+        """
+        Hard gate: block trade if an open position exists in the OPPOSITE direction.
+        FlokiWatch is a directional system — no opposing positions allowed (FLO-85).
+        """
+        direction = direction.upper()
+        opposite = "SELL" if direction == "BUY" else "BUY"
+
+        for pos in positions_list:
+            if pos.direction == opposite:
+                return False, (
+                    f"Opposing position already open (ticket #{pos.ticket} is {opposite}) — "
+                    f"cannot open {direction} while {opposite} is active"
+                )
+
+        return True, ""
+
     def check_overtrading(self, direction: str) -> Tuple[bool, str]:
         """
         Check if enough time has passed since last trade in same direction.
