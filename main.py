@@ -3591,7 +3591,8 @@ class TradingBot:
                                 f"C) Do nothing — your decision becomes WAIT\n\n"
                                 f"You must choose. If you don't call execute_trade or debate_with_rex in this turn, your decision becomes WAIT."
                             )
-                            _followup_resp = loop.run_until_complete(
+                            _fu_loop = asyncio.new_event_loop()
+                            _followup_resp = _fu_loop.run_until_complete(
                                 asyncio.wait_for(
                                     _agent._call_gemini_with_tools(_followup_msg, tools=tools_obj),
                                     timeout=60,
@@ -3612,7 +3613,8 @@ class TradingBot:
                                     f"B) Do nothing — decision becomes WAIT\n\n"
                                     f"No more chances after this."
                                 )
-                                _final_resp = loop.run_until_complete(
+                                _fn_loop = asyncio.new_event_loop()
+                                _final_resp = _fn_loop.run_until_complete(
                                     asyncio.wait_for(
                                         _agent._call_gemini_with_tools(_final_msg, tools=tools_obj),
                                         timeout=60,
@@ -3662,7 +3664,8 @@ class TradingBot:
                             f"C) Do nothing — your decision becomes HOLD_TRADE\n\n"
                             f"You must choose. If you don't call close_trade or debate_with_rex, your decision becomes HOLD_TRADE."
                         )
-                        _cf_resp = loop.run_until_complete(
+                        _cf_loop = asyncio.new_event_loop()
+                        _cf_resp = _cf_loop.run_until_complete(
                             asyncio.wait_for(
                                 _agent._call_gemini_with_tools(_close_followup, tools=tools_obj),
                                 timeout=60,
@@ -3683,7 +3686,8 @@ class TradingBot:
                                 f"B) Do nothing — decision becomes HOLD_TRADE\n\n"
                                 f"No more chances after this."
                             )
-                            _cf_final_resp = loop.run_until_complete(
+                            _cf_fn_loop = asyncio.new_event_loop()
+                            _cf_final_resp = _cf_fn_loop.run_until_complete(
                                 asyncio.wait_for(
                                     _agent._call_gemini_with_tools(_cf_final, tools=tools_obj),
                                     timeout=60,
