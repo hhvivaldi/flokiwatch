@@ -299,7 +299,8 @@ class TradingBot:
             except Exception:
                 acquired = True
 
-            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "ECHO_CRITICAL"}
+            # FLO-90: ECHO_CRITICAL removed — Echo is pull-only, no forced cycles
+            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH"}
             if str(trigger_type or "") not in allowed:
                 log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
                 return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
@@ -1087,47 +1088,14 @@ class TradingBot:
                                     from echo_sentinel import run_echo_scan
                                     result = run_echo_scan()
 
+                                    # FLO-90: Echo is pull-only. Log CRITICAL alerts but do NOT
+                                    # wake Floki or Luna. Floki reads alerts via get_echo_alerts
+                                    # during his normal scheduled cycles.
                                     if result.critical_alerts:
-                                        # FLO-62: Filter out stale headlines (>1h old) from wake trigger
                                         fresh_critical = [c for c in result.critical_alerts if c.age_hours < 1.0]
-                                        stale_critical = [c for c in result.critical_alerts if c.age_hours >= 1.0]
-                                        for sc in stale_critical:
-                                            log.info(f"ECHO | CRITICAL classified but wake suppressed — headline is {sc.age_hours:.1f}h old (threshold: 1h): {sc.title[:60]}")
-
-                                    if result.critical_alerts and fresh_critical:
-                                        # Safety: max ECHO_MAX_WAKES_PER_HOUR
-                                        max_wakes = int(getattr(config, "ECHO_MAX_WAKES_PER_HOUR", 2))
-                                        hour_key = datetime.utcnow().strftime("%Y-%m-%d-%H")
-                                        echo_wake_counts = getattr(self, "_echo_wake_counts", {})
-                                        wakes_this_hour = echo_wake_counts.get(hour_key, 0)
-
-                                        if wakes_this_hour < max_wakes:
-                                            echo_wake_counts[hour_key] = wakes_this_hour + 1
-                                            # Prune old hour keys
-                                            self._echo_wake_counts = {k: v for k, v in echo_wake_counts.items() if k >= datetime.utcnow().strftime("%Y-%m-%d-%H")}
-
-                                            trigger_data = {
-                                                "critical_count": len(fresh_critical),
-                                                "headlines": [c.title for c in fresh_critical[:3]],
-                                                "scan_time": result.scan_time,
-                                            }
-                                            log.info(f"ECHO | CRITICAL alert — waking Floki ({wakes_this_hour + 1}/{max_wakes} this hour)")
-                                            self.agent_proactive_out_of_cycle(
-                                                trigger_type="ECHO_CRITICAL",
-                                                trigger_data=trigger_data,
-                                            )
-
-                                            # Trigger Luna out-of-cycle on CRITICAL
-                                            if bool(getattr(config, "LUNA_ENABLED", False)):
-                                                try:
-                                                    from luna_analyst import run_luna_analysis as _luna_ooc
-                                                    self._luna_last_scan_ts = time.time()
-                                                    threading.Thread(target=_luna_ooc, daemon=True).start()
-                                                    log.info("LUNA | out-of-cycle trigger — Echo CRITICAL")
-                                                except Exception:
-                                                    pass
-                                        else:
-                                            log.warning(f"ECHO | CRITICAL alert suppressed — wake cap reached ({max_wakes}/hr)")
+                                        if fresh_critical:
+                                            titles = "; ".join(c.title[:60] for c in fresh_critical[:3])
+                                            log.info(f"ECHO | {len(fresh_critical)} CRITICAL alert(s) stored (pull-only, no wake): {titles}")
                                 except Exception as e_echo:
                                     log.warning(f"ECHO | scheduler error (ignored): {e_echo}")
 
@@ -3215,9 +3183,6 @@ class TradingBot:
 
         if trigger_type in ("SIMBA_WAKE", "SIMBA_WATCH"):
             log.info("FLOKI_SCHEDULE | Simba override — calling Floki now (wake/watch condition met)")
-
-        if trigger_type == "ECHO_CRITICAL":
-            log.info("FLOKI_SCHEDULE | Echo CRITICAL alert — calling Floki now (breaking news)")
 
         agent = get_agent()
         if not agent.is_enabled():
