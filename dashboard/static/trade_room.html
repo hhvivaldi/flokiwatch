@@ -1861,35 +1861,45 @@
           var list = buildConflictStrips(latestMessages || []);
           var html = '';
 
-          // FLO-94: Build ANALYSIS lookup by timestamp (10s window) for expand-in-place
-          var analysisMap = {};  // timestamp_key -> full content
+          // FLO-94: Two-pass render — first link FLOKI_DECISION to ANALYSIS, then render.
+          // Pass 1: Build ANALYSIS index keyed by MM:SS + decision for timezone-safe matching.
+          // Events table uses datetime.now() (local), analyses uses datetime.utcnow() (UTC),
+          // causing a systematic 1-hour offset. MM:SS is identical across both.
+          var analysisIndex = [];  // [{mmss, decision, content, id}]
           var analysisLinked = {};  // analysis msg id -> true (hide from feed)
           for (var ai = 0; ai < list.length; ai++) {
             var am = list[ai];
             if ((am.author || '').toUpperCase() === 'FLOKI' && (am.type || '').toUpperCase() === 'ANALYSIS' && am.content) {
               var aTs = am.timestamp || '';
-              // Store with second-precision key for matching
-              var aKey = aTs.slice(0, 19);  // "2026-03-23T14:52:51"
-              analysisMap[aKey] = am.content;
-              analysisMap['__id__' + aKey] = am.id;
+              // Extract MM:SS from ISO timestamp (chars 14-19: "MM:SS")
+              var aMmss = aTs.length >= 19 ? aTs.slice(14, 19) : '';
+              var aDec = ((am.metadata || {}).decision || '').toUpperCase();
+              if (aMmss) analysisIndex.push({ mmss: aMmss, decision: aDec, content: am.content, id: am.id });
             }
           }
-          // Link FLOKI_DECISION to nearest ANALYSIS within 10s window
-          function findAnalysis(decTs) {
-            if (!decTs) return null;
-            var dKey = decTs.slice(0, 19);
-            if (analysisMap[dKey]) return { key: dKey, content: analysisMap[dKey] };
-            // Try +/- 10 seconds
-            try {
-              var dDate = new Date(decTs);
-              if (isNaN(dDate.getTime())) return null;
-              for (var offset = -10; offset <= 10; offset++) {
-                var tryDate = new Date(dDate.getTime() + offset * 1000);
-                var tryKey = tryDate.toISOString().slice(0, 19);
-                if (analysisMap[tryKey]) return { key: tryKey, content: analysisMap[tryKey] };
+          // Now scan FLOKI_DECISION messages and link to matching ANALYSIS
+          var decisionAnalysisMap = {};  // decision msg id -> analysis content
+          for (var di = 0; di < list.length; di++) {
+            var dm = list[di];
+            var dAuthor = (dm.author || '').toUpperCase();
+            var dType = (dm.type || '').toUpperCase();
+            if (dAuthor === 'FLOKI' && (dType === 'FLOKI_DECISION' || dType === 'DECISION')) {
+              var dTs = dm.timestamp || '';
+              var dMmss = dTs.length >= 19 ? dTs.slice(14, 19) : '';
+              // Extract decision from content (e.g. "WAIT (85%). reasoning...")
+              var dMatch = (dm.content || '').match(/^(WAIT|OPEN_BUY|OPEN_SELL|CLOSE_TRADE|HOLD_TRADE|HOLD|ADJUST_TRADE)/i);
+              var dDec = dMatch ? dMatch[1].toUpperCase() : '';
+              if (dMmss && dDec) {
+                for (var li = 0; li < analysisIndex.length; li++) {
+                  var entry = analysisIndex[li];
+                  if (entry.mmss === dMmss && entry.decision === dDec) {
+                    decisionAnalysisMap[dm.id || ('idx:' + di)] = entry.content;
+                    analysisLinked[entry.id] = true;
+                    break;
+                  }
+                }
               }
-            } catch(e) {}
-            return null;
+            }
           }
 
           if (!list.length) {
@@ -2046,15 +2056,13 @@
                   else if (dec.indexOf('HOLD') >= 0) dColor = '#60a5fa';
 
                   // FLO-94: Link to matching ANALYSIS for expand-in-place
-                  var linked = findAnalysis(m.timestamp);
+                  var msgId = m.id || ('idx:' + i);
+                  var linkedContent = decisionAnalysisMap[msgId];
                   var expandHtml = '';
-                  if (linked) {
-                    // Mark the ANALYSIS message for hiding
-                    var linkedId = analysisMap['__id__' + linked.key];
-                    if (linkedId) analysisLinked[linkedId] = true;
+                  if (linkedContent) {
                     var eid = 'floki-expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
                     // Strip KEY FACTORS from full analysis for cleaner display
-                    var fullText = linked.content;
+                    var fullText = linkedContent;
                     var kfCut = fullText.indexOf('KEY FACTORS:');
                     if (kfCut >= 0) fullText = fullText.slice(0, kfCut).trim();
                     var fullHtml = esc(fullText).replace(/\n/g, '<br>');
