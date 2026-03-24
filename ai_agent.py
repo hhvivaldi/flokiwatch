@@ -812,6 +812,7 @@ class AIAgent:
         last_model = self.model
         tool_calls = 0
         tool_trace: List[Dict[str, Any]] = []
+        had_execution_followup = False
 
         system_prompt = ""
         try:
@@ -945,6 +946,37 @@ class AIAgent:
             )
 
             if text_out and not fn_calls:
+                # FLO-109: If Floki decided OPEN/CLOSE but never called
+                # execute_trade / close_trade, give ONE follow-up turn so
+                # Gemini has the mechanical opportunity to call the tool.
+                if not had_execution_followup:
+                    _text_upper = str(text_out).upper()
+                    _trace_names = {str(t.get("name", "")).lower() for t in tool_trace if isinstance(t, dict)}
+
+                    _needs_execute = (
+                        ("OPEN_BUY" in _text_upper or "OPEN_SELL" in _text_upper)
+                        and "execute_trade" not in _trace_names
+                    )
+                    _needs_close = (
+                        "CLOSE_TRADE" in _text_upper
+                        and "close_trade" not in _trace_names
+                    )
+
+                    if _needs_execute or _needs_close:
+                        _missing_tool = "execute_trade" if _needs_execute else "close_trade"
+                        _followup_msg = (
+                            f"Your decision above requires calling {_missing_tool} to take effect. "
+                            f"Call {_missing_tool} now with the correct parameters, "
+                            f"or respond with WAIT if you changed your mind."
+                        )
+                        had_execution_followup = True
+                        contents.append({"role": "user", "parts": [{"text": _followup_msg}]})
+                        logger.info(
+                            f"GEMINI_FOLLOWUP | missing={_missing_tool} | "
+                            f"injecting follow-up turn (tool_calls={tool_calls}/{int(self.max_tool_calls)})"
+                        )
+                        continue
+
                 return {
                     "content": str(text_out).strip(),
                     "input_tokens": total_input_tokens,
