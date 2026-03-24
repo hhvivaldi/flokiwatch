@@ -924,7 +924,7 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         data_snapshot = _build_data_snapshot(macro)
 
     return LunaAnalysisResult(
-        timestamp=parsed.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         environment=parsed.get("environment", "SAFE"),
         risk_level=int(parsed.get("risk_level", 3)),
         directional_bias=parsed.get("directional_bias", "NEUTRAL"),
