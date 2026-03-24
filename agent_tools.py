@@ -2018,6 +2018,50 @@ class AgentTools:
             elapsed = round((time.time() - start) * 1000, 1)
             return {"success": False, "reason": f"luna_brief_error: {e}", "latency_ms": elapsed}
 
+    def write_trading_journal(self, entry: str, category: str = "reflection") -> Dict[str, Any]:
+        """Append an entry to Floki's persistent trading journal."""
+        start = time.time()
+        try:
+            entry_s = str(entry or "").strip()
+            if not entry_s:
+                return {"success": False, "reason": "empty entry"}
+
+            cat_s = str(category or "reflection").strip().lower()
+            valid_cats = ("reflection", "missing_data", "lesson", "frustration", "idea", "market_observation")
+            if cat_s not in valid_cats:
+                cat_s = "reflection"
+
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            journal_path = os.path.join(base_dir, "data", "floki_journal.json")
+            os.makedirs(os.path.dirname(journal_path), exist_ok=True)
+
+            entries: list = []
+            if os.path.exists(journal_path):
+                try:
+                    with open(journal_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        entries = data
+                except Exception:
+                    entries = []
+
+            entries.append({
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "category": cat_s,
+                "entry": entry_s,
+            })
+
+            tmp_path = journal_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(entries, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, journal_path)
+
+            self._log_tool("write_trading_journal", start, f"cat={cat_s} len={len(entry_s)}")
+            return {"success": True, "total_entries": len(entries)}
+        except Exception as e:
+            self._log_tool("write_trading_journal", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def _agent_monitor_events_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")
