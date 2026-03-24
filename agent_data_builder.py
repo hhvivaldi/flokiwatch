@@ -1560,8 +1560,10 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "ema9": _safe_round(ema.get("ema9", 0), 2),
         "ema21": _safe_round(ema.get("ema21", 0), 2),
         "ema50": _safe_round(ema.get("ema50", 0), 2),
+        "ema200": _safe_round(ema.get("ema200", 0), 2),
         "above_ema20": ema.get("above_ema20", False),
         "above_ema50": ema.get("above_ema50", False),
+        "above_ema200": ema.get("above_ema200", False),
     }
     
     # Bollinger Bands

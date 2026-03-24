@@ -1104,8 +1104,10 @@ class AgentTools:
 
             try:
                 emas = ind.get("emas") or {}
+                out["ema50"] = self._safe_float(emas.get("ema50"))
                 out["ema200"] = self._safe_float(emas.get("ema200"))
             except Exception:
+                out["ema50"] = None
                 out["ema200"] = None
 
             try:

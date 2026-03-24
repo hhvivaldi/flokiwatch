@@ -58,7 +58,8 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
     df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
-    
+    df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
+
     # RSI
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -892,11 +893,13 @@ def analyze_technical_detailed(df: pd.DataFrame) -> Dict:
     ema9 = float(last['ema_9']) if 'ema_9' in last.index else close
     ema21 = float(last['ema_21']) if 'ema_21' in last.index else close
     ema50 = float(last['ema_50']) if 'ema_50' in last.index else close
-    
+    ema200 = float(last['ema_200']) if 'ema_200' in last.index else close
+
     above_ema9 = close > ema9
     above_ema21 = close > ema21
     above_ema50 = close > ema50
-    
+    above_ema200 = close > ema200
+
     # EMA trend (using EMA9 as proxy for EMA20, EMA50 already exists)
     if above_ema9 and above_ema21 and above_ema50:
         ema_trend = "bullish"
@@ -964,9 +967,13 @@ def analyze_technical_detailed(df: pd.DataFrame) -> Dict:
             "divergence": macd_divergence,
         },
         "ema": {
+            "ema9": round(ema9, 2),
+            "ema21": round(ema21, 2),
+            "ema50": round(ema50, 2),
+            "ema200": round(ema200, 2),
             "above_ema20": above_ema9,  # EMA9 as proxy for EMA20
             "above_ema50": above_ema50,
-            "above_ema200": above_ema50,  # No EMA200 available, using EMA50 as proxy
+            "above_ema200": above_ema200,
             "trend": ema_trend,
         },
         "bollinger": {
