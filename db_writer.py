@@ -501,7 +501,7 @@ def record_trade_open(
                 open_price,
                 sl,
                 tp,
-                open_time or datetime.now().isoformat(),
+                open_time or datetime.utcnow().isoformat(),
                 comment,
                 decision_source,
             ),
@@ -560,7 +560,7 @@ def record_trade_close(
     try:
         conn = _get_connection()
         be_int = 1 if breakeven_activated else (0 if breakeven_activated is False else None)
-        conn.execute(
+        cursor = conn.execute(
             """UPDATE trades
                SET close_price = ?, profit = ?, close_reason = ?, close_time = ?, breakeven_activated = ?
                WHERE ticket = ?""",
@@ -573,6 +573,11 @@ def record_trade_close(
                 ticket,
             ),
         )
+        if cursor.rowcount == 0:
+            log.warning(
+                f"TRADE_CLOSE | ticket #{ticket} not found in SQLite — "
+                f"close not recorded (will be caught by reconciliation)"
+            )
         conn.commit()
         conn.close()
     except Exception as e:
