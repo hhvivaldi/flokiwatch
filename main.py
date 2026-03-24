@@ -1141,6 +1141,22 @@ class TradingBot:
                                         from sage_auditor import run_sage_auditor
 
                                         run_sage_auditor()
+
+                                        # FLO-113: Update sage_last_run.json so dashboard shows correct date
+                                        try:
+                                            import json as _json
+                                            from datetime import datetime as _dt, timezone as _tz
+                                            _now = _dt.now(_tz.utc)
+                                            _last_run_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "sage_last_run.json")
+                                            _tmp = _last_run_path + ".tmp"
+                                            with open(_tmp, "w", encoding="utf-8") as _f:
+                                                _json.dump({
+                                                    "last_run_date": _now.date().isoformat(),
+                                                    "last_run_time": _now.strftime("%H:%M:%S"),
+                                                }, _f)
+                                            os.replace(_tmp, _last_run_path)
+                                        except Exception:
+                                            pass
                                     except Exception as e_sage:
                                         log.warning(f"SAGE | scheduler error (ignored): {e_sage}")
 
