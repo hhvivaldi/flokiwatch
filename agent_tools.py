@@ -1161,7 +1161,29 @@ class AgentTools:
                 self._log_no_cache("get_sr_zones", start)
                 return self._no_cache()
 
-            self._log_tool("get_sr_zones", start, f"zones={len(zones)}")
+            # FLO-111: Filter to 8 most relevant zones (4 above + 4 below price)
+            raw_count = len(zones)
+            try:
+                cp = dp.get("current_price") or {}
+                price = self._safe_float(cp.get("mid")) or self._safe_float(cp.get("bid"))
+                if price:
+                    above = []
+                    below = []
+                    for z in zones:
+                        zp = z.get("price") if isinstance(z, dict) else getattr(z, "midpoint", None)
+                        if zp is None:
+                            zp = z.get("midpoint", 0) if isinstance(z, dict) else 0
+                        if zp > price:
+                            above.append(z)
+                        else:
+                            below.append(z)
+                    above.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
+                    below.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
+                    zones = above[:4] + below[:4]
+            except Exception:
+                pass
+
+            self._log_tool("get_sr_zones", start, f"zones={len(zones)} (raw={raw_count})")
             return {"zones": zones}
         except Exception as e:
             self._log_tool("get_sr_zones", start, f"error={e}")
