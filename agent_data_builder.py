@@ -1809,7 +1809,23 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
         "normalized": _safe_round(sentiment.get("normalized", 0), 2),
         "label": sentiment.get("label", "neutral"),
     }
-    
+
+    # FLO-111: Oil WTI (already fetched by calculate_news_score_hybrid)
+    oil = news_data.get("oil", {})
+    if isinstance(oil, dict) and oil.get("current") is not None:
+        macro["oil"] = {
+            "value": _safe_round(oil.get("current"), 2),
+            "change_24h": _safe_round(oil.get("change_percent", 0), 2),
+        }
+
+    # FLO-111: S&P 500 (already fetched by calculate_news_score_hybrid)
+    sp500 = news_data.get("sp500", {})
+    if isinstance(sp500, dict) and sp500.get("current") is not None:
+        macro["sp500"] = {
+            "value": _safe_round(sp500.get("current"), 2),
+            "change_24h": _safe_round(sp500.get("change_percent", 0), 2),
+        }
+
     return macro
 
 
