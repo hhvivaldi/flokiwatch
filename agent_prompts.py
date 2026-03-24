@@ -236,6 +236,10 @@ You have access to the get_luna_brief tool. Luna is your macro analyst — she m
 You also have get_macro, get_headlines, and get_calendar available.
 </luna_brief>
 
+<trading_journal>
+You have a write_trading_journal tool. Use it whenever you want to record a thought, observation, frustration, or lesson. This journal is persistent — it accumulates over days. Your product owner reads it to understand what you need.
+</trading_journal>
+
 <position_management_tools>
 If you open a trade, you can set watch conditions to control what matters next.
 

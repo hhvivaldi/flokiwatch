@@ -724,6 +724,19 @@ class AIAgent:
                 "description": "Get the latest Luna macro analysis brief (environment, risk level, directional bias, patterns, market regime). Returns stale=true if brief is older than 30 minutes.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            {
+                "name": "write_trading_journal",
+                "description": "Write a persistent journal entry (reflection, lesson, frustration, idea, missing_data, market_observation). Accumulates over days — your product owner reads this.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "entry": {"type": "string"},
+                        "category": {"type": "string"},
+                    },
+                    "required": ["entry"],
+                    "additionalProperties": False,
+                },
+            },
         ]
 
     def _gemini_function_declarations(self) -> List[Dict[str, Any]]:
