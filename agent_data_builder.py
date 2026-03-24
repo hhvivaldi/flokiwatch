@@ -1723,20 +1723,26 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
         "change_24h": _safe_round(dxy.get("change_24h", 0), 2),
         "trend": dxy.get("trend", "stable"),
     }
-    
+    if dxy.get("value") is None:
+        macro["dxy"]["data_quality"] = "unavailable"
+
     # VIX
     vix = news_data.get("vix", {})
     macro["vix"] = {
         "value": _safe_round(vix.get("value", 0), 1),
         "level": vix.get("level", "normal"),
     }
-    
+    if vix.get("value") is None:
+        macro["vix"]["data_quality"] = "unavailable"
+
     # Yields
     yields = news_data.get("yields", {})
     macro["yields_10y"] = {
         "value": _safe_round(yields.get("value", 0), 2),
         "trend": yields.get("trend", "stable"),
     }
+    if yields.get("value") is None:
+        macro["yields_10y"]["data_quality"] = "unavailable"
     
     # Calendar
     cal_phase = calendar_data.get("phase", "normal")
