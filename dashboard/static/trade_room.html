@@ -1842,7 +1842,7 @@
               var m = msgs[i];
               var isDebate = (m.type || '').toString().toUpperCase() === 'DEBATE';
               var rex = (m.author || '').toString().toUpperCase() === 'REX';
-              var agree = m.metadata ? m.metadata.rex_agrees : null;
+              var agree = m.metadata ? (m.metadata.rex_agrees !== undefined ? m.metadata.rex_agrees : m.metadata.agree) : null;
               if (isDebate && rex && agree === false) {
                 out.push({
                   __kind: 'conflict',
@@ -2988,7 +2988,7 @@
             for (var j = 0; j < (messages || []).length; j++) {
               var mr = messages[j];
               if ((mr.author || '').toString().toUpperCase() === 'REX' && (mr.type || '').toString().toUpperCase() === 'DEBATE') {
-                rexAgree = mr.metadata ? mr.metadata.rex_agrees : null;
+                rexAgree = mr.metadata ? (mr.metadata.rex_agrees !== undefined ? mr.metadata.rex_agrees : mr.metadata.agree) : null;
                 rexConcernsCount = (mr.metadata && mr.metadata.concerns && mr.metadata.concerns.length) ? mr.metadata.concerns.length : 0;
                 break;
               }
@@ -3053,7 +3053,7 @@
               var mx = messages[k];
               if ((mx.type || '').toString().toUpperCase() === 'DEBATE' && (mx.author || '').toString().toUpperCase() === 'REX') {
                 debateRex++;
-                var a = mx.metadata ? mx.metadata.rex_agrees : null;
+                var a = mx.metadata ? (mx.metadata.rex_agrees !== undefined ? mx.metadata.rex_agrees : mx.metadata.agree) : null;
                 if (a === true) agreements++;
                 if (a === false) conflicts++;
               }
