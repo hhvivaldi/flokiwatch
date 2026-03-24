@@ -187,9 +187,9 @@ class PositionMonitor:
                         direction=pos.direction,
                         actual_open_price=pos.open_price,
                     )
-                except Exception:
-                    pass
-        
+                except Exception as e:
+                    log.warning(f"Monitor: update_trade_open_price failed for #{pos.ticket}: {e}")
+
         # Check if EA bridge is handling position management
         ea_handles_trailing = False
         if getattr(config, 'USE_EA_BRIDGE', False):
