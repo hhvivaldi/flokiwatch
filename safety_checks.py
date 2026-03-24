@@ -5,12 +5,19 @@ Checks conditions before executing trades
 
 from datetime import datetime, timedelta
 from typing import Tuple, List, Optional
+import json
+import logging
+import os
 import config
+
+log = logging.getLogger(__name__)
+
+SAFETY_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "safety_state.json")
 
 
 class SafetyChecker:
     """Safety checks manager"""
-    
+
     def __init__(self):
         self.consecutive_losses = 0
         self.pause_until: Optional[datetime] = None
@@ -20,7 +27,102 @@ class SafetyChecker:
         # Anti-overtrading: last trade per direction
         self.last_trade_time: dict = {'BUY': None, 'SELL': None}
         self.last_close_type: dict = {'BUY': None, 'SELL': None}  # "trailing", "sl", "tp", None
+        self._load_state()
     
+    # -----------------------------------------------------------------
+    # Persistence (FLO-93)
+    # -----------------------------------------------------------------
+
+    def _save_state(self) -> None:
+        """Persist safety state to disk (atomic write)."""
+        try:
+            os.makedirs(os.path.dirname(SAFETY_STATE_FILE), exist_ok=True)
+            payload = {
+                "pause_until": self.pause_until.isoformat() if self.pause_until else None,
+                "daily_loss": self.daily_loss,
+                "daily_trades": self.daily_trades,
+                "consecutive_losses": self.consecutive_losses,
+                "last_reset_date": str(self.last_reset_date),
+                "last_trade_time": {
+                    k: v.isoformat() if v else None
+                    for k, v in self.last_trade_time.items()
+                },
+                "last_close_type": dict(self.last_close_type),
+                "saved_at": datetime.now().isoformat(),
+            }
+            tmp_path = SAFETY_STATE_FILE + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp_path, SAFETY_STATE_FILE)
+        except Exception as e:
+            log.warning(f"SAFETY | Failed to save state: {e}")
+
+    def _load_state(self) -> None:
+        """Restore safety state from disk on startup."""
+        try:
+            if not os.path.exists(SAFETY_STATE_FILE):
+                return
+            with open(SAFETY_STATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                log.warning("SAFETY | State file corrupt (not a dict) — fresh start")
+                return
+
+            # --- pause_until: survives restart AND daily reset ---
+            pu = data.get("pause_until")
+            if pu:
+                try:
+                    pause_dt = datetime.fromisoformat(pu)
+                    if pause_dt > datetime.now():
+                        self.pause_until = pause_dt
+                        log.info(f"SAFETY | Restored pause_until={pause_dt.strftime('%Y-%m-%d %H:%M')}")
+                    else:
+                        log.info(f"SAFETY | Stored pause expired ({pu}) — cleared")
+                except (ValueError, TypeError):
+                    pass
+
+            # --- daily counters: only restore if same day ---
+            saved_date_str = data.get("last_reset_date")
+            today = datetime.now().date()
+            same_day = False
+            if saved_date_str:
+                try:
+                    saved_date = datetime.strptime(saved_date_str, "%Y-%m-%d").date()
+                    same_day = saved_date == today
+                except (ValueError, TypeError):
+                    pass
+
+            if same_day:
+                self.daily_loss = float(data.get("daily_loss", 0.0))
+                self.daily_trades = int(data.get("daily_trades", 0))
+                self.consecutive_losses = int(data.get("consecutive_losses", 0))
+                self.last_reset_date = today
+
+                # Restore anti-overtrading timestamps
+                for direction in ("BUY", "SELL"):
+                    ltt = (data.get("last_trade_time") or {}).get(direction)
+                    if ltt:
+                        try:
+                            self.last_trade_time[direction] = datetime.fromisoformat(ltt)
+                        except (ValueError, TypeError):
+                            pass
+                    lct = (data.get("last_close_type") or {}).get(direction)
+                    if lct:
+                        self.last_close_type[direction] = lct
+
+                log.info(
+                    f"SAFETY | Restored state: losses={self.consecutive_losses}, "
+                    f"daily_loss=${self.daily_loss:.2f}, trades={self.daily_trades}"
+                )
+            else:
+                # New day — only consecutive_losses resets, pause_until already handled above
+                log.info(f"SAFETY | New day ({today} vs saved {saved_date_str}) — daily counters reset")
+
+        except json.JSONDecodeError:
+            log.warning("SAFETY | State file corrupt (bad JSON) — fresh start")
+        except Exception as e:
+            log.warning(f"SAFETY | Failed to load state: {e} — fresh start")
+
     def reset_daily_stats(self):
         """Reset daily statistics"""
         today = datetime.now().date()
@@ -28,17 +130,19 @@ class SafetyChecker:
             self.daily_loss = 0.0
             self.daily_trades = 0
             self.last_reset_date = today
+            self._save_state()
     
     def record_trade_result(self, profit: float):
         """Record trade result"""
         self.reset_daily_stats()
         self.daily_trades += 1
-        
+
         if profit < 0:
             self.consecutive_losses += 1
             self.daily_loss += abs(profit)
         else:
             self.consecutive_losses = 0
+        self._save_state()
     
     def check_all(
         self,
@@ -86,7 +190,8 @@ class SafetyChecker:
             # Activate pause
             if self.pause_until is None:
                 self.pause_until = datetime.now() + timedelta(hours=config.PAUSE_AFTER_LOSSES_HOURS)
-        
+                self._save_state()
+
         # 5. Active pause
         if self.pause_until and datetime.now() < self.pause_until:
             reasons.append(f"Bot paused until {self.pause_until.strftime('%Y-%m-%d %H:%M')}")
@@ -94,6 +199,7 @@ class SafetyChecker:
             # Pause expired
             self.pause_until = None
             self.consecutive_losses = 0
+            self._save_state()
         
         # 6. Maximum positions
         if open_positions >= config.MAX_POSITIONS:
@@ -220,6 +326,7 @@ class SafetyChecker:
         """Record that a trade was opened (for anti-overtrading)"""
         direction = direction.upper()
         self.last_trade_time[direction] = datetime.now()
+        self._save_state()
     
     def record_close_type(self, direction: str, close_type: str):
         """
@@ -233,6 +340,7 @@ class SafetyChecker:
         self.last_close_type[direction] = close_type
         # Update last_trade_time to the close moment (cooldown counts from here)
         self.last_trade_time[direction] = datetime.now()
+        self._save_state()
     
     def is_market_open(self, now_utc: Optional[datetime] = None) -> Tuple[bool, str, Optional[datetime]]:
         """
@@ -368,6 +476,7 @@ class SafetyChecker:
     def force_pause(self, hours: int, reason: str):
         """Force manual pause"""
         self.pause_until = datetime.now() + timedelta(hours=hours)
+        self._save_state()
         return {
             'paused': True,
             'until': self.pause_until,
@@ -378,6 +487,7 @@ class SafetyChecker:
         """Clear pause"""
         self.pause_until = None
         self.consecutive_losses = 0
+        self._save_state()
 
 
 # Global instance
