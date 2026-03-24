@@ -500,9 +500,7 @@ class AIAgent:
             return False
 
     def _macro_tools_if_needed(self) -> List[Dict[str, Any]]:
-        """Return get_headlines + get_macro tools only if Luna brief is NOT fresh."""
-        if self._luna_brief_is_fresh():
-            return []
+        """Return get_headlines + get_macro — always available (Floki decides what to use)."""
         return [
             {
                 "name": "get_headlines",
@@ -817,7 +815,6 @@ class AIAgent:
         contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
 
         had_empty_retry = False
-        budget_warning_injected = False
 
         while True:
             if (time.time() - start_time) >= float(self.timeout):
@@ -1015,22 +1012,6 @@ class AIAgent:
                         }
                     )
 
-                    _budget_warn_at = int(self.max_tool_calls) - 5
-                    if (not budget_warning_injected) and tool_calls >= _budget_warn_at:
-                        contents.append(
-                            {
-                                "role": "user",
-                                "parts": [
-                                    {
-                                        "text": f"IMPORTANT: You have used {tool_calls} of {int(self.max_tool_calls)} available tool calls. You MUST produce your final JSON decision NOW. Do not call any more tools. Respond with your decision JSON immediately."
-                                    }
-                                ],
-                            }
-                        )
-                        budget_warning_injected = True
-                        logger.warning(
-                            f"GEMINI_TOOL_BUDGET | finalization instruction injected at tool_calls={tool_calls}/{int(self.max_tool_calls)}"
-                        )
                 except Exception as e:
                     tool_trace.append({"name": "unknown", "input": {}, "result": {"success": False, "reason": str(e)}, "latency_ms": 0})
                     continue
