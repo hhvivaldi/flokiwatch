@@ -399,7 +399,7 @@ USE_AI_AGENT = True                       # True = enable AI Agent, False = Brai
 AI_AGENT_MODE = "active"                  # shadow = Agent decides but Brain executes | gate = Agent controls entry | full = Agent controls all
 AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) model name; unused for Gemini
 AI_AGENT_TIMEOUT = 240                    # Timeout in seconds for API calls
-AI_AGENT_MAX_TOOL_CALLS = 25              # Max tool calls per decision (investigation + debate + execution)
+AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
 # Gemini integration (Phase 2)
 FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "gemini-3-flash-preview")

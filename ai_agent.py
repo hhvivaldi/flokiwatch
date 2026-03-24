@@ -1015,13 +1015,14 @@ class AIAgent:
                         }
                     )
 
-                    if (not budget_warning_injected) and tool_calls >= 20:
+                    _budget_warn_at = int(self.max_tool_calls) - 5
+                    if (not budget_warning_injected) and tool_calls >= _budget_warn_at:
                         contents.append(
                             {
                                 "role": "user",
                                 "parts": [
                                     {
-                                        "text": "IMPORTANT: You have used 20 of 25 available tool calls. You MUST produce your final JSON decision NOW. Do not call any more tools. Respond with your decision JSON immediately."
+                                        "text": f"IMPORTANT: You have used {tool_calls} of {int(self.max_tool_calls)} available tool calls. You MUST produce your final JSON decision NOW. Do not call any more tools. Respond with your decision JSON immediately."
                                     }
                                 ],
                             }
