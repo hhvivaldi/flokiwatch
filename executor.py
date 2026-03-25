@@ -290,15 +290,23 @@ class MT5Executor:
                                 if real_ticket > 0:
                                     break
                             if real_ticket == 0:
-                                log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — returning ticket=0")
+                                log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — trade not confirmed")
+                                return OrderResult(
+                                    success=False,
+                                    ticket=0,
+                                    error_code=-1,
+                                    error_message="ticket_not_resolved",
+                                    price=ref_price,
+                                    volume=lot_size,
+                                )
                         except Exception as e_poll:
                             log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
 
                         return OrderResult(
-                            success=True,
+                            success=real_ticket > 0,
                             ticket=real_ticket,
-                            error_code=None,
-                            error_message=None,
+                            error_code=None if real_ticket > 0 else -1,
+                            error_message=None if real_ticket > 0 else "ticket_not_resolved",
                             price=ref_price,
                             volume=lot_size,
                         )

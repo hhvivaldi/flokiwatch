@@ -1583,6 +1583,12 @@ class AgentTools:
             fill_price = self._safe_float(getattr(res, "price", None))
             ticket = getattr(res, "ticket", None)
 
+            # FLO-114: Guard against phantom trades — ticket must be a real positive int
+            if not ticket or (isinstance(ticket, (int, float)) and int(ticket) <= 0):
+                reason = getattr(res, "error_message", None) or "ticket_not_resolved"
+                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | ticket={ticket} ({reason})")
+                return {"success": False, "reason": str(reason)}
+
             # FLO-63: Save trade conditions snapshot at open time
             if ticket is not None:
                 try:
