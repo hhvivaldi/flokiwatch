@@ -24,12 +24,14 @@ class TradingLogger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(getattr(logging, config.LOG_LEVEL))
         
+        self._current_date = datetime.now().strftime('%Y-%m-%d')
+
         # Avoid handler duplication
         if not self.logger.handlers:
             # File handler
             log_file = os.path.join(
                 self.log_dir,
-                f"trading_bot_{datetime.now().strftime('%Y-%m-%d')}.log"
+                f"trading_bot_{self._current_date}.log"
             )
             file_handler = logging.FileHandler(log_file, encoding='utf-8')
             file_handler.setLevel(logging.DEBUG)
@@ -105,6 +107,36 @@ class TradingLogger:
         """MT5 status log"""
         status = "CONNECTED" if connected else "DISCONNECTED"
         self.logger.info(f"MT5 | {status} | {message}")
+
+    def rotate_if_needed(self) -> None:
+        """Swap file handler at midnight so new logs go to today's file."""
+        today = datetime.now().strftime('%Y-%m-%d')
+        if today == self._current_date:
+            return
+
+        new_log_file = os.path.join(
+            self.log_dir,
+            f"trading_bot_{today}.log"
+        )
+
+        # Build new handler with same format as the original
+        new_handler = logging.FileHandler(new_log_file, encoding='utf-8')
+        new_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        new_handler.setFormatter(formatter)
+
+        # Remove old file handler(s), keep console handler
+        for h in self.logger.handlers[:]:
+            if isinstance(h, logging.FileHandler) and not isinstance(h, logging.StreamHandler):
+                h.close()
+                self.logger.removeHandler(h)
+
+        self.logger.addHandler(new_handler)
+        self._current_date = today
+        self.logger.info(f"LOG | Rotated to {new_log_file}")
 
 
 # Global instance

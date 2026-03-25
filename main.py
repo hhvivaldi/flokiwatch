@@ -5259,6 +5259,9 @@ class TradingBot:
         today = datetime.now().date()
         
         if today != self.daily_stats['date']:
+            # Rotate log file to new day BEFORE anything else logs
+            log.rotate_if_needed()
+
             # Send previous day summary
             self._send_daily_summary()
             
