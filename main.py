@@ -3470,7 +3470,29 @@ class TradingBot:
                         break
 
                 if _exec_succeeded:
-                    pass  # genuine open — decision stays
+                    # FLO-114: Record trade open in SQLite from tool trace
+                    try:
+                        for _t in _tool_trace:
+                            if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
+                                _r = _t.get("result", {})
+                                if isinstance(_r, dict) and _r.get("ticket"):
+                                    record_trade_open(
+                                        ticket=int(_r["ticket"]),
+                                        direction=str(_r.get("direction", agent_result.decision.replace("OPEN_", ""))),
+                                        volume=float(_r.get("volume", 0.01)),
+                                        open_price=float(_r.get("fill_price", 0)),
+                                        sl=float(_r.get("sl", 0)),
+                                        tp=float(_r.get("tp", 0)),
+                                        comment="floki_agent",
+                                        decision_source="floki_agent",
+                                    )
+                                    log.info(
+                                        f"FLOKI | record_trade_open → ticket={_r['ticket']} "
+                                        f"{_r.get('direction', '?')} @ {_r.get('fill_price', '?')}"
+                                    )
+                                break
+                    except Exception as e_rto:
+                        log.warning(f"FLOKI | record_trade_open failed: {e_rto}")
                 elif _exec_called and not _exec_succeeded:
                     _fail_reason = "unknown"
                     try:

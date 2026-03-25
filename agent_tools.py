@@ -1664,6 +1664,8 @@ class AgentTools:
                 "success": True,
                 "ticket": int(ticket) if ticket is not None else None,
                 "fill_price": fill_price,
+                "volume": float(pos.lot_size),
+                "direction": dir_s,
                 "sl": float(sl_f),
                 "tp": float(tp_f),
                 "warning": m5_warning,
