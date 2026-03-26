@@ -567,6 +567,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_market_context",
+                "description": "Get broader market context — correlated metals (silver, platinum, palladium), forex pairs (dollar strength, safe havens), indices (S&P 500), energy (oil), and crypto (BTC). Call when you want to see what the rest of the market is doing.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "get_open_positions",
                 "description": "Get open positions from execution layer",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},

@@ -1356,6 +1356,105 @@ class AgentTools:
             return {"success": False, "reason": "tool_error"}
 
     # ---------------------------------------------------------------------
+    # Market context (correlated instruments from MT5)
+    # ---------------------------------------------------------------------
+
+    _MARKET_CONTEXT_SYMBOLS = {
+        "metals": ["XAGUSD", "XPTUSD", "XPDUSD"],
+        "forex": ["EURUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCNH", "GBPUSD"],
+        "indices": ["US500"],
+        "energy": ["XTIUSD"],
+        "crypto": ["BTCUSD"],
+    }
+
+    def get_market_context(self) -> Dict[str, Any]:
+        """Read correlated MT5 instruments for broader market picture."""
+        start = time.time()
+        try:
+            # 60s cache
+            cached = getattr(self, "_market_context_cache", None)
+            cached_ts = getattr(self, "_market_context_cache_ts", 0)
+            if cached and (time.time() - cached_ts) < 60:
+                self._log_tool("get_market_context", start, "cache_hit")
+                return cached
+
+            import MetaTrader5 as mt5
+
+            result: Dict[str, Any] = {}
+
+            for category, symbols in self._MARKET_CONTEXT_SYMBOLS.items():
+                cat_data: Dict[str, Any] = {}
+                for sym in symbols:
+                    try:
+                        mt5.symbol_select(sym, True)
+                        tick = mt5.symbol_info_tick(sym)
+                        if tick and tick.bid > 0:
+                            info = mt5.symbol_info(sym)
+                            prev_close = getattr(info, "session_close", 0) if info else 0
+                            change_pct = None
+                            if prev_close and prev_close > 0:
+                                change_pct = round(((tick.bid - prev_close) / prev_close) * 100, 2)
+                            cat_data[sym] = {
+                                "bid": round(tick.bid, 5 if tick.bid < 10 else 2),
+                                "change_pct": change_pct,
+                            }
+                        else:
+                            cat_data[sym] = None
+                    except Exception:
+                        cat_data[sym] = None
+                result[category] = cat_data
+
+            # Derived: gold/silver ratio
+            try:
+                gold_tick = mt5.symbol_info_tick("XAUUSD")
+                silver = (result.get("metals") or {}).get("XAGUSD")
+                if gold_tick and gold_tick.bid > 0 and silver and silver.get("bid"):
+                    result["metals"]["gold_silver_ratio"] = round(gold_tick.bid / silver["bid"], 1)
+            except Exception:
+                pass
+
+            # Derived: dollar strength from EUR, JPY, CHF
+            try:
+                forex = result.get("forex") or {}
+                eur = (forex.get("EURUSD") or {}).get("change_pct")
+                jpy = (forex.get("USDJPY") or {}).get("change_pct")
+                chf = (forex.get("USDCHF") or {}).get("change_pct")
+                if eur is not None and jpy is not None and chf is not None:
+                    # Dollar strong = EUR falling, JPY rising, CHF rising
+                    strong_signals = (1 if eur < 0 else 0) + (1 if jpy > 0 else 0) + (1 if chf > 0 else 0)
+                    if strong_signals >= 2:
+                        result["forex"]["dollar_strength"] = "strong"
+                    elif strong_signals <= 1:
+                        result["forex"]["dollar_strength"] = "weak"
+                    else:
+                        result["forex"]["dollar_strength"] = "mixed"
+            except Exception:
+                pass
+
+            # Session context
+            try:
+                utc_hour = datetime.utcnow().hour
+                session_name = self._infer_session_from_utc_hour(utc_hour)
+                dp = self._last_agent_data()
+                vol = (dp.get("indicators") or {}).get("volume") if dp else None
+                result["session"] = {
+                    "name": session_name,
+                    "utc_hour": utc_hour,
+                    "volume_ratio": vol.get("tick_volume_ratio") if isinstance(vol, dict) else None,
+                }
+            except Exception:
+                pass
+
+            self._market_context_cache = result
+            self._market_context_cache_ts = time.time()
+            n_live = sum(1 for cat in result.values() if isinstance(cat, dict) for v in cat.values() if isinstance(v, dict) and v.get("bid"))
+            self._log_tool("get_market_context", start, f"live={n_live}")
+            return result
+        except Exception as e:
+            self._log_tool("get_market_context", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
+    # ---------------------------------------------------------------------
     # Portfolio tools (execution layer is allowed)
     # ---------------------------------------------------------------------
 
