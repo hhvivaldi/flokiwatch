@@ -714,7 +714,10 @@ class AgentTools:
                 return {"success": False, "reason": "rex_unavailable"}
 
             if not isinstance(rex, dict) or not rex.get("success"):
-                return {"success": False, "reason": rex.get("reason") if isinstance(rex, dict) else "rex_failed"}
+                _rex_reason = rex.get("reason") if isinstance(rex, dict) else "rex_failed"
+                log.warning(f"REX | debate_with_rex failed: {_rex_reason}")
+                self._log_tool("debate_with_rex", start, f"failed={_rex_reason}")
+                return {"success": False, "reason": _rex_reason}
 
             agree = rex.get("agree")
             reasoning = str(rex.get("reasoning") or "").strip()

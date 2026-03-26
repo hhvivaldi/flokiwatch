@@ -183,8 +183,8 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
 
         model = (
             (str(cfg_model).strip() if cfg_model else "")
-            or os.environ.get("REX_MODEL", "gpt-4o").strip()
-            or "gpt-4o"
+            or os.environ.get("REX_MODEL", "gpt-5-mini").strip()
+            or "gpt-5-mini"
         )
 
         prompt = _build_prompt(floki_summary)
@@ -207,10 +207,11 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
                 model=model,
                 messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=450,
+                max_completion_tokens=450,
                 timeout=timeout_seconds,
             )
         except Exception as e:
+            log.warning(f"REX | API call failed: {e}")
             return {"success": False, "reason": f"openai_request_failed: {e}"}
 
         content = None
