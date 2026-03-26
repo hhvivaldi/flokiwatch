@@ -1716,26 +1716,10 @@ def _format_macro_data(news_data: Dict, calendar_data: Dict) -> Dict:
     else:
         macro["headlines"] = []
     
-    # DXY
-    dxy = news_data.get("dxy", {})
-    macro["dxy"] = {
-        "value": _safe_round(dxy.get("value", 0), 2),
-        "change_24h": _safe_round(dxy.get("change_24h", 0), 2),
-        "trend": dxy.get("trend", "stable"),
-    }
-    if dxy.get("value") is None:
-        macro["dxy"]["data_quality"] = "unavailable"
+    # FLO-121: DXY and VIX removed — now from MT5 futures via get_market_context
+    # (DXY_M6, VIX_J6). Real-time during NY session, no Yahoo 30-min cache lag.
 
-    # VIX
-    vix = news_data.get("vix", {})
-    macro["vix"] = {
-        "value": _safe_round(vix.get("value", 0), 1),
-        "level": vix.get("level", "normal"),
-    }
-    if vix.get("value") is None:
-        macro["vix"]["data_quality"] = "unavailable"
-
-    # Yields
+    # Yields (kept — UST10Y_M6 gives bond price, not yield; Yahoo ^TNX gives yield directly)
     yields = news_data.get("yields", {})
     macro["yields_10y"] = {
         "value": _safe_round(yields.get("value", 0), 2),

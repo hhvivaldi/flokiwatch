@@ -1733,53 +1733,34 @@ def get_news_detailed() -> dict:
     
     components = result.get("components", {})
     
-    # DXY
-    dxy_comp = components.get("dxy", {})
-    dxy_value = dxy_comp.get("current")
-    dxy_change = dxy_comp.get("change_percent", 0)
-    dxy_trend = "falling" if (dxy_change and dxy_change < 0) else "rising"
-    
-    # Yields
+    # FLO-121: DXY, VIX, Oil, S&P removed — now via get_market_context (MT5 real-time)
+
+    # Yields (kept — UST10Y_M6 gives bond price not yield; Yahoo ^TNX gives yield directly)
     yields_comp = components.get("yields", {})
     yields_value = yields_comp.get("current")
     yields_change = yields_comp.get("change_percent", 0)
     yields_trend = "falling" if (yields_change and yields_change < 0) else "rising"
-    
-    # VIX
-    vix_comp = components.get("vix", {})
-    vix_value = vix_comp.get("current")
-    vix_level = "high" if (vix_value and vix_value > 20) else "low"
-    
+
     # Headlines sentiment (normalized from -1 to +1)
     headlines_comp = components.get("headlines", {})
     headlines_score = headlines_comp.get("score", 50)
     # Convert 0-100 to -1 to +1: (score - 50) / 50
     sentiment_normalized = round((headlines_score - 50) / 50, 2)
 
-    # FLO-121: Oil and S&P 500 removed — now via get_market_context (MT5 real-time)
-
     return {
         "score": score,
-        "dxy": {
-            "value": dxy_value,
-            "trend": dxy_trend,
-            "change_24h": dxy_change,
-        },
         "yields": {
             "value": yields_value,
             "trend": yields_trend,
             "change_24h": yields_change,
         },
-        "vix": {
-            "value": vix_value,
-            "level": vix_level,
-        },
         "sentiment": {
             "headlines_score": headlines_score,
             "normalized": sentiment_normalized,
         },
-        "high_impact_news_soon": False,  # Default: no economic calendar data
-        "geopolitical_risk": "low",  # Default: neutral, does not influence decision
+        "headlines": headlines_comp.get("details", [])[:5],
+        "high_impact_news_soon": False,
+        "geopolitical_risk": "low",
         "anomalies": result.get("anomalies", []),
         "error": None,
     }
