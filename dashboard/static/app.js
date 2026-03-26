@@ -1129,7 +1129,7 @@ function renderIntelFeed(feed, mtfTrend, volumeGate, marketContext) {
   const indices = mc.indices || {};
   const energy = mc.energy || {};
   const crypto = mc.crypto || {};
-  const yields10y = macro.yields_10y || {};
+  const yields10y = macro.yields_10y || macro.yields || {};
   function gridBox(id, label, val, chg, unit) {
     const v = val != null ? (unit || '') + (typeof val === 'number' ? val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : val) : '—';
     const chgHtml = chg != null ? `<span class="${chg > 0 ? 'text-green-400' : chg < 0 ? 'text-red-400' : 'text-gray-400'} text-[10px] font-mono">${chg > 0 ? '+' : ''}${Number(chg).toFixed(2)}%</span>` : '';

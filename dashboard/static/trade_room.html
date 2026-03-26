@@ -1104,19 +1104,8 @@
           <div class="ctx-row"><span class="ctx-key">Bollinger</span><span id="ctx-bb" class="ctx-val">—</span></div>
         </div>
 
-        <!-- Macro block -->
-        <div class="ctx-block">
-          <div class="ctx-label">MACRO</div>
-          <div class="ctx-row"><span class="ctx-key">DXY</span><span id="ctx-dxy" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">VIX</span><span id="ctx-vix" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">10Y</span><span id="ctx-10y" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">Oil WTI</span><span id="ctx-oil" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">S&P 500</span><span id="ctx-sp500" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">GLD Vol</span><span id="ctx-gld" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">GLD Flows</span><span id="ctx-gld-flows" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">Real Yields</span><span id="ctx-real-yields" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">USD/CNY</span><span id="ctx-usdcny" class="ctx-val">—</span></div>
-        </div>
+        <!-- FLO-122: 5-section macro panel (same as dashboard) -->
+        <div id="tr-macro-container"></div>
 
         <!-- Session win rate -->
         <div class="ctx-block">
@@ -3287,99 +3276,80 @@
                 setIndicator('ctx-bb', bbText);
               } catch(e) {}
 
-              // Macro from last_analysis.intel_feed.macro
+              // FLO-122: 5-section macro panel from market_context + macro
               try {
+                var mc = state.market_context || {};
                 var la2 = state.last_analysis || {};
                 var intel = la2.intel_feed || {};
                 var macro = intel.macro || {};
-                var dxy = macro.dxy || {};
-                var vix = macro.vix || {};
-                var yields = macro.yields || {};
-                var oil = macro.oil || {};
-                var sp500 = macro.sp500 || {};
-
-                var dxyVal = (dxy.value != null) ? Number(dxy.value) : null;
-                var vixVal = (vix.value != null) ? Number(vix.value) : null;
-                var y10Val = (yields.value != null) ? Number(yields.value) : null;
-                var oilVal = (oil.value != null) ? Number(oil.value) : null;
-                var sp500Val = (sp500.value != null) ? Number(sp500.value) : null;
-
-                var dxyEl = document.getElementById('ctx-dxy');
-                if (dxyEl) dxyEl.textContent = (dxyVal != null && isFinite(dxyVal)) ? dxyVal.toFixed(2) : '—';
-
-                var vixEl = document.getElementById('ctx-vix');
-                if (vixEl) vixEl.textContent = (vixVal != null && isFinite(vixVal)) ? vixVal.toFixed(2) : '—';
-
-                var y10El = document.getElementById('ctx-10y');
-                if (y10El) y10El.textContent = (y10Val != null && isFinite(y10Val)) ? y10Val.toFixed(2) + '%' : '—';
-
-                var oilEl = document.getElementById('ctx-oil');
-                if (oilEl) oilEl.textContent = (oilVal != null && isFinite(oilVal)) ? '$' + oilVal.toFixed(2) : '—';
-
-                var sp500El = document.getElementById('ctx-sp500');
-                if (sp500El) sp500El.textContent = (sp500Val != null && isFinite(sp500Val)) ? sp500Val.toFixed(0) : '—';
-
-                var gld = macro.gld || {};
-                var gldVal = (gld.value != null) ? Number(gld.value) : null;
-                var gldEl = document.getElementById('ctx-gld');
-                if (gldEl) gldEl.textContent = (gldVal != null && isFinite(gldVal)) ? Number(gldVal).toLocaleString() : '—';
-
-                var gf = macro.gld_flows || {};
-                var gfEl = document.getElementById('ctx-gld-flows');
-                if (gfEl && gf.direction) {
-                  var gfBull = gf.direction === 'ACCUMULATION' || gf.direction === 'QUIET_BID';
-                  var gfVol = gf.volume_change_pct != null ? ' vol ' + (gf.volume_change_pct > 0 ? '+' : '') + Number(gf.volume_change_pct).toFixed(0) + '%' : '';
-                  gfEl.textContent = gf.direction + gfVol;
-                  gfEl.style.color = gfBull ? '#4ade80' : (gf.direction === 'DISTRIBUTION' ? '#f87171' : '#6b7280');
-                } else if (gfEl) {
-                  gfEl.textContent = '\u2014';
-                }
-
-                var ry = macro.real_yields || {};
-                var ryVal = (ry.value != null) ? Number(ry.value) : null;
-                var ryEl = document.getElementById('ctx-real-yields');
-                if (ryEl) {
-                  // FLO-76: prefer proxy (live) over FRED (end-of-day)
-                  var ryProxy = (ry.proxy != null) ? Number(ry.proxy) : null;
-                  if (ryProxy != null && isFinite(ryProxy)) {
-                    ryEl.textContent = '\u2248' + ryProxy.toFixed(2) + '%';
-                  } else if (ryVal != null && isFinite(ryVal)) {
-                    ryEl.textContent = ryVal.toFixed(2) + '%';
-                  } else {
-                    ryEl.textContent = '\u2014';
+                var ctr = document.getElementById('tr-macro-container');
+                if (ctr) {
+                  function trMcRow(sym, d, label) {
+                    if (!d || d.bid == null) return '<div class="ctx-row"><span class="ctx-key">' + (label||sym) + '</span><span class="ctx-val">\u2014</span></div>';
+                    var c = d.change_pct;
+                    var chgColor = c > 0 ? '#4ade80' : (c < 0 ? '#f87171' : '#6b7280');
+                    var chgText = c != null ? (c > 0 ? '+' : '') + c.toFixed(2) + '%' : '';
+                    var posText = d.position_in_range != null ? ' ' + (d.position_in_range * 100).toFixed(0) + '%' : '';
+                    return '<div class="ctx-row"><span class="ctx-key">' + (label||sym) + '</span><span class="ctx-val">' + (typeof d.bid === 'number' ? d.bid.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits: d.bid < 10 ? 5 : 2}) : d.bid) + '</span><span style="color:' + chgColor + ';font-size:9px;margin-left:4px">' + chgText + '</span><span style="color:#67e8f9;font-size:8px;margin-left:3px;opacity:0.5">' + posText + '</span></div>';
                   }
+                  function trMcSection(title, rows, extra) {
+                    return '<div class="ctx-block" style="margin-bottom:6px"><div class="ctx-label">' + title + '</div>' + rows + (extra||'') + '</div>';
+                  }
+                  var html = '';
+                  // METALS
+                  var metals = mc.metals || {};
+                  var gsr = metals.gold_silver_ratio;
+                  html += trMcSection('METALS',
+                    trMcRow('XAGUSD', metals.XAGUSD, 'Silver') + trMcRow('XPTUSD', metals.XPTUSD, 'Platinum') + trMcRow('XPDUSD', metals.XPDUSD, 'Palladium'),
+                    gsr ? '<div style="font-size:9px;color:#9ca3af;margin-top:3px;border-top:1px solid rgba(75,85,99,0.2);padding-top:3px">Au/Ag: <span style="color:#e5e7eb;font-weight:bold">' + gsr + '</span></div>' : ''
+                  );
+                  // FOREX
+                  var fx = mc.forex || {};
+                  var fxL = {EURUSD:'EUR/USD',USDJPY:'USD/JPY',USDCHF:'USD/CHF',AUDUSD:'AUD/USD',USDCNH:'USD/CNH',GBPUSD:'GBP/USD'};
+                  var fxRows = '';
+                  var fxKeys = ['EURUSD','USDJPY','USDCHF','AUDUSD','USDCNH','GBPUSD'];
+                  for (var fi=0;fi<fxKeys.length;fi++) fxRows += trMcRow(fxKeys[fi], fx[fxKeys[fi]], fxL[fxKeys[fi]]);
+                  var ds = fx.dollar_strength;
+                  var dsHtml = ds ? '<div style="font-size:9px;margin-top:3px;border-top:1px solid rgba(75,85,99,0.2);padding-top:3px">Dollar: <span style="font-weight:bold;color:' + (ds==='strong'?'#f87171':ds==='weak'?'#4ade80':'#fbbf24') + '">' + ds.toUpperCase() + '</span></div>' : '';
+                  html += trMcSection('FOREX', fxRows, dsHtml);
+                  // FUTURES
+                  var fut = mc.futures || {};
+                  var futL = {'DXY_M6':'DXY','VIX_J6':'VIX','UST10Y_M6':'10Y Bond'};
+                  html += trMcSection('FUTURES',
+                    trMcRow('DXY_M6', fut.DXY_M6, 'DXY') + trMcRow('VIX_J6', fut.VIX_J6, 'VIX') + trMcRow('UST10Y_M6', fut.UST10Y_M6, '10Y Bond')
+                  );
+                  // KEY METRICS (2x2)
+                  var sp = (mc.indices||{}).US500||{};
+                  var btc = (mc.crypto||{}).BTCUSD||{};
+                  var oil = (mc.energy||{}).XTIUSD||{};
+                  var yd = macro.yields_10y || macro.yields || {};
+                  function trGridBox(label, val, chg, prefix) {
+                    var v = val != null ? (prefix||'') + (typeof val==='number'?val.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):val) : '\u2014';
+                    var cc = chg!=null?(chg>0?'#4ade80':chg<0?'#f87171':'#6b7280'):'';
+                    var ct = chg!=null?(chg>0?'+':'')+Number(chg).toFixed(2)+'%':'';
+                    return '<div style="text-align:center;background:rgba(31,41,55,0.7);border:1px solid rgba(75,85,99,0.25);border-radius:6px;padding:6px"><div style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em">' + label + '</div><div style="font-size:12px;color:#e5e7eb;font-weight:bold;font-family:monospace;margin-top:2px">' + v + '</div><div style="font-size:9px;color:' + cc + ';margin-top:1px">' + ct + '</div></div>';
+                  }
+                  html += '<div class="ctx-block" style="margin-bottom:6px"><div class="ctx-label">KEY METRICS</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">' + trGridBox('S&P 500',sp.bid,sp.change_pct) + trGridBox('BTC',btc.bid,btc.change_pct,'$') + trGridBox('OIL WTI',oil.bid,oil.change_pct,'$') + trGridBox('10Y YIELD',yd.value,null) + '</div></div>';
+                  // YAHOO DATA
+                  var gld = macro.gld || {};
+                  var gf = macro.gld_flows || {};
+                  var ry = macro.real_yields || {};
+                  var yRows = '';
+                  if (gld.value != null) {
+                    var gv = Number(gld.value);
+                    var gFmt = gv >= 1e6 ? (gv/1e6).toFixed(1)+'M' : (gv >= 1e3 ? (gv/1e3).toFixed(0)+'K' : gv);
+                    yRows += '<div class="ctx-row"><span class="ctx-key">GLD Vol</span><span class="ctx-val">' + gFmt + '</span></div>';
+                  }
+                  if (gf.direction) {
+                    var gfC = gf.direction==='ACCUMULATION'?'#4ade80':(gf.direction==='DISTRIBUTION'?'#f87171':'#6b7280');
+                    var gfV = gf.volume_change_pct!=null?' '+(gf.volume_change_pct>0?'+':'')+Number(gf.volume_change_pct).toFixed(0)+'%':'';
+                    yRows += '<div class="ctx-row"><span class="ctx-key">GLD Flows</span><span class="ctx-val" style="color:'+gfC+'">'+gf.direction+gfV+'</span></div>';
+                  }
+                  var ryV = (ry.proxy!=null)?ry.proxy:ry.value;
+                  if (ryV!=null) yRows += '<div class="ctx-row"><span class="ctx-key">Real Yields</span><span class="ctx-val">\u2248'+Number(ryV).toFixed(2)+'%</span></div>';
+                  if (yRows) html += trMcSection('YAHOO DATA', yRows);
+                  ctr.innerHTML = html;
                 }
-
-                var usdcny = macro.usdcny || {};
-                var cnyVal = (usdcny.value != null) ? Number(usdcny.value) : null;
-                var cnyEl = document.getElementById('ctx-usdcny');
-                if (cnyEl) cnyEl.textContent = (cnyVal != null && isFinite(cnyVal)) ? cnyVal.toFixed(4) : '—';
-
-                // 5d trend arrows from macro_history (FLO-74)
-                try {
-                  fetchJson('/api/macro-history').then(function(mh) {
-                    if (!mh || typeof mh !== 'object') return;
-                    var dates = Object.keys(mh).sort();
-                    if (dates.length < 2) return;
-                    var oldest = mh[dates[0]] || {};
-                    var newest = mh[dates[dates.length - 1]] || {};
-                    var trendMap = {dxy:'ctx-dxy', vix:'ctx-vix', yields:'ctx-10y', oil:'ctx-oil', sp500:'ctx-sp500'};
-                    var trendKeys = Object.keys(trendMap);
-                    for (var tki = 0; tki < trendKeys.length; tki++) {
-                      var tKey = trendKeys[tki];
-                      var elId = trendMap[tKey];
-                      var tel = document.getElementById(elId);
-                      if (!tel) continue;
-                      var oldV = oldest[tKey];
-                      var newV = newest[tKey];
-                      if (oldV == null || newV == null || oldV === 0) continue;
-                      var pctChg = ((newV - oldV) / Math.abs(oldV)) * 100;
-                      var arrow = Math.abs(pctChg) < 0.5 ? ' \u2594' : (pctChg > 0 ? ' \u25B2' : ' \u25BC');
-                      if (Math.abs(pctChg) > 5) arrow += arrow.trim();
-                      tel.textContent = tel.textContent + arrow;
-                    }
-                  }).catch(function(){});
-                } catch(e2) {}
               } catch(e) {}
 
               var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
