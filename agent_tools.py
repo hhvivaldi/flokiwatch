@@ -1539,11 +1539,7 @@ class AgentTools:
                 self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | could not compute sl pips")
                 return {"success": False, "reason": "could not compute sl pips"}
 
-            if sl_pips < 150 or sl_pips > 800:
-                self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | sl out of range ({sl_pips:.1f} pips)")
-                return {"success": False, "reason": f"sl out of range ({sl_pips:.1f} pips)"}
-
-            # Safety checks (max positions, daily loss, market open buffers, etc.)
+            # Safety checks (market open, MT5 connected, opposing positions)
             acct = self._executor.get_account_info() or {}
             balance = self._safe_float(acct.get("balance"))
             if balance is None:

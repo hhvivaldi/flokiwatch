@@ -292,13 +292,6 @@ class TradingBot:
             log.debug(f"Failed to load persisted dashboard state: {e}")
 
     def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
-        # FLO-92: When paused, kill ALL agent cycles — zero API spend
-        try:
-            if is_bot_paused():
-                log.info(f"FLOKI_SCHEDULE | Cycle skipped — bot is paused | trigger={trigger_type}")
-                return {"success": False, "reason": "bot_paused"}
-        except Exception:
-            pass
 
         acquired = False
         try:
@@ -1168,7 +1161,7 @@ class TradingBot:
                 # FLO-92: Skip Echo scans when bot is paused
                 try:
                     echo_enabled = bool(getattr(config, "ECHO_ENABLED", False))
-                    if echo_enabled and not is_bot_paused():
+                    if echo_enabled:
                         echo_interval = int(getattr(config, "ECHO_SCAN_INTERVAL_SECONDS", 300))
                         now_ts = time.time()
                         last_echo = getattr(self, "_echo_last_scan_ts", 0) or 0
@@ -1200,7 +1193,7 @@ class TradingBot:
                 # FLO-92: Skip Luna scans when bot is paused
                 try:
                     luna_enabled = bool(getattr(config, "LUNA_ENABLED", False))
-                    if luna_enabled and not is_bot_paused():
+                    if luna_enabled:
                         _luna_market_open, _luna_reason, _luna_next_open = is_market_open()
                         _luna_is_weekend = (not _luna_market_open
                                             and 'weekend' in (_luna_reason or '').lower())
@@ -1320,8 +1313,7 @@ class TradingBot:
                         try:
                             now_ts = time.time()
                             last_ts = self._last_agent_monitor_tick or 0
-                            # FLO-92: Skip Simba monitor ticks when bot is paused
-                            if (now_ts - last_ts) >= 30 and not is_bot_paused():
+                            if (now_ts - last_ts) >= 30:
                                 if self._agent_monitor is None:
                                     from agent_monitor import AgentMonitor
                                     self._agent_monitor = AgentMonitor(bot=self)

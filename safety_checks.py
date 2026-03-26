@@ -184,49 +184,12 @@ class SafetyChecker:
         elif self.is_in_open_buffer():
             reasons.append(f"{getattr(config, 'MARKET_OPEN_BUFFER_MINUTES', 60)} min buffer after open — no new positions")
         
-        # 4. Consecutive losses
-        if self.consecutive_losses >= config.MAX_CONSECUTIVE_LOSSES:
-            reasons.append(f"Reached {self.consecutive_losses} consecutive losses")
-            # Activate pause
-            if self.pause_until is None:
-                self.pause_until = datetime.now() + timedelta(hours=config.PAUSE_AFTER_LOSSES_HOURS)
-                self._save_state()
+        # FLO-118: Removed checks 4-10 (consecutive losses pause, active pause,
+        # max positions, max daily loss, high-impact news, anti-overtrading,
+        # smart pyramid). Floki manages his own risk. Sage advises via session
+        # memory — Floki reads and decides for himself.
 
-        # 5. Active pause
-        if self.pause_until and datetime.now() < self.pause_until:
-            reasons.append(f"Bot paused until {self.pause_until.strftime('%Y-%m-%d %H:%M')}")
-        elif self.pause_until and datetime.now() >= self.pause_until:
-            # Pause expired
-            self.pause_until = None
-            self.consecutive_losses = 0
-            self._save_state()
-        
-        # 6. Maximum positions
-        if open_positions >= config.MAX_POSITIONS:
-            reasons.append(f"Maximum positions reached ({open_positions}/{config.MAX_POSITIONS})")
-        
-        # 7. Maximum daily loss
-        daily_loss_percent = (self.daily_loss / account_balance) * 100 if account_balance > 0 else 0
-        if daily_loss_percent >= config.MAX_DAILY_LOSS:
-            reasons.append(f"Maximum daily loss reached ({daily_loss_percent:.1f}%)")
-        
-        # 8. High-impact news
-        if has_high_impact_news:
-            reasons.append("High-impact news in the next 2 hours")
-        
-        # 9. Anti-overtrading: check time since last trade in same direction
-        if trade_direction:
-            overtrading_ok, overtrading_reason = self.check_overtrading(trade_direction)
-            if not overtrading_ok:
-                reasons.append(overtrading_reason)
-        
-        # 10. Smart Pyramid: check if position already exists in same direction
-        if trade_direction and open_positions_list:
-            pyramid_ok, pyramid_reason = self.check_pyramid_allowed(trade_direction, open_positions_list)
-            if not pyramid_ok:
-                reasons.append(pyramid_reason)
-
-        # 11. FLO-85: Hard gate — no opposing positions allowed
+        # FLO-85: Hard gate — no opposing positions allowed
         if trade_direction and open_positions_list:
             opposing_ok, opposing_reason = self.check_no_opposing_position(trade_direction, open_positions_list)
             if not opposing_ok:
