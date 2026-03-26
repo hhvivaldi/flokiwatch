@@ -104,7 +104,8 @@
 | Field | Type | Writer | Reader (app.js) |
 |-------|------|--------|-----------------|
 | `intel_feed.headlines` | array | `main.py` | `renderIntelFeed()` → `#intel-headlines` |
-| `intel_feed.macro` | object (dxy, yields, vix) | `main.py` | `renderIntelFeed()` → `#intel-macro` |
+| `intel_feed.macro` | object (yields_10y, gld, real_yields, gld_flows) | `main.py` | `renderIntelFeed()` → `#macro-grid`, `#macro-yahoo` |
+| `market_context` | object (metals, forex, indices, energy, crypto, futures, session) | `state_writer.py` (from `market_context_cache.json`) | `renderIntelFeed()` → `#macro-metals`, `#macro-forex`, `#macro-futures`, `#macro-grid` |
 | `intel_feed.anomalies` | array | `main.py` | `renderIntelFeed()` → anomaly display |
 | `intel_feed.analysis_method` | string | `main.py` | `renderIntelFeed()` → `#intel-method` |
 | `intel_feed.news_score` | float | `main.py` | not directly used |
@@ -115,6 +116,55 @@
 | `intel_feed.alerts` | array | `main.py` | `renderIntelFeed()` → `#intel-tags` |
 | `intel_feed.sr_zones` | array | `main.py` | `renderIntelFeed()` → `#intel-sr-zones` |
 | `intel_feed.candlestick_patterns` | object \| null | `main.py` | `renderIntelFeed()` → `#intel-patterns` |
+
+### `market_context` Object (FLO-122)
+
+Data source: `data/market_context_cache.json` (written by `agent_tools.get_market_context()`, read by `state_writer.py`).
+
+**Section container IDs:**
+
+| Container ID | Section | Data Source |
+|-------------|---------|-------------|
+| `#macro-metals` | Metals table (Silver, Platinum, Palladium) | `market_context.metals` |
+| `#macro-forex` | Forex table (6 pairs + dollar strength) | `market_context.forex` |
+| `#macro-futures` | Futures table (DXY, VIX, 10Y Bond) | `market_context.futures` |
+| `#macro-grid` | 2x2 grid (S&P, BTC, Oil, Yields) | `market_context.indices/crypto/energy` + `macro.yields_10y` |
+| `#macro-yahoo` | Yahoo data (GLD Vol, Flows, Real Yields) | `intel_feed.macro` |
+
+**Instrument field IDs** (each is a `<tr>` element):
+
+| Field ID | Symbol | Category |
+|----------|--------|----------|
+| `#mc-XAGUSD` | Silver | metals |
+| `#mc-XPTUSD` | Platinum | metals |
+| `#mc-XPDUSD` | Palladium | metals |
+| `#mc-EURUSD` | EUR/USD | forex |
+| `#mc-USDJPY` | USD/JPY | forex |
+| `#mc-USDCHF` | USD/CHF | forex |
+| `#mc-AUDUSD` | AUD/USD | forex |
+| `#mc-USDCNH` | USD/CNH | forex |
+| `#mc-GBPUSD` | GBP/USD | forex |
+| `#mc-DXY_M6` | Dollar Index | futures |
+| `#mc-VIX_J6` | VIX | futures |
+| `#mc-UST10Y_M6` | 10Y Bond | futures |
+| `#mc-grid-sp500` | S&P 500 | grid |
+| `#mc-grid-btc` | Bitcoin | grid |
+| `#mc-grid-oil` | Oil WTI | grid |
+| `#mc-grid-yields` | 10Y Yield | grid |
+| `#mc-gld` | GLD Volume | yahoo |
+| `#mc-gld-flows` | GLD Flows | yahoo |
+| `#mc-real-yields` | Real Yields | yahoo |
+
+**Per-instrument fields** (in `market_context.{category}.{SYMBOL}`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bid` | float | Current bid price |
+| `change_pct` | float \| null | Change % from session close |
+| `day_high` | float \| null | Session high (bidhigh) |
+| `day_low` | float \| null | Session low (bidlow) |
+| `position_in_range` | float \| null | 0.0 (day low) to 1.0 (day high) |
+| `label` | string \| null | Human-readable label (futures only) |
 
 ### `last_analysis.intel_feed.candlestick_patterns` Object
 
