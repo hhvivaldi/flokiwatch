@@ -1403,8 +1403,8 @@ class AgentTools:
                             }
                             # Day range context
                             if info:
-                                d_hi = getattr(info, "session_high", 0) or 0
-                                d_lo = getattr(info, "session_low", 0) or 0
+                                d_hi = getattr(info, "bidhigh", 0) or 0
+                                d_lo = getattr(info, "bidlow", 0) or 0
                                 if d_hi > d_lo > 0:
                                     decimals = 5 if d_hi < 10 else 2
                                     entry["day_high"] = round(d_hi, decimals)
