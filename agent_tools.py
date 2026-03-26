@@ -1397,10 +1397,22 @@ class AgentTools:
                             change_pct = None
                             if prev_close and prev_close > 0:
                                 change_pct = round(((tick.bid - prev_close) / prev_close) * 100, 2)
-                            cat_data[sym] = {
+                            entry: Dict[str, Any] = {
                                 "bid": round(tick.bid, 5 if tick.bid < 10 else 2),
                                 "change_pct": change_pct,
                             }
+                            # Day range context
+                            if info:
+                                d_hi = getattr(info, "session_high", 0) or 0
+                                d_lo = getattr(info, "session_low", 0) or 0
+                                if d_hi > d_lo > 0:
+                                    decimals = 5 if d_hi < 10 else 2
+                                    entry["day_high"] = round(d_hi, decimals)
+                                    entry["day_low"] = round(d_lo, decimals)
+                                    entry["position_in_range"] = round(
+                                        (tick.bid - d_lo) / (d_hi - d_lo), 2
+                                    )
+                            cat_data[sym] = entry
                         else:
                             cat_data[sym] = None
                     except Exception:
