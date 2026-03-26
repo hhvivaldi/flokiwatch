@@ -1368,6 +1368,13 @@ class AgentTools:
         "indices": ["US500"],
         "energy": ["XTIUSD"],
         "crypto": ["BTCUSD"],
+        "futures": ["DXY_M6", "VIX_J6", "UST10Y_M6"],
+    }
+
+    _FUTURES_LABELS = {
+        "DXY_M6": "Dollar Index",
+        "VIX_J6": "VIX Fear Gauge",
+        "UST10Y_M6": "10Y Bond Price (up=yields down)",
     }
 
     def get_market_context(self) -> Dict[str, Any]:
@@ -1412,6 +1419,10 @@ class AgentTools:
                                     entry["position_in_range"] = round(
                                         (tick.bid - d_lo) / (d_hi - d_lo), 2
                                     )
+                            # Label for futures
+                            label = self._FUTURES_LABELS.get(sym)
+                            if label:
+                                entry["label"] = label
                             cat_data[sym] = entry
                         else:
                             cat_data[sym] = None
