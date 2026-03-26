@@ -28,11 +28,15 @@ def get_ea_management_params(sl_pips: float, volatility_status: Any) -> Tuple[fl
         )
 
     if bool(getattr(config, "FLOKI_MANAGES_POSITION", False)):
+        # FLO-116: EA becomes pure executor. Floki manages positions via
+        # adjust_trade (direct MT5 API) and close_trade. Set BE/trailing
+        # triggers to 9999 so the EA never activates them autonomously.
+        # Keep max_drawdown as emergency backstop only.
         return (
-            float(sl_pips_f * getattr(config, "FLOKI_BREAKEVEN_ATR_MULT", 0.8)),
-            float(getattr(config, "FLOKI_TRAILING_TRIGGER_PIPS", 500)),
-            float(getattr(config, "FLOKI_TRAILING_DISTANCE_PIPS", 300)),
-            float(getattr(config, "FLOKI_MAX_DRAWDOWN_PIPS", config.MAX_POSITION_DRAWDOWN_PIPS)),
+            9999.0,
+            9999.0,
+            9999.0,
+            float(getattr(config, "FLOKI_MAX_DRAWDOWN_PIPS", 800)),
         )
 
     return (
