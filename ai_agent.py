@@ -661,7 +661,7 @@ class AIAgent:
             },
             {
                 "name": "adjust_trade",
-                "description": "Adjust SL/TP of an open trade",
+                "description": "Adjust SL/TP of an open trade. You are responsible for position management — move SL to protect profits or adjust TP based on market structure.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
