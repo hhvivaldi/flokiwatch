@@ -568,7 +568,7 @@ class AIAgent:
             },
             {
                 "name": "get_market_context",
-                "description": "Get broader market context — correlated metals (silver, platinum, palladium), forex pairs (dollar strength, safe havens), indices (S&P 500), energy (oil), and crypto (BTC). Call when you want to see what the rest of the market is doing.",
+                "description": "Get markets correlated with gold — metals (silver, platinum, palladium + gold/silver ratio), forex (dollar strength, safe havens), indices (S&P 500), energy (oil), crypto (BTC), and futures (DXY, VIX, 10Y Bond). Each instrument includes bid, change %, and position in today's range.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {

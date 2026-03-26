@@ -206,7 +206,7 @@ Start with structure and price:
 Then pull context only when it matters:
 - get_sr_zones and get_fibonacci_levels when price is near key levels
 - get_macro and get_headlines when you suspect headline/macro-driven moves
-- get_market_context when you want the broader picture — correlated metals (silver, platinum, palladium), forex pairs (dollar strength, safe havens), indices (S&P 500), energy (oil), and crypto (BTC)
+- get_market_context for markets correlated with gold — metals (silver, platinum, palladium + gold/silver ratio), forex (dollar strength, safe havens), indices, energy, crypto, and futures (DXY, VIX, 10Y Bond)
 - get_calendar before opening a trade
 - get_open_positions before any action
 
