@@ -1362,129 +1362,27 @@ class AgentTools:
     # Market context (correlated instruments from MT5)
     # ---------------------------------------------------------------------
 
-    _MARKET_CONTEXT_SYMBOLS = {
-        "metals": ["XAGUSD", "XPTUSD", "XPDUSD"],
-        "forex": ["EURUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCNH", "GBPUSD"],
-        "indices": ["US500"],
-        "energy": ["XTIUSD"],
-        "crypto": ["BTCUSD"],
-        "futures": ["DXY_M6", "VIX_J6", "UST10Y_M6"],
-    }
-
-    _FUTURES_LABELS = {
-        "DXY_M6": "Dollar Index",
-        "VIX_J6": "VIX Fear Gauge",
-        "UST10Y_M6": "10Y Bond Price (up=yields down)",
-    }
-
     def get_market_context(self) -> Dict[str, Any]:
         """Read correlated MT5 instruments for broader market picture."""
         start = time.time()
         try:
-            # 60s cache
-            cached = getattr(self, "_market_context_cache", None)
-            cached_ts = getattr(self, "_market_context_cache_ts", 0)
-            if cached and (time.time() - cached_ts) < 60:
-                self._log_tool("get_market_context", start, "cache_hit")
-                return cached
+            from market_context_fetcher import fetch_market_context
 
-            import MetaTrader5 as mt5
+            result = fetch_market_context()
+            if not result:
+                self._log_tool("get_market_context", start, "no_data")
+                return {"success": False, "reason": "no_data"}
 
-            result: Dict[str, Any] = {}
-
-            for category, symbols in self._MARKET_CONTEXT_SYMBOLS.items():
-                cat_data: Dict[str, Any] = {}
-                for sym in symbols:
-                    try:
-                        mt5.symbol_select(sym, True)
-                        tick = mt5.symbol_info_tick(sym)
-                        if tick and tick.bid > 0:
-                            info = mt5.symbol_info(sym)
-                            prev_close = getattr(info, "session_close", 0) if info else 0
-                            change_pct = None
-                            if prev_close and prev_close > 0:
-                                change_pct = round(((tick.bid - prev_close) / prev_close) * 100, 2)
-                            entry: Dict[str, Any] = {
-                                "bid": round(tick.bid, 5 if tick.bid < 10 else 2),
-                                "change_pct": change_pct,
-                            }
-                            # Day range context
-                            if info:
-                                d_hi = getattr(info, "bidhigh", 0) or 0
-                                d_lo = getattr(info, "bidlow", 0) or 0
-                                if d_hi > d_lo > 0:
-                                    decimals = 5 if d_hi < 10 else 2
-                                    entry["day_high"] = round(d_hi, decimals)
-                                    entry["day_low"] = round(d_lo, decimals)
-                                    entry["position_in_range"] = round(
-                                        (tick.bid - d_lo) / (d_hi - d_lo), 2
-                                    )
-                            # Label for futures
-                            label = self._FUTURES_LABELS.get(sym)
-                            if label:
-                                entry["label"] = label
-                            cat_data[sym] = entry
-                        else:
-                            cat_data[sym] = None
-                    except Exception:
-                        cat_data[sym] = None
-                result[category] = cat_data
-
-            # Derived: gold/silver ratio
+            # Enrich with volume ratio from agent data (not available in fetcher)
             try:
-                gold_tick = mt5.symbol_info_tick("XAUUSD")
-                silver = (result.get("metals") or {}).get("XAGUSD")
-                if gold_tick and gold_tick.bid > 0 and silver and silver.get("bid"):
-                    result["metals"]["gold_silver_ratio"] = round(gold_tick.bid / silver["bid"], 1)
-            except Exception:
-                pass
-
-            # Derived: dollar strength from EUR, JPY, CHF
-            try:
-                forex = result.get("forex") or {}
-                eur = (forex.get("EURUSD") or {}).get("change_pct")
-                jpy = (forex.get("USDJPY") or {}).get("change_pct")
-                chf = (forex.get("USDCHF") or {}).get("change_pct")
-                if eur is not None and jpy is not None and chf is not None:
-                    # Dollar strong = EUR falling, JPY rising, CHF rising
-                    strong_signals = (1 if eur < 0 else 0) + (1 if jpy > 0 else 0) + (1 if chf > 0 else 0)
-                    if strong_signals >= 2:
-                        result["forex"]["dollar_strength"] = "strong"
-                    elif strong_signals <= 1:
-                        result["forex"]["dollar_strength"] = "weak"
-                    else:
-                        result["forex"]["dollar_strength"] = "mixed"
-            except Exception:
-                pass
-
-            # Session context
-            try:
-                utc_hour = datetime.utcnow().hour
-                session_name = self._infer_session_from_utc_hour(utc_hour)
                 dp = self._last_agent_data()
                 vol = (dp.get("indicators") or {}).get("volume") if dp else None
-                result["session"] = {
-                    "name": session_name,
-                    "utc_hour": utc_hour,
-                    "volume_ratio": vol.get("tick_volume_ratio") if isinstance(vol, dict) else None,
-                }
+                if isinstance(result.get("session"), dict) and isinstance(vol, dict):
+                    result["session"]["volume_ratio"] = vol.get("tick_volume_ratio")
             except Exception:
                 pass
 
-            self._market_context_cache = result
-            self._market_context_cache_ts = time.time()
             n_live = sum(1 for cat in result.values() if isinstance(cat, dict) for v in cat.values() if isinstance(v, dict) and v.get("bid"))
-
-            # FLO-122: Write to disk so dashboard state_writer can read it
-            try:
-                _cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "market_context_cache.json")
-                _tmp = _cache_path + ".tmp"
-                with open(_tmp, "w", encoding="utf-8") as _f:
-                    json.dump(result, _f, ensure_ascii=False)
-                os.replace(_tmp, _cache_path)
-            except Exception:
-                pass
-
             self._log_tool("get_market_context", start, f"live={n_live}")
             return result
         except Exception as e:

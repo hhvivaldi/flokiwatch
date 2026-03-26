@@ -223,14 +223,12 @@ def write_state(bot_instance: Any) -> None:
         # Force null even if older state formats injected data elsewhere
         state["agent_memory"] = None
 
-        # FLO-122: Inject market_context from cached file (written by get_market_context tool)
+        # FLO-122: Inject market_context from MT5 (shared fetcher with 60s cache)
         try:
-            _mc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "market_context_cache.json")
-            if os.path.exists(_mc_path):
-                with open(_mc_path, "r", encoding="utf-8") as _mcf:
-                    _mc = json.loads(_mcf.read())
-                if isinstance(_mc, dict):
-                    state["market_context"] = _mc
+            from market_context_fetcher import fetch_market_context
+            _mc = fetch_market_context()
+            if isinstance(_mc, dict) and _mc:
+                state["market_context"] = _mc
         except Exception:
             pass
 
