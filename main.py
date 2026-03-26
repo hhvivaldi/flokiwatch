@@ -5249,7 +5249,7 @@ class TradingBot:
                 # Record close type for dynamic cooldown
                 close_type = action.get('close_type', 'sl')
                 trade_dir = action.get('direction', 'BUY')
-                record_close_type(trade_dir, close_type)
+                record_close_type(trade_dir, close_type, pnl=profit)
         
         # Persist state after monitor cycle
         write_state(self)

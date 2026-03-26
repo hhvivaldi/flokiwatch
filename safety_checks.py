@@ -307,7 +307,9 @@ class SafetyChecker:
         
         # Dynamic cooldown based on close type
         close_type = self.last_close_type.get(direction)
-        if close_type == "trailing":
+        if close_type == "breakeven":
+            min_minutes = getattr(config, 'MIN_MINUTES_AFTER_BREAKEVEN', 5)
+        elif close_type == "trailing":
             min_minutes = getattr(config, 'MIN_MINUTES_AFTER_TRAILING', 30)
         elif close_type == "sl":
             min_minutes = getattr(config, 'MIN_MINUTES_AFTER_SL', 45)
@@ -328,15 +330,20 @@ class SafetyChecker:
         self.last_trade_time[direction] = datetime.now()
         self._save_state()
     
-    def record_close_type(self, direction: str, close_type: str):
+    def record_close_type(self, direction: str, close_type: str, pnl: Optional[float] = None):
         """
         Record the close type of the last trade (for dynamic cooldown).
-        
+
         Args:
             direction: "BUY" or "SELL"
-            close_type: "trailing", "sl", "tp", or None
+            close_type: "trailing", "sl", "tp", "breakeven", or None
+            pnl: P&L of the closed trade (used to detect breakeven closes)
         """
         direction = direction.upper()
+        # FLO-116: If P&L is near zero (-$2 to +$2), classify as breakeven
+        # regardless of close_type — EA-killed trades shouldn't trigger long cooldowns
+        if pnl is not None and -2.0 <= float(pnl) <= 2.0:
+            close_type = "breakeven"
         self.last_close_type[direction] = close_type
         # Update last_trade_time to the close moment (cooldown counts from here)
         self.last_trade_time[direction] = datetime.now()
@@ -542,9 +549,9 @@ def record_trade_opened(direction: str):
     safety.record_trade_opened(direction)
 
 
-def record_close_type(direction: str, close_type: str):
+def record_close_type(direction: str, close_type: str, pnl: float = None):
     """Record close type of last trade (for dynamic cooldown)"""
-    safety.record_close_type(direction, close_type)
+    safety.record_close_type(direction, close_type, pnl=pnl)
 
 
 def record_trade_result(profit: float):
