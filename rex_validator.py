@@ -183,8 +183,8 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
 
         model = (
             (str(cfg_model).strip() if cfg_model else "")
-            or os.environ.get("REX_MODEL", "gpt-5-mini").strip()
-            or "gpt-5-mini"
+            or os.environ.get("REX_MODEL", "gpt-4o").strip()
+            or "gpt-4o"
         )
 
         prompt = _build_prompt(floki_summary)
