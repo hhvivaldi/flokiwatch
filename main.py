@@ -3462,29 +3462,7 @@ class TradingBot:
                         break
 
                 if _exec_succeeded:
-                    # FLO-114: Record trade open in SQLite from tool trace
-                    try:
-                        for _t in _tool_trace:
-                            if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
-                                _r = _t.get("result", {})
-                                if isinstance(_r, dict) and _r.get("ticket"):
-                                    record_trade_open(
-                                        ticket=int(_r["ticket"]),
-                                        direction=str(_r.get("direction", agent_result.decision.replace("OPEN_", ""))),
-                                        volume=float(_r.get("volume", 0.01)),
-                                        open_price=float(_r.get("fill_price", 0)),
-                                        sl=float(_r.get("sl", 0)),
-                                        tp=float(_r.get("tp", 0)),
-                                        comment="floki_agent",
-                                        decision_source="floki_agent",
-                                    )
-                                    log.info(
-                                        f"FLOKI | record_trade_open → ticket={_r['ticket']} "
-                                        f"{_r.get('direction', '?')} @ {_r.get('fill_price', '?')}"
-                                    )
-                                break
-                    except Exception as e_rto:
-                        log.warning(f"FLOKI | record_trade_open failed: {e_rto}")
+                    pass  # genuine open — decision stays
                 elif _exec_called and not _exec_succeeded:
                     _fail_reason = "unknown"
                     try:
@@ -3541,6 +3519,34 @@ class TradingBot:
                     agent_result.decision = "HOLD_TRADE"
         except Exception:
             pass
+
+        # FLO-103: Record trade open in SQLite whenever execute_trade succeeded —
+        # regardless of decision type (OPEN_BUY, HOLD_TRADE, etc.). Covers the
+        # case where Floki opens a trade mid-conversation via GEMINI_FOLLOWUP
+        # but the final decision text says HOLD_TRADE.
+        try:
+            _tt = getattr(agent_result, "tool_trace", None) or []
+            for _t in _tt:
+                if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
+                    _r = _t.get("result")
+                    if isinstance(_r, dict) and _r.get("success") and _r.get("ticket"):
+                        record_trade_open(
+                            ticket=int(_r["ticket"]),
+                            direction=str(_r.get("direction", "UNKNOWN")),
+                            volume=float(_r.get("volume", 0.01)),
+                            open_price=float(_r.get("fill_price", 0)),
+                            sl=float(_r.get("sl", 0)),
+                            tp=float(_r.get("tp", 0)),
+                            comment="floki_agent",
+                            decision_source="floki_agent",
+                        )
+                        log.info(
+                            f"FLOKI | record_trade_open → ticket={_r['ticket']} "
+                            f"{_r.get('direction', '?')} @ {_r.get('fill_price', '?')}"
+                        )
+                    break
+        except Exception as e_rto:
+            log.warning(f"FLOKI | record_trade_open failed: {e_rto}")
 
         try:
             alert_proactive_decision(agent_result)
