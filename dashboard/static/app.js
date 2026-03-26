@@ -856,7 +856,7 @@ function render(state) {
 
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);
-  renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate);
+  renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate, state.market_context);
   renderAgentCard(la.agent_decision, marketClosed);
   renderProactiveAnalysis(la.proactive_analysis, state.positions);
   renderFastTriggers(la.fast_decisions);
@@ -1022,7 +1022,7 @@ function echoBadge(classification) {
   return "";
 }
 
-function renderIntelFeed(feed, mtfTrend, volumeGate) {
+function renderIntelFeed(feed, mtfTrend, volumeGate, marketContext) {
   const section = el("intel-feed-section");
   const contentEls = section.querySelectorAll(".intel-feed-content");
   const empty = section.querySelector(".intel-feed-empty");
@@ -1077,44 +1077,90 @@ function renderIntelFeed(feed, mtfTrend, volumeGate) {
     }
   }
 
-  // Macro cards
+  // FLO-122: 5-section macro panel (MT5 market_context + Yahoo macro)
   const macroContainer = el("intel-macro");
   macroContainer.innerHTML = "";
   const macro = feed.macro || {};
-  for (const key of ["dxy", "yields", "vix", "oil", "sp500", "gld", "real_yields", "usdcny"]) {
-    const m = macro[key];
-    if (!m) continue;
-    // FLO-76: prefer proxy for real_yields when available
-    const val = (key === "real_yields" && m.proxy != null) ? m.proxy : m.value;
-    const chg = m.change_pct;
-    const hasScore = m.score != null && Number.isFinite(m.score);
-    const sc = hasScore ? intelScoreColor(m.score) : intelScoreColor(50);
-    const impact = macroImpactText(key, chg);
-    const arrow = Number(chg) > 0 ? "&#9650;" : (Number(chg) < 0 ? "&#9660;" : "");
-    const chgClass = Number(chg) > 0 ? "text-green-400" : (Number(chg) < 0 ? "text-red-400" : "text-gray-400");
-    const unit = macroUnit(key);
-    const prefix = macroPrefix(key);
-    const scoreHtml = hasScore ? fmtNum(m.score, 0) : "";
+  const mc = marketContext || {};
 
-    macroContainer.insertAdjacentHTML("beforeend", `
-      <div class="bg-gray-800/40 backdrop-blur-sm border ${sc.border} rounded-xl p-3 shadow-md hover:bg-gray-800/60 transition-colors duration-300 intel-macro-card relative overflow-hidden group" data-macro-key="${key}">
-        <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-        <div class="flex items-center justify-between relative z-10">
-          <div class="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">${macroLabel(key)} <span class="macro-trend-arrow" data-trend-key="${key}"></span></div>
-          <div class="text-xs font-bold font-mono ${sc.text}">${scoreHtml}</div>
-        </div>
-        <div class="flex items-baseline gap-2 mt-2 relative z-10">
-          <span class="text-lg text-gray-100 font-bold font-mono">${val != null ? prefix + macroFmtVal(key, val) + unit : "—"}</span>
-          <span class="text-xs font-mono font-medium ${chgClass}">${arrow} ${chg != null ? (Number(chg) > 0 ? "+" : "") + Number(chg).toFixed(2) + "%" : "—"}</span>
-        </div>
-        <div class="intel-robot-bubble inline-flex mt-2 relative z-10">
-          <img src="/image/flokiwatch.png" alt="Floki" class="floki-intel-mini shadow-sm ring-1 ring-white/10">
-          <div class="intel-bubble backdrop-blur-md bg-gray-900/90 border-gray-700/50 p-2">
-            <div class="text-xs text-gray-300 font-medium">${impact}</div>
-          </div>
-        </div>
-      </div>
-    `);
+  // Helper: render a table row for an MT5 instrument
+  function mcRow(sym, data, label) {
+    if (!data || data.bid == null) return `<tr id="mc-${sym}"><td class="text-gray-500 text-xs py-0.5" colspan="3">${label || sym} —</td></tr>`;
+    const v = data.bid;
+    const c = data.change_pct;
+    const chgHtml = c != null ? `<span class="${c > 0 ? 'text-green-400' : c < 0 ? 'text-red-400' : 'text-gray-400'}">${c > 0 ? '+' : ''}${c.toFixed(2)}%</span>` : '<span class="text-gray-500">—</span>';
+    const posHtml = data.position_in_range != null ? `<span class="text-gray-500">${(data.position_in_range * 100).toFixed(0)}%</span>` : '';
+    return `<tr id="mc-${sym}"><td class="text-gray-300 text-xs py-0.5 font-medium">${label || sym}</td><td class="text-gray-100 text-xs font-mono text-right">${typeof v === 'number' ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: v < 10 ? 5 : 2}) : v}</td><td class="text-xs font-mono text-right w-16">${chgHtml}</td><td class="text-[10px] font-mono text-right w-8">${posHtml}</td></tr>`;
+  }
+
+  // Helper: render a section card
+  function mcSection(id, title, tableHtml, extra) {
+    return `<div id="${id}" class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md"><div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">${title}</div><table class="w-full">${tableHtml}</table>${extra || ''}</div>`;
+  }
+
+  // Section 1: METALS
+  const metals = mc.metals || {};
+  const gsr = metals.gold_silver_ratio;
+  let metalsRows = mcRow("XAGUSD", metals.XAGUSD, "Silver") + mcRow("XPTUSD", metals.XPTUSD, "Platinum") + mcRow("XPDUSD", metals.XPDUSD, "Palladium");
+  const gsrHtml = gsr ? `<div class="text-[10px] text-gray-400 mt-1 font-mono">Gold/Silver Ratio: <span class="text-gray-200 font-bold">${gsr}</span></div>` : '';
+  macroContainer.insertAdjacentHTML("beforeend", mcSection("macro-metals", "METALS", metalsRows, gsrHtml));
+
+  // Section 2: FOREX
+  const forex = mc.forex || {};
+  const fxLabels = {EURUSD: "EUR/USD", USDJPY: "USD/JPY", USDCHF: "USD/CHF", AUDUSD: "AUD/USD", USDCNH: "USD/CNH", GBPUSD: "GBP/USD"};
+  let forexRows = "";
+  for (const sym of ["EURUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCNH", "GBPUSD"]) {
+    forexRows += mcRow(sym, forex[sym], fxLabels[sym]);
+  }
+  const ds = forex.dollar_strength;
+  const dsHtml = ds ? `<div class="text-[10px] mt-1 font-mono">Dollar: <span class="font-bold ${ds === 'strong' ? 'text-red-400' : ds === 'weak' ? 'text-green-400' : 'text-gray-400'}">${ds.toUpperCase()}</span></div>` : '';
+  macroContainer.insertAdjacentHTML("beforeend", mcSection("macro-forex", "FOREX", forexRows, dsHtml));
+
+  // Section 3: FUTURES
+  const futures = mc.futures || {};
+  const futLabels = {"DXY_M6": "DXY", "VIX_J6": "VIX", "UST10Y_M6": "10Y Bond"};
+  let futRows = "";
+  for (const sym of ["DXY_M6", "VIX_J6", "UST10Y_M6"]) {
+    futRows += mcRow(sym, futures[sym], futLabels[sym]);
+  }
+  macroContainer.insertAdjacentHTML("beforeend", mcSection("macro-futures", "FUTURES", futRows));
+
+  // Section 4: 2x2 GRID (key metrics from mixed sources)
+  const indices = mc.indices || {};
+  const energy = mc.energy || {};
+  const crypto = mc.crypto || {};
+  const yields10y = macro.yields_10y || {};
+  function gridBox(id, label, val, chg, unit) {
+    const v = val != null ? (unit || '') + (typeof val === 'number' ? val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : val) : '—';
+    const chgHtml = chg != null ? `<span class="${chg > 0 ? 'text-green-400' : chg < 0 ? 'text-red-400' : 'text-gray-400'} text-[10px] font-mono">${chg > 0 ? '+' : ''}${Number(chg).toFixed(2)}%</span>` : '';
+    return `<div id="${id}" class="bg-gray-800/60 rounded-lg p-2 text-center"><div class="text-[9px] text-gray-500 font-semibold tracking-widest uppercase">${label}</div><div class="text-sm text-gray-100 font-bold font-mono mt-0.5">${v}</div><div class="mt-0.5">${chgHtml}</div></div>`;
+  }
+  const sp = indices.US500 || {};
+  const btc = crypto.BTCUSD || {};
+  const oil = energy.XTIUSD || {};
+  const yd = yields10y;
+  const gridHtml = `<div class="grid grid-cols-2 gap-2">${gridBox("mc-grid-sp500", "S&P 500", sp.bid, sp.change_pct)}${gridBox("mc-grid-btc", "BTC", btc.bid, btc.change_pct, "$")}${gridBox("mc-grid-oil", "OIL WTI", oil.bid, oil.change_pct, "$")}${gridBox("mc-grid-yields", "10Y YIELD", yd.value, null, "")}</div>`;
+  macroContainer.insertAdjacentHTML("beforeend", `<div id="macro-grid" class="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 shadow-md"><div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">KEY METRICS</div>${gridHtml}</div>`);
+
+  // Section 5: YAHOO DATA (GLD, Real Yields — no MT5 equivalent)
+  const gld = macro.gld || {};
+  const ry = macro.real_yields || {};
+  const gf = macro.gld_flows || {};
+  const ryVal = (ry.proxy != null) ? ry.proxy : ry.value;
+  let yahooRows = '';
+  if (gld.value != null) {
+    const gldFmt = Number(gld.value) >= 1e6 ? (Number(gld.value) / 1e6).toFixed(1) + 'M' : (Number(gld.value) >= 1e3 ? (Number(gld.value) / 1e3).toFixed(0) + 'K' : gld.value);
+    yahooRows += `<tr id="mc-gld"><td class="text-gray-300 text-xs py-0.5 font-medium">GLD Vol</td><td class="text-gray-100 text-xs font-mono text-right" colspan="3">${gldFmt}</td></tr>`;
+  }
+  if (gf.direction) {
+    const gfColor = gf.direction === 'ACCUMULATION' ? 'text-green-400' : gf.direction === 'DISTRIBUTION' ? 'text-red-400' : 'text-gray-400';
+    yahooRows += `<tr id="mc-gld-flows"><td class="text-gray-300 text-xs py-0.5 font-medium">GLD Flows</td><td class="text-xs font-mono text-right ${gfColor}" colspan="3">${gf.direction} ${gf.volume_change_pct != null ? (gf.volume_change_pct > 0 ? '+' : '') + gf.volume_change_pct.toFixed(0) + '%' : ''}</td></tr>`;
+  }
+  if (ryVal != null) {
+    yahooRows += `<tr id="mc-real-yields"><td class="text-gray-300 text-xs py-0.5 font-medium">Real Yields</td><td class="text-gray-100 text-xs font-mono text-right" colspan="3">${Number(ryVal).toFixed(2)}%</td></tr>`;
+  }
+  if (yahooRows) {
+    macroContainer.insertAdjacentHTML("beforeend", mcSection("macro-yahoo", "YAHOO DATA", yahooRows));
   }
 
   // Anomalies
