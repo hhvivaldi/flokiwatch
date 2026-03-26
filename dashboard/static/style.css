@@ -633,6 +633,96 @@
 }
 
 /* ================================================================
+   FLO-122: MACRO PANEL — 5-SECTION LAYOUT
+   ================================================================ */
+
+/* Section cards */
+#macro-metals,
+#macro-forex,
+#macro-futures,
+#macro-grid,
+#macro-yahoo {
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(75, 85, 99, 0.35);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  backdrop-filter: blur(8px);
+}
+
+/* Section header text */
+#macro-metals > div:first-child,
+#macro-forex > div:first-child,
+#macro-futures > div:first-child,
+#macro-grid > div:first-child,
+#macro-yahoo > div:first-child {
+  color: rgba(163, 230, 53, 0.7);  /* chartreuse accent */
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Table rows */
+#macro-metals table,
+#macro-forex table,
+#macro-futures table,
+#macro-yahoo table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#macro-metals table tr,
+#macro-forex table tr,
+#macro-futures table tr,
+#macro-yahoo table tr {
+  border-bottom: 1px solid rgba(75, 85, 99, 0.15);
+}
+
+#macro-metals table tr:last-child,
+#macro-forex table tr:last-child,
+#macro-futures table tr:last-child,
+#macro-yahoo table tr:last-child {
+  border-bottom: none;
+}
+
+#macro-metals table td,
+#macro-forex table td,
+#macro-futures table td,
+#macro-yahoo table td {
+  padding: 3px 2px;
+}
+
+/* Gold/Silver ratio + Dollar strength badges */
+#macro-metals > div:last-child,
+#macro-forex > div:last-child {
+  border-top: 1px solid rgba(75, 85, 99, 0.2);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+/* 2x2 grid boxes */
+#macro-grid .grid > div {
+  background: rgba(31, 41, 55, 0.7);
+  border: 1px solid rgba(75, 85, 99, 0.25);
+  border-radius: 8px;
+  padding: 8px;
+  transition: border-color 0.2s ease;
+}
+
+#macro-grid .grid > div:hover {
+  border-color: rgba(163, 230, 53, 0.3);
+}
+
+/* Position-in-range column: subtle cyan */
+#macro-metals table td:last-child,
+#macro-forex table td:last-child,
+#macro-futures table td:last-child {
+  color: rgba(103, 232, 249, 0.5);  /* cyan accent, muted */
+}
+
+/* ================================================================
    FLOKIWATCH BRANDING
    ================================================================ */
 
