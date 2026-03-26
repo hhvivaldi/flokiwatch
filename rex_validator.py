@@ -206,8 +206,7 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
             resp = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_completion_tokens=450,
+                max_completion_tokens=1500,
                 timeout=timeout_seconds,
             )
         except Exception as e:
