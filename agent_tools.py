@@ -191,6 +191,31 @@ class AgentTools:
             return "NY"
         return "OFF"
 
+    def _build_session_context_for_rex(
+        self, session_name: Optional[str], indicators: Dict[str, Any], dp: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build session context so Rex can evaluate data in session context."""
+        ctx: Dict[str, Any] = {"name": session_name}
+        try:
+            utc_hour = self._safe_int(dp.get("utc_hour"))
+            if utc_hour is None:
+                utc_hour = datetime.utcnow().hour
+            ctx["utc_hour"] = utc_hour
+
+            # Hours into session
+            session_starts = {"ASIAN": 0, "LONDON": 7, "NY": 13, "OFF": 21}
+            start = session_starts.get(session_name or "", 0)
+            ctx["hours_into_session"] = (utc_hour - start) % 24
+
+            # Volume ratio vs average (from indicators if available)
+            vol = indicators.get("volume") if isinstance(indicators, dict) else None
+            if isinstance(vol, dict):
+                ctx["volume_ratio"] = vol.get("tick_volume_ratio")
+                ctx["volume_classification"] = vol.get("classification")
+        except Exception:
+            pass
+        return ctx
+
     def _rsi_bucket(self, rsi: Optional[float]) -> Optional[str]:
         if rsi is None:
             return None
@@ -659,7 +684,7 @@ class AgentTools:
                 "rex_previous_response": rex_previous_response,
                 "market_context": {
                     "current_price": price or None,
-                    "session_name": session_name,
+                    "session": self._build_session_context_for_rex(session_name, indicators, dp),
                     "indicators": indicators,
                     "sr_zones_nearest": sr_nearest,
                     "fibonacci": fib,
