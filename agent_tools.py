@@ -1474,6 +1474,17 @@ class AgentTools:
             self._market_context_cache = result
             self._market_context_cache_ts = time.time()
             n_live = sum(1 for cat in result.values() if isinstance(cat, dict) for v in cat.values() if isinstance(v, dict) and v.get("bid"))
+
+            # FLO-122: Write to disk so dashboard state_writer can read it
+            try:
+                _cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "market_context_cache.json")
+                _tmp = _cache_path + ".tmp"
+                with open(_tmp, "w", encoding="utf-8") as _f:
+                    json.dump(result, _f, ensure_ascii=False)
+                os.replace(_tmp, _cache_path)
+            except Exception:
+                pass
+
             self._log_tool("get_market_context", start, f"live={n_live}")
             return result
         except Exception as e:
