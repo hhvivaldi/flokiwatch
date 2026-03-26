@@ -1756,9 +1756,7 @@ def get_news_detailed() -> dict:
     # Convert 0-100 to -1 to +1: (score - 50) / 50
     sentiment_normalized = round((headlines_score - 50) / 50, 2)
 
-    # FLO-111: Oil + S&P 500 (pass through from components)
-    oil_comp = components.get("oil", {})
-    sp500_comp = components.get("sp500", {})
+    # FLO-121: Oil and S&P 500 removed — now via get_market_context (MT5 real-time)
 
     return {
         "score": score,
@@ -1775,14 +1773,6 @@ def get_news_detailed() -> dict:
         "vix": {
             "value": vix_value,
             "level": vix_level,
-        },
-        "oil": {
-            "current": oil_comp.get("current"),
-            "change_percent": oil_comp.get("change_percent", 0),
-        },
-        "sp500": {
-            "current": sp500_comp.get("current"),
-            "change_percent": sp500_comp.get("change_percent", 0),
         },
         "sentiment": {
             "headlines_score": headlines_score,
