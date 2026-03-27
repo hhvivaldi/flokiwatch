@@ -25,7 +25,22 @@ class RexResult:
         }
 
 
-def _build_prompt(floki_summary: Dict[str, Any]) -> str:
+def _build_prompt_with_tools(floki_summary: Dict[str, Any]) -> str:
+    """Build user prompt for tool-calling Rex — Floki's proposal only, no data snapshot."""
+    floki = floki_summary.get("floki", {})
+    direction = floki.get("direction", "?")
+    confidence = floki.get("confidence", "?")
+    reasoning = floki.get("reasoning", "")
+    return (
+        f"Floki proposes: {direction} at {confidence}% confidence.\n"
+        f"His reasoning: {reasoning}\n\n"
+        "Check the market data yourself using your tools, then respond with your assessment. "
+        "End with AGREE or DISAGREE on its own line."
+    )
+
+
+def _build_prompt_legacy(floki_summary: Dict[str, Any]) -> str:
+    """Build user prompt for snapshot-based Rex (fallback)."""
     summary_json = json.dumps(floki_summary or {}, ensure_ascii=False, default=str)
     return (
         "You have access to the same market data as Floki. USE IT. Reference specific levels, indicators, timeframes.\n\n"
@@ -62,8 +77,11 @@ def _rex_system_prompt() -> str:
         "Bring a new point or change your mind. "
         "Each turn of the debate should advance the conversation, not repeat the same argument.\n\n"
 
+        "You have tools to check the market yourself. Look at the data before agreeing or disagreeing — "
+        "don't rely only on what Floki tells you. If you disagree, show him what the data actually says.\n\n"
+
         "Keep your response to 3-4 sentences MAX. "
-        "Pick your ONE strongest point and argue it with specific data from <market_data_snapshot>. "
+        "Pick your ONE strongest point and argue it with specific data you verified. "
         "If you have a second point, keep it brief.\n\n"
 
         "Examples of good debate:\n\n"
@@ -84,7 +102,7 @@ def _rex_system_prompt() -> str:
         "End with your honest take — challenge Floki directly or say what would change your mind. "
         "Be direct, not diplomatic.\n\n"
 
-        "Every point you make should reference specific data from the snapshot. No generic concerns.\n\n"
+        "Every point you make should reference specific data you checked. No generic concerns.\n\n"
 
         "Speak naturally. Talk like you're standing next to Floki at the trading desk. "
         "End your response with one word on its own line: AGREE or DISAGREE.\n\n"
@@ -155,63 +173,263 @@ def _parse_rex_response(text: str) -> RexResult:
     )
 
 
-def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 20) -> Dict[str, Any]:
-    """Ask Rex for a debate response to Floki's intended trade (GPT-4o).
+# FLO-125: Rex tool schemas — 6 tools for independent analysis
+_REX_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_price",
+            "description": "Get current gold bid/ask/spread",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_candles",
+            "description": "Get OHLCV candles. Timeframes: M5, H1, H4, D1. Max 20 candles.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "timeframe": {"type": "string", "enum": ["M5", "H1", "H4", "D1"]},
+                    "count": {"type": "integer"},
+                },
+                "required": ["timeframe"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_indicators",
+            "description": "Get technical indicators: RSI, MACD, EMA50, EMA200, ATR, ADX, Bollinger",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sr_zones",
+            "description": "Get support/resistance zones nearest to current price",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_market_context",
+            "description": "Get markets correlated with gold: metals (silver, platinum, gold/silver ratio), forex (dollar strength), indices, energy, crypto, futures (DXY, VIX, 10Y Bond)",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_luna_brief",
+            "description": "Get Luna's macro analysis: environment (SAFE/CAUTION/DANGER), risk level, directional bias, detected patterns",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+]
 
-    Non-blocking rule: this function must never raise; callers must treat failures as neutral.
 
-    Returns:
-        {
-          "success": True/False,
-          "agree": True/False/None,
-          "reasoning": str,
-          "concerns": list,
-          "suggested_adjustment": str,
-          "latency_ms": int,
-          "model": str
-        }
+def _get_rex_model() -> str:
+    cfg_model = None
+    try:
+        import config
+        cfg_model = getattr(config, "REX_MODEL", None)
+    except Exception:
+        pass
+    return (
+        (str(cfg_model).strip() if cfg_model else "")
+        or os.environ.get("REX_MODEL", "gpt-5-mini").strip()
+        or "gpt-5-mini"
+    )
+
+
+def _execute_rex_tool(agent_tools: Any, name: str, args: dict) -> str:
+    """Execute a tool call from Rex, return JSON string result."""
+    t0 = time.time()
+    try:
+        if name == "get_current_price":
+            result = agent_tools.get_current_price()
+        elif name == "get_candles":
+            tf = args.get("timeframe", "H1")
+            count = min(int(args.get("count", 10) or 10), 20)
+            result = agent_tools.get_candles(tf, count)
+        elif name == "get_indicators":
+            result = agent_tools.get_indicators()
+        elif name == "get_sr_zones":
+            result = agent_tools.get_sr_zones()
+        elif name == "get_market_context":
+            result = agent_tools.get_market_context()
+        elif name == "get_luna_brief":
+            result = agent_tools.get_luna_brief()
+        else:
+            result = {"error": f"unknown tool: {name}"}
+        dt = int((time.time() - t0) * 1000)
+        log.info(f"REX_TOOL | {name} | {dt}ms")
+        return json.dumps(result, ensure_ascii=False, default=str)
+    except Exception as e:
+        dt = int((time.time() - t0) * 1000)
+        log.warning(f"REX_TOOL | {name} | {dt}ms | error={e}")
+        return json.dumps({"error": str(e)})
+
+
+def validate_with_rex(
+    floki_summary: Dict[str, Any],
+    *,
+    timeout_seconds: int = 60,
+    agent_tools: Any = None,
+) -> Dict[str, Any]:
+    """Ask Rex for a debate response with independent tool access (GPT-5 mini).
+
+    FLO-125: Rex calls tools directly to verify Floki's claims.
+    Falls back to snapshot-based approach if tools unavailable.
+
+    Non-blocking rule: this function must never raise.
     """
     start = time.time()
     try:
-        cfg_model = None
-        try:
-            import config
-
-            cfg_model = getattr(config, "REX_MODEL", None)
-        except Exception:
-            cfg_model = None
-
-        model = (
-            (str(cfg_model).strip() if cfg_model else "")
-            or os.environ.get("REX_MODEL", "gpt-5-mini").strip()
-            or "gpt-5-mini"
-        )
-
-        prompt = _build_prompt(floki_summary)
-        full_prompt = f"{_rex_system_prompt()}\n\n{prompt}"
-
-        try:
-            log.info(f"REX | model={model} | provider=openai")
-        except Exception:
-            pass
+        model = _get_rex_model()
+        log.info(f"REX | model={model} | provider=openai | tools={'yes' if agent_tools else 'no'}")
 
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
             return {"success": False, "reason": "OPENAI_API_KEY not set"}
 
-        try:
-            from openai import OpenAI
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
 
-            client = OpenAI(api_key=api_key)
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
-                max_completion_tokens=2000,
-                timeout=timeout_seconds,
-            )
+        # If agent_tools available, use tool-calling flow
+        if agent_tools is not None:
+            result = _rex_tool_loop(client, model, floki_summary, agent_tools, start, timeout_seconds)
+            if result:
+                return result
+            # Fallback level 2: snapshot-based
+            log.info("REX | fallback_level=2 | using snapshot approach")
+
+        # Snapshot-based approach (original behavior or fallback)
+        return _validate_with_rex_legacy(client, model, floki_summary, start, timeout_seconds)
+
+    except Exception as e:
+        log.warning(f"REX | unexpected error: {e}")
+        return {"success": False, "reason": "unexpected_error"}
+
+
+def _rex_tool_loop(
+    client: Any,
+    model: str,
+    floki_summary: Dict[str, Any],
+    agent_tools: Any,
+    start: float,
+    timeout_seconds: int,
+) -> Optional[Dict[str, Any]]:
+    """Run Rex's tool-calling loop. Returns result dict or None (triggers fallback)."""
+    MAX_ITERATIONS = 3
+    PER_CALL_TIMEOUT = 20
+
+    prompt = _build_prompt_with_tools(floki_summary)
+    messages = [
+        {"role": "system", "content": _rex_system_prompt()},
+        {"role": "user", "content": prompt},
+    ]
+
+    tool_calls_made = []
+
+    for iteration in range(MAX_ITERATIONS + 1):
+        if (time.time() - start) > timeout_seconds:
+            log.warning(f"REX | tool loop timeout after {iteration} iterations")
+            break
+
+        try:
+            # Last iteration: no tools, force text
+            use_tools = iteration < MAX_ITERATIONS
+            kwargs = {
+                "model": model,
+                "messages": messages,
+                "max_completion_tokens": 2000,
+                "timeout": PER_CALL_TIMEOUT,
+            }
+            if use_tools:
+                kwargs["tools"] = _REX_TOOLS
+
+            resp = client.chat.completions.create(**kwargs)
         except Exception as e:
-            log.warning(f"REX | API call failed: {e}")
-            return {"success": False, "reason": f"openai_request_failed: {e}"}
+            log.warning(f"REX | API call failed (iteration {iteration}): {e}")
+            return None
+
+        msg = resp.choices[0].message
+        finish = resp.choices[0].finish_reason
+
+        # Tool calls requested
+        if msg.tool_calls:
+            # Append assistant message with tool calls
+            messages.append(msg)
+
+            for tc in msg.tool_calls:
+                fname = tc.function.name
+                try:
+                    fargs = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                except Exception:
+                    fargs = {}
+
+                result_str = _execute_rex_tool(agent_tools, fname, fargs)
+                tool_calls_made.append(fname)
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result_str,
+                })
+            continue
+
+        # Text response — we have Rex's answer
+        content = msg.content
+        if not content or not content.strip():
+            # Fallback level 1: force text without tools
+            if use_tools:
+                log.info("REX | fallback_level=1 | empty response, retrying without tools")
+                continue
+            log.warning("REX | empty response after forced text call")
+            return None
+
+        parsed = _parse_rex_response(content)
+        latency_ms = int((time.time() - start) * 1000)
+        log.info(f"REX | tool loop complete | iterations={iteration + 1} | tools_called={tool_calls_made} | {latency_ms}ms")
+        return {
+            "success": True,
+            "agree": bool(parsed.agree),
+            "reasoning": str(parsed.reasoning or "").strip(),
+            "concerns": parsed.concerns if isinstance(parsed.concerns, list) else [],
+            "suggested_adjustment": str(parsed.suggested_adjustment or "").strip(),
+            "latency_ms": latency_ms,
+            "model": model,
+            "raw": content,
+            "rex_tools_called": tool_calls_made,
+        }
+
+    log.warning("REX | tool loop exhausted without text response")
+    return None
+
+
+def _validate_with_rex_legacy(
+    client: Any,
+    model: str,
+    floki_summary: Dict[str, Any],
+    start: float,
+    timeout_seconds: int,
+) -> Dict[str, Any]:
+    """Snapshot-based Rex validation (original approach, used as fallback)."""
+    try:
+        prompt = _build_prompt_legacy(floki_summary)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
+            max_completion_tokens=2000,
+            timeout=min(timeout_seconds, 20),
+        )
 
         content = None
         try:
@@ -233,10 +451,8 @@ def validate_with_rex(floki_summary: Dict[str, Any], *, timeout_seconds: int = 2
             "latency_ms": latency_ms,
             "model": model,
             "raw": content,
+            "rex_tools_called": [],
         }
     except Exception as e:
-        try:
-            log.debug(f"rex_validator: unexpected error (non-blocking): {e}")
-        except Exception:
-            pass
-        return {"success": False, "reason": "unexpected_error"}
+        log.warning(f"REX | legacy fallback failed: {e}")
+        return {"success": False, "reason": f"legacy_failed: {e}"}

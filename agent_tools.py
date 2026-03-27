@@ -708,7 +708,7 @@ class AgentTools:
             try:
                 from rex_validator import validate_with_rex
 
-                rex = validate_with_rex(payload, timeout_seconds=20)
+                rex = validate_with_rex(payload, timeout_seconds=60, agent_tools=self)
             except Exception as e:
                 self._log_tool("debate_with_rex", start, f"error={e}")
                 return {"success": False, "reason": "rex_unavailable"}
