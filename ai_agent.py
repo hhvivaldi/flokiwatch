@@ -876,7 +876,7 @@ class AIAgent:
                     contents=contents,
                     config={
                         "max_output_tokens": int(self.max_tokens),
-                        "temperature": 0.2,
+                        "temperature": 0.7,
                         "tools": [{"function_declarations": fn_decls}],
                     },
                 )
@@ -1253,7 +1253,7 @@ class AIAgent:
                 contents=contents,
                 config={
                     "max_output_tokens": int(self.max_tokens),
-                    "temperature": 0.1,
+                    "temperature": 0.5,
                 },
             )
 
