@@ -3137,50 +3137,23 @@
               var showPriceText = isFinite(nShowPrice) ? nShowPrice.toFixed(2) : '—';
               if (priceEl) priceEl.textContent = showPriceText;
 
-              // Change line: prefer previous close fields if present, else compare with previous polled price
+              // FLO-129: Daily change from MT5 session_close (via state_writer)
               try {
                 var changeEl = document.getElementById('ctx-change');
                 if (changeEl) {
-                  var la0 = state.last_analysis || {};
-
-                  var prevClose = null;
-                  var prevCandidates = [
-                    la0.previous_close,
-                    la0.prev_close,
-                    la0.last_close,
-                    la0.close,
-                    la0.h1_close,
-                    la0.h1_previous_close,
-                    la0.h1_prev_close
-                  ];
-                  for (var pc = 0; pc < prevCandidates.length; pc++) {
-                    var cand = prevCandidates[pc];
-                    var nn = Number(cand);
-                    if (cand !== null && cand !== undefined && isFinite(nn)) { prevClose = nn; break; }
-                  }
-
-                  var base = (prevClose !== null) ? prevClose : prevCtxPrice;
-                  if (!isFinite(nShowPrice) || base === null || base === undefined || !isFinite(Number(base)) || Number(base) === 0) {
+                  var pct = state.price_daily_change_pct;
+                  var prevClose = state.prev_d1_close;
+                  if (pct != null && isFinite(pct) && nShowPrice && prevClose) {
+                    var delta = nShowPrice - prevClose;
+                    var up = delta > 0;
+                    var arrow = up ? '▲' : '▼';
+                    var color = up ? '#34d399' : '#f87171';
+                    var sign = up ? '+' : '-';
+                    changeEl.textContent = arrow + ' ' + sign + Math.abs(delta).toFixed(2) + ' (' + sign + Math.abs(pct).toFixed(2) + '%)';
+                    changeEl.style.color = color;
+                  } else {
                     changeEl.textContent = '—';
                     changeEl.style.color = '';
-                  } else {
-                    var b = Number(base);
-                    var delta = nShowPrice - b;
-                    var pct = (delta / b) * 100;
-
-                    if (!isFinite(delta) || !isFinite(pct) || delta === 0) {
-                      changeEl.textContent = '—';
-                      changeEl.style.color = '';
-                    } else {
-                      var up = delta > 0;
-                      var arrow = up ? '▲' : '▼';
-                      var color = up ? '#34d399' : '#f87171';
-                      var signDelta = up ? '+' : '-';
-                      var absDelta = Math.abs(delta);
-                      var absPct = Math.abs(pct);
-                      changeEl.textContent = arrow + ' ' + signDelta + absDelta.toFixed(2) + ' (' + signDelta + absPct.toFixed(2) + '%)';
-                      changeEl.style.color = color;
-                    }
                   }
                 }
               } catch (e) {

@@ -133,6 +133,20 @@ def write_state(bot_instance: Any) -> None:
             last_known_price = float(current_price)
             bot_instance.last_known_price = last_known_price
 
+        # FLO-129: Daily change % from MT5 session_close
+        price_daily_change_pct = None
+        prev_d1_close = None
+        try:
+            import MetaTrader5 as _mt5
+            _xau_info = _mt5.symbol_info("XAUUSD")
+            if _xau_info and last_known_price:
+                _sc = getattr(_xau_info, "session_close", 0)
+                if _sc and _sc > 0:
+                    prev_d1_close = round(float(_sc), 2)
+                    price_daily_change_pct = round(((last_known_price - _sc) / _sc) * 100, 2)
+        except Exception:
+            pass
+
         positions = []
         try:
             if getattr(bot_instance, "executes_trades", False):
@@ -213,6 +227,8 @@ def write_state(bot_instance: Any) -> None:
                 "pnl_percent": round(pnl_percent, 2),
             },
             "last_known_price": last_known_price,
+            "price_daily_change_pct": price_daily_change_pct,
+            "prev_d1_close": prev_d1_close,
             "last_analysis": last_analysis,
             "positions": positions,
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
