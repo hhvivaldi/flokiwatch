@@ -284,9 +284,23 @@ def _get_macro_data() -> Dict[str, Any]:
     sp500 = _mt5_to_luna(indices.get("US500"))
     usdcny = _mt5_to_luna(forex.get("USDCNH"))
 
+    # Gold price from MT5 XAUUSD (replaces Yahoo GC=F which was 4.5h stale during intraday)
+    gold = {}
+    try:
+        import MetaTrader5 as _mt5
+        _gt = _mt5.symbol_info_tick("XAUUSD")
+        if _gt and _gt.bid > 0:
+            _gi = _mt5.symbol_info("XAUUSD")
+            _pc = getattr(_gi, "session_close", 0) if _gi else 0
+            _chg = round(((_gt.bid - _pc) / _pc) * 100, 2) if _pc and _pc > 0 else 0
+            gold = {"current": round(_gt.bid, 2), "change_percent": _chg}
+    except Exception:
+        pass
+    if not gold.get("current"):
+        gold = _get_gold_data()  # fallback to Yahoo if MT5 unavailable
+
     # Yahoo/FRED data (no MT5 equivalent)
     yields = get_yields_data()
-    gold = _get_gold_data()
     gld = get_gld_data()
     real_yields = get_real_yields()
     fed_funds = get_fed_funds_rate()
