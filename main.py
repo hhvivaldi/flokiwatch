@@ -3368,6 +3368,7 @@ class TradingBot:
                             _thesis_block += f"Your thesis hasn't changed since {_unchanged[:16]}. Focus on what's NEW or different.\n"
                         _thesis_block += "What changed? Has your thesis evolved or is it the same?\n</previous_thesis>\n"
                         trigger_context += _thesis_block
+                        log.info(f"FLOKI | previous_thesis injected: {_pt_bias} from {_pt_ts} | price_at_decision={_pt_price}")
             except Exception:
                 pass
 
