@@ -3332,6 +3332,45 @@ class TradingBot:
                 trigger_context += f"Trigger data: {trigger_data}. "
             trigger_context += "Investigate using tools and respond with final decision JSON."
 
+            # FLO-127: Inject previous thesis for inter-cycle continuity
+            try:
+                _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
+                if os.path.exists(_thesis_path):
+                    with open(_thesis_path, "r", encoding="utf-8") as _tf:
+                        _prev = json.loads(_tf.read())
+                    if isinstance(_prev, dict) and _prev.get("direction_bias"):
+                        _pt_ts = _prev.get("timestamp", "?")[:16]
+                        _pt_bias = _prev.get("direction_bias", "?")
+                        _pt_price = _prev.get("price_at_decision")
+                        _pt_levels = _prev.get("key_levels", [])
+                        _pt_conds = _prev.get("conditions", [])
+                        _pt_decision = _prev.get("decision", "?")
+                        _cur_price = None
+                        try:
+                            _cur_price = float(getattr(self, "last_known_price", 0) or 0)
+                        except Exception:
+                            pass
+                        _price_move = ""
+                        if _cur_price and _pt_price:
+                            _diff = round(_cur_price - _pt_price, 1)
+                            _price_move = f"Price is now {_cur_price:.1f} (moved {'+' if _diff >= 0 else ''}{_diff} from your decision). "
+                        _levels_str = ", ".join(str(l) for l in _pt_levels[:5]) if _pt_levels else "none specified"
+                        _conds_str = "; ".join(_pt_conds[:2]) if _pt_conds else "none specified"
+                        _thesis_block = (
+                            f"\n<previous_thesis>\n"
+                            f"[{_pt_ts}] You were {_pt_bias} (decided {_pt_decision}). "
+                            f"Your plan: \"{_conds_str}\". "
+                            f"{_price_move}"
+                            f"Key levels: {_levels_str}.\n"
+                        )
+                        _unchanged = _prev.get("unchanged_since")
+                        if _unchanged:
+                            _thesis_block += f"Your thesis hasn't changed since {_unchanged[:16]}. Focus on what's NEW or different.\n"
+                        _thesis_block += "What changed? Has your thesis evolved or is it the same?\n</previous_thesis>\n"
+                        trigger_context += _thesis_block
+            except Exception:
+                pass
+
             tools_obj = AgentTools(
                 self,
                 executor=executor,
@@ -3547,6 +3586,84 @@ class TradingBot:
                     break
         except Exception as e_rto:
             log.warning(f"FLOKI | record_trade_open failed: {e_rto}")
+
+        # FLO-127: Persist active thesis for inter-cycle continuity
+        try:
+            import re as _re
+            _reasoning = str(getattr(agent_result, "reasoning", "") or "")
+            _decision = str(getattr(agent_result, "decision", "") or "")
+
+            # Direction bias
+            _upper_start = _reasoning[:150].upper()
+            if _decision in ("OPEN_BUY",) or ("BUY" in _upper_start and "SELL" not in _upper_start):
+                _bias = "BULLISH"
+            elif _decision in ("OPEN_SELL",) or ("SELL" in _upper_start and "BUY" not in _upper_start):
+                _bias = "BEARISH"
+            else:
+                _bias = "NEUTRAL"
+
+            # Key levels (4xxx pattern for gold)
+            _levels = sorted(set(int(m) for m in _re.findall(r'\b(4[0-9]{3})\b', _reasoning)))[:5]
+
+            # Conditions (sentences with trigger words)
+            _conditions = []
+            for _sent in _reasoning.replace("!", ".").replace("?", ".").split("."):
+                _s = _sent.strip().lower()
+                if any(w in _s for w in ["wait for", "waiting for", "need to see", "want to see",
+                                          "until we", "before i", "retest", "break of",
+                                          "clear", "reclaim"]):
+                    _conditions.append(_sent.strip()[:200])
+                if len(_conditions) >= 3:
+                    break
+
+            # Invalidation
+            _invalidation = None
+            for _sent in _reasoning.replace("!", ".").replace("?", ".").split("."):
+                _s = _sent.strip().lower()
+                if any(w in _s for w in ["change my mind", "invalidate", "unless", "would flip"]):
+                    _invalidation = _sent.strip()[:200]
+                    break
+
+            _cur_price = None
+            try:
+                _cur_price = float(getattr(self, "last_known_price", 0) or 0) or None
+            except Exception:
+                pass
+
+            # Anti-repetition: compare with previous thesis
+            _unchanged_since = None
+            _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
+            try:
+                if os.path.exists(_thesis_path):
+                    with open(_thesis_path, "r", encoding="utf-8") as _tf:
+                        _old = json.loads(_tf.read())
+                    if isinstance(_old, dict):
+                        _old_bias = _old.get("direction_bias")
+                        _old_levels = set(_old.get("key_levels", []))
+                        _new_levels = set(_levels)
+                        _overlap = len(_old_levels & _new_levels) / max(len(_old_levels | _new_levels), 1)
+                        if _old_bias == _bias and _overlap > 0.6:
+                            _unchanged_since = _old.get("unchanged_since") or _old.get("timestamp")
+            except Exception:
+                pass
+
+            _thesis = {
+                "direction_bias": _bias,
+                "key_levels": _levels,
+                "conditions": _conditions,
+                "invalidation": _invalidation,
+                "decision": _decision,
+                "confidence": getattr(agent_result, "confidence", None),
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "price_at_decision": _cur_price,
+                "unchanged_since": _unchanged_since,
+            }
+            _tmp = _thesis_path + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as _tf:
+                json.dump(_thesis, _tf, indent=2, ensure_ascii=False)
+            os.replace(_tmp, _thesis_path)
+        except Exception:
+            pass
 
         try:
             alert_proactive_decision(agent_result)
