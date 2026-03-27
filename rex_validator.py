@@ -244,6 +244,30 @@ _REX_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_fibonacci_levels",
+            "description": "Get Fibonacci retracement levels and swing high/low for H1, H4, D1",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_trade_lessons",
+            "description": "Get statistical lessons from Floki's past trades — AVOID patterns (losing setups) and PREFERRED patterns (winning setups)",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_open_positions",
+            "description": "Get current open positions with ticket, direction, entry price, SL, TP, P&L",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
 ]
 
 
@@ -279,6 +303,12 @@ def _execute_rex_tool(agent_tools: Any, name: str, args: dict) -> str:
             result = agent_tools.get_market_context()
         elif name == "get_luna_brief":
             result = agent_tools.get_luna_brief()
+        elif name == "get_fibonacci_levels":
+            result = agent_tools.get_fibonacci_levels()
+        elif name == "get_trade_lessons":
+            result = agent_tools.get_trade_lessons()
+        elif name == "get_open_positions":
+            result = agent_tools.get_open_positions()
         else:
             result = {"error": f"unknown tool: {name}"}
         dt = int((time.time() - t0) * 1000)

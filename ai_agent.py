@@ -824,7 +824,7 @@ class AIAgent:
                         tools=openai_tools,
                         response_format={"type": "json_object"},
                         max_completion_tokens=int(self.max_tokens),
-                        temperature=0.7,
+                        temperature=1.0,
                         timeout=PER_CALL_TIMEOUT,
                     )
                 resp = await loop.run_in_executor(None, _sync_call)
@@ -1096,7 +1096,7 @@ class AIAgent:
                 messages=messages,
                 response_format={"type": "json_object"},
                 max_completion_tokens=int(self.max_tokens),
-                temperature=0.5,
+                temperature=0.7,
                 timeout=20,
             )
 
