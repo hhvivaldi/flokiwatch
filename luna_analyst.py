@@ -243,16 +243,21 @@ def _estimate_cost(input_tokens: int, output_tokens: int) -> float:
 # Data Collection
 # ---------------------------------------------------------------------------
 
+def _mt5_to_luna(mt5_entry: dict) -> dict:
+    """Remap MT5 market_context entry to Luna's key format."""
+    if not mt5_entry or not isinstance(mt5_entry, dict):
+        return {}
+    result = {"current": mt5_entry.get("bid"), "change_percent": mt5_entry.get("change_pct", 0)}
+    if mt5_entry.get("position_in_range") is not None:
+        result["position_in_range"] = mt5_entry["position_in_range"]
+    return result
+
+
 def _get_macro_data() -> Dict[str, Any]:
-    """Fetch all macro data from news_score_hybrid and economic_calendar."""
+    """Fetch macro data from MT5 (correlated markets) + Yahoo/FRED (yields, GLD, FRED series)."""
     from news_score_hybrid import (
-        get_dxy_data,
-        get_vix_data,
         get_yields_data,
-        get_oil_data,
-        get_sp500_data,
         get_gld_data,
-        get_usdcny_data,
         get_real_yields,
         get_fed_funds_rate,
         get_breakeven_inflation,
@@ -260,14 +265,29 @@ def _get_macro_data() -> Dict[str, Any]:
         get_gld_weekly_flows,
     )
 
-    dxy = get_dxy_data()
-    vix = get_vix_data()
+    # MT5 correlated markets (replaces Yahoo for DXY, VIX, Oil, S&P, USD/CNY)
+    try:
+        from market_context_fetcher import fetch_market_context
+        mc = fetch_market_context()
+    except Exception:
+        mc = {}
+
+    # Remap 5 overlapping instruments from MT5 → Luna format
+    futures = mc.get("futures", {})
+    indices = mc.get("indices", {})
+    energy = mc.get("energy", {})
+    forex = mc.get("forex", {})
+
+    dxy = _mt5_to_luna(futures.get("DXY_M6"))
+    vix = _mt5_to_luna(futures.get("VIX_J6"))
+    oil = _mt5_to_luna(energy.get("XTIUSD"))
+    sp500 = _mt5_to_luna(indices.get("US500"))
+    usdcny = _mt5_to_luna(forex.get("USDCNH"))
+
+    # Yahoo/FRED data (no MT5 equivalent)
     yields = get_yields_data()
-    oil = get_oil_data()
-    sp500 = get_sp500_data()
     gold = _get_gold_data()
     gld = get_gld_data()
-    usdcny = get_usdcny_data()
     real_yields = get_real_yields()
     fed_funds = get_fed_funds_rate()
     breakeven = get_breakeven_inflation()
@@ -285,6 +305,19 @@ def _get_macro_data() -> Dict[str, Any]:
     except Exception:
         pass
 
+    # New from MT5: correlated metals, forex pairs, crypto
+    metals = {}
+    for sym in ("XAGUSD", "XPTUSD", "XPDUSD"):
+        metals[sym] = _mt5_to_luna((mc.get("metals") or {}).get(sym))
+    metals["gold_silver_ratio"] = (mc.get("metals") or {}).get("gold_silver_ratio")
+
+    forex_pairs = {}
+    for sym in ("EURUSD", "USDJPY", "USDCHF", "AUDUSD", "GBPUSD"):
+        forex_pairs[sym] = _mt5_to_luna(forex.get(sym))
+    forex_pairs["dollar_strength"] = forex.get("dollar_strength")
+
+    btc = _mt5_to_luna((mc.get("crypto") or {}).get("BTCUSD"))
+
     return {
         "dxy": dxy,
         "vix": vix,
@@ -300,6 +333,9 @@ def _get_macro_data() -> Dict[str, Any]:
         "cpi": cpi,
         "gld_flows": gld_flows,
         "sage_insights": sage_insights,
+        "metals": metals,
+        "forex": forex_pairs,
+        "btc": btc,
     }
 
 
@@ -446,6 +482,42 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
         lines.append(f"GLD ETF sentiment (5d vs prev 5d): {gld_flows.get('direction')} | vol change {gld_flows.get('volume_change_pct', 'N/A')}% | price change {gld_flows.get('price_change_pct', 'N/A')}%")
 
     lines.append("</macro_data>")
+
+    # FLO-123: Cross-market data from MT5
+    metals = macro.get("metals", {})
+    forex_pairs = macro.get("forex", {})
+    btc = macro.get("btc", {})
+    _has_cross = any(
+        isinstance(v, dict) and v.get("current") is not None
+        for v in [metals.get("XAGUSD"), metals.get("XPTUSD"), btc]
+    )
+    if _has_cross:
+        lines.append("\n<correlated_markets>")
+        for sym, label in [("XAGUSD", "Silver"), ("XPTUSD", "Platinum"), ("XPDUSD", "Palladium")]:
+            m = metals.get(sym, {})
+            if m.get("current") is not None:
+                rng = f", range: {int(m['position_in_range'] * 100)}%" if m.get("position_in_range") is not None else ""
+                chg = f"{m.get('change_percent', 0):+.2f}%" if m.get("change_percent") is not None else ""
+                lines.append(f"{label}: ${m['current']} ({chg}{rng})")
+        gsr = metals.get("gold_silver_ratio")
+        if gsr:
+            lines.append(f"Gold/Silver Ratio: {gsr}")
+        fx_parts = []
+        for sym, label in [("EURUSD", "EUR/USD"), ("USDJPY", "USD/JPY"), ("USDCHF", "USD/CHF"), ("AUDUSD", "AUD/USD"), ("GBPUSD", "GBP/USD")]:
+            f = forex_pairs.get(sym, {})
+            if f.get("current") is not None:
+                fx_parts.append(f"{label}: {f['current']} ({f.get('change_percent', 0):+.2f}%)")
+        if fx_parts:
+            lines.append(" | ".join(fx_parts[:3]))
+            if len(fx_parts) > 3:
+                lines.append(" | ".join(fx_parts[3:]))
+        ds = forex_pairs.get("dollar_strength")
+        if ds:
+            lines.append(f"Dollar Strength: {ds.upper()}")
+        if btc.get("current") is not None:
+            brng = f", range: {int(btc['position_in_range'] * 100)}%" if btc.get("position_in_range") is not None else ""
+            lines.append(f"BTC: ${btc['current']:,.0f} ({btc.get('change_percent', 0):+.2f}%{brng})")
+        lines.append("</correlated_markets>")
 
     # Macro trends (5-day rolling)
     trends = _build_macro_trends(macro)
