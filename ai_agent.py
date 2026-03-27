@@ -368,54 +368,45 @@ class AIAgent:
 
     def initialize(self) -> bool:
         """
-        Initialize the Gemini client.
+        Initialize the OpenAI client (FLO-130: migrated from Gemini).
         Call this after config is loaded.
-        
-        Returns:
-            True if initialization successful, False otherwise
         """
         try:
             import config
-            
-            # Check if Agent is enabled
+
             self.enabled = getattr(config, 'USE_AI_AGENT', False)
             if not self.enabled:
                 logger.info("AI Agent is disabled in config")
                 return False
-            
-            # Get API key
-            api_key = os.environ.get("GEMINI_API_KEY", "")
+
+            api_key = os.environ.get("OPENAI_API_KEY", "")
             if not api_key:
-                logger.warning("GEMINI_API_KEY not set - AI Agent disabled")
+                logger.warning("OPENAI_API_KEY not set - AI Agent disabled")
                 self.enabled = False
                 return False
 
-            # Import and initialize Gemini client
             try:
-                from google import genai
-
-                self.client = genai.Client(api_key=api_key)
+                from openai import OpenAI
+                self.client = OpenAI(api_key=api_key)
             except ImportError:
-                logger.error("google-genai package not installed. Run: pip install google-genai")
+                logger.error("openai package not installed. Run: pip install openai")
                 self.enabled = False
                 return False
             except Exception as e:
-                logger.error(f"Failed to initialize Gemini client: {e}")
+                logger.error(f"Failed to initialize OpenAI client: {e}")
                 self.enabled = False
                 return False
-            
-            # Get config
-            self.model = getattr(config, 'FLOKI_MODEL', 'gemini-3-flash-preview')
-            self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 60)
-            self.mode = getattr(config, 'AI_AGENT_MODE', 'shadow')
 
-            self.max_tool_calls = int(getattr(config, 'AI_AGENT_MAX_TOOL_CALLS', 15) or 15)
+            self.model = getattr(config, 'FLOKI_MODEL', 'gpt-5.4')
+            self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 240)
+            self.mode = getattr(config, 'AI_AGENT_MODE', 'shadow')
+            self.max_tool_calls = int(getattr(config, 'AI_AGENT_MAX_TOOL_CALLS', 40) or 40)
             self.max_tokens = int(getattr(config, 'AI_AGENT_MAX_TOKENS', 4096) or 4096)
-            
+
             self._initialized = True
             logger.info(f"AI Agent initialized: model={self.model}, mode={self.mode}, timeout={self.timeout}s")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize AI Agent: {e}")
             self.enabled = False
@@ -443,7 +434,7 @@ class AIAgent:
                 user_message = "Scheduled analysis. Decide what to check and whether to act."
 
             response = await asyncio.wait_for(
-                self._call_gemini_with_tools(user_message, tools=tools),
+                self._call_openai_with_tools(user_message, tools=tools),
                 timeout=self.timeout,
             )
             
@@ -744,27 +735,9 @@ class AIAgent:
             },
         ]
 
-    def _gemini_function_declarations(self) -> List[Dict[str, Any]]:
-        def _strip_additional_props(obj: Any) -> Any:
-            if isinstance(obj, dict):
-                if "additionalProperties" in obj:
-                    try:
-                        obj.pop("additionalProperties", None)
-                    except Exception:
-                        pass
-                if "additional_properties" in obj:
-                    try:
-                        obj.pop("additional_properties", None)
-                    except Exception:
-                        pass
-                for k, v in list(obj.items()):
-                    obj[k] = _strip_additional_props(v)
-                return obj
-            if isinstance(obj, list):
-                return [_strip_additional_props(x) for x in obj]
-            return obj
-
-        decls: List[Dict[str, Any]] = []
+    def _openai_tools(self) -> List[Dict[str, Any]]:
+        """Convert tool schemas to OpenAI function-calling format."""
+        tools: List[Dict[str, Any]] = []
         for t in self._tool_schemas():
             try:
                 name = t.get("name")
@@ -772,18 +745,17 @@ class AIAgent:
                 schema = t.get("input_schema")
                 if not name or not isinstance(schema, dict):
                     continue
-                schema_copy = copy.deepcopy(schema)
-                schema_copy = _strip_additional_props(schema_copy)
-                decls.append(
-                    {
+                tools.append({
+                    "type": "function",
+                    "function": {
                         "name": name,
                         "description": desc or "",
-                        "parameters": schema_copy,
-                    }
-                )
+                        "parameters": copy.deepcopy(schema),
+                    },
+                })
             except Exception:
                 continue
-        return decls
+        return tools
 
     def _execute_tool(self, tools: Any, name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -808,14 +780,15 @@ class AIAgent:
         except Exception:
             return False
 
-    async def _call_gemini_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
+    async def _call_openai_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
+        """FLO-130: OpenAI GPT-5.4 tool loop (migrated from Gemini)."""
         loop = asyncio.get_event_loop()
         start_time = time.time()
 
         total_input_tokens = 0
         total_output_tokens = 0
         last_model = self.model
-        tool_calls = 0
+        tool_calls_count = 0
         tool_trace: List[Dict[str, Any]] = []
         had_execution_followup = False
 
@@ -825,248 +798,117 @@ class AIAgent:
         except Exception:
             system_prompt = ""
 
-        fn_decls = self._gemini_function_declarations()
+        openai_tools = self._openai_tools()
 
-        # Gemini chat content format: list of content items with role + parts.
-        contents: List[Dict[str, Any]] = []
+        messages: List[Dict[str, Any]] = []
         if system_prompt:
-            contents.append({"role": "user", "parts": [{"text": system_prompt}]})
-        contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": str(trigger_context or "").strip()})
 
-        had_empty_retry = False
+        PER_CALL_TIMEOUT = 30
+        MAX_ITERATIONS = int(self.max_tool_calls) + 2
 
-        while True:
+        for iteration in range(MAX_ITERATIONS):
             if (time.time() - start_time) >= float(self.timeout):
+                logger.warning(f"FLOKI | tool loop timeout after {iteration} iterations")
                 return {
-                    "content": json.dumps(
-                        {
-                            "decision": "WAIT",
-                            "confidence": 0,
-                            "reasoning": "Timeout during tool loop",
-                            "key_factors": [],
-                            "concerns": ["timeout"],
-                        }
-                    ),
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "model": last_model,
-                    "tool_trace": tool_trace,
+                    "content": json.dumps({"decision": "WAIT", "confidence": 0, "reasoning": "timeout during tool loop", "key_factors": [], "concerns": ["timeout"]}),
+                    "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace,
                 }
-
-            if tool_calls >= int(self.max_tool_calls):
-                return {
-                    "content": json.dumps(
-                        {
-                            "decision": "WAIT",
-                            "confidence": 0,
-                            "reasoning": "max tool calls reached",
-                            "key_factors": [],
-                            "concerns": ["max_tool_calls_reached"],
-                        }
-                    ),
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "model": last_model,
-                    "tool_trace": tool_trace,
-                }
-
-            def _sync_call():
-                return self.client.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config={
-                        "max_output_tokens": int(self.max_tokens),
-                        "temperature": 0.7,
-                        "tools": [{"function_declarations": fn_decls}],
-                    },
-                )
-
-            resp = await loop.run_in_executor(None, _sync_call)
 
             try:
-                usage = getattr(resp, "usage_metadata", None)
-                if usage is not None:
-                    logger.info(
-                        f"GEMINI_USAGE | total_tokens={getattr(usage, 'total_token_count', 0)} cached_tokens={getattr(usage, 'cached_content_token_count', 0)} prompt_tokens={getattr(usage, 'prompt_token_count', 0)}"
+                def _sync_call():
+                    return self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        tools=openai_tools,
+                        response_format={"type": "json_object"},
+                        max_completion_tokens=int(self.max_tokens),
+                        temperature=0.7,
+                        timeout=PER_CALL_TIMEOUT,
                     )
+                resp = await loop.run_in_executor(None, _sync_call)
+            except Exception as e:
+                logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
+                continue
+
+            try:
+                usage = resp.usage
+                if usage:
+                    total_input_tokens += usage.prompt_tokens or 0
+                    total_output_tokens += usage.completion_tokens or 0
+                    last_model = resp.model or self.model
             except Exception:
                 pass
 
-            finish_reason = None
-            try:
-                candidates = getattr(resp, "candidates", None) or []
-                c0 = candidates[0] if candidates else None
-                finish_reason = getattr(c0, "finish_reason", None)
-            except Exception:
-                finish_reason = None
+            msg = resp.choices[0].message
+            finish = resp.choices[0].finish_reason
 
-            try:
-                usage = getattr(resp, "usage_metadata", None)
-                if usage is not None:
-                    total_input_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
-                    total_output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
-            except Exception:
-                pass
-
-            text_out = None
-            fn_calls = []
-            parts = []
-            part_types = []
-            try:
-                # google-genai returns candidates[0].content.parts
-                candidates = getattr(resp, "candidates", None) or []
-                c0 = candidates[0] if candidates else None
-                content = getattr(c0, "content", None)
-                parts = getattr(content, "parts", None) or []
-                for p in parts:
-                    fc = getattr(p, "function_call", None)
-                    if fc is not None:
-                        fn_calls.append(fc)
-                    else:
-                        t = getattr(p, "text", None)
-                        if isinstance(t, str) and t.strip():
-                            text_out = (text_out or "") + t
-
-                try:
-                    for p in parts:
-                        try:
-                            if getattr(p, "function_call", None) is not None:
-                                part_types.append("function_call")
-                            elif getattr(p, "text", None) is not None:
-                                part_types.append("text")
-                            else:
-                                part_types.append(type(p).__name__)
-                        except Exception:
-                            part_types.append("unknown")
-                except Exception:
-                    part_types = []
-            except Exception:
-                text_out = None
-                fn_calls = []
-                parts = []
-                part_types = []
-
+            has_tool_calls = bool(msg.tool_calls)
+            has_content = bool(msg.content and msg.content.strip())
             logger.info(
-                f"GEMINI_PARTS | types={part_types} fn_calls={len(fn_calls)} text_out={'Y' if (text_out and str(text_out).strip()) else 'N'} finish_reason={finish_reason} tool_calls={tool_calls}/{int(self.max_tool_calls)}"
+                f"FLOKI_TURN | finish={finish} tool_calls={len(msg.tool_calls) if msg.tool_calls else 0} "
+                f"has_content={has_content} iteration={iteration} tools_used={tool_calls_count}/{int(self.max_tool_calls)}"
             )
 
-            if text_out and not fn_calls:
-                # FLO-109: If Floki decided OPEN/CLOSE but never called
-                # execute_trade / close_trade, give ONE follow-up turn so
-                # Gemini has the mechanical opportunity to call the tool.
+            if msg.tool_calls:
+                messages.append(msg)
+                for tc in msg.tool_calls:
+                    if tool_calls_count >= int(self.max_tool_calls):
+                        break
+                    tool_calls_count += 1
+                    fname = tc.function.name
+                    try:
+                        fargs = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                    except Exception:
+                        fargs = {}
+                    t0 = time.time()
+                    result = self._execute_tool(tools, fname, fargs)
+                    dt_ms = int((time.time() - t0) * 1000)
+                    tool_trace.append({"name": fname, "input": fargs, "result": result, "latency_ms": dt_ms})
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False, default=str)})
+                continue
+
+            text_out = msg.content or ""
+
+            if text_out.strip():
                 if not had_execution_followup:
-                    _text_upper = str(text_out).upper()
+                    _text_upper = text_out.upper()
                     _trace_names = {str(t.get("name", "")).lower() for t in tool_trace if isinstance(t, dict)}
+                    _needs_execute = ("OPEN_BUY" in _text_upper or "OPEN_SELL" in _text_upper) and "execute_trade" not in _trace_names
+                    _needs_close = "CLOSE_TRADE" in _text_upper and "close_trade" not in _trace_names
+                    _needs_adjust = "ADJUST_TRADE" in _text_upper and "adjust_trade" not in _trace_names
 
-                    _needs_execute = (
-                        ("OPEN_BUY" in _text_upper or "OPEN_SELL" in _text_upper)
-                        and "execute_trade" not in _trace_names
-                    )
-                    _needs_close = (
-                        "CLOSE_TRADE" in _text_upper
-                        and "close_trade" not in _trace_names
-                    )
-
-                    if _needs_execute or _needs_close:
-                        _missing_tool = "execute_trade" if _needs_execute else "close_trade"
+                    if _needs_execute or _needs_close or _needs_adjust:
+                        _missing_tool = "execute_trade" if _needs_execute else ("close_trade" if _needs_close else "adjust_trade")
                         _followup_msg = (
                             f"Your decision above requires calling {_missing_tool} to take effect. "
                             f"Call {_missing_tool} now with the correct parameters, "
-                            f"or respond with WAIT if you changed your mind."
+                            f"or respond with your updated decision if you changed your mind."
                         )
                         had_execution_followup = True
-                        contents.append({"role": "user", "parts": [{"text": _followup_msg}]})
-                        logger.info(
-                            f"GEMINI_FOLLOWUP | missing={_missing_tool} | "
-                            f"injecting follow-up turn (tool_calls={tool_calls}/{int(self.max_tool_calls)})"
-                        )
+                        messages.append({"role": "user", "content": _followup_msg})
+                        logger.info(f"FLOKI_FOLLOWUP | missing={_missing_tool} | injecting follow-up turn (tools_used={tool_calls_count}/{int(self.max_tool_calls)})")
                         continue
 
-                return {
-                    "content": str(text_out).strip(),
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "model": last_model,
-                    "tool_trace": tool_trace,
-                }
+                _cost_in = total_input_tokens * 2.50 / 1_000_000
+                _cost_out = total_output_tokens * 15.00 / 1_000_000
+                _cost_total = _cost_in + _cost_out
+                _latency = int((time.time() - start_time) * 1000)
+                logger.info(
+                    f"FLOKI | model={last_model} | input_tokens={total_input_tokens} | output_tokens={total_output_tokens} | "
+                    f"cost=${_cost_total:.4f} | tools_called={tool_calls_count} | latency={_latency}ms"
+                )
+                return {"content": text_out.strip(), "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace}
 
-            if not fn_calls:
-                try:
-                    fr_s = str(finish_reason or "").strip().upper()
-                    had_text_part = any(str(t).strip().lower() == "text" for t in (part_types or []))
-                    empty_text_part = had_text_part and not (text_out and str(text_out).strip())
-                    retryable_finish = bool(fr_s) and fr_s not in ("STOP", "MAX_TOKENS")
-                    if (not had_empty_retry) and (empty_text_part or retryable_finish):
-                        had_empty_retry = True
-                        tool_trace.append(
-                            {
-                                "name": "gemini_retry",
-                                "input": {
-                                    "reason": "empty_text_part" if empty_text_part else "empty_response",
-                                    "finish_reason": fr_s,
-                                },
-                                "result": {"success": True, "retry": 1},
-                                "latency_ms": 0,
-                            }
-                        )
-                        continue
-                except Exception:
-                    pass
-                return {
-                    "content": json.dumps(
-                        {
-                            "decision": "WAIT",
-                            "confidence": 0,
-                            "reasoning": "empty response",
-                            "key_factors": [],
-                            "concerns": ["empty_response"],
-                        }
-                    ),
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "model": last_model,
-                    "tool_trace": tool_trace,
-                }
-
-            # Execute requested function calls and append function_response parts.
-            for fc in fn_calls:
-                if tool_calls >= int(self.max_tool_calls):
-                    break
-                tool_calls += 1
-                try:
-                    name = str(getattr(fc, "name", "") or "").strip()
-                    args = getattr(fc, "args", None)
-                    if not isinstance(args, dict):
-                        try:
-                            args = dict(args) if args is not None else {}
-                        except Exception:
-                            args = {}
-
-                    t0 = time.time()
-                    result = self._execute_tool(tools, name, args)
-                    dt_ms = int((time.time() - t0) * 1000)
-
-                    tool_trace.append({"name": name, "input": args, "result": result, "latency_ms": dt_ms})
-
-                    contents.append(
-                        {
-                            "role": "user",
-                            "parts": [
-                                {
-                                    "function_response": {
-                                        "name": name,
-                                        "response": result,
-                                    }
-                                }
-                            ],
-                        }
-                    )
-
-                except Exception as e:
-                    tool_trace.append({"name": "unknown", "input": {}, "result": {"success": False, "reason": str(e)}, "latency_ms": 0})
-                    continue
-
+            logger.warning(f"FLOKI | empty response at iteration {iteration}, finish={finish}")
             continue
+
+        logger.warning(f"FLOKI | loop exhausted after {MAX_ITERATIONS} iterations")
+        return {
+            "content": json.dumps({"decision": "WAIT", "confidence": 0, "reasoning": "loop exhausted", "key_factors": [], "concerns": ["loop_exhausted"]}),
+            "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace,
+        }
 
 
     def _build_user_message(self, data_package: Dict, trigger_type: str = "SIGNAL") -> str:
@@ -1230,6 +1072,7 @@ class AIAgent:
             return self._fallback_result(f"JSON parse error: {e}", raw_response=content)
 
     async def _request_json_retry(self, trigger_context: str) -> Dict[str, Any]:
+        """FLO-130: JSON retry via OpenAI."""
         loop = asyncio.get_event_loop()
         retry_prompt = (
             "Your previous response was not valid JSON. "
@@ -1241,20 +1084,20 @@ class AIAgent:
         except Exception:
             system_prompt = ""
 
-        contents: List[Dict[str, Any]] = []
+        messages: List[Dict[str, Any]] = []
         if system_prompt:
-            contents.append({"role": "user", "parts": [{"text": system_prompt}]})
-        contents.append({"role": "user", "parts": [{"text": str(trigger_context or "").strip()}]})
-        contents.append({"role": "user", "parts": [{"text": retry_prompt}]})
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": str(trigger_context or "").strip()})
+        messages.append({"role": "user", "content": retry_prompt})
 
         def _sync_retry_call():
-            return self.client.models.generate_content(
+            return self.client.chat.completions.create(
                 model=self.model,
-                contents=contents,
-                config={
-                    "max_output_tokens": int(self.max_tokens),
-                    "temperature": 0.5,
-                },
+                messages=messages,
+                response_format={"type": "json_object"},
+                max_completion_tokens=int(self.max_tokens),
+                temperature=0.5,
+                timeout=20,
             )
 
         resp = await loop.run_in_executor(None, _sync_retry_call)
@@ -1262,17 +1105,16 @@ class AIAgent:
         input_tokens = 0
         output_tokens = 0
         try:
-            usage = getattr(resp, "usage_metadata", None)
-            if usage is not None:
-                input_tokens = int(getattr(usage, "prompt_token_count", 0) or 0)
-                output_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+            usage = resp.usage
+            if usage:
+                input_tokens = usage.prompt_tokens or 0
+                output_tokens = usage.completion_tokens or 0
         except Exception:
-            input_tokens = 0
-            output_tokens = 0
+            pass
 
         content = ""
         try:
-            content = getattr(resp, "text", None) or ""
+            content = resp.choices[0].message.content or ""
         except Exception:
             content = ""
 

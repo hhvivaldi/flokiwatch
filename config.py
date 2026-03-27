@@ -401,8 +401,8 @@ AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) mode
 AI_AGENT_TIMEOUT = 240                    # Timeout in seconds for API calls
 AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
-# Gemini integration (Phase 2)
-FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "gemini-3-flash-preview")
+# FLO-130: Floki model (migrated from Gemini to OpenAI GPT-5.4)
+FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "gpt-5.4")
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
 # ============================================================================
