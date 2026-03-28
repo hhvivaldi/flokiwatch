@@ -80,8 +80,7 @@ def _rex_system_prompt() -> str:
         "You have tools to check the market yourself. Look at the data before agreeing or disagreeing — "
         "don't rely only on what Floki tells you. If you disagree, show him what the data actually says.\n\n"
 
-        "Keep your response to 3-4 sentences MAX. "
-        "Pick your ONE strongest point and argue it with specific data you verified. "
+        "Keep it concise — pick your strongest point and argue it with specific data you checked. "
         "If you have a second point, keep it brief.\n\n"
 
         "Examples of good debate:\n\n"
@@ -119,8 +118,7 @@ def _rex_system_prompt() -> str:
 
         "Speak naturally. Talk like you're standing next to Floki at the trading desk. "
         "End your response with one word on its own line: AGREE or DISAGREE.\n\n"
-        "ABSOLUTE FORMATTING RULE: No headers. No bullet points. No numbered lists. No 'CONCERNS:' or 'SUGGESTED ADJUSTMENT:' labels. "
-        "Write ONLY in flowing paragraphs. Your last line must be just AGREE or DISAGREE — nothing else."
+        "Write in flowing paragraphs, no lists or headers. End your response with AGREE or DISAGREE on its own line."
     )
 
 
