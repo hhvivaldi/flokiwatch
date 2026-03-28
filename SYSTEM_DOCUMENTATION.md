@@ -1,6 +1,6 @@
 # XAUUSD Trading Bot — Documentação Completa do Sistema
 
-> **Versão:** Março 2026 | **Modo:** DEMO (Capital Point Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1 | **Balance:** $813.76 (82 trades Pop B)
+> **Versão:** Março 2026 | **Modo:** DEMO (Capital Point Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1 | **Balance:** $813.76 (101 trades Pop B)
 
 ---
 

@@ -13,7 +13,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
 - Daily performance audit by independent Sage auditor
 - Active thesis persistence for inter-cycle continuity
 
-**Current state:** DEMO mode, Capital Point. Balance: $813.76, 82 trades (Population B).
+**Current state:** DEMO mode, Capital Point. Balance: $813.76, 101 trades (Population B).
 
 ## Architecture — Trading Office
 
