@@ -1,6 +1,6 @@
 # XAUUSD Trading Bot — Documentação Completa do Sistema
 
-> **Versão:** Março 2026 | **Modo:** DEMO (ICMarkets-Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1 | **Balance:** $1,064.02 (81 trades Pop B)
+> **Versão:** Março 2026 | **Modo:** DEMO (Capital Point Demo) | **Símbolo:** XAU/USD | **Timeframe:** H1 | **Balance:** $813.76 (82 trades Pop B)
 
 ---
 
@@ -9,8 +9,8 @@
 Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-first**. O sistema separa claramente:
 
 - **Brain (Python)**: pipeline de dados e cálculo (60s). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
-- **Floki (Gemini 3 Flash)**: portfolio manager e único decisor. Agenda o próprio ciclo via `set_next_check` (5-120 min). Decide **WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST**.
-- **Rex (GPT-4o)**: debate partner. Desafia o raciocínio do Floki apenas em decisões OPEN/CLOSE (AGREE/DISAGREE). HOLD/WAIT/ADJUST são skippados (FLO-50).
+- **Floki (GPT-5.4, 28 tools)**: portfolio manager e único decisor. Agenda o próprio ciclo via `set_next_check` (5-120 min). Decide **WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST**. Active thesis persistence (active_thesis.json). 91-line prompt (FLO-128).
+- **Rex (GPT-5 mini, 9 tools)**: co-pilot com acesso independente a dados. Verifica dados antes de concordar/discordar. Ajuda refinar planos (SL, entry, timing). Debates em qualquer decisão.
 - **Simba (Python, zero AI cost)**: watchdog. Monitoriza 10 tipos de condições (price, RSI, volume, ADX, scanner_pattern, pnl_threshold, indicator) a cada 30s. Acorda o Floki quando condições são atingidas.
 - **Luna (MiMo-V2-Flash)**: macro analyst. Analisa DXY, VIX, yields, oil, S&P 500, gold, Echo alerts + calendário a cada 15 min. Produz `luna_brief.json` com environment (SAFE/CAUTION/DANGER), padrões (forced_liquidation, safe_haven_flow, etc.), bias direcional. Quando Luna está ativa, Floki perde acesso a `get_macro` e `get_headlines` (Luna já processou esses dados).
 - **Echo (MiMo-V2-Flash)**: news sentinel 24/7. Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Classifica headlines como CRITICAL/IMPORTANT/ROUTINE. CRITICAL acorda Floki imediatamente (max 2/hora) + trigger Luna out-of-cycle. Feed health tracking com alerta a 3+ falhas consecutivas.
@@ -41,10 +41,10 @@ main.py (Orquestrador — Trading Office)
   │     ├── news_score_hybrid.py (25 RSS feeds + DXY/VIX/Yields)
   │     ├── economic_calendar.py (calendário)
   │     └── support_resistance.py (zonas S/R + Fibonacci)
-  ├── Floki (Gemini 3 Flash, self-scheduled 5-120 min) → ai_agent.py
+  ├── Floki (GPT-5.4, 28 tools, self-scheduled 5-120 min) → ai_agent.py
   │     ├── 20+ tools (market data, trading, memory, debate)
   │     └── decide: WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST
-  ├── Rex (GPT-4o, on OPEN/CLOSE only) → rex_validator.py
+  ├── Rex (GPT-5 mini, 9 tools, co-pilot) → rex_validator.py
   │     └── AGREE / DISAGREE + reasoning (HOLD/WAIT/ADJUST skipped)
   ├── Luna (MiMo-V2-Flash, every 15 min) → luna_analyst.py
   │     ├── DXY/VIX/yields/oil/S&P 500/gold + Echo alerts + calendar
@@ -99,7 +99,7 @@ O output do Brain é consumido por:
 
 ## 4. Floki — Portfolio Manager e Único Decisor
 
-**Modelo:** Gemini 3 Flash (`gemini-3-flash-preview`)
+**Modelo:** GPT-5.4 (`gpt-5.4`) | **Temperature:** 1.0 | **API:** OpenAI
 **Ficheiro:** `ai_agent.py`, `agent_tools.py`, `agent_prompts.py`
 
 **Quando corre:**
@@ -107,7 +107,7 @@ O output do Brain é consumido por:
 - Auto-agendado via `set_next_check` (5-120 min, default 5 min)
 - Fora do ciclo: SIMBA_WAKE (condição atingida), SIMBA_WATCH (posição em risco), ECHO_CRITICAL (breaking news)
 
-**20+ ferramentas disponíveis:**
+**28 ferramentas disponíveis (4 categorias: Technical, Cross-market, Macro, Performance):**
 
 - Dados: get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_headlines, get_macro, get_calendar, get_ml_prediction
 - Trading: execute_trade, close_trade, adjust_trade
@@ -122,7 +122,7 @@ O output do Brain é consumido por:
 
 ## 5. Rex — Debate Partner
 
-**Modelo:** GPT-4o
+**Modelo:** GPT-5 mini (`gpt-5-mini`) | **9 tools:** price, candles, indicators, S/R zones, market_context, luna_brief, fibonacci, trade_lessons, open_positions
 **Ficheiro:** `rex_validator.py`
 
 Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação. **Apenas decisões OPEN/CLOSE ativam o Rex** — HOLD/WAIT/ADJUST são skippados (FLO-50, otimização de custo).
@@ -293,7 +293,7 @@ Níveis: very_high(≥80), high(≥65), moderate(≥50), low(≥35), very_low(<3
 
 ## 7. GPT Confidence Validator
 
-**Ficheiro:** `gpt_confidence.py` | **Modelo:** gpt-4o-mini
+**Ficheiro:** `gpt_confidence.py` | **Modelo:** gpt-4o-mini (legacy, may be updated)
 
 Pós-Cérebro, ajusta confiança ±15 pontos. Ações: CONFIRM/BOOST/REDUCE.
 
@@ -340,7 +340,7 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 ## 10. Safety Checks
 
-**Ficheiro:** `safety_checks.py` — 10 verificações:
+**Ficheiro:** `safety_checks.py` — FLO-118: Blocking removido. Apenas 3 checks ativos: MT5 connected, market hours, FLO-85 opposing positions.
 
 1. MT5 conectado
 2. Mercado aberto (Dom 22:00→Sex 21:00 UTC, pausa 21-22 UTC)
