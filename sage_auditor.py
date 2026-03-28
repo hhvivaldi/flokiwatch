@@ -847,7 +847,7 @@ async def _call_gemini_for_patterns(
     """
 
     start = time.time()
-    meta: Dict[str, Any] = {"model": getattr(config, "FLOKI_MODEL", ""), "tokens": {"input": 0, "output": 0, "total": 0}, "latency_ms": 0}
+    meta: Dict[str, Any] = {"model": getattr(config, "SAGE_MODEL", "gemini-3-flash-preview"), "tokens": {"input": 0, "output": 0, "total": 0}, "latency_ms": 0}
 
     sage_api_key = str(getattr(config, "SAGE_API_KEY", "") or os.environ.get("SAGE_API_KEY", "") or "").strip()
     shared_api_key = str(os.environ.get("GEMINI_API_KEY", "") or "").strip()
@@ -964,7 +964,7 @@ async def _call_gemini_for_patterns(
     }
 
     client = genai.Client(api_key=api_key)
-    model = getattr(config, "FLOKI_MODEL", "gemini-3-flash-preview")
+    model = getattr(config, "SAGE_MODEL", "gemini-3-flash-preview")
 
     try:
         resp = await asyncio.to_thread(
@@ -1062,7 +1062,7 @@ def run_sage_auditor() -> SageRunResult:
         llm_insights: List[Dict[str, Any]] = []
         llm_recs: List[str] = []
         meta: Dict[str, Any] = {
-            "model": getattr(config, "FLOKI_MODEL", "gemini-3-flash-preview"),
+            "model": getattr(config, "SAGE_MODEL", "gemini-3-flash-preview"),
             "tokens": {"input": 0, "output": 0, "total": 0},
             "latency_ms": 0,
         }

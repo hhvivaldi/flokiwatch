@@ -411,8 +411,9 @@ FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 USE_SAGE_AUDITOR = True
 SAGE_RUN_TIME_UTC = "21:00"
 
-# Dedicated API key for Sage cost isolation (fallback to GEMINI_API_KEY in sage_auditor.py)
+# Dedicated API key and model for Sage (stays on Gemini, separate from Floki's GPT-5.4)
 SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
+SAGE_MODEL = os.environ.get("SAGE_MODEL", "gemini-3-flash-preview")
 
 # Intraday drawdown alerts (FLO-68)
 SAGE_INTRADAY_DRAWDOWN_ALERT = float(os.environ.get("SAGE_INTRADAY_DRAWDOWN_ALERT", "-30"))   # dollars — alert if daily P&L <= this
