@@ -1580,11 +1580,12 @@ class AgentTools:
                 self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | account balance unavailable")
                 return {"success": False, "reason": "account balance unavailable"}
 
-            open_positions_list = []
+            open_positions_list = None
             try:
                 open_positions_list = self._executor.get_open_positions() or []
             except Exception:
-                open_positions_list = []
+                log.warning("EXECUTE_TRADE | Position fetch failed — opposing guard will block")
+                open_positions_list = None
 
             is_safe, reasons = self._safety.is_safe_to_trade(
                 account_balance=float(balance),

@@ -190,10 +190,14 @@ class SafetyChecker:
         # memory — Floki reads and decides for himself.
 
         # FLO-85: Hard gate — no opposing positions allowed
-        if trade_direction and open_positions_list:
+        # Use `is not None` instead of truthiness — empty list [] means "no positions" (safe),
+        # but None means "fetch failed" (must block)
+        if trade_direction and open_positions_list is not None:
             opposing_ok, opposing_reason = self.check_no_opposing_position(trade_direction, open_positions_list)
             if not opposing_ok:
                 reasons.append(opposing_reason)
+        elif trade_direction and open_positions_list is None:
+            reasons.append("opposing_check_skipped: position fetch failed")
 
         is_safe = len(reasons) == 0
         return is_safe, reasons

@@ -132,7 +132,10 @@ def _parse_rex_response(text: str) -> RexResult:
         agree = m.group(1).strip().upper() == "AGREE"
         body = raw[: m.start()].strip()
     else:
-        agree = True
+        # Safe default: if Rex didn't clearly state AGREE/DISAGREE, treat as DISAGREE
+        # This prevents truncated or malformed responses from silently approving trades
+        log.warning("REX | No clear AGREE/DISAGREE found in response — defaulting to DISAGREE")
+        agree = False
         body = raw
 
     concerns = []
@@ -401,8 +404,17 @@ def _rex_tool_loop(
             log.warning(f"REX | API call failed (iteration {iteration}): {e}")
             return None
 
+        if not resp.choices:
+            log.warning("REX | API returned empty choices — skipping iteration")
+            return None
+
         msg = resp.choices[0].message
         finish = resp.choices[0].finish_reason
+
+        # Truncation guard: if response was cut off, don't parse partial text
+        if finish == "length" and not (msg.tool_calls):
+            log.warning("REX | Response truncated (finish_reason=length) — treating as inconclusive")
+            return None
 
         # Tool calls requested
         if msg.tool_calls:
