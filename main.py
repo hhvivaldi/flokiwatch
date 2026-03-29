@@ -3624,7 +3624,7 @@ class TradingBot:
                 _bias = "NEUTRAL"
 
             # Key levels (4xxx pattern for gold)
-            _levels = sorted(set(int(m) for m in _re.findall(r'\b(4[0-9]{3})\b', _reasoning)))[:5]
+            _levels = sorted(set(int(m) for m in _re.findall(r'\b([2-9][0-9]{3})\b', _reasoning) if 2000 <= int(m) <= 9999))[:5]
 
             # Conditions (sentences with trigger words)
             _conditions = []
@@ -3683,8 +3683,8 @@ class TradingBot:
             with open(_tmp, "w", encoding="utf-8") as _tf:
                 json.dump(_thesis, _tf, indent=2, ensure_ascii=False)
             os.replace(_tmp, _thesis_path)
-        except Exception:
-            pass
+        except Exception as e_thesis:
+            log.warning(f"FLOKI | thesis persist failed: {e_thesis}")
 
         try:
             alert_proactive_decision(agent_result)
@@ -4784,6 +4784,45 @@ class TradingBot:
                     f"Reactive analysis triggered. Session={session_name}. "
                     "Investigate using tools and respond with final decision JSON."
                 )
+            except Exception:
+                pass
+
+            # FLO-127: Inject previous thesis into reactive trigger_context (same as proactive)
+            try:
+                _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
+                if os.path.exists(_thesis_path):
+                    with open(_thesis_path, "r", encoding="utf-8") as _tf:
+                        _prev = json.loads(_tf.read())
+                    if isinstance(_prev, dict) and _prev.get("direction_bias"):
+                        _pt_ts = _prev.get("timestamp", "?")[:16]
+                        _pt_bias = _prev.get("direction_bias", "?")
+                        _pt_price = _prev.get("price_at_decision")
+                        _pt_levels = _prev.get("key_levels", [])
+                        _pt_conds = _prev.get("conditions", [])
+                        _pt_decision = _prev.get("decision", "?")
+                        _cur_price = None
+                        try:
+                            _cur_price = float(getattr(self, "last_known_price", 0) or 0)
+                        except Exception:
+                            pass
+                        _price_move = ""
+                        if _cur_price and _pt_price:
+                            _diff = round(_cur_price - _pt_price, 1)
+                            _price_move = f"Price is now {_cur_price:.1f} (moved {'+' if _diff >= 0 else ''}{_diff} from your decision). "
+                        _levels_str = ", ".join(str(l) for l in _pt_levels[:5]) if _pt_levels else "none specified"
+                        _conds_str = "; ".join(_pt_conds[:2]) if _pt_conds else "none specified"
+                        _thesis_block = (
+                            f"\n<previous_thesis>\n"
+                            f"[{_pt_ts}] You were {_pt_bias} (decided {_pt_decision}). "
+                            f"Your plan: \"{_conds_str}\". "
+                            f"{_price_move}"
+                            f"Key levels: {_levels_str}.\n"
+                        )
+                        _unchanged = _prev.get("unchanged_since")
+                        if _unchanged:
+                            _thesis_block += f"Your thesis hasn't changed since {_unchanged[:16]}. Focus on what's NEW or different.\n"
+                        _thesis_block += "BEFORE you start your analysis: briefly state whether this thesis still holds or what changed. Then proceed.\n</previous_thesis>\n"
+                        trigger_context += _thesis_block
             except Exception:
                 pass
 

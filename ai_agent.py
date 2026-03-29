@@ -696,7 +696,6 @@ class AIAgent:
                     "required": ["thesis", "note"],
                     "additionalProperties": False,
                 },
-                "cache_control": {"type": "ephemeral"},
             },
             {
                 "name": "set_next_check",
@@ -818,18 +817,23 @@ class AIAgent:
 
             try:
                 def _sync_call():
-                    return self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        tools=openai_tools,
-                        response_format={"type": "json_object"},
-                        max_completion_tokens=int(self.max_tokens),
-                        temperature=1.0,
-                        timeout=PER_CALL_TIMEOUT,
-                    )
+                    kwargs = {
+                        "model": self.model,
+                        "messages": messages,
+                        "tools": openai_tools,
+                        "max_completion_tokens": int(self.max_tokens),
+                        "temperature": 1.0,
+                        "timeout": PER_CALL_TIMEOUT,
+                    }
+                    # Only force JSON output when no tool calls are expected (avoids degrading tool use)
+                    if not openai_tools:
+                        kwargs["response_format"] = {"type": "json_object"}
+                    return self.client.chat.completions.create(**kwargs)
                 resp = await loop.run_in_executor(None, _sync_call)
             except Exception as e:
                 logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
+                # Backoff: sleep 2s before retry to avoid hammering rate limits
+                await asyncio.sleep(2)
                 continue
 
             try:
@@ -840,6 +844,11 @@ class AIAgent:
                     last_model = resp.model or self.model
             except Exception:
                 pass
+
+            # Guard for empty choices (content filter, safety refusal)
+            if not resp.choices:
+                logger.warning(f"FLOKI | empty choices at iteration {iteration} — content filter or safety refusal")
+                continue
 
             msg = resp.choices[0].message
             finish = resp.choices[0].finish_reason
@@ -852,10 +861,22 @@ class AIAgent:
             )
 
             if msg.tool_calls:
-                messages.append(msg)
-                for tc in msg.tool_calls:
-                    if tool_calls_count >= int(self.max_tool_calls):
-                        break
+                # Check if we have budget for ALL tool calls in this batch
+                remaining_budget = int(self.max_tool_calls) - tool_calls_count
+                calls_to_process = msg.tool_calls[:remaining_budget] if remaining_budget < len(msg.tool_calls) else msg.tool_calls
+
+                # Build assistant message with ONLY the calls we'll process (avoids orphan tool_call_ids)
+                if len(calls_to_process) < len(msg.tool_calls):
+                    logger.warning(f"FLOKI | tool budget hit: processing {len(calls_to_process)}/{len(msg.tool_calls)} calls")
+                    # Create a modified message with only the calls we process
+                    messages.append({"role": "assistant", "tool_calls": [
+                        {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                        for tc in calls_to_process
+                    ]})
+                else:
+                    messages.append(msg)
+
+                for tc in calls_to_process:
                     tool_calls_count += 1
                     fname = tc.function.name
                     try:
@@ -873,11 +894,20 @@ class AIAgent:
 
             if text_out.strip():
                 if not had_execution_followup:
-                    _text_upper = text_out.upper()
                     _trace_names = {str(t.get("name", "")).lower() for t in tool_trace if isinstance(t, dict)}
-                    _needs_execute = ("OPEN_BUY" in _text_upper or "OPEN_SELL" in _text_upper) and "execute_trade" not in _trace_names
-                    _needs_close = "CLOSE_TRADE" in _text_upper and "close_trade" not in _trace_names
-                    _needs_adjust = "ADJUST_TRADE" in _text_upper and "adjust_trade" not in _trace_names
+
+                    # Parse the decision field from JSON to avoid false positives
+                    # ("decided against OPEN_BUY" should NOT trigger followup)
+                    _parsed_decision = ""
+                    try:
+                        _parsed_json = json.loads(text_out)
+                        _parsed_decision = str(_parsed_json.get("decision", "")).upper()
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        _parsed_decision = ""
+
+                    _needs_execute = _parsed_decision in ("OPEN_BUY", "OPEN_SELL") and "execute_trade" not in _trace_names
+                    _needs_close = _parsed_decision == "CLOSE_TRADE" and "close_trade" not in _trace_names
+                    _needs_adjust = _parsed_decision == "ADJUST_TRADE" and "adjust_trade" not in _trace_names
 
                     if _needs_execute or _needs_close or _needs_adjust:
                         _missing_tool = "execute_trade" if _needs_execute else ("close_trade" if _needs_close else "adjust_trade")
