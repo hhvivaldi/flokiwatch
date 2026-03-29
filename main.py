@@ -4787,7 +4787,7 @@ class TradingBot:
             except Exception:
                 pass
 
-            # FLO-139: Inject market regime into reactive trigger_context
+            # FLO-139: Inject market regime into reactive trigger_context (same as proactive)
             try:
                 _regime = getattr(self, "_last_regime_context", None)
                 if _regime and isinstance(_regime, dict) and _regime.get("regime"):
@@ -4796,9 +4796,11 @@ class TradingBot:
                     trigger_context += (
                         f"\n<market_regime>\n"
                         f"Current: {_r['regime']} ({_r.get('confidence', '?')} confidence)\n"
-                        f"Duration: {_r.get('duration_display', '?')}\n"
-                        f"Stability: {_r.get('stability', '?')}\n"
+                        f"Duration: {_r.get('duration_display', '?')} (since transition from {_r.get('previous_regime', '?')})\n"
+                        f"Stability: {_r.get('stability', '?')} ({_r.get('regime_changes_24h', 0)} changes in 24h)\n"
                         f"Evidence: {_evidence_str}\n"
+                        f"ATR: {_r.get('atr_current', '?')} pips ({_r.get('atr_ratio', '?')}x vs 5-day avg)\n"
+                        f"Transition: {_r.get('transition', '?')}\n"
                         f"</market_regime>\n"
                     )
             except Exception:
