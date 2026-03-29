@@ -177,6 +177,24 @@ For new files over 100 lines, show the complete file for audit BEFORE pushing. C
 7. Commit with descriptive message: `fix: FLO-XXX — description` or `feat: FLO-XXX — description`
 8. Push to GitHub after each commit
 
+### Rule 16 — Documentation Always Updated
+
+After ANY change to the system, update ALL relevant documentation in the SAME commit:
+- `CLAUDE.md` — if architecture, agents, models, tools, rules, or conventions changed
+- `README.md` — if architecture, setup, or overview changed
+- `SYSTEM_DOCUMENTATION.md` — if detailed system behavior changed
+- `MONDAY_CHECKLIST.md` — if startup/verification procedures changed
+- `FIELD_CONTRACT.md` — if bot_state.json fields changed
+- `docs/MONDAY_GPT54_TEST.md` — if test procedures changed
+
+Documentation updates are NOT optional. They go in the SAME commit as the code change. If you add a new field to bot_state.json, FIELD_CONTRACT.md is updated in that commit. If you change a model, CLAUDE.md and README.md are updated in that commit. If you add a new agent feature, SYSTEM_DOCUMENTATION.md is updated in that commit.
+
+Outdated documentation is worse than no documentation — it causes wrong assumptions and wasted time.
+
+### Rule 17 — Push Immediately
+
+Every commit must be pushed to GitHub immediately after committing. No local-only commits. The repo on GitHub must ALWAYS reflect the latest state. If Hermano needs to pull from another machine, or if we need to verify code, GitHub must be current.
+
 ### What NOT to Do
 
 - Do NOT push 50+ fixes in parallel without individual review
