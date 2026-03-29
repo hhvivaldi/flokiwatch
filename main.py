@@ -5420,6 +5420,13 @@ class TradingBot:
                         extract_trade_lesson(action.get("ticket"))
                     except Exception:
                         pass
+
+                    # FLO-137: Post-trade reflexion (GPT-5.4, daemon thread)
+                    try:
+                        from trade_reflexion import run_trade_reflexion_async
+                        run_trade_reflexion_async(action)
+                    except Exception:
+                        pass
                 
                 # Record for safety checks (cooldown applies even for pending)
                 record_trade_result(profit)

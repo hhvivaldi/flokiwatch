@@ -1999,6 +1999,39 @@ class AgentTools:
             self._log_tool("get_trade_lessons", start, f"error={e}")
             return {"success": False, "reason": "lessons_unavailable"}
 
+    # -----------------------------------------------------------------
+    # FLO-137: Trade reflexion tools
+    # -----------------------------------------------------------------
+
+    def get_recent_reflexions(self, limit: int = 5) -> Dict[str, Any]:
+        """Return the most recent post-trade reflexions (FLO-137)."""
+        start = time.time()
+        try:
+            from db_writer import get_recent_reflexions as _get
+            lim = min(max(int(limit or 5), 1), 20)
+            rows = _get(lim)
+            self._log_tool("get_recent_reflexions", start, f"count={len(rows)}")
+            return {"success": True, "reflexions": rows, "count": len(rows)}
+        except Exception as e:
+            self._log_tool("get_recent_reflexions", start, f"error={e}")
+            return {"success": False, "reason": "reflexions_unavailable"}
+
+    def search_reflexions(self, keywords: str, limit: int = 5) -> Dict[str, Any]:
+        """Search past trade reflexions by keywords (FLO-138)."""
+        start = time.time()
+        try:
+            from db_writer import search_reflexions as _search
+            kw = str(keywords or "").strip()
+            if not kw:
+                return {"success": False, "reason": "empty keywords"}
+            lim = min(max(int(limit or 5), 1), 20)
+            rows = _search(kw, lim)
+            self._log_tool("search_reflexions", start, f"keywords={kw} | count={len(rows)}")
+            return {"success": True, "results": rows, "count": len(rows)}
+        except Exception as e:
+            self._log_tool("search_reflexions", start, f"error={e}")
+            return {"success": False, "reason": "search_unavailable"}
+
     def write_session_memory(self, thesis: str, note: str) -> Dict[str, Any]:
         start = time.time()
         try:

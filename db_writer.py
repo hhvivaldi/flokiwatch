@@ -328,6 +328,27 @@ def init_db() -> None:
             except sqlite3.OperationalError:
                 pass
 
+        # FLO-137: trade reflexions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trade_reflexions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket INTEGER UNIQUE NOT NULL,
+                timestamp TEXT NOT NULL,
+                direction TEXT,
+                entry_price REAL,
+                exit_price REAL,
+                pnl REAL,
+                close_reason TEXT,
+                thesis_summary TEXT,
+                reflexion_json TEXT,
+                lesson TEXT,
+                pattern_tags TEXT,
+                model TEXT,
+                tokens INTEGER,
+                latency_ms INTEGER
+            )
+        """)
+
         conn.commit()
         conn.close()
         db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
@@ -1092,3 +1113,166 @@ def record_account_snapshot(account_info: Optional[Dict[str, Any]]) -> None:
             conn.close()
     except Exception as e:
         log.debug(f"db_writer: failed to record account snapshot: {e}")
+
+
+# -------------------------------------------------------------------------
+# FLO-137: Trade reflexions
+# -------------------------------------------------------------------------
+
+def get_agent_decision_near_time(open_time: str) -> Optional[Dict[str, Any]]:
+    """Find the agent_decisions row closest to a given timestamp (±5 min)."""
+    try:
+        conn = _get_connection()
+        try:
+            row = conn.execute(
+                """SELECT agent_reasoning, agent_concerns, agent_key_factors,
+                          rex_agreed, rex_reasoning
+                   FROM agent_decisions
+                   WHERE timestamp BETWEEN datetime(?, '-5 minutes') AND datetime(?, '+5 minutes')
+                   ORDER BY ABS(julianday(timestamp) - julianday(?))
+                   LIMIT 1""",
+                (open_time, open_time, open_time),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row:
+            return {
+                "agent_reasoning": row[0],
+                "agent_concerns": row[1],
+                "agent_key_factors": row[2],
+                "rex_agreed": row[3],
+                "rex_reasoning": row[4],
+            }
+    except Exception as e:
+        log.debug(f"db_writer: failed to query agent_decision near {open_time}: {e}")
+    return None
+
+
+def record_trade_reflexion(
+    ticket: int,
+    direction: str,
+    entry_price: float,
+    exit_price: float,
+    pnl: float,
+    close_reason: str,
+    thesis_summary: str,
+    reflexion_json: str,
+    lesson: str,
+    pattern_tags: str,
+    model: str = "",
+    tokens: int = 0,
+    latency_ms: int = 0,
+) -> None:
+    """Record a post-trade reflexion from GPT-5.4."""
+    try:
+        conn = _get_connection()
+        try:
+            conn.execute(
+                """INSERT OR REPLACE INTO trade_reflexions
+                   (ticket, timestamp, direction, entry_price, exit_price, pnl,
+                    close_reason, thesis_summary, reflexion_json, lesson,
+                    pattern_tags, model, tokens, latency_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ticket,
+                    datetime.utcnow().isoformat(),
+                    direction,
+                    entry_price,
+                    exit_price,
+                    pnl,
+                    close_reason,
+                    thesis_summary,
+                    reflexion_json,
+                    lesson,
+                    pattern_tags,
+                    model,
+                    tokens,
+                    latency_ms,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        log.info(f"REFLEXION | ticket={ticket} | lesson={lesson[:80]}")
+    except Exception as e:
+        log.warning(f"db_writer: failed to record trade reflexion: {e}")
+
+
+def get_recent_reflexions(limit: int = 5) -> List[Dict[str, Any]]:
+    """Get most recent trade reflexions."""
+    try:
+        conn = _get_connection()
+        try:
+            rows = conn.execute(
+                """SELECT ticket, direction, pnl, close_reason, thesis_summary,
+                          lesson, pattern_tags, timestamp
+                   FROM trade_reflexions
+                   ORDER BY id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [
+            {
+                "ticket": r[0], "direction": r[1], "pnl": r[2],
+                "close_reason": r[3], "thesis_summary": r[4],
+                "lesson": r[5], "pattern_tags": json.loads(r[6]) if r[6] else [],
+                "timestamp": r[7],
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        log.debug(f"db_writer: failed to get reflexions: {e}")
+        return []
+
+
+def search_reflexions(keywords: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """Search trade reflexions by keywords (OR logic, ranked by match count).
+    Pushes filtering to SQL with LIKE to avoid unbounded memory scan."""
+    try:
+        import json as _json
+        terms = [t.strip().lower() for t in keywords.split() if t.strip()]
+        if not terms:
+            return []
+
+        # Build SQL WHERE with OR conditions on lesson + pattern_tags
+        where_clauses = []
+        params = []
+        for t in terms:
+            where_clauses.append("(LOWER(lesson) LIKE ? OR LOWER(pattern_tags) LIKE ?)")
+            params.extend([f"%{t}%", f"%{t}%"])
+
+        conn = _get_connection()
+        try:
+            rows = conn.execute(
+                f"""SELECT ticket, direction, pnl, close_reason, thesis_summary,
+                           lesson, pattern_tags, timestamp
+                    FROM trade_reflexions
+                    WHERE {' OR '.join(where_clauses)}
+                    ORDER BY id DESC
+                    LIMIT ?""",
+                (*params, limit * 3),  # fetch extra for re-ranking
+            ).fetchall()
+        finally:
+            conn.close()
+
+        # Re-rank by match count (how many terms matched)
+        scored = []
+        for r in rows:
+            searchable = f"{r[5] or ''} {r[6] or ''}".lower()
+            hits = sum(1 for t in terms if t in searchable)
+            scored.append((hits, r))
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        return [
+            {
+                "ticket": r[0], "direction": r[1], "pnl": r[2],
+                "close_reason": r[3], "thesis_summary": r[4],
+                "lesson": r[5], "pattern_tags": _json.loads(r[6]) if r[6] else [],
+                "timestamp": r[7], "match_score": hits,
+            }
+            for hits, r in scored[:limit]
+        ]
+    except Exception as e:
+        log.debug(f"db_writer: failed to search reflexions: {e}")
+        return []

@@ -701,6 +701,30 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_recent_reflexions",
+                "description": "Read your most recent post-trade reflexions — what you learned from each closed trade (thesis correctness, key lesson, pattern tags). Call to review recent performance.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "search_reflexions",
+                "description": "Search past trade reflexions by keywords (e.g., 'false_breakout', 'asian_session', 'sl_too_tight'). Returns trades matching any keyword, sorted by relevance.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "keywords": {"type": "string", "description": "Space-separated keywords to search in lessons and pattern tags"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+                    },
+                    "required": ["keywords"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {
