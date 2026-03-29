@@ -331,7 +331,7 @@ def init_db() -> None:
         db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
         log.warning("SQLite history DB initialized: " + db_abs_path)
     except Exception as e:
-        log.debug(f"db_writer: failed to initialize DB: {e}")
+        log.error(f"db_writer: failed to initialize DB: {e}")
 
 
 def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str, Any]] = None, author: str = "SIMBA") -> None:
@@ -358,12 +358,14 @@ def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str
                 payload_json = None
 
         conn = _get_connection()
-        conn.execute(
-            "INSERT INTO agent_events (timestamp, event_type, author, content, payload_json) VALUES (?, ?, ?, ?, ?)",
-            (datetime.now().isoformat(), et, str(author or "SIMBA"), content_s[:4000], payload_json),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                "INSERT INTO agent_events (timestamp, event_type, author, content, payload_json) VALUES (?, ?, ?, ?, ?)",
+                (datetime.now().isoformat(), et, str(author or "SIMBA"), content_s[:4000], payload_json),
+            )
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
         log.debug(f"db_writer: failed to record agent event: {e}")
 
@@ -382,9 +384,10 @@ def record_analysis(last_analysis: Dict[str, Any]) -> None:
         ml_meta = last_analysis.get("ml") or {}
 
         conn = _get_connection()
-        conn.execute(
-            """INSERT INTO analyses
-               (timestamp, decision, final_score, confidence, confidence_level,
+        try:
+            conn.execute(
+                """INSERT INTO analyses
+                   (timestamp, decision, final_score, confidence, confidence_level,
                 tech_score, news_score, ml_score, momentum_score, calendar_score,
                 current_price, volatility_status, scenario, scenario_description,
                 gpt_action, gpt_adjustment,
@@ -470,10 +473,11 @@ def record_analysis(last_analysis: Dict[str, Any]) -> None:
                 ml_meta.get("direction"),
             ),
         )
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
-        log.debug(f"db_writer: failed to record analysis: {e}")
+        log.warning(f"db_writer: failed to record analysis: {e}")
 
 
 def record_trade_open(
@@ -490,26 +494,28 @@ def record_trade_open(
     """Record trade open."""
     try:
         conn = _get_connection()
-        conn.execute(
-            """INSERT OR IGNORE INTO trades
-               (ticket, direction, volume, open_price, sl, tp, open_time, comment, decision_source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                ticket,
-                direction,
-                volume,
-                open_price,
-                sl,
-                tp,
-                open_time or datetime.utcnow().isoformat(),
-                comment,
-                decision_source,
-            ),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO trades
+                   (ticket, direction, volume, open_price, sl, tp, open_time, comment, decision_source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ticket,
+                    direction,
+                    volume,
+                    open_price,
+                    sl,
+                    tp,
+                    open_time or datetime.utcnow().isoformat(),
+                    comment,
+                    decision_source,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
-        log.debug(f"db_writer: failed to record trade open: {e}")
+        log.warning(f"db_writer: failed to record trade open: {e}")
 
 
 def update_trade_open_price(
@@ -559,29 +565,31 @@ def record_trade_close(
     """Update trade with close data."""
     try:
         conn = _get_connection()
-        be_int = 1 if breakeven_activated else (0 if breakeven_activated is False else None)
-        cursor = conn.execute(
-            """UPDATE trades
-               SET close_price = ?, profit = ?, close_reason = ?, close_time = ?, breakeven_activated = ?
-               WHERE ticket = ?""",
-            (
-                close_price,
-                profit,
-                close_reason,
-                close_time or datetime.now().isoformat(),
-                be_int,
-                ticket,
-            ),
-        )
-        if cursor.rowcount == 0:
-            log.warning(
-                f"TRADE_CLOSE | ticket #{ticket} not found in SQLite — "
-                f"close not recorded (will be caught by reconciliation)"
+        try:
+            be_int = 1 if breakeven_activated else (0 if breakeven_activated is False else None)
+            cursor = conn.execute(
+                """UPDATE trades
+                   SET close_price = ?, profit = ?, close_reason = ?, close_time = ?, breakeven_activated = ?
+                   WHERE ticket = ?""",
+                (
+                    close_price,
+                    profit,
+                    close_reason,
+                    close_time or datetime.utcnow().isoformat(),
+                    be_int,
+                    ticket,
+                ),
             )
-        conn.commit()
-        conn.close()
+            if cursor.rowcount == 0:
+                log.warning(
+                    f"TRADE_CLOSE | ticket #{ticket} not found in SQLite — "
+                    f"close not recorded (will be caught by reconciliation)"
+                )
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
-        log.debug(f"db_writer: failed to record trade close: {e}")
+        log.warning(f"db_writer: failed to record trade close: {e}")
 
 
 def record_agent_decision(
@@ -1059,20 +1067,22 @@ def record_account_snapshot(account_info: Optional[Dict[str, Any]]) -> None:
             return
 
         conn = _get_connection()
-        conn.execute(
-            """INSERT INTO account_snapshots
-               (timestamp, balance, equity, margin, free_margin, profit)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                datetime.now().isoformat(),
-                account_info.get("balance"),
-                account_info.get("equity"),
-                account_info.get("margin"),
-                account_info.get("free_margin"),
-                account_info.get("profit"),
-            ),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """INSERT INTO account_snapshots
+                   (timestamp, balance, equity, margin, free_margin, profit)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    datetime.now().isoformat(),
+                    account_info.get("balance"),
+                    account_info.get("equity"),
+                    account_info.get("margin"),
+                    account_info.get("free_margin"),
+                    account_info.get("profit"),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
         log.debug(f"db_writer: failed to record account snapshot: {e}")

@@ -79,13 +79,16 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             account_info = None
 
+        is_fresh_account = False
         if account_info and account_info.get("balance") is not None:
             _last_valid_account_info = account_info
+            is_fresh_account = True
         elif _last_valid_account_info is not None:
             account_info = _last_valid_account_info
             log.debug("state_writer: MT5 account_info unavailable, using cache")
 
-        record_account_snapshot(account_info)
+        if is_fresh_account:
+            record_account_snapshot(account_info)
 
         daily_stats = getattr(bot_instance, "daily_stats", {}) or {}
         balance_for_pct = None
@@ -144,8 +147,8 @@ def write_state(bot_instance: Any) -> None:
                 if _sc and _sc > 0:
                     prev_d1_close = round(float(_sc), 2)
                     price_daily_change_pct = round(((last_known_price - _sc) / _sc) * 100, 2)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"state_writer: MT5 session_close error: {e}")
 
         positions = []
         try:
@@ -245,8 +248,8 @@ def write_state(bot_instance: Any) -> None:
             _mc = fetch_market_context()
             if isinstance(_mc, dict) and _mc:
                 state["market_context"] = _mc
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"state_writer: market_context fetch error: {e}")
 
         # FLO-139: Inject market regime from bot instance
         try:
@@ -261,8 +264,8 @@ def write_state(bot_instance: Any) -> None:
                     "atr_ratio": _regime.get("atr_ratio"),
                     "transition": _regime.get("transition"),
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"state_writer: market_regime error: {e}")
 
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 

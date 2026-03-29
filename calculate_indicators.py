@@ -6,8 +6,12 @@ Step 3: Calculate EMAs, RSI, MACD, Bollinger Bands
 
 import pandas as pd
 import pandas_ta as ta
+import numpy as np
 import os
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 DATA_DIR = "data"
@@ -31,21 +35,36 @@ def load_data(timeframe):
 
 def calculate_emas(df):
     """Calculate EMAs of 9, 21 and 50 periods"""
-    df['ema_9'] = ta.ema(df['close'], length=9)
-    df['ema_21'] = ta.ema(df['close'], length=21)
-    df['ema_50'] = ta.ema(df['close'], length=50)
+    for length, col in [(9, 'ema_9'), (21, 'ema_21'), (50, 'ema_50')]:
+        result = ta.ema(df['close'], length=length)
+        if result is None:
+            logger.warning("ta.ema(length=%d) returned None — not enough rows (%d)", length, len(df))
+            df[col] = np.nan
+        else:
+            df[col] = result
     return df
 
 
 def calculate_rsi(df, period=14):
     """Calculate 14-period RSI"""
-    df['rsi_14'] = ta.rsi(df['close'], length=period)
+    result = ta.rsi(df['close'], length=period)
+    if result is None:
+        logger.warning("ta.rsi(length=%d) returned None — not enough rows (%d)", period, len(df))
+        df['rsi_14'] = np.nan
+    else:
+        df['rsi_14'] = result
     return df
 
 
 def calculate_macd(df):
     """Calculate MACD (12, 26, 9)"""
     macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
+    if macd is None:
+        logger.warning("ta.macd returned None — not enough rows (%d)", len(df))
+        df['macd'] = np.nan
+        df['macd_signal'] = np.nan
+        df['macd_hist'] = np.nan
+        return df
     df['macd'] = macd['MACD_12_26_9']
     df['macd_signal'] = macd['MACDs_12_26_9']
     df['macd_hist'] = macd['MACDh_12_26_9']
@@ -55,6 +74,12 @@ def calculate_macd(df):
 def calculate_bollinger(df, period=20, std=2):
     """Calculate Bollinger Bands (20, 2)"""
     bbands = ta.bbands(df['close'], length=period, std=std)
+    if bbands is None:
+        logger.warning("ta.bbands returned None — not enough rows (%d)", len(df))
+        df['bb_upper'] = np.nan
+        df['bb_middle'] = np.nan
+        df['bb_lower'] = np.nan
+        return df
     df['bb_upper'] = bbands[f'BBU_{period}_{std}.0']
     df['bb_middle'] = bbands[f'BBM_{period}_{std}.0']
     df['bb_lower'] = bbands[f'BBL_{period}_{std}.0']

@@ -151,7 +151,10 @@ def analyze_volume(df: pd.DataFrame, period: int = 20) -> Dict:
     
     volumes = df['volume'].values
     current_volume = float(volumes[-1])
-    avg_volume = float(np.mean(volumes[-period:]))
+    if len(volumes) >= period + 1:
+        avg_volume = float(np.mean(volumes[-period-1:-1]))
+    else:
+        avg_volume = float(np.mean(volumes[-period:]))
     
     if avg_volume <= 0:
         return {
@@ -221,15 +224,28 @@ def count_consecutive_candles(df: pd.DataFrame) -> Dict:
     opens = df['open'].values
     
     # Count from end backwards
-    count = 1
-    last_direction = "bullish" if closes[-1] > opens[-1] else "bearish"
-    
-    for i in range(len(df) - 2, -1, -1):
-        current_direction = "bullish" if closes[i] > opens[i] else "bearish"
-        if current_direction == last_direction:
-            count += 1
-        else:
-            break
+    if closes[-1] > opens[-1]:
+        last_direction = "bullish"
+    elif closes[-1] < opens[-1]:
+        last_direction = "bearish"
+    else:
+        last_direction = "neutral"
+
+    if last_direction == "neutral":
+        count = 0
+    else:
+        count = 1
+        for i in range(len(df) - 2, -1, -1):
+            if closes[i] > opens[i]:
+                current_direction = "bullish"
+            elif closes[i] < opens[i]:
+                current_direction = "bearish"
+            else:
+                current_direction = "neutral"
+            if current_direction == last_direction:
+                count += 1
+            else:
+                break
     
     return {
         "consecutive_count": count,

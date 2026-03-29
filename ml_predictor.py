@@ -103,10 +103,17 @@ class MLPredictor:
             
             if not os.path.exists(model_path):
                 return False
-            
+
+            if not os.path.exists(features_path):
+                log.warning(f"Fallback XGB features not found: {features_path}")
+                return False
+            if not os.path.exists(config_path):
+                log.warning(f"Fallback XGB config not found: {config_path}")
+                return False
+
             model = xgb.XGBClassifier()
             model.load_model(model_path)
-            
+
             with open(features_path) as f:
                 feats = json.load(f)
             with open(config_path) as f:
@@ -222,12 +229,16 @@ class MLPredictor:
                 vix_info = news_data.get('vix', {})
                 if vix_info.get('value') is not None:
                     vix_level = float(vix_info['value'])
-                
+                if vix_info.get('change') is not None:
+                    vix_change = float(vix_info['change'])
+                elif vix_info.get('change_24h') is not None:
+                    vix_change = float(vix_info['change_24h'])
+
                 yields_info = news_data.get('yields', {})
                 if yields_info.get('change_24h') is not None:
                     yields_change = float(yields_info['change_24h'])
                 
-                news_score_real = float(news_data.get('score', 50.0))
+                news_score_real = float(news_data.get('score') or 50.0)
             
             df['dxy_change_1d'] = dxy_change
             df['vix_level'] = vix_level
@@ -275,6 +286,10 @@ class MLPredictor:
             # === REGIME DETECTION ===
             abs_ema50_d1 = abs(df['price_vs_ema50_D1'].iloc[-1]) if 'price_vs_ema50_D1' in df.columns else 0
             atr_r = df['atr_ratio_H1_vs_D1'].iloc[-1] if 'atr_ratio_H1_vs_D1' in df.columns else 0.18
+            if pd.isna(atr_r):
+                atr_r = 0.18
+            if pd.isna(abs_ema50_d1):
+                abs_ema50_d1 = 0.5
             regime = 0  # ranging
             if abs_ema50_d1 > 2.0:
                 regime = 1  # trending
@@ -422,6 +437,7 @@ class MLPredictor:
             
             if algo == 'lgb':
                 proba = model.predict(X)[0]
+                proba = 1.0 / (1.0 + np.exp(-proba))  # sigmoid: raw margin → probability
             else:
                 proba = model.predict_proba(X)[0][1]
             
@@ -480,7 +496,14 @@ class MLPredictor:
                     horizon_scores[horizon] = weighted_score / total_weight
                 else:
                     horizon_scores[horizon] = 50.0
-            
+
+            # P0-2: Check if any model actually produced a prediction
+            if not model_details:
+                return {
+                    'prediction': 0, 'probability': 0.5, 'score': 50.0,
+                    'direction': 'NEUTRAL', 'error': 'all_models_failed'
+                }
+
             # Blend H1 + H4
             h1_w = self.horizon_blend.get('h1', 0.4)
             h4_w = self.horizon_blend.get('h4', 0.6)

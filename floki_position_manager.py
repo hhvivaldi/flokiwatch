@@ -17,15 +17,9 @@ def _get_signal_file_path() -> str:
 
 def get_ea_management_params(sl_pips: float, volatility_status: Any) -> Tuple[float, float, float, float]:
     sl_pips_f = float(sl_pips)
+    if sl_pips_f <= 0:
+        sl_pips_f = 50.0
     vol_status = str(volatility_status or "").strip().upper()
-
-    if vol_status == "COOLING_DOWN":
-        return (
-            float(config.COOLING_BREAKEVEN_TRIGGER_PIPS),
-            float(config.COOLING_TRAILING_TRIGGER_PIPS),
-            float(config.COOLING_TRAILING_DISTANCE_PIPS),
-            float(config.MAX_POSITION_DRAWDOWN_PIPS),
-        )
 
     if bool(getattr(config, "FLOKI_MANAGES_POSITION", False)):
         # FLO-116: EA becomes pure executor. Floki manages positions via
@@ -37,6 +31,14 @@ def get_ea_management_params(sl_pips: float, volatility_status: Any) -> Tuple[fl
             9999.0,
             9999.0,
             float(getattr(config, "FLOKI_MAX_DRAWDOWN_PIPS", 800)),
+        )
+
+    if vol_status == "COOLING_DOWN":
+        return (
+            float(config.COOLING_BREAKEVEN_TRIGGER_PIPS),
+            float(config.COOLING_TRAILING_TRIGGER_PIPS),
+            float(config.COOLING_TRAILING_DISTANCE_PIPS),
+            float(config.MAX_POSITION_DRAWDOWN_PIPS),
         )
 
     return (
@@ -83,7 +85,8 @@ def write_floki_heartbeat() -> bool:
                     existing = json.load(f)
                 if isinstance(existing, dict):
                     payload = dict(existing)
-            except Exception:
+            except Exception as e:
+                log.warning(f"FLOKI_PM | heartbeat JSON corrupted, resetting: {e}")
                 payload = {}
 
         payload["floki_heartbeat"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"

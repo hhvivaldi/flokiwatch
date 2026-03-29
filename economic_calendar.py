@@ -20,6 +20,7 @@ Phases:
 - POST_EVENT: 3-30 min after release
 """
 
+import hashlib
 import json
 import os
 import requests
@@ -224,7 +225,7 @@ def _fetch_fcs_api() -> Optional[Dict]:
                 continue
             
             events.append({
-                "event_id": hash(f"{item.get('title', '')}{event_date}{event_time}"),
+                "event_id": int(hashlib.md5(f"{item.get('title', '')}{event_date}{event_time}".encode()).hexdigest()[:12], 16),
                 "name": item.get("title", ""),
                 "time_server": dt.strftime("%Y.%m.%d %H:%M:%S"),
                 "importance": "HIGH",
@@ -252,9 +253,14 @@ def _parse_fcs_value(val) -> Optional[float]:
     if val is None or val == "" or val == "null":
         return None
     try:
-        # Remove non-numeric characters (%, K, M, etc.)
-        clean = str(val).replace("%", "").replace("K", "").replace("M", "").replace(",", "").strip()
-        return float(clean)
+        multiplier = 1
+        upper = str(val).upper()
+        if 'K' in upper:
+            multiplier = 1000
+        elif 'M' in upper:
+            multiplier = 1000000
+        clean = str(val).replace("%", "").replace("K", "").replace("k", "").replace("M", "").replace("m", "").replace(",", "").strip()
+        return float(clean) * multiplier
     except (ValueError, TypeError):
         return None
 

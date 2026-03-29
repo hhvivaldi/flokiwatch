@@ -142,6 +142,9 @@ class DiscordAlert:
         else:
             full_message = f"{emoji} {message}\n`{timestamp}`"
 
+        if len(full_message) > 1990:
+            full_message = full_message[:1990] + "..."
+
         payload = {
             "content": full_message,
             "username": self.bot_name,
@@ -161,6 +164,9 @@ class DiscordAlert:
         if not self.enabled:
             log.debug(f"[DISCORD DISABLED] {title}: {description}")
             return False
+
+        if len(description) > 4090:
+            description = description[:4090] + "..."
 
         embed = {
             "title": title,
@@ -378,8 +384,12 @@ def alert_signal_detected(
 
     scenario_value = scenario or _extract_scenario(brain_summary) or "N/A"
     timestamp = timestamp or _utc_timestamp()
+    try:
+        conf_val = float(confidence)
+    except (ValueError, TypeError):
+        conf_val = 0.0
     description = (
-        f"Score: {final_score:.1f} | Confidence: {float(confidence):.0f}%\n"
+        f"Score: {final_score:.1f} | Confidence: {conf_val:.0f}%\n"
         f"Scenario: {scenario_value}\n"
         f"Price: {_format_price(current_price)}\n"
         f"SL: {_format_price(stop_loss)} | TP: {_format_price(take_profit)}\n"

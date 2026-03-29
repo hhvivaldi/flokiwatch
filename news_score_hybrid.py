@@ -802,7 +802,10 @@ def get_dxy_data():
             
             current_price = hist['Close'].iloc[-1]
             previous_price = hist['Close'].iloc[-2]
-            change_percent = ((current_price - previous_price) / previous_price) * 100
+            if previous_price == 0:
+                change_percent = 0.0
+            else:
+                change_percent = ((current_price - previous_price) / previous_price) * 100
             
             # Calculate score (inverse correlation)
             # DXY fell = bullish for gold
@@ -850,7 +853,10 @@ def _get_yields_yahoo():
     
     current_yield = float(hist['Close'].iloc[-1])
     previous_yield = float(hist['Close'].iloc[-2])
-    change_percent = ((current_yield - previous_yield) / previous_yield) * 100
+    if previous_yield == 0:
+        change_percent = 0.0
+    else:
+        change_percent = ((current_yield - previous_yield) / previous_yield) * 100
     
     return {
         "current": round(current_yield, 2),
@@ -1031,7 +1037,10 @@ def get_vix_data():
         
         current_vix = hist['Close'].iloc[-1]
         previous_vix = hist['Close'].iloc[-2]
-        change_percent = ((current_vix - previous_vix) / previous_vix) * 100
+        if previous_vix == 0:
+            change_percent = 0.0
+        else:
+            change_percent = ((current_vix - previous_vix) / previous_vix) * 100
         
         # Calculate score (direct correlation)
         # VIX rose = bullish for gold (safe haven)
@@ -1627,18 +1636,29 @@ def save_hybrid_history(result):
     
     # Keep only last 7 days
     cutoff = datetime.now() - timedelta(days=7)
-    history = [h for h in history if datetime.fromisoformat(h["timestamp"]) > cutoff]
+    filtered = []
+    for h in history:
+        try:
+            if datetime.fromisoformat(h["timestamp"]) > cutoff:
+                filtered.append(h)
+        except (ValueError, KeyError, TypeError) as e:
+            log.warning(f"save_hybrid_history: skipping entry with malformed timestamp: {e}")
+    history = filtered
     
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(HYBRID_HISTORY_FILE, 'w') as f:
+    with open(HYBRID_HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, indent=2)
 
 
 def load_hybrid_history():
     """Load history"""
     if os.path.exists(HYBRID_HISTORY_FILE):
-        with open(HYBRID_HISTORY_FILE, 'r') as f:
-            return json.load(f)
+        try:
+            with open(HYBRID_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError) as e:
+            log.warning(f"load_hybrid_history: corrupt JSON, returning empty list: {e}")
+            return []
     return []
 
 

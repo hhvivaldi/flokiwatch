@@ -329,7 +329,7 @@ def _merge_lower_into_higher(lower_zones: List[SRZone], higher_zones: List[SRZon
         absorbed = False
         for hz in higher_zones:
             if abs(lz.midpoint - hz.midpoint) <= merge_dist:
-                # Higher TF absorbs lower TF zone
+                # Higher TF absorbs lower TF zone — accumulate touches for multi-TF confirmation
                 hz.touches += lz.touches
                 # Track confluence: add lower TF label if not already present
                 if lz.timeframe not in hz.confluence:

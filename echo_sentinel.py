@@ -274,12 +274,19 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
             timeout=20,
         )
 
+        # P1-5: Validate AI response structure before accessing
+        if not response.choices or not response.choices[0].message or not response.choices[0].message.content:
+            log.warning("[ECHO] AI response missing choices/message/content")
+            return None
+
         raw = response.choices[0].message.content
         parsed = json.loads(raw)
 
-        results = parsed.get("results", parsed.get("headlines", []))
+        # P1-2: Check for bare JSON array BEFORE calling .get()
         if isinstance(parsed, list):
             results = parsed
+        else:
+            results = parsed.get("results", parsed.get("headlines", []))
 
         # Track cost
         usage = response.usage
@@ -554,7 +561,10 @@ def get_unread_alerts() -> List[Dict]:
     if unread:
         for a in alerts:
             a["read"] = True
-        _save_alerts(alerts)
+        try:
+            _save_alerts(alerts)
+        except Exception as e:
+            log.warning(f"[ECHO] Failed to mark alerts as read: {e}")
     return unread
 
 
@@ -635,13 +645,12 @@ def run_echo_scan(
     now_ts = time.time()
 
     fresh_headlines = []
+    new_hashes = {}  # P0-3: Track new hashes separately, persist after classification
     for h in all_headlines:
         fp = _fingerprint(h.get("title", ""))
         if fp not in seen:
             fresh_headlines.append(h)
-            seen[fp] = now_ts
-
-    _save_seen_hashes(seen)
+            new_hashes[fp] = now_ts
 
     if not fresh_headlines:
         log.info(f"[ECHO] Scanned {total_scanned} headlines, all already seen")
@@ -662,6 +671,9 @@ def run_echo_scan(
     )
 
     if not candidates:
+        # P0-3: Safe to persist hashes — all were keyword-filtered as ROUTINE
+        seen.update(new_hashes)
+        _save_seen_hashes(seen)
         return EchoScanResult(
             scan_time=scan_time,
             headlines_scanned=total_scanned,
@@ -674,6 +686,15 @@ def run_echo_scan(
     ai_results = _classify_with_ai(candidates)
     use_fallback = ai_results is None
 
+    # P0-1: Validate AI result count matches candidates; fall back entirely on mismatch
+    if ai_results is not None and len(ai_results) != len(candidates):
+        log.warning(
+            f"[ECHO] AI result count mismatch: got {len(ai_results)} results for "
+            f"{len(candidates)} candidates — falling back to keyword classification for ALL"
+        )
+        ai_results = None
+        use_fallback = True
+
     critical_alerts = []
     important_alerts = []
     routine_count = filtered_out  # already filtered by keyword
@@ -684,8 +705,8 @@ def run_echo_scan(
             result = _classify_keyword_fallback(headline)
             method = "keyword_fallback"
         else:
-            result = ai_results[i] if i < len(ai_results) else _classify_keyword_fallback(headline)
-            method = "ai" if i < len(ai_results) else "keyword_fallback"
+            result = ai_results[i]
+            method = "ai"
             ai_classified += 1
 
         classified = ClassifiedHeadline(
@@ -713,6 +734,10 @@ def run_echo_scan(
         else:
             routine_count += 1
 
+    # P0-3: Persist dedup hashes only after classification succeeds
+    seen.update(new_hashes)
+    _save_seen_hashes(seen)
+
     # 5. Log results
     if critical_alerts:
         for c in critical_alerts:
@@ -732,11 +757,10 @@ def run_echo_scan(
         try:
             _db_path = _Path(__file__).parent / "data" / "history.db"
             if _db_path.exists():
-                _conn = _sqlite3.connect(str(_db_path))
-                _rows = _conn.execute(
-                    "SELECT content FROM agent_events WHERE author='ECHO' AND timestamp > datetime('now', '-24 hours')"
-                ).fetchall()
-                _conn.close()
+                with _sqlite3.connect(str(_db_path)) as _conn:
+                    _rows = _conn.execute(
+                        "SELECT content FROM agent_events WHERE author='ECHO' AND timestamp > datetime('now', '-24 hours')"
+                    ).fetchall()
                 for _r in _rows:
                     # Extract title from content like "CRITICAL: Title. IMPACT. Summary"
                     _txt = (_r[0] or "")

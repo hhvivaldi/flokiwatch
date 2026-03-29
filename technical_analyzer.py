@@ -64,8 +64,9 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
+    rs = gain / loss.replace(0, np.nan)
     df['rsi_14'] = 100 - (100 / (1 + rs))
+    df['rsi_14'] = df['rsi_14'].fillna(100.0)
     
     # MACD
     ema_12 = df['close'].ewm(span=12, adjust=False).mean()
@@ -90,7 +91,9 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Stochastic
     low_14 = df['low'].rolling(window=14).min()
     high_14 = df['high'].rolling(window=14).max()
-    df['stoch_k'] = 100 * (df['close'] - low_14) / (high_14 - low_14)
+    denom = (high_14 - low_14).replace(0, np.nan)
+    df['stoch_k'] = 100 * (df['close'] - low_14) / denom
+    df['stoch_k'] = df['stoch_k'].fillna(50.0)
     df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
     
     return df
@@ -633,9 +636,21 @@ def calculate_technical_score(df: pd.DataFrame) -> Tuple[float, Dict]:
     # Get last row
     last = df.iloc[-1]
     prev = df.iloc[-2]
-    
+
+    # NaN guards for critical indicator values
+    nan_defaults = {
+        'rsi_14': 50.0, 'stoch_k': 50.0,
+        'macd': 0.0, 'macd_signal': 0.0,
+        'bb_upper': last['close'], 'bb_lower': last['close'],
+        'ema_9': last['close'], 'ema_21': last['close'],
+        'ema_50': last['close'], 'atr_14': 10.0,
+    }
+    for col, default in nan_defaults.items():
+        if col in last.index and pd.isna(last[col]):
+            last[col] = default
+
     scores = {}
-    
+
     # 1. Trend Score (EMAs) - 25 points
     trend_score = 0
     if last['close'] > last['ema_9']:
@@ -741,7 +756,8 @@ def get_atr_value(df: pd.DataFrame) -> float:
     """Return current ATR value"""
     if df is None or 'atr_14' not in df.columns:
         return 10.0  # Default
-    return df['atr_14'].iloc[-1]
+    val = df['atr_14'].iloc[-1]
+    return val if not pd.isna(val) else 10.0
 
 
 def analyze_technical() -> Tuple[float, Dict, float]:
@@ -929,7 +945,7 @@ def analyze_technical_detailed(df: pd.DataFrame) -> Dict:
     # Squeeze detection: very narrow bands (width < 50% of average)
     if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
         bb_widths = (df['bb_upper'] - df['bb_lower']).values
-        avg_width = float(np.mean(bb_widths[-20:])) if len(bb_widths) >= 20 else bb_width
+        avg_width = float(np.nanmean(bb_widths[-20:])) if len(bb_widths) >= 20 else bb_width
         bb_squeeze = bb_width < (avg_width * 0.5) if avg_width > 0 else False
     else:
         bb_squeeze = False

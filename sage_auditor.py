@@ -995,6 +995,12 @@ async def _call_gemini_for_patterns(
     except Exception:
         text = ""
 
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3].strip()
+
     try:
         parsed = json.loads(text)
     except Exception:
@@ -1035,6 +1041,33 @@ async def _call_gemini_for_patterns(
     return clean_insights, clean_recs, meta
 
 
+def _run_async_safely(coro):
+    """Run a coroutine safely whether or not an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+        # Already in async context - run in a separate thread with its own loop
+        import concurrent.futures
+        result = None
+        exc = None
+
+        def _thread_target():
+            nonlocal result, exc
+            try:
+                result = asyncio.run(coro)
+            except Exception as e:
+                exc = e
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_thread_target)
+            fut.result()
+        if exc is not None:
+            raise exc
+        return result
+    except RuntimeError:
+        # No running loop - safe to use asyncio.run
+        return asyncio.run(coro)
+
+
 def run_sage_auditor() -> SageRunResult:
     """Entry point for daily Sage run.
 
@@ -1067,8 +1100,9 @@ def run_sage_auditor() -> SageRunResult:
             "latency_ms": 0,
         }
         try:
-            llm_insights, llm_recs, meta = asyncio.run(_call_gemini_for_patterns(trades, base_insights))
-        except Exception:
+            llm_insights, llm_recs, meta = _run_async_safely(_call_gemini_for_patterns(trades, base_insights))
+        except Exception as e:
+            log.warning(f"SAGE | LLM enrichment failed: {e}")
             llm_insights, llm_recs = [], []
 
         # Merge insights (base first, then LLM; cap)

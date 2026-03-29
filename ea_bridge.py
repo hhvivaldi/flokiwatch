@@ -147,12 +147,18 @@ def write_signal(
                 tick = mt5.symbol_info_tick(config.SYMBOL)
                 if tick and tick.time:
                     server_time = datetime.fromtimestamp(tick.time)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"EA Bridge: MT5 tick fetch failed, using local time - {e}")
         
+        # Validate signal
+        valid_signals = {"BUY", "SELL", "HOLD", "CLOSE"}
+        if signal.upper() not in valid_signals:
+            log.warning(f"EA Bridge: Invalid signal '{signal}' - must be one of {valid_signals}")
+            return False
+
         # Fallback to local time if MT5 not available
         now = server_time if server_time else datetime.now()
-        signal_id = now.strftime("%Y%m%d%H%M%S")
+        signal_id = now.strftime("%Y%m%d%H%M%S") + f"{now.microsecond // 1000:03d}"
         
         payload = {
             "version": 1,
@@ -178,10 +184,8 @@ def write_signal(
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(payload, f, indent=2)
         
-        # Rename (atomic on most systems)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        os.rename(temp_path, file_path)
+        # Atomic replace (safe on Windows)
+        os.replace(temp_path, file_path)
         
         log.info(f"EA Bridge: Signal written - {signal} | SL:{sl:.2f} TP:{tp:.2f} Lot:{lot_size}")
         return True
@@ -277,12 +281,12 @@ def read_ea_status(stale_threshold_seconds: int = 60, max_retries: int = 3, retr
                 is_stale=is_stale
             )
             
-        except PermissionError:
-            # EA is writing — wait and retry
+        except (PermissionError, json.JSONDecodeError) as e:
+            # EA is writing or file is half-written — wait and retry
             if attempt < max_retries - 1:
                 time.sleep(retry_delay_ms / 1000)
                 continue
-            log.warning(f"EA Bridge: Failed to read status after {max_retries} attempts - file locked")
+            log.warning(f"EA Bridge: Failed to read status after {max_retries} attempts - {e}")
             return None
         except Exception as e:
             log.warning(f"EA Bridge: Failed to read status - {e}")
