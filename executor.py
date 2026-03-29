@@ -248,6 +248,16 @@ class MT5Executor:
                         None,
                     )
 
+                    # FLO-89: Snapshot positions BEFORE write_signal to avoid race condition
+                    pre_tickets = set()
+                    try:
+                        from ea_bridge import read_ea_status
+                        pre_status = read_ea_status(stale_threshold_seconds=120)
+                        if pre_status and pre_status.positions:
+                            pre_tickets = {p.ticket for p in pre_status.positions}
+                    except Exception as e_pre:
+                        log.warning(f"EA_BRIDGE | Pre-snapshot failed (non-blocking): {e_pre}")
+
                     ok = write_signal(
                         signal=direction,
                         sl=float(stop_loss),
@@ -262,18 +272,12 @@ class MT5Executor:
                     )
 
                     if ok:
-                        # FLO-89: Poll EA status for real ticket instead of returning 0.
+                        # Poll EA status for real ticket instead of returning 0.
                         # The EA processes signals within seconds; poll up to 10s.
                         real_ticket = 0
                         try:
                             from ea_bridge import read_ea_status
                             import time as _time
-
-                            # Snapshot positions BEFORE the EA processes the signal
-                            pre_status = read_ea_status(stale_threshold_seconds=120)
-                            pre_tickets = set()
-                            if pre_status and pre_status.positions:
-                                pre_tickets = {p.ticket for p in pre_status.positions}
 
                             for _poll in range(10):
                                 _time.sleep(1)
@@ -310,8 +314,8 @@ class MT5Executor:
                             price=ref_price,
                             volume=lot_size,
                         )
-            except Exception:
-                pass
+            except Exception as e_ea:
+                log.error(f"EA_BRIDGE | Failed, falling through to MT5 direct: {e_ea}")
         
         # Configure order
         if direction.upper() == "BUY":
