@@ -7,6 +7,10 @@ from typing import Any, Dict, Optional, List, Tuple
 from logger import log
 
 
+# FLO-141: per-ticket adjustment rate limiter (in-memory, lost on restart)
+_adjust_rate_history: Dict[int, List[float]] = {}
+
+
 class AgentTools:
     def __init__(
         self,
@@ -1751,8 +1755,37 @@ class AgentTools:
             self._log_tool("close_trade", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    # -----------------------------------------------------------------
+    # FLO-141: adjust_trade guards
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _is_sl_widening(direction_type: int, old_sl: float, new_sl: float) -> bool:
+        """Check if new SL widens risk (moves SL further from entry).
+        direction_type: 0=BUY, 1=SELL (MT5 convention)."""
+        if direction_type == 0:  # BUY — SL is below entry, widening = moving lower
+            return new_sl < old_sl
+        else:  # SELL — SL is above entry, widening = moving higher
+            return new_sl > old_sl
+
+    @staticmethod
+    def _is_adjust_rate_limited(ticket: int, max_per_hour: int = 3) -> bool:
+        """Check if ticket has exceeded max adjustments in the last rolling hour."""
+        now = time.time()
+        cutoff = now - 3600
+        history = _adjust_rate_history.get(ticket, [])
+        # Prune stale entries
+        history = [ts for ts in history if ts > cutoff]
+        _adjust_rate_history[ticket] = history
+        return len(history) >= max_per_hour
+
+    @staticmethod
+    def _record_adjustment(ticket: int) -> None:
+        """Record a successful adjustment timestamp."""
+        _adjust_rate_history.setdefault(ticket, []).append(time.time())
+
     def adjust_trade(self, ticket: int, new_sl: float, new_tp: float) -> Dict[str, Any]:
-        """Adjust SL/TP on an open position. Simplified — uses executor.modify_position directly."""
+        """Adjust SL/TP on an open position with SL-widening guard and rate limiting (FLO-141)."""
         start = time.time()
         try:
             try:
@@ -1769,24 +1802,58 @@ class AgentTools:
             if sl_f is None and tp_f is None:
                 return {"success": False, "reason": "invalid new sl/tp"}
 
-            # Get current position to log old values
+            # --- Rate limit check (FLO-141) ---
+            import config as _cfg
+            _max_adj = getattr(_cfg, "MAX_ADJUSTMENTS_PER_HOUR", 3)
+            if self._is_adjust_rate_limited(t, _max_adj):
+                log.warning(f"ADJUST_TRADE | BLOCKED | reason=rate_limit | ticket={t} | max={_max_adj}/hour")
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | rate_limit")
+                return {
+                    "success": False,
+                    "reason": "rate_limit",
+                    "detail": f"{_max_adj} adjustments already made in last hour for ticket {t}",
+                }
+
+            # --- Get current position (live MT5) for old values + direction ---
             old_sl = None
             old_tp = None
+            direction_type = None  # 0=BUY, 1=SELL
             try:
                 positions = self._executor.get_open_positions() or []
                 for p in positions:
                     if getattr(p, "ticket", None) == t:
                         old_sl = self._safe_float(getattr(p, "sl", None))
                         old_tp = self._safe_float(getattr(p, "tp", None))
+                        direction_type = getattr(p, "type", None)
                         break
             except Exception:
                 pass
 
+            # --- SL-widening guard (FLO-141) ---
+            if sl_f is not None and old_sl is not None and direction_type is not None and old_sl > 0:
+                if self._is_sl_widening(direction_type, old_sl, sl_f):
+                    dir_label = "BUY" if direction_type == 0 else "SELL"
+                    log.warning(
+                        f"ADJUST_TRADE | BLOCKED | reason=sl_widening | ticket={t} | "
+                        f"{dir_label} | old_sl={old_sl:.2f} → new_sl={sl_f:.2f}"
+                    )
+                    self._log_tool("adjust_trade", start, f"ticket={t} | blocked | sl_widening")
+                    return {
+                        "success": False,
+                        "reason": "sl_widening_blocked",
+                        "detail": f"New SL {sl_f:.2f} widens risk vs current SL {old_sl:.2f} on {dir_label} position. "
+                                  f"To reduce risk, move SL closer to entry (higher for BUY, lower for SELL).",
+                    }
+
+            # --- Execute modification ---
             res = self._executor.modify_position(t, new_sl=sl_f, new_tp=tp_f)
             if not getattr(res, "success", False):
                 reason = getattr(res, "error_message", None) or "adjust failed"
                 self._log_tool("adjust_trade", start, f"ticket={t} | success=false | {reason}")
                 return {"success": False, "reason": str(reason)}
+
+            # Record successful adjustment for rate limiting
+            self._record_adjustment(t)
 
             _fmt = lambda v: f"{v:.2f}" if v is not None else "—"
             log.info(

@@ -116,8 +116,8 @@ Floki saves reasoning to `data/active_thesis.json` between cycles: direction_bia
 - No trades 60 min before/after market open/close
 - Max 6% daily loss → pause
 - Volatility guard: M5 >1.8% movement blocks trades (`volatility_guard.py`)
-- adjust_trade has NO SL-widening guard currently (FLO-141 — planned)
-- adjust_trade has NO rate limiting currently (FLO-141 — planned)
+- adjust_trade: SL-widening guard blocks moves that increase risk (FLO-141)
+- adjust_trade: rate limited to MAX_ADJUSTMENTS_PER_HOUR (default 3) per ticket (FLO-141)
 
 ## File Conventions
 
@@ -219,5 +219,5 @@ Tickets use FLO-NNN format (e.g., FLO-143). Commit messages: `fix: FLO-143 — d
 
 - FLO-96: Timezone audit (3 sources: local CET, UTC, MT5 EET) — DO NOT fix without full audit
 - FLO-140: 26 P1 bugs logged from full codebase review — post-Monday cleanup
-- FLO-141: adjust_trade needs SL-widening guard + rate limiting
-- vix_change always 0 in ML features — VIX removed from pipeline in FLO-121, feature is dead
+- FLO-141: adjust_trade SL-widening guard + rate limiting — DONE
+- FLO-146: vix_change always 0 in ML features — VIX removed from pipeline in FLO-121, feature is dead
