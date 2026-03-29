@@ -73,8 +73,11 @@ PYRAMID_MIN_PROFIT_PERCENT = 0.3  # Minimum profit (%) on existing position to a
 # XAU/USD market hours (UTC)
 # Gold trades: Sunday 22:00 UTC → Friday 21:00 UTC
 # Daily pause: 21:00-22:00 UTC (Mon-Thu)
-MARKET_DAILY_CLOSE_HOUR = 21   # Daily close at 21:00 UTC
-MARKET_DAILY_OPEN_HOUR = 22    # Reopening at 22:00 UTC
+# XAU/USD market hours (UTC). CME gold closes 5pm ET = 21:00 UTC winter / 21:00 UTC summer
+# (both ET and broker EET shift together, so UTC hours stay constant year-round).
+# Override via env var if your broker uses non-standard hours.
+MARKET_DAILY_CLOSE_HOUR = int(os.environ.get("MARKET_DAILY_CLOSE_HOUR", "21"))
+MARKET_DAILY_OPEN_HOUR = int(os.environ.get("MARKET_DAILY_OPEN_HOUR", "22"))
 MARKET_CLOSE_BUFFER_MINUTES = 60  # Don't open new positions 60 min before close (backtest: 64% losses were gaps)
 MARKET_OPEN_BUFFER_MINUTES = 60   # Don't open new positions in 1st hour after open (22:00-23:00 UTC)
 

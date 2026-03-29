@@ -371,7 +371,7 @@ def _rex_tool_loop(
     timeout_seconds: int,
 ) -> Optional[Dict[str, Any]]:
     """Run Rex's tool-calling loop. Returns result dict or None (triggers fallback)."""
-    MAX_ITERATIONS = 3
+    MAX_TOOL_ROUNDS = 3  # 3 tool rounds + 1 forced-text round = 4 API calls max
     PER_CALL_TIMEOUT = 20
 
     prompt = _build_prompt_with_tools(floki_summary)
@@ -382,14 +382,14 @@ def _rex_tool_loop(
 
     tool_calls_made = []
 
-    for iteration in range(MAX_ITERATIONS + 1):
+    for iteration in range(MAX_TOOL_ROUNDS + 1):
         if (time.time() - start) > timeout_seconds:
             log.warning(f"REX | tool loop timeout after {iteration} iterations")
             break
 
         try:
             # Last iteration: no tools, force text
-            use_tools = iteration < MAX_ITERATIONS
+            use_tools = iteration < MAX_TOOL_ROUNDS
             kwargs = {
                 "model": model,
                 "messages": messages,

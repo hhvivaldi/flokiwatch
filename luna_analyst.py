@@ -511,7 +511,7 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
             m = metals.get(sym, {})
             if m.get("current") is not None:
                 rng = f", range: {int(m['position_in_range'] * 100)}%" if m.get("position_in_range") is not None else ""
-                chg = f"{m.get('change_percent', 0):+.2f}%" if m.get("change_percent") is not None else ""
+                chg = f"{(m.get('change_percent') or 0):+.2f}%" if m.get("change_percent") is not None else ""
                 lines.append(f"{label}: ${m['current']} ({chg}{rng})")
         gsr = metals.get("gold_silver_ratio")
         if gsr:
@@ -520,7 +520,7 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
         for sym, label in [("EURUSD", "EUR/USD"), ("USDJPY", "USD/JPY"), ("USDCHF", "USD/CHF"), ("AUDUSD", "AUD/USD"), ("GBPUSD", "GBP/USD")]:
             f = forex_pairs.get(sym, {})
             if f.get("current") is not None:
-                fx_parts.append(f"{label}: {f['current']} ({f.get('change_percent', 0):+.2f}%)")
+                fx_parts.append(f"{label}: {f['current']} ({(f.get('change_percent') or 0):+.2f}%)")
         if fx_parts:
             lines.append(" | ".join(fx_parts[:3]))
             if len(fx_parts) > 3:
@@ -530,7 +530,7 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
             lines.append(f"Dollar Strength: {ds.upper()}")
         if btc.get("current") is not None:
             brng = f", range: {int(btc['position_in_range'] * 100)}%" if btc.get("position_in_range") is not None else ""
-            lines.append(f"BTC: ${btc['current']:,.0f} ({btc.get('change_percent', 0):+.2f}%{brng})")
+            lines.append(f"BTC: ${btc['current']:,.0f} ({(btc.get('change_percent') or 0):+.2f}%{brng})")
         lines.append("</correlated_markets>")
 
     # Macro trends (5-day rolling)
@@ -974,7 +974,13 @@ def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
         )
 
         elapsed_ms = int((time.time() - t0) * 1000)
+        if not response.choices or not response.choices[0].message:
+            log.error(f"LUNA: MiMo returned empty choices after {elapsed_ms}ms")
+            return None
         raw = response.choices[0].message.content
+        if not raw:
+            log.error(f"LUNA: MiMo returned null content after {elapsed_ms}ms")
+            return None
         parsed = json.loads(raw)
 
         # Track cost

@@ -126,12 +126,15 @@ class PositionMonitor:
             actions.extend(broker_actions)
         else:
             # First cycle: populate known_positions without detecting closures
-            self._initialized = True
             if positions:
                 log.info(f"   Monitor: {len(positions)} position(s) detected at startup")
-        
+
         # Update known_positions with current positions
         self.known_positions = {pos.ticket: pos for pos in positions}
+
+        # Set _initialized AFTER known_positions is populated so balance capture sees correct state
+        if not self._initialized:
+            self._initialized = True
         
         # Capture original SL first time we see each position
         for pos in positions:
@@ -609,17 +612,22 @@ class PositionMonitor:
         log.position_update(pos.ticket, "TIMEOUT_CLOSE", f"Open for {time_open}")
         
         result = close_position(pos.ticket)
-        
+
         if result.success:
-            # Calculate P&L
+            # Get actual fill profit from deal history (not stale cached pos.profit)
+            actual_profit = pos.profit  # fallback
+            deal = get_deal_history(pos.ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
+            if deal and deal.get('profit') is not None and not deal.get('pending'):
+                actual_profit = deal['profit']
+
             account_info = executor.get_account_info()
             balance = account_info['balance'] if account_info else config.CAPITAL_INICIAL
-            profit_percent = (pos.profit / balance) * 100
-            
+            profit_percent = (actual_profit / balance) * 100 if balance else 0
+
             alert_trade_closed(
                 ticket=pos.ticket,
                 direction=pos.direction,
-                profit=pos.profit,
+                profit=actual_profit,
                 profit_percent=profit_percent,
                 reason=f"Timeout ({config.MAX_POSITION_HOURS}h)"
             )
@@ -655,16 +663,22 @@ class PositionMonitor:
         )
         
         result = close_position(pos.ticket)
-        
+
         if result.success:
+            # Get actual fill profit from deal history (not stale cached pos.profit)
+            actual_profit = pos.profit  # fallback
+            deal = get_deal_history(pos.ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
+            if deal and deal.get('profit') is not None and not deal.get('pending'):
+                actual_profit = deal['profit']
+
             account_info = executor.get_account_info()
             balance = account_info['balance'] if account_info else config.CAPITAL_INICIAL
-            profit_percent = (pos.profit / balance) * 100
-            
+            profit_percent = (actual_profit / balance) * 100 if balance else 0
+
             alert_trade_closed(
                 ticket=pos.ticket,
                 direction=pos.direction,
-                profit=pos.profit,
+                profit=actual_profit,
                 profit_percent=profit_percent,
                 reason="Excessive drawdown"
             )
@@ -735,22 +749,29 @@ class PositionMonitor:
             if deal:
                 # We have close details
                 is_pending = deal.get('pending', False)
-                profit = profit_balance if profit_balance is not None else (deal['profit'] if not is_pending else 0)
+                deal_profit = deal.get('profit')
                 reason = deal['reason']
                 direction = deal['direction']
                 close_price = deal['close_price']
                 outcome = deal.get('outcome')
 
-                if profit_balance is not None:
+                # P&L priority: deal profit (accurate per-position) > balance_diff (corrupted with multiple positions)
+                if deal_profit is not None and not is_pending:
+                    profit = deal_profit
+                elif profit_balance is not None:
+                    profit = profit_balance
                     is_pending = False
+                else:
+                    profit = deal_profit if not is_pending else 0
+
+                # Cross-check: log drift between deal and balance_diff (informational only)
+                if profit_balance is not None and deal_profit is not None and not is_pending:
                     try:
-                        deal_profit = deal.get('profit')
-                        if deal_profit is not None:
-                            drift = abs(float(deal_profit) - float(profit_balance))
-                            if drift > 0.05:
-                                log.warning(
-                                    f"   Monitor: P&L drift for #{ticket}: balance_diff=${profit_balance:+.2f} vs deal=${float(deal_profit):+.2f}"
-                                )
+                        drift = abs(float(deal_profit) - float(profit_balance))
+                        if drift > 0.05:
+                            log.warning(
+                                f"   Monitor: P&L drift for #{ticket}: deal=${float(deal_profit):+.2f} vs balance_diff=${profit_balance:+.2f}"
+                            )
                     except Exception:
                         pass
                 
@@ -973,16 +994,22 @@ class PositionMonitor:
         
         for pos in positions:
             result = close_position(pos.ticket)
-            
+
             if result.success:
+                # Get actual fill profit from deal history (not stale cached pos.profit)
+                actual_profit = pos.profit  # fallback
+                deal = get_deal_history(pos.ticket, open_price=pos.open_price, tp_price=pos.tp, sl_price=pos.sl)
+                if deal and deal.get('profit') is not None and not deal.get('pending'):
+                    actual_profit = deal['profit']
+
                 account_info = executor.get_account_info()
                 balance = account_info['balance'] if account_info else config.CAPITAL_INICIAL
-                profit_percent = (pos.profit / balance) * 100
-                
+                profit_percent = (actual_profit / balance) * 100 if balance else 0
+
                 alert_trade_closed(
                     ticket=pos.ticket,
                     direction=pos.direction,
-                    profit=pos.profit,
+                    profit=actual_profit,
                     profit_percent=profit_percent,
                     reason=reason
                 )
