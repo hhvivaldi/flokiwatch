@@ -238,11 +238,6 @@ class TradingBot:
         except Exception:
             return None
 
-        # L2 Reflection engine (warm memory)
-        try:
-            run_reflection_async("startup")
-        except Exception:
-            pass
     
     def _shutdown_handler(self, signum, frame):
         """Graceful shutdown handler"""
@@ -936,6 +931,19 @@ class TradingBot:
 
         self._load_persisted_state()
         init_db()
+
+        # L2 Reflection engine (warm memory)
+        try:
+            run_reflection_async("startup")
+        except Exception:
+            pass
+
+        # FLO-138 Phase 2: sync ChromaDB semantic memory on startup
+        try:
+            from trade_reflexion import sync_chromadb_on_startup
+            sync_chromadb_on_startup()
+        except Exception:
+            pass
 
         try:
             threshold_min = int(getattr(config, "STARTUP_SKIP_THRESHOLD_MINUTES", 30) or 30)

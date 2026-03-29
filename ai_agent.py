@@ -725,6 +725,19 @@ class AIAgent:
                 },
             },
             {
+                "name": "search_memory",
+                "description": "Semantic search across your trade reflexions using natural language. Finds similar past situations even with different wording. Example: 'trade that failed near a round number during low volume' or 'successful breakout after consolidation'. Falls back to search_reflexions if unavailable.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Natural language description of the trade pattern or situation you want to find"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {

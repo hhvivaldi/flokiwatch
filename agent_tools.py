@@ -2032,6 +2032,34 @@ class AgentTools:
             self._log_tool("search_reflexions", start, f"error={e}")
             return {"success": False, "reason": "search_unavailable"}
 
+    def search_memory(self, query: str, limit: int = 3) -> Dict[str, Any]:
+        """Semantic search across trade reflexions using embeddings (FLO-138 Phase 2)."""
+        start = time.time()
+        try:
+            from trade_reflexion import search_memory as _semantic_search
+            q = str(query or "").strip()
+            if not q:
+                return {"success": False, "reason": "empty query"}
+            lim = min(max(int(limit or 3), 1), 10)
+            results = _semantic_search(q, lim)
+            if not results:
+                # Fallback hint
+                self._log_tool("search_memory", start, "chromadb_empty_or_unavailable")
+                return {
+                    "success": False,
+                    "reason": "chromadb_unavailable",
+                    "fallback": "use search_reflexions for keyword search",
+                }
+            self._log_tool("search_memory", start, f"query={q[:50]} | count={len(results)}")
+            return {"success": True, "results": results, "count": len(results)}
+        except Exception as e:
+            self._log_tool("search_memory", start, f"error={e}")
+            return {
+                "success": False,
+                "reason": "search_memory_error",
+                "fallback": "use search_reflexions for keyword search",
+            }
+
     def write_session_memory(self, thesis: str, note: str) -> Dict[str, Any]:
         start = time.time()
         try:
