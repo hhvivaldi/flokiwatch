@@ -107,7 +107,7 @@ O output do Brain é consumido por:
 - Auto-agendado via `set_next_check` (5-120 min, default 5 min)
 - Fora do ciclo: SIMBA_WAKE (condição atingida), SIMBA_WATCH (posição em risco), ECHO_CRITICAL (breaking news)
 
-**28 ferramentas disponíveis (4 categorias: Technical, Cross-market, Macro, Performance):**
+**30 ferramentas disponíveis (4 categorias: Technical, Cross-market, Macro, Performance):**
 
 - Dados: get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_headlines, get_macro, get_calendar, get_ml_prediction
 - Trading: execute_trade, close_trade, adjust_trade
@@ -115,6 +115,7 @@ O output do Brain é consumido por:
 - Memória: read_session_memory, write_session_memory, get_trade_patterns
 - Colaboração: debate_with_rex, get_echo_alerts
 - Contexto: get_open_positions, get_trade_history, get_account_info, get_position_events
+- Reflexão: get_recent_reflexions, search_reflexions (FLO-137/138)
 
 **O que decide:** WAIT / OPEN_BUY / OPEN_SELL / HOLD_TRADE / CLOSE_TRADE / ADJUST_TRADE
 
