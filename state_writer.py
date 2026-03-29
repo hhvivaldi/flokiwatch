@@ -248,6 +248,22 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-139: Inject market regime from bot instance
+        try:
+            _regime = getattr(bot_instance, "_last_regime_context", None)
+            if isinstance(_regime, dict) and _regime.get("regime"):
+                state["market_regime"] = {
+                    "regime": _regime["regime"],
+                    "confidence": _regime.get("confidence"),
+                    "duration": _regime.get("duration_display"),
+                    "stability": _regime.get("stability"),
+                    "adx": _regime.get("adx"),
+                    "atr_ratio": _regime.get("atr_ratio"),
+                    "transition": _regime.get("transition"),
+                }
+        except Exception:
+            pass
+
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 
     except Exception as e:

@@ -3372,6 +3372,26 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-139: Inject market regime into trigger_context
+            try:
+                _regime = getattr(self, "_last_regime_context", None)
+                if _regime and isinstance(_regime, dict) and _regime.get("regime"):
+                    _r = _regime
+                    _evidence_str = ", ".join(_r.get("evidence", [])[:5])
+                    _regime_block = (
+                        f"\n<market_regime>\n"
+                        f"Current: {_r['regime']} ({_r.get('confidence', '?')} confidence)\n"
+                        f"Duration: {_r.get('duration_display', '?')} (since transition from {_r.get('previous_regime', '?')})\n"
+                        f"Stability: {_r.get('stability', '?')} ({_r.get('regime_changes_24h', 0)} changes in 24h)\n"
+                        f"Evidence: {_evidence_str}\n"
+                        f"ATR: {_r.get('atr_current', '?')} pips ({_r.get('atr_ratio', '?')}x vs 5-day avg)\n"
+                        f"Transition: {_r.get('transition', '?')}\n"
+                        f"</market_regime>\n"
+                    )
+                    trigger_context += _regime_block
+            except Exception:
+                pass
+
             tools_obj = AgentTools(
                 self,
                 executor=executor,
@@ -4715,56 +4735,40 @@ class TradingBot:
         # ================================================================
         # NEW DATA: Regime Context (trending/ranging, ADX/ATR analysis)
         # ================================================================
-        regime_context = None
+        # FLO-139: Full regime detection with temporal context
         try:
-            adx_value = momentum_data.get("adx", {}).get("adx_value", 0)
             atr_value = momentum_data.get("atr", {}).get("atr_value", 0)
-            
-            # Determine regime
-            if adx_value >= 25:
-                regime = "trending"
-                if adx_value >= 40:
-                    trend_strength = "strong"
-                else:
-                    trend_strength = "moderate"
-            else:
-                regime = "ranging"
-                trend_strength = "weak"
-            
-            # Count hours ADX above 25 (from H1 data if available)
-            adx_hours_above_25 = 0
-            try:
-                # Use stored ADX history if available
-                adx_history = getattr(self, '_adx_history', [])
-                adx_history.append(adx_value)
-                adx_history = adx_history[-24:]  # Keep last 24 hours
-                self._adx_history = adx_history
-                adx_hours_above_25 = sum(1 for v in adx_history if v >= 25)
-            except Exception:
-                pass
-            
-            # ATR vs weekly average (estimate from current ATR)
-            atr_vs_weekly = 1.0
-            try:
-                atr_history = getattr(self, '_atr_history', [])
+            atr_history = getattr(self, '_atr_history', [])
+            if atr_value:
                 atr_history.append(atr_value)
-                atr_history = atr_history[-120:]  # ~5 days of hourly data
+                atr_history = atr_history[-120:]
                 self._atr_history = atr_history
-                if len(atr_history) > 20:
-                    weekly_avg = sum(atr_history) / len(atr_history)
-                    if weekly_avg > 0:
-                        atr_vs_weekly = atr_value / weekly_avg
+
+            luna_brief_data = None
+            try:
+                from luna_analyst import load_luna_brief
+                luna_brief_data = load_luna_brief()
             except Exception:
                 pass
-            
-            regime_context = {
-                "regime": regime,
-                "adx_hours_above_25": adx_hours_above_25,
-                "atr_vs_weekly_avg": atr_vs_weekly,
-                "trend_strength": trend_strength,
-            }
+
+            from regime_detector import detect_market_regime
+            regime_result = detect_market_regime(
+                tech_data=tech_data,
+                momentum_data=momentum_data,
+                vol_status=vol_status,
+                brain_result=brain_result,
+                current_price=current_price,
+                atr_history=atr_history,
+                luna_brief=luna_brief_data,
+            )
+            self._last_regime_context = regime_result
+            log.info(
+                f"REGIME | {regime_result['regime']} | {regime_result['confidence']} | "
+                f"{regime_result['duration_display']} | {regime_result['stability']} | "
+                f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')}"
+            )
         except Exception as e:
-            log.debug(f"Error building regime context: {e}")
+            log.debug(f"Error in regime detection: {e}")
         
         # Call Agent (async) - tool-driven (no XML / no full data package)
         from ai_agent import agent_decide
@@ -4780,6 +4784,23 @@ class TradingBot:
                     f"Reactive analysis triggered. Session={session_name}. "
                     "Investigate using tools and respond with final decision JSON."
                 )
+            except Exception:
+                pass
+
+            # FLO-139: Inject market regime into reactive trigger_context
+            try:
+                _regime = getattr(self, "_last_regime_context", None)
+                if _regime and isinstance(_regime, dict) and _regime.get("regime"):
+                    _r = _regime
+                    _evidence_str = ", ".join(_r.get("evidence", [])[:5])
+                    trigger_context += (
+                        f"\n<market_regime>\n"
+                        f"Current: {_r['regime']} ({_r.get('confidence', '?')} confidence)\n"
+                        f"Duration: {_r.get('duration_display', '?')}\n"
+                        f"Stability: {_r.get('stability', '?')}\n"
+                        f"Evidence: {_evidence_str}\n"
+                        f"</market_regime>\n"
+                    )
             except Exception:
                 pass
 
