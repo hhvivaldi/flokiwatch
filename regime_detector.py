@@ -71,9 +71,9 @@ def detect_market_regime(
     atr_current = _sf(atr_data.get("atr_value"))
 
     vol_data = momentum_data.get("volume", {})
-    volume_ratio = _sf(vol_data.get("volume_ratio"), 1.0)
+    volume_ratio = _sf(vol_data.get("volume_ratio"), default=1.0)
 
-    rsi_val = _sf(tech_data.get("rsi", {}).get("value"), 50)
+    rsi_val = _sf(tech_data.get("rsi", {}).get("value"), default=50.0)
 
     macd_data = tech_data.get("macd", {})
     macd_hist = _sf(macd_data.get("histogram"))
@@ -153,8 +153,10 @@ def detect_market_regime(
     if adx and adx < 15:
         quiet_signals += 1
         quiet_evidence.append(f"ADX {adx:.1f} (no trend)")
-    bb_avg = sum(atr_history[-20:]) / len(atr_history[-20:]) if atr_history and len(atr_history) >= 20 else 0
-    if bb_width > 0 and bb_avg > 0 and bb_width < bb_avg * 0.7:
+    # Use ATR as proxy for "normal" band width since we don't track bb_width history
+    atr_avg = sum(atr_history[-20:]) / len(atr_history[-20:]) if atr_history and len(atr_history) >= 20 else 0
+    # Bollinger width < 2x ATR average indicates tight bands (normal width ~3-4x ATR)
+    if bb_width > 0 and atr_avg > 0 and bb_width < atr_avg * 2.0:
         quiet_signals += 1
         quiet_evidence.append("Bollinger squeeze (tight bands)")
 
@@ -172,7 +174,7 @@ def detect_market_regime(
     # -----------------------------------------------------------------------
     breakout_signals = 0
     breakout_evidence = []
-    if bb_width > 0 and bb_avg > 0 and bb_width < bb_avg * 0.5:
+    if bb_width > 0 and atr_avg > 0 and bb_width < atr_avg * 1.5:
         breakout_signals += 1
         breakout_evidence.append("Bollinger at minimum width (squeeze)")
     if volume_ratio > 0.8 and _prev_adx is not None and _prev_adx < 20:
@@ -255,7 +257,7 @@ def detect_market_regime(
     if volume_ratio < 1.0:
         ranging_evidence.append(f"Volume {volume_ratio:.2f}x avg (below average)")
 
-    if ranging_evidence:
+    if len(ranging_evidence) >= 2:
         regime = "RANGING"
         confidence = "high" if len(ranging_evidence) >= 3 else "moderate"
         result = _build_result(regime, confidence, ranging_evidence, adx, atr_current, atr_ratio, bb_width)
@@ -282,14 +284,14 @@ def detect_market_regime(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _sf(val: Any, default: float = 0) -> Optional[float]:
-    """Safe float extraction."""
+def _sf(val: Any, default: Optional[float] = None) -> Optional[float]:
+    """Safe float extraction. Returns default (None) if val is missing."""
     if val is None:
-        return default if default != 0 else None
+        return default
     try:
         return float(val)
     except (TypeError, ValueError):
-        return default if default != 0 else None
+        return default
 
 
 def _build_result(
@@ -313,10 +315,10 @@ def _build_result(
             m = duration_minutes % 60
             duration_display = f"{h}h {m}m"
 
-    # Previous regime
+    # Previous regime (the regime BEFORE the current one)
     previous_regime = None
     for entry in reversed(_regime_history):
-        if entry.get("new") != regime:
+        if entry.get("new") == regime:
             previous_regime = entry.get("old")
             break
 
@@ -371,31 +373,32 @@ def _update_temporal(regime: str, now: float) -> None:
         _last_regime_change_ts = now
 
 
+_TRANSITION_TEXTS = {
+    ("QUIET", "TRENDING_BULLISH"): "Breakout from quiet market — fresh bullish trend",
+    ("QUIET", "TRENDING_BEARISH"): "Breakout from quiet market — fresh bearish trend",
+    ("QUIET", "BREAKOUT_IMMINENT"): "Quiet market coiling — breakout building",
+    ("QUIET", "VOLATILE"): "Quiet market exploded — volatility spike",
+    ("RANGING", "TRENDING_BULLISH"): "Range broken to the upside",
+    ("RANGING", "TRENDING_BEARISH"): "Range broken to the downside",
+    ("RANGING", "VOLATILE"): "Range broken by volatility spike",
+    ("TRENDING_BULLISH", "RANGING"): "Bullish trend exhaustion — momentum fading",
+    ("TRENDING_BEARISH", "RANGING"): "Bearish trend exhaustion — momentum fading",
+    ("TRENDING_BULLISH", "TRENDING_BEARISH"): "Trend reversal — bulls to bears",
+    ("TRENDING_BEARISH", "TRENDING_BULLISH"): "Trend reversal — bears to bulls",
+    ("TRENDING_BULLISH", "VOLATILE"): "Trend disrupted by volatility",
+    ("TRENDING_BEARISH", "VOLATILE"): "Trend disrupted by volatility",
+    ("VOLATILE", "TRENDING_BULLISH"): "Volatility resolving into bullish trend",
+    ("VOLATILE", "TRENDING_BEARISH"): "Volatility resolving into bearish trend",
+    ("VOLATILE", "RANGING"): "Volatility settling into range",
+    ("BREAKOUT_IMMINENT", "TRENDING_BULLISH"): "Breakout confirmed — bullish",
+    ("BREAKOUT_IMMINENT", "TRENDING_BEARISH"): "Breakout confirmed — bearish",
+}
+
+
 def _transition_text(previous: Optional[str], current: str, duration: int) -> str:
     """Generate human-readable transition narrative."""
     if duration > 1440:  # 24h+
         return "Established regime — high confidence"
     if previous is None:
         return "First detection this session"
-
-    transitions = {
-        ("QUIET", "TRENDING_BULLISH"): "Breakout from quiet market — fresh bullish trend",
-        ("QUIET", "TRENDING_BEARISH"): "Breakout from quiet market — fresh bearish trend",
-        ("QUIET", "BREAKOUT_IMMINENT"): "Quiet market coiling — breakout building",
-        ("QUIET", "VOLATILE"): "Quiet market exploded — volatility spike",
-        ("RANGING", "TRENDING_BULLISH"): "Range broken to the upside",
-        ("RANGING", "TRENDING_BEARISH"): "Range broken to the downside",
-        ("RANGING", "VOLATILE"): "Range broken by volatility spike",
-        ("TRENDING_BULLISH", "RANGING"): "Bullish trend exhaustion — momentum fading",
-        ("TRENDING_BEARISH", "RANGING"): "Bearish trend exhaustion — momentum fading",
-        ("TRENDING_BULLISH", "TRENDING_BEARISH"): "Trend reversal — bulls to bears",
-        ("TRENDING_BEARISH", "TRENDING_BULLISH"): "Trend reversal — bears to bulls",
-        ("TRENDING_BULLISH", "VOLATILE"): "Trend disrupted by volatility",
-        ("TRENDING_BEARISH", "VOLATILE"): "Trend disrupted by volatility",
-        ("VOLATILE", "TRENDING_BULLISH"): "Volatility resolving into bullish trend",
-        ("VOLATILE", "TRENDING_BEARISH"): "Volatility resolving into bearish trend",
-        ("VOLATILE", "RANGING"): "Volatility settling into range",
-        ("BREAKOUT_IMMINENT", "TRENDING_BULLISH"): "Breakout confirmed — bullish",
-        ("BREAKOUT_IMMINENT", "TRENDING_BEARISH"): "Breakout confirmed — bearish",
-    }
-    return transitions.get((previous, current), f"Transitioned from {previous}")
+    return _TRANSITION_TEXTS.get((previous, current), f"Transitioned from {previous}")
