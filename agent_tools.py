@@ -1702,6 +1702,34 @@ class AgentTools:
                         pass
                     conds.update(luna_ctx)
 
+                    # FLO-137: snapshot active thesis at trade open
+                    try:
+                        _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
+                        if os.path.exists(_thesis_path):
+                            with open(_thesis_path, "r", encoding="utf-8") as _tf:
+                                _thesis = json.load(_tf)
+                            conds["thesis_at_open"] = {
+                                "direction_bias": _thesis.get("direction_bias"),
+                                "key_levels": _thesis.get("key_levels"),
+                                "conditions": _thesis.get("conditions"),
+                                "decision": _thesis.get("decision"),
+                                "confidence": _thesis.get("confidence"),
+                            }
+                    except Exception:
+                        pass
+
+                    # FLO-137: snapshot Rex debate reasoning at trade open
+                    try:
+                        hist = getattr(self, "_rex_debate_history", [])
+                        if hist:
+                            last_rex = hist[-1]
+                            conds["rex_at_open"] = {
+                                "agree": last_rex.get("agree"),
+                                "reasoning": (last_rex.get("rex") or "")[:2000],
+                            }
+                    except Exception:
+                        pass
+
                     save_trade_conditions(ticket, dir_s, conds)
                 except Exception:
                     pass

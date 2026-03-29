@@ -292,6 +292,8 @@ class AgentResult:
     invalidation: Optional[str] = None
     adjustment: Optional[Dict] = None
     close_reason: Optional[str] = None
+    rex_agreed: Optional[bool] = None
+    rex_reasoning: Optional[str] = None
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for logging/storage"""
@@ -331,6 +333,10 @@ class AgentResult:
             result["adjustment"] = self.adjustment
         if self.close_reason:
             result["close_reason"] = self.close_reason
+        if self.rex_agreed is not None:
+            result["rex_agreed"] = self.rex_agreed
+        if self.rex_reasoning:
+            result["rex_reasoning"] = self.rex_reasoning
         return result
 
 
@@ -453,11 +459,21 @@ class AIAgent:
             except Exception:
                 pass
             
+            # FLO-137: attach Rex debate data to result for DB storage
+            try:
+                rex_hist = getattr(tools, "_rex_debate_history", [])
+                if rex_hist:
+                    last_rex = rex_hist[-1]
+                    result.rex_agreed = last_rex.get("agree")
+                    result.rex_reasoning = (last_rex.get("rex") or "")[:4000]
+            except Exception:
+                pass
+
             logger.info(
                 f"Agent decision: {result.decision} (conf={result.confidence}) "
                 f"[{result.input_tokens}+{result.output_tokens} tokens, {latency_ms}ms]"
             )
-            
+
             return result
             
         except asyncio.TimeoutError:
