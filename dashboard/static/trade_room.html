@@ -1147,6 +1147,15 @@
           <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span id="ctx-wlbe" class="ctx-val">—</span></div>
         </div>
 
+        <!-- FLO-142: Market Regime badge -->
+        <div class="ctx-block border-t border-emerald-500/20">
+          <div class="ctx-label">MARKET REGIME</div>
+          <div class="ctx-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+            <span id="ctx-regime-pill" class="bc-pill" style="font-size:11px;letter-spacing:0.5px;padding:2px 10px">—</span>
+            <span id="ctx-regime-detail" class="ctx-val" style="font-size:9px;color:#6b7280">—</span>
+          </div>
+        </div>
+
         <!-- Next trigger countdown -->
         <div class="ctx-block border-t border-emerald-500/20">
           <div class="ctx-label">NEXT PROACTIVE</div>
@@ -3325,7 +3334,9 @@
                 }
               } catch(e) {}
 
-              var sess = (state.bot && state.bot.session) || (state.market && state.market.session) || '—';
+              var sess = (state.last_analysis && state.last_analysis.session_name)
+                       || (state.market_context && state.market_context.session && state.market_context.session.name)
+                       || '—';
               var sessEl = document.getElementById('ctx-session');
               if (sessEl) sessEl.textContent = String(sess);
 
@@ -3345,6 +3356,43 @@
               } catch(e) {}
               var wlbeEl = document.getElementById('ctx-wlbe');
               if (wlbeEl) wlbeEl.textContent = wlbe;
+
+              // FLO-142: Market Regime badge
+              try {
+                var mr = state.market_regime;
+                var regimePill = document.getElementById('ctx-regime-pill');
+                var regimeDetail = document.getElementById('ctx-regime-detail');
+                if (regimePill && mr && mr.regime) {
+                  var r = String(mr.regime).toUpperCase();
+                  regimePill.textContent = r.replace(/_/g, ' ');
+                  // Color by regime type
+                  var regimeColors = {
+                    'VOLATILE':           {c:'#ef4444', bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
+                    'TRENDING_BULLISH':   {c:'#10b981', bg:'rgba(16,185,129,0.15)', bd:'rgba(16,185,129,0.3)'},
+                    'TRENDING_BEARISH':   {c:'#ef4444', bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
+                    'BREAKOUT_IMMINENT':  {c:'#f59e0b', bg:'rgba(245,158,11,0.15)', bd:'rgba(245,158,11,0.3)'},
+                    'RANGING':            {c:'#6366f1', bg:'rgba(99,102,241,0.12)', bd:'rgba(99,102,241,0.25)'},
+                    'QUIET':              {c:'#94a3b8', bg:'rgba(148,163,184,0.1)', bd:'rgba(148,163,184,0.2)'},
+                    'TRANSITIONAL':       {c:'#a78bfa', bg:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.25)'},
+                  };
+                  var rc = regimeColors[r] || regimeColors['TRANSITIONAL'];
+                  regimePill.style.color = rc.c;
+                  regimePill.style.background = rc.bg;
+                  regimePill.style.border = '1px solid ' + rc.bd;
+                  // Detail line: confidence + duration + stability
+                  var parts = [];
+                  if (mr.confidence) parts.push(mr.confidence + ' conf');
+                  if (mr.duration) parts.push(mr.duration);
+                  if (mr.stability) parts.push(mr.stability);
+                  if (regimeDetail) regimeDetail.textContent = parts.join(' · ') || '—';
+                } else if (regimePill) {
+                  regimePill.textContent = '—';
+                  regimePill.style.color = '#6b7280';
+                  regimePill.style.background = 'transparent';
+                  regimePill.style.border = '1px solid rgba(107,114,128,0.2)';
+                  if (regimeDetail) regimeDetail.textContent = '—';
+                }
+              } catch(e) {}
 
               // FLO-68: Sage today P&L summary
               try {
