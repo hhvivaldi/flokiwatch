@@ -567,13 +567,13 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 
 | Field | Type | Writer | Reader |
 |-------|------|--------|--------|
-| `market_regime.regime` | string (`VOLATILE` \| `QUIET` \| `BREAKOUT_IMMINENT` \| `TRENDING_BULLISH` \| `TRENDING_BEARISH` \| `RANGING` \| `TRANSITIONAL`) | `state_writer.py` via `regime_detector.py` | `#ctx-regime-pill` (Trade Room, FLO-142) |
-| `market_regime.confidence` | string (`high` \| `moderate` \| `low`) | `state_writer.py` | `#ctx-regime-detail` (Trade Room, FLO-142) |
-| `market_regime.duration` | string (e.g., "4h 23m") | `state_writer.py` | `#ctx-regime-detail` (Trade Room, FLO-142) |
-| `market_regime.stability` | string (`stable` \| `moderate` \| `unstable`) | `state_writer.py` | `#ctx-regime-detail` (Trade Room, FLO-142) |
-| `market_regime.adx` | float | `state_writer.py` | dashboard (future) |
-| `market_regime.atr_ratio` | float | `state_writer.py` | dashboard (future) |
-| `market_regime.transition` | string | `state_writer.py` | dashboard (future) |
+| `market_regime.regime` | string (`VOLATILE` \| `QUIET` \| `BREAKOUT_IMMINENT` \| `TRENDING_BULLISH` \| `TRENDING_BEARISH` \| `RANGING` \| `TRANSITIONAL`) | `state_writer.py` via `regime_detector.py` | `#ctx-regime-pill` + `#regime-card-pill` (Trade Room) |
+| `market_regime.confidence` | string (`high` \| `moderate` \| `low`) | `state_writer.py` | `#ctx-regime-detail` + `#regime-card-conf` (Trade Room) |
+| `market_regime.duration` | string (e.g., "4h 23m") | `state_writer.py` | `#ctx-regime-detail` + `#regime-card-duration` (Trade Room) |
+| `market_regime.stability` | string (`stable` \| `moderate` \| `unstable`) | `state_writer.py` | `#ctx-regime-detail` + `#regime-card-stability` (Trade Room) |
+| `market_regime.adx` | float | `state_writer.py` | `#regime-card-adx` (Trade Room) |
+| `market_regime.atr_ratio` | float | `state_writer.py` | `#regime-card-atr` (Trade Room) |
+| `market_regime.transition` | string | `state_writer.py` | `#regime-card-transition` (Trade Room) |
 
 ### `ea_bridge` Object in `bot_state.json`
 

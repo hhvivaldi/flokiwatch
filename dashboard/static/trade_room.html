@@ -1081,18 +1081,42 @@
               </div>
             </div>
 
-            <!-- ATLAS — hiring -->
-            <div class="bc-card bc-card-hiring" id="atlas-card" style="border-color:rgba(0,150,136,0.25)" aria-disabled="true">
-              <div class="bc-btn" style="cursor:default">
+            <!-- MARKET REGIME card (FLO-145 Proposal 6) -->
+            <div class="bc-card" id="regime-card" style="border-color:var(--clr-ranging)">
+              <button type="button" class="bc-btn" data-expand-target="regime-expand" aria-expanded="false">
                 <div class="bc-row1">
-                  <div class="bc-avatar" style="border:2px dashed rgba(0,150,136,0.4);color:rgba(0,150,136,0.4)">?</div>
+                  <div class="bc-avatar" id="avatar-regime" style="border-color:var(--clr-ranging);background:rgba(99,102,241,0.08);font-size:18px;color:var(--clr-ranging)">◈</div>
                   <div class="bc-identity">
-                    <span class="bc-name" style="color:rgba(0,150,136,0.6)">ATLAS</span>
-                    <span class="bc-role">Technical analyst</span>
+                    <span class="bc-name" id="regime-card-name" style="color:var(--clr-ranging)">MARKET</span>
+                    <span class="bc-role">Regime detector</span>
                   </div>
                 </div>
-                <div class="bc-hiring-row2">WE ARE HIRING</div>
-                <div class="bc-hiring-row3">+ open desk</div>
+                <div class="bc-row2">
+                  <span id="regime-card-pill" class="bc-pill" style="background:rgba(99,102,241,0.15);color:var(--clr-ranging)">—</span>
+                  <span id="regime-card-conf" class="bc-pill" style="background:rgba(99,102,241,0.08);color:var(--text-secondary)">—</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Duration</span>
+                    <span id="regime-card-duration" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
+                  </div>
+                  <div class="bc-bar-track"><div id="regime-card-bar" class="bc-bar-fill" style="width:0%;background:var(--clr-ranging)"></div></div>
+                </div>
+              </button>
+              <div id="regime-expand" class="agent-expand">
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">Stability</span>
+                  <span id="regime-card-stability" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
+                </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">ADX</span>
+                  <span id="regime-card-adx" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
+                </div>
+                <div class="bc-metric" style="margin-bottom:3px">
+                  <span class="bc-metric-label">ATR ratio</span>
+                  <span id="regime-card-atr" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
+                </div>
+                <div id="regime-card-transition" style="font-size:9px;color:var(--text-muted);margin-top:4px">—</div>
               </div>
             </div>
 
@@ -3432,6 +3456,56 @@
                   regimePill.style.background = 'transparent';
                   regimePill.style.border = '1px solid rgba(107,114,128,0.2)';
                   if (regimeDetail) regimeDetail.textContent = '—';
+                }
+              } catch(e) {}
+
+              // FLO-145 Proposal 6: Update Market Regime agent card
+              try {
+                var mr = state.market_regime;
+                var rcPill = document.getElementById('regime-card-pill');
+                var rcConf = document.getElementById('regime-card-conf');
+                var rcDur = document.getElementById('regime-card-duration');
+                var rcBar = document.getElementById('regime-card-bar');
+                var rcStab = document.getElementById('regime-card-stability');
+                var rcAdx = document.getElementById('regime-card-adx');
+                var rcAtr = document.getElementById('regime-card-atr');
+                var rcTrans = document.getElementById('regime-card-transition');
+                var rcCard = document.getElementById('regime-card');
+                var rcAvatar = document.getElementById('avatar-regime');
+                var rcName = document.getElementById('regime-card-name');
+                if (mr && mr.regime && rcPill) {
+                  var r = String(mr.regime).toUpperCase();
+                  var cs2 = getComputedStyle(document.documentElement);
+                  var regimeVarMap = {
+                    'VOLATILE':'--clr-volatile', 'TRENDING_BULLISH':'--clr-trending-bull',
+                    'TRENDING_BEARISH':'--clr-trending-bear', 'BREAKOUT_IMMINENT':'--clr-breakout',
+                    'RANGING':'--clr-ranging', 'QUIET':'--clr-quiet', 'TRANSITIONAL':'--clr-transitional'
+                  };
+                  var varName = regimeVarMap[r] || '--clr-ranging';
+                  var clr = cs2.getPropertyValue(varName).trim();
+                  // Update pill
+                  rcPill.textContent = r.replace(/_/g, ' ');
+                  rcPill.style.color = clr;
+                  rcPill.style.background = clr.replace(')', ',0.15)').replace('rgb(', 'rgba(');
+                  // Confidence pill
+                  if (rcConf) rcConf.textContent = mr.confidence || '—';
+                  // Duration
+                  if (rcDur) { rcDur.textContent = mr.duration || '—'; rcDur.style.color = clr; }
+                  // Stability bar (stable=100%, moderate=60%, unstable=30%)
+                  if (rcBar) {
+                    var stabPct = mr.stability === 'stable' ? 100 : mr.stability === 'moderate' ? 60 : 30;
+                    rcBar.style.width = stabPct + '%';
+                    rcBar.style.background = clr;
+                  }
+                  // Expand details
+                  if (rcStab) { rcStab.textContent = mr.stability || '—'; rcStab.style.color = clr; }
+                  if (rcAdx) rcAdx.textContent = mr.adx != null ? Number(mr.adx).toFixed(1) : '—';
+                  if (rcAtr) rcAtr.textContent = mr.atr_ratio != null ? Number(mr.atr_ratio).toFixed(2) + 'x' : '—';
+                  if (rcTrans) rcTrans.textContent = mr.transition || '—';
+                  // Card border + avatar color
+                  if (rcCard) rcCard.style.borderColor = clr;
+                  if (rcAvatar) { rcAvatar.style.borderColor = clr; rcAvatar.style.color = clr; }
+                  if (rcName) rcName.style.color = clr;
                 }
               } catch(e) {}
 
