@@ -808,7 +808,7 @@ class AgentTools:
     # Position management tools
     # ---------------------------------------------------------------------
 
-    def set_watch_conditions(self, ticket: int, conditions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def set_watch_conditions(self, ticket: int, conditions: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         start = time.time()
         try:
             try:
@@ -817,7 +817,12 @@ class AgentTools:
                 return {"success": False, "reason": "invalid ticket"}
 
             if not isinstance(conditions, list) or not conditions:
-                return {"success": False, "reason": "conditions must be a non-empty list"}
+                self._log_tool("set_watch_conditions", start, f"ticket={t} | missing conditions arg")
+                return {
+                    "success": False,
+                    "reason": "conditions argument required",
+                    "hint": "Pass conditions as array of objects, e.g.: conditions=[{type:'pnl_threshold', value:-15}, {type:'price_touch', level:4550}]",
+                }
 
             cleaned: List[Dict[str, Any]] = []
             for c in conditions:
