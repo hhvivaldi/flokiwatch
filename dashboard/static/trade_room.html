@@ -14,6 +14,44 @@
     <link rel="stylesheet" href="/static/style.css" />
 
     <style>
+      /* ── FLO-145: Design system color variables ── */
+      :root {
+        /* Agent identity colors */
+        --clr-floki:   #AAFF00;
+        --clr-rex:     #9C27B0;
+        --clr-simba:   #00E5FF;
+        --clr-sage:    #FFB300;
+        --clr-echo:    #00BCD4;
+        --clr-luna:    #E040FB;
+
+        /* Market signal colors */
+        --clr-buy:     #10b981;
+        --clr-sell:    #ef4444;
+        --clr-neutral: #94a3b8;
+        --clr-hold:    #f59e0b;
+        --clr-standby: #6366f1;
+
+        /* Regime colors */
+        --clr-volatile:   #ef4444;
+        --clr-trending-bull: #10b981;
+        --clr-trending-bear: #ef4444;
+        --clr-breakout:   #f59e0b;
+        --clr-ranging:    #6366f1;
+        --clr-quiet:      #94a3b8;
+        --clr-transitional: #a78bfa;
+
+        /* Surface colors */
+        --bg-deep:     #080808;
+        --bg-panel:    rgba(18, 18, 18, 0.7);
+        --bg-card:     rgba(15, 23, 42, 0.6);
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-hover:  rgba(255, 255, 255, 0.12);
+        --text-primary:  #f8fafc;
+        --text-secondary: #94a3b8;
+        --text-muted:    #64748b;
+        --text-dim:      #475569;
+      }
+
       html, body {
         font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background-color: #080808;
@@ -29,17 +67,17 @@
 
       /* ── Glassmorphism ──────────────────────── */
       .glass-panel-deep {
-        background: rgba(18, 18, 18, 0.7);
+        background: var(--bg-panel);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--border-subtle);
         box-shadow: 
           0 4px 24px -1px rgba(0, 0, 0, 0.4),
           inset 0 1px 1px rgba(255, 255, 255, 0.03);
         transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       }
       .glass-panel-deep:hover {
-        border-color: rgba(255, 255, 255, 0.12);
+        border-color: var(--border-hover);
         box-shadow: 
           0 8px 32px -1px rgba(0, 0, 0, 0.5),
           inset 0 1px 1px rgba(255, 255, 255, 0.05);
@@ -78,34 +116,34 @@
         display: block;
       }
       .avatar-floki {
-        background: rgba(16, 185, 129, 0.1);
-        border: 1.5px solid rgba(16, 185, 129, 0.3);
-        color: #10b981;
-        box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        background: color-mix(in srgb, var(--clr-floki) 10%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--clr-floki) 30%, transparent);
+        color: var(--clr-floki);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--clr-floki) 10%, transparent);
       }
       .avatar-rex {
-        background: rgba(99, 102, 241, 0.1);
-        border: 1.5px solid rgba(99, 102, 241, 0.3);
-        color: #6366f1;
-        box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+        background: color-mix(in srgb, var(--clr-rex) 10%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--clr-rex) 30%, transparent);
+        color: var(--clr-rex);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--clr-rex) 10%, transparent);
       }
       .avatar-sage {
-        background: rgba(245, 158, 11, 0.1);
-        border: 1.5px solid rgba(245, 158, 11, 0.3);
-        color: #f59e0b;
-        box-shadow: 0 0 15px rgba(245, 158, 11, 0.12);
+        background: color-mix(in srgb, var(--clr-sage) 10%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--clr-sage) 30%, transparent);
+        color: var(--clr-sage);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--clr-sage) 12%, transparent);
       }
       .avatar-echo {
-        background: rgba(0, 188, 212, 0.1);
-        border: 1.5px solid rgba(0, 188, 212, 0.3);
-        color: #00BCD4;
-        box-shadow: 0 0 15px rgba(0, 188, 212, 0.12);
+        background: color-mix(in srgb, var(--clr-echo) 10%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--clr-echo) 30%, transparent);
+        color: var(--clr-echo);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--clr-echo) 12%, transparent);
       }
       .avatar-luna {
-        background: rgba(224, 64, 251, 0.1);
-        border: 1.5px solid rgba(224, 64, 251, 0.3);
-        color: #E040FB;
-        box-shadow: 0 0 15px rgba(224, 64, 251, 0.12);
+        background: color-mix(in srgb, var(--clr-luna) 10%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--clr-luna) 30%, transparent);
+        color: var(--clr-luna);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--clr-luna) 12%, transparent);
       }
       .avatar-sm {
         width: 32px;
@@ -173,11 +211,11 @@
         text-transform: uppercase;
         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       }
-      .pill-buy     { color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
-      .pill-sell    { color: #ef4444; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); }
-      .pill-wait    { color: #94a3b8; background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.2); }
-      .pill-hold    { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
-      .pill-standby { color: #6366f1; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); }
+      .pill-buy     { color: var(--clr-buy); background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
+      .pill-sell    { color: var(--clr-sell); background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); }
+      .pill-wait    { color: var(--clr-neutral); background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.2); }
+      .pill-hold    { color: var(--clr-hold); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
+      .pill-standby { color: var(--clr-standby); background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); }
 
       /* ── Status tag ─────────────────────────── */
       .status-tag {
@@ -220,8 +258,8 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       }
       .stat-row:last-child { border-bottom: none; }
-      .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; }
-      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #e2e8f0; }
+      .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
 
       /* ── Filter tabs ────────────────────────── */
       .filter-tab {
@@ -3366,14 +3404,17 @@
                   var r = String(mr.regime).toUpperCase();
                   regimePill.textContent = r.replace(/_/g, ' ');
                   // Color by regime type
+                  // Colors sourced from CSS variables
+                  var cs = getComputedStyle(document.documentElement);
+                  var rv = function(v) { return cs.getPropertyValue(v).trim(); };
                   var regimeColors = {
-                    'VOLATILE':           {c:'#ef4444', bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
-                    'TRENDING_BULLISH':   {c:'#10b981', bg:'rgba(16,185,129,0.15)', bd:'rgba(16,185,129,0.3)'},
-                    'TRENDING_BEARISH':   {c:'#ef4444', bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
-                    'BREAKOUT_IMMINENT':  {c:'#f59e0b', bg:'rgba(245,158,11,0.15)', bd:'rgba(245,158,11,0.3)'},
-                    'RANGING':            {c:'#6366f1', bg:'rgba(99,102,241,0.12)', bd:'rgba(99,102,241,0.25)'},
-                    'QUIET':              {c:'#94a3b8', bg:'rgba(148,163,184,0.1)', bd:'rgba(148,163,184,0.2)'},
-                    'TRANSITIONAL':       {c:'#a78bfa', bg:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.25)'},
+                    'VOLATILE':           {c: rv('--clr-volatile'),      bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
+                    'TRENDING_BULLISH':   {c: rv('--clr-trending-bull'), bg:'rgba(16,185,129,0.15)', bd:'rgba(16,185,129,0.3)'},
+                    'TRENDING_BEARISH':   {c: rv('--clr-trending-bear'), bg:'rgba(239,68,68,0.15)',  bd:'rgba(239,68,68,0.3)'},
+                    'BREAKOUT_IMMINENT':  {c: rv('--clr-breakout'),     bg:'rgba(245,158,11,0.15)', bd:'rgba(245,158,11,0.3)'},
+                    'RANGING':            {c: rv('--clr-ranging'),      bg:'rgba(99,102,241,0.12)', bd:'rgba(99,102,241,0.25)'},
+                    'QUIET':              {c: rv('--clr-quiet'),        bg:'rgba(148,163,184,0.1)', bd:'rgba(148,163,184,0.2)'},
+                    'TRANSITIONAL':       {c: rv('--clr-transitional'), bg:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.25)'},
                   };
                   var rc = regimeColors[r] || regimeColors['TRANSITIONAL'];
                   regimePill.style.color = rc.c;
@@ -3394,34 +3435,12 @@
                 }
               } catch(e) {}
 
-              // FLO-143: Floki next check countdown
+              // FLO-143: update stored target when poll delivers new timestamp
               try {
-                var cdEl = document.getElementById('proactive-countdown');
-                var cdLabel = document.getElementById('proactive-countdown-label');
                 var nca = state.floki_next_check_at;
-                if (cdEl && nca) {
-                  var target = new Date(nca.endsWith('Z') ? nca : nca + 'Z');
-                  var diff = target.getTime() - Date.now();
-                  if (diff > 0) {
-                    var totalSec = Math.floor(diff / 1000);
-                    var m = Math.floor(totalSec / 60);
-                    var s = totalSec % 60;
-                    cdEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-                    cdEl.style.color = '#34d399';
-                    if (cdLabel) cdLabel.textContent = 'SCHEDULED';
-                  } else if (diff > -120000) {
-                    cdEl.textContent = 'NOW';
-                    cdEl.style.color = '#fbbf24';
-                    if (cdLabel) cdLabel.textContent = 'CHECKING...';
-                  } else {
-                    var overMin = Math.floor(Math.abs(diff) / 60000);
-                    cdEl.textContent = '+' + overMin + 'm';
-                    cdEl.style.color = '#ef4444';
-                    if (cdLabel) cdLabel.textContent = 'OVERDUE';
-                  }
-                } else if (cdEl) {
-                  cdEl.textContent = '—';
-                  cdEl.style.color = '#6b7280';
+                if (nca && nca !== window._flokiCountdownRaw) {
+                  window._flokiCountdownRaw = nca;
+                  window._flokiCountdownTarget = new Date(nca.endsWith('Z') ? nca : nca + 'Z').getTime();
                 }
               } catch(e) {}
 
@@ -3544,6 +3563,35 @@
 
         loadOnce();
         setInterval(loadOnce, POLL_MS);
+
+        // FLO-143: 1-second live countdown ticker
+        setInterval(function() {
+          try {
+            var cdEl = document.getElementById('proactive-countdown');
+            var cdLabel = document.getElementById('proactive-countdown-label');
+            if (!cdEl) return;
+            var t = window._flokiCountdownTarget;
+            if (!t) { cdEl.textContent = '—'; cdEl.style.color = '#6b7280'; return; }
+            var diff = t - Date.now();
+            if (diff > 0) {
+              var sec = Math.floor(diff / 1000);
+              var m = Math.floor(sec / 60);
+              var s = sec % 60;
+              cdEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+              cdEl.style.color = '#34d399';
+              if (cdLabel) cdLabel.textContent = 'SCHEDULED';
+            } else if (diff > -120000) {
+              cdEl.textContent = 'NOW';
+              cdEl.style.color = '#fbbf24';
+              if (cdLabel) cdLabel.textContent = 'CHECKING...';
+            } else {
+              var overMin = Math.floor(Math.abs(diff) / 60000);
+              cdEl.textContent = '+' + overMin + 'm';
+              cdEl.style.color = '#ef4444';
+              if (cdLabel) cdLabel.textContent = 'OVERDUE';
+            }
+          } catch(e) {}
+        }, 1000);
       })();
     </script>
 
