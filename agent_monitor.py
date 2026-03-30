@@ -1,3 +1,5 @@
+import json
+import os
 import time
 import threading
 from datetime import datetime
@@ -545,6 +547,26 @@ class AgentMonitor:
         except Exception:
             expired = False
 
+        # FLO-149 Fix 1: Skip max_sleep wake if Floki's timer is due within 2 minutes
+        if expired:
+            try:
+                _nc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_next_check.json")
+                if os.path.exists(_nc_path):
+                    with open(_nc_path, "r", encoding="utf-8") as _ncf:
+                        _nc = json.load(_ncf)
+                    nc_iso = _nc.get("next_check_at") if isinstance(_nc, dict) else None
+                    if nc_iso:
+                        from datetime import timezone as _tz
+                        nc_dt = datetime.fromisoformat(str(nc_iso).replace("Z", "+00:00"))
+                        if nc_dt.tzinfo is None:
+                            nc_dt = nc_dt.replace(tzinfo=_tz.utc)
+                        secs_until = (nc_dt - datetime.now(_tz.utc)).total_seconds()
+                        if 0 < secs_until < 120:
+                            log.info(f"SIMBA | max_sleep expired but Floki check due in {int(secs_until)}s — skipping wake")
+                            expired = False
+            except Exception:
+                pass
+
         triggered_ids: List[str] = []
         checked_count = 0
         met_count = 0
@@ -741,25 +763,8 @@ class AgentMonitor:
                     f"Next wake eligible at {next_hhmm}."
                 ).strip()
 
-                record_agent_event(
-                    "SIMBA_CHECK",
-                    msg,
-                    payload={
-                        "simba": simba_result,
-                        "expired": bool(expired),
-                        "triggered": triggered_ids,
-                        "price": price_f,
-                        "range_low": self._simba_5m_low,
-                        "range_high": self._simba_5m_high,
-                        "nearest_levels": nearest_levels,
-                        "cooldown": True,
-                        "cooldown_minutes": cooldown_minutes,
-                        "cooldown_remaining_min": mins_remaining,
-                        "next_eligible_at": next_eligible_iso,
-                        "cooldown_fingerprint": conditions_fingerprint,
-                    },
-                    author="SIMBA",
-                )
+                # FLO-149 Fix 2: cooldown → log only, not feed
+                log.info(f"SIMBA_COOLDOWN | {msg} | price={price_str}")
                 summary_emitted = True
             else:
                 if emit_summary:
@@ -853,30 +858,8 @@ class AgentMonitor:
                             near=str(near_txt),
                         )
 
-                    record_agent_event(
-                        "SIMBA_CHECK",
-                        msg,
-                        payload={
-                            "simba": simba_result,
-                            "expired": False,
-                            "price": price_f,
-                            "range_low": rng_low,
-                            "range_high": rng_high,
-                            "checked_count": checked,
-                            "met_count": met,
-                            "trend": trend,
-                            "nearest_levels": nearest_levels,
-                            "cooldown": in_cooldown,
-                            "cooldown_minutes": cooldown_minutes,
-                            "cooldown_fingerprint": conditions_fingerprint,
-                            "summary_5m": True,
-                        },
-                        author="SIMBA",
-                    )
-                    try:
-                        log.info(f"SIMBA_5MIN_SUMMARY | {msg}")
-                    except Exception:
-                        pass
+                    # FLO-149 Fix 2: patrol → log only, not feed
+                    log.info(f"SIMBA_5MIN_SUMMARY | {msg}")
                     summary_emitted = True
                     try:
                         self._last_simba_summary_ts = float(now_ts)
