@@ -267,6 +267,17 @@ def write_state(bot_instance: Any) -> None:
         except Exception as e:
             log.debug(f"state_writer: market_regime error: {e}")
 
+        # FLO-143: Inject Floki's next scheduled check time
+        try:
+            _nc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_next_check.json")
+            if os.path.exists(_nc_path):
+                with open(_nc_path, "r", encoding="utf-8") as _ncf:
+                    _nc = json.load(_ncf)
+                if isinstance(_nc, dict) and _nc.get("next_check_at"):
+                    state["floki_next_check_at"] = _nc["next_check_at"]
+        except Exception:
+            pass
+
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 
     except Exception as e:

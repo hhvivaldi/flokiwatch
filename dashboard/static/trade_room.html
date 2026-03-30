@@ -1156,11 +1156,11 @@
           </div>
         </div>
 
-        <!-- Next trigger countdown -->
+        <!-- Next trigger countdown (FLO-143: real Floki schedule) -->
         <div class="ctx-block border-t border-emerald-500/20">
-          <div class="ctx-label">NEXT PROACTIVE</div>
-          <div id="proactive-countdown" class="font-mono text-3xl font-bold text-emerald-400 tracking-tighter animate-pulse">—</div>
-          <div class="text-[9px] text-gray-600 mt-1.5 uppercase tracking-widest font-bold">M30 SNAPSHOT</div>
+          <div class="ctx-label">NEXT FLOKI CHECK</div>
+          <div id="proactive-countdown" class="font-mono text-3xl font-bold text-emerald-400 tracking-tighter">—</div>
+          <div id="proactive-countdown-label" class="text-[9px] text-gray-600 mt-1.5 uppercase tracking-widest font-bold">SCHEDULED</div>
         </div>
 
       </div><!-- /col-right -->
@@ -3391,6 +3391,37 @@
                   regimePill.style.background = 'transparent';
                   regimePill.style.border = '1px solid rgba(107,114,128,0.2)';
                   if (regimeDetail) regimeDetail.textContent = '—';
+                }
+              } catch(e) {}
+
+              // FLO-143: Floki next check countdown
+              try {
+                var cdEl = document.getElementById('proactive-countdown');
+                var cdLabel = document.getElementById('proactive-countdown-label');
+                var nca = state.floki_next_check_at;
+                if (cdEl && nca) {
+                  var target = new Date(nca.endsWith('Z') ? nca : nca + 'Z');
+                  var diff = target.getTime() - Date.now();
+                  if (diff > 0) {
+                    var totalSec = Math.floor(diff / 1000);
+                    var m = Math.floor(totalSec / 60);
+                    var s = totalSec % 60;
+                    cdEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+                    cdEl.style.color = '#34d399';
+                    if (cdLabel) cdLabel.textContent = 'SCHEDULED';
+                  } else if (diff > -120000) {
+                    cdEl.textContent = 'NOW';
+                    cdEl.style.color = '#fbbf24';
+                    if (cdLabel) cdLabel.textContent = 'CHECKING...';
+                  } else {
+                    var overMin = Math.floor(Math.abs(diff) / 60000);
+                    cdEl.textContent = '+' + overMin + 'm';
+                    cdEl.style.color = '#ef4444';
+                    if (cdLabel) cdLabel.textContent = 'OVERDUE';
+                  }
+                } else if (cdEl) {
+                  cdEl.textContent = '—';
+                  cdEl.style.color = '#6b7280';
                 }
               } catch(e) {}
 

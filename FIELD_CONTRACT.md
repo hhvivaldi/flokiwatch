@@ -555,6 +555,12 @@ The following elements have been added to the dashboard:
 
 **Note:** `position-phase` (OPEN/BREAKEVEN/TRAILING) is deferred until EA Bridge is enabled for live trading.
 
+### `floki_next_check_at` (FLO-143)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `floki_next_check_at` | string (ISO timestamp, e.g., `"2026-03-30T09:56:18Z"`) | `state_writer.py` (reads `data/agent_next_check.json`) | `#proactive-countdown` (Trade Room, FLO-143) |
+
 ### `market_regime` Object (FLO-139)
 
 Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cycle (~60s) from all available indicators.
