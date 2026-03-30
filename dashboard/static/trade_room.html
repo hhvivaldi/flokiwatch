@@ -306,6 +306,51 @@
         pointer-events: none;
       }
 
+      /* ── FLO-145 Proposal 4: Compact feed mode ── */
+      .feed-compact .msg-row {
+        gap: 6px;
+        margin-bottom: 2px;
+        animation: none;
+      }
+      .feed-compact .msg-avatar { display: none; }
+      .feed-compact .msg-bubble {
+        max-width: 100%;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.35;
+        box-shadow: none;
+      }
+      .feed-compact .msg-bubble br { display: none; }
+      .feed-compact .msg-bubble br:first-of-type { display: inline; }
+      .feed-compact .msg-content {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .feed-compact .msg-meta {
+        padding: 0 0 0 2px;
+        gap: 4px;
+      }
+      .feed-compact .msg-author {
+        font-size: 9px !important;
+        min-width: 42px;
+      }
+      .feed-compact .time-divider {
+        margin: 6px 0 4px;
+      }
+      .feed-compact .time-divider span {
+        font-size: 8px;
+        padding: 0 4px;
+      }
+      .feed-compact .msg-row.rex,
+      .feed-compact .msg-row.msg-left {
+        flex-direction: row;
+      }
+      .feed-compact .agreement-banner { display: none; }
+      .feed-compact::before { display: none; }
+
       /* ── Time divider ───────────────────────── */
       .time-divider {
         display: flex;
@@ -1303,7 +1348,7 @@
       </div>
 
       <div class="col-center">
-          <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap">
+          <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap" style="align-items:center">
             <button class="filter-tab active" data-filter="all">ALL</button>
             <button class="filter-tab" data-filter="decision">DECISIONS</button>
             <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
@@ -1311,6 +1356,7 @@
             <button class="filter-tab" data-filter="news">NEWS</button>
             <button class="filter-tab" data-filter="macro">MACRO</button>
             <button class="filter-tab" data-filter="alert">ALERTS</button>
+            <button id="compact-toggle" class="filter-tab" style="margin-left:auto;border:1px solid var(--border-subtle)" onclick="document.getElementById('feed').classList.toggle('feed-compact');this.classList.toggle('active')">⊟ COMPACT</button>
           </div>
           <div class="feed-scroll" id="feed"></div>
         </div>
