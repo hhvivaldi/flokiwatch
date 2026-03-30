@@ -1201,6 +1201,12 @@
           <div id="ctx-watch-conditions">No active watch conditions</div>
         </div>
 
+        <!-- FLO-146 Bug 4: Calendar upcoming events -->
+        <div class="ctx-block">
+          <div class="ctx-label">UPCOMING EVENTS</div>
+          <div id="ctx-calendar-events">No upcoming events</div>
+        </div>
+
         <!-- Session block -->
         <div class="ctx-block">
           <div class="ctx-label">SESSION</div>
@@ -2899,7 +2905,19 @@
             var flokiDecision = null;
             var flokiConf = null;
             var flokiTools = [];
+            // FLO-146 Bug 1: Read thesis from state.active_thesis (not session_memory)
             var thesis = null;
+            try {
+              var at = state && state.active_thesis;
+              if (at && at.direction_bias) {
+                var parts = [at.direction_bias];
+                if (at.decision && at.decision !== at.direction_bias) parts.push('(' + at.decision + ')');
+                if (at.conditions && at.conditions.length) parts.push('— ' + at.conditions.slice(0,2).join('; '));
+                else if (at.key_levels && at.key_levels.length) parts.push('— levels: ' + at.key_levels.slice(0,4).join(', '));
+                thesis = parts.join(' ');
+              }
+            } catch(e) {}
+            // Extract Floki decision from messages + fallback thesis from session_memory
             for (var i = 0; i < (messages || []).length; i++) {
               var m = messages[i];
               if (!thesis && m && m.metadata && m.metadata.session_thesis) thesis = m.metadata.session_thesis;
@@ -3040,7 +3058,16 @@
 
             var thesisTag = document.getElementById('floki-thesis-tag');
             if (thesisTag) thesisTag.textContent = 'THESIS: ' + (thesis ? thesis : '—');
-            setText('floki-summary', thesis ? thesis : 'No active thesis captured.');
+            // FLO-146 Bug 1: Show thesis + last activity in expand area
+            var thesisSummary = thesis ? thesis : 'No active thesis captured.';
+            try {
+              var pa2 = (state && state.last_analysis) ? state.last_analysis.proactive_analysis : null;
+              if (pa2 && pa2.timestamp) {
+                var ago = Math.floor((Date.now() - new Date(pa2.timestamp).getTime()) / 60000);
+                thesisSummary += '\n\nLast check: ' + (ago <= 0 ? 'just now' : ago + 'm ago') + ' · ' + (pa2.trigger || 'SCHEDULED');
+              }
+            } catch(e) {}
+            setText('floki-summary', thesisSummary);
 
             // REX last debate stance
             var rexAgree = null;
@@ -3506,6 +3533,48 @@
                   if (rcCard) rcCard.style.borderColor = clr;
                   if (rcAvatar) { rcAvatar.style.borderColor = clr; rcAvatar.style.color = clr; }
                   if (rcName) rcName.style.color = clr;
+                }
+              } catch(e) {}
+
+              // FLO-146 Bug 3: Watch conditions from state
+              try {
+                var wcEl = document.getElementById('ctx-watch-conditions');
+                var wcs = state.wake_conditions;
+                if (wcEl && wcs && wcs.conditions && wcs.conditions.length) {
+                  var html = '';
+                  for (var wi = 0; wi < wcs.conditions.length; wi++) {
+                    var wc = wcs.conditions[wi];
+                    var typ = (wc.type || '').replace(/_/g, ' ');
+                    var lvl = wc.level != null ? Number(wc.level).toFixed(1) : '?';
+                    html += '<div style="font-size:9px;font-family:\'JetBrains Mono\',monospace;padding:2px 0;color:#94a3b8">';
+                    html += '<span style="color:var(--clr-simba)">' + (wc.id || 'c'+(wi+1)) + '</span> ';
+                    html += typ + ' <strong style="color:#e2e8f0">' + lvl + '</strong>';
+                    html += '</div>';
+                  }
+                  wcEl.innerHTML = html;
+                } else if (wcEl) {
+                  wcEl.textContent = 'No active watch conditions';
+                }
+              } catch(e) {}
+
+              // FLO-146 Bug 4: Calendar upcoming events
+              try {
+                var calEl = document.getElementById('ctx-calendar-events');
+                var cal = state.last_analysis && state.last_analysis.intel_feed && state.last_analysis.intel_feed.calendar;
+                if (calEl && cal && cal.upcoming_events && cal.upcoming_events.length) {
+                  var html = '';
+                  for (var ci = 0; ci < cal.upcoming_events.length; ci++) {
+                    var ev = cal.upcoming_events[ci];
+                    var impClr = ev.importance === 'HIGH' ? 'var(--clr-sell)' : 'var(--clr-hold)';
+                    html += '<div style="font-size:9px;padding:2px 0">';
+                    html += '<span style="color:' + impClr + ';font-weight:700">' + (ev.importance || '?') + '</span> ';
+                    html += '<span style="color:#e2e8f0">' + (ev.name || '?') + '</span> ';
+                    html += '<span style="color:#64748b">(' + (ev.time_until || ev.time || '?') + ')</span>';
+                    html += '</div>';
+                  }
+                  calEl.innerHTML = html;
+                } else if (calEl) {
+                  calEl.textContent = 'No upcoming events';
                 }
               } catch(e) {}
 

@@ -561,6 +561,27 @@ The following elements have been added to the dashboard:
 |-------|------|--------|--------|
 | `floki_next_check_at` | string (ISO timestamp, e.g., `"2026-03-30T09:56:18Z"`) | `state_writer.py` (reads `data/agent_next_check.json`) | `#proactive-countdown` (Trade Room, FLO-143) |
 
+### `active_thesis` Object (FLO-146)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `active_thesis.direction_bias` | string (`NEUTRAL` \| `BULLISH` \| `BEARISH`) | `state_writer.py` (reads `data/active_thesis.json`) | `#floki-summary` (Trade Room) |
+| `active_thesis.key_levels` | array of numbers | `state_writer.py` | `#floki-summary` (Trade Room) |
+| `active_thesis.conditions` | array of strings | `state_writer.py` | `#floki-summary` (Trade Room) |
+| `active_thesis.decision` | string | `state_writer.py` | `#floki-summary` (Trade Room) |
+| `active_thesis.confidence` | number | `state_writer.py` | `#floki-summary` (Trade Room) |
+| `active_thesis.timestamp` | string (ISO) | `state_writer.py` | `#floki-summary` (Trade Room) |
+| `active_thesis.price_at_decision` | number | `state_writer.py` | `#floki-summary` (Trade Room) |
+
+### `wake_conditions` Object (FLO-146)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `wake_conditions.count` | integer | `state_writer.py` (reads `data/agent_wake_conditions.json`) | `#ctx-watch-conditions` (Trade Room) |
+| `wake_conditions.conditions` | array of condition objects | `state_writer.py` | `#ctx-watch-conditions` (Trade Room) |
+| `wake_conditions.max_sleep_minutes` | integer | `state_writer.py` | Trade Room (future) |
+| `wake_conditions.last_wake_at` | string (ISO) | `state_writer.py` | Trade Room (future) |
+
 ### `market_regime` Object (FLO-139)
 
 Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cycle (~60s) from all available indicators.

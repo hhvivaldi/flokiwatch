@@ -278,6 +278,42 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-146 Bug 1: Inject active thesis
+        try:
+            _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
+            if os.path.exists(_thesis_path):
+                with open(_thesis_path, "r", encoding="utf-8") as _tf:
+                    _thesis = json.load(_tf)
+                if isinstance(_thesis, dict) and _thesis.get("direction_bias"):
+                    state["active_thesis"] = {
+                        "direction_bias": _thesis.get("direction_bias"),
+                        "key_levels": _thesis.get("key_levels", []),
+                        "conditions": _thesis.get("conditions", []),
+                        "decision": _thesis.get("decision"),
+                        "confidence": _thesis.get("confidence"),
+                        "timestamp": _thesis.get("timestamp"),
+                        "price_at_decision": _thesis.get("price_at_decision"),
+                    }
+        except Exception:
+            pass
+
+        # FLO-146 Bug 2+3: Inject Simba wake conditions
+        try:
+            _wc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_wake_conditions.json")
+            if os.path.exists(_wc_path):
+                with open(_wc_path, "r", encoding="utf-8") as _wcf:
+                    _wc = json.load(_wcf)
+                if isinstance(_wc, dict):
+                    conditions = _wc.get("conditions", [])
+                    state["wake_conditions"] = {
+                        "count": len(conditions) if isinstance(conditions, list) else 0,
+                        "conditions": conditions if isinstance(conditions, list) else [],
+                        "max_sleep_minutes": _wc.get("max_sleep_minutes"),
+                        "last_wake_at": _wc.get("last_wake_at"),
+                    }
+        except Exception:
+            pass
+
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 
     except Exception as e:
