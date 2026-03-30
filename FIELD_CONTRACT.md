@@ -559,7 +559,21 @@ The following elements have been added to the dashboard:
 
 | Field | Type | Writer | Reader |
 |-------|------|--------|--------|
-| `floki_next_check_at` | string (ISO timestamp, e.g., `"2026-03-30T09:56:18Z"`) | `state_writer.py` (reads `data/agent_next_check.json`) | `#proactive-countdown` (Trade Room, FLO-143) |
+| `floki_next_check_at` | string (ISO timestamp, e.g., `"2026-03-30T09:56:18Z"`) | `state_writer.py` (reads `data/agent_next_check.json`) | `#proactive-countdown` + `#cc-countdown` (Trade Room) |
+
+### Command Center Elements (FLO-145 Proposal 1)
+
+| Element ID | Reads from | Description |
+|------------|-----------|-------------|
+| `#cc-price` | `last_analysis.current_price` / `last_known_price` | XAU/USD price (28px) |
+| `#cc-change` | `price_daily_change_pct` | Daily change % with color |
+| `#cc-regime` | `market_regime.regime` | Regime name, color-coded |
+| `#cc-regime-detail` | `market_regime.confidence` + `duration` | Sub-label |
+| `#cc-floki-decision` | `proactive_analysis.decision` | Floki decision, color-coded |
+| `#cc-floki-conf` | `proactive_analysis.confidence` | Confidence % |
+| `#cc-rex-verdict` | Latest REX debate message | AGREE/DISAGREE |
+| `#cc-countdown` | `floki_next_check_at` | Live countdown (1s ticker) |
+| `#cc-pnl` | `daily_stats.pnl` | Session P&L |
 
 ### `active_thesis` Object (FLO-146)
 

@@ -521,6 +521,113 @@
         gap: 12px;
       }
 
+      /* ── FLO-145 Command Center ────────────── */
+      .command-center {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 8px 24px;
+        background: linear-gradient(180deg, rgba(18,18,18,0.8) 0%, rgba(8,8,8,0.95) 100%);
+        border-bottom: 1px solid var(--border-subtle);
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .cc-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 2px 18px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .cc-divider {
+        border-left: 1px solid rgba(255,255,255,0.06);
+      }
+      .cc-label {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        line-height: 1;
+        margin-bottom: 2px;
+      }
+      .cc-price-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+      .cc-change {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        line-height: 1;
+      }
+      .cc-regime-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--clr-ranging);
+        line-height: 1.2;
+        letter-spacing: 0.04em;
+      }
+      .cc-decision-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--clr-neutral);
+        line-height: 1.2;
+      }
+      .cc-rex-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        line-height: 1.2;
+      }
+      .cc-countdown-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--clr-buy);
+        line-height: 1.2;
+      }
+      .cc-pnl-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        line-height: 1.2;
+      }
+      .cc-sub {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        color: var(--text-muted);
+        line-height: 1;
+      }
+      .cc-live-badge {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--clr-buy);
+        background: rgba(16,185,129,0.08);
+        border: 1px solid rgba(16,185,129,0.2);
+        padding: 3px 8px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        animation: pulse-live 2s ease-in-out infinite;
+      }
+      @keyframes pulse-live {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+      .cc-price { padding-left: 0; }
+
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
         display: grid;
@@ -837,12 +944,44 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════
-         PAGE HEADER STRIP
+         COMMAND CENTER (FLO-145 Proposal 1+7)
     ════════════════════════════════════════════════ -->
-    <div class="page-header-strip">
-      <span class="section-pixel-header text-emerald-400">TRADE ROOM — TRADING OFFICE</span>
-      <span class="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-600 px-2 py-0.5 bg-gray-900/60 rounded border border-gray-700/40">LIVE FEED</span>
-      <span id="data-badge" class="ml-auto text-[10px] font-bold font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/20 animate-pulse">LIVE DATA</span>
+    <div class="command-center">
+      <!-- Price block (dominant) -->
+      <div class="cc-block cc-price">
+        <span class="cc-label">XAU/USD</span>
+        <span id="cc-price" class="cc-price-val">—</span>
+        <span id="cc-change" class="cc-change">—</span>
+      </div>
+      <!-- Regime -->
+      <div class="cc-block cc-divider">
+        <span class="cc-label">REGIME</span>
+        <span id="cc-regime" class="cc-regime-val">—</span>
+        <span id="cc-regime-detail" class="cc-sub">—</span>
+      </div>
+      <!-- Floki -->
+      <div class="cc-block cc-divider">
+        <span class="cc-label">FLOKI</span>
+        <span id="cc-floki-decision" class="cc-decision-val">WAIT</span>
+        <span id="cc-floki-conf" class="cc-sub">—%</span>
+      </div>
+      <!-- Rex -->
+      <div class="cc-block cc-divider">
+        <span class="cc-label">REX</span>
+        <span id="cc-rex-verdict" class="cc-rex-val">—</span>
+      </div>
+      <!-- Next check -->
+      <div class="cc-block cc-divider">
+        <span class="cc-label">NEXT</span>
+        <span id="cc-countdown" class="cc-countdown-val">—</span>
+      </div>
+      <!-- P&L -->
+      <div class="cc-block cc-divider">
+        <span class="cc-label">P&L</span>
+        <span id="cc-pnl" class="cc-pnl-val">—</span>
+      </div>
+      <!-- Live badge -->
+      <span id="data-badge" class="cc-live-badge">LIVE</span>
     </div>
 
     <!-- ═══════════════════════════════════════════════
@@ -3548,6 +3687,76 @@
                 }
               } catch(e) {}
 
+              // FLO-145 Proposal 1: Command Center population
+              try {
+                // Price
+                var ccPrice = document.getElementById('cc-price');
+                var ccChange = document.getElementById('cc-change');
+                var sp = (state.last_analysis && state.last_analysis.current_price != null)
+                  ? state.last_analysis.current_price : state.last_known_price;
+                if (ccPrice && sp != null) ccPrice.textContent = Number(sp).toFixed(2);
+                if (ccChange && state.price_daily_change_pct != null) {
+                  var pct = Number(state.price_daily_change_pct);
+                  ccChange.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+                  ccChange.style.color = pct >= 0 ? 'var(--clr-buy)' : 'var(--clr-sell)';
+                }
+
+                // Regime
+                var ccRegime = document.getElementById('cc-regime');
+                var ccRegDet = document.getElementById('cc-regime-detail');
+                var mr2 = state.market_regime;
+                if (ccRegime && mr2 && mr2.regime) {
+                  ccRegime.textContent = mr2.regime.replace(/_/g, ' ');
+                  var rvm2 = {'VOLATILE':'--clr-volatile','TRENDING_BULLISH':'--clr-trending-bull','TRENDING_BEARISH':'--clr-trending-bear','BREAKOUT_IMMINENT':'--clr-breakout','RANGING':'--clr-ranging','QUIET':'--clr-quiet','TRANSITIONAL':'--clr-transitional'};
+                  var cv = rvm2[mr2.regime.toUpperCase()] || '--clr-ranging';
+                  ccRegime.style.color = getComputedStyle(document.documentElement).getPropertyValue(cv).trim();
+                  if (ccRegDet) ccRegDet.textContent = (mr2.confidence || '') + ' · ' + (mr2.duration || '');
+                }
+
+                // Floki decision + confidence
+                var ccFloki = document.getElementById('cc-floki-decision');
+                var ccFConf = document.getElementById('cc-floki-conf');
+                var pa4 = (state.last_analysis || {}).proactive_analysis;
+                if (ccFloki && pa4) {
+                  var d = pa4.decision || 'WAIT';
+                  ccFloki.textContent = d;
+                  ccFloki.style.color = d.indexOf('BUY') >= 0 ? 'var(--clr-buy)' : d.indexOf('SELL') >= 0 ? 'var(--clr-sell)' : 'var(--clr-neutral)';
+                  if (ccFConf) ccFConf.textContent = (pa4.confidence || '—') + '%';
+                }
+
+                // Rex
+                var ccRex = document.getElementById('cc-rex-verdict');
+                if (ccRex) {
+                  // Read from latest message or thesis
+                  var lastRex = null;
+                  for (var ri = 0; ri < (messages || []).length; ri++) {
+                    var rm = messages[ri];
+                    if ((rm.author || '').toUpperCase() === 'REX' && (rm.type || '').toUpperCase() === 'DEBATE') {
+                      lastRex = rm.metadata ? (rm.metadata.rex_agrees !== undefined ? rm.metadata.rex_agrees : rm.metadata.agree) : null;
+                      break;
+                    }
+                  }
+                  if (lastRex === true) { ccRex.textContent = 'AGREE'; ccRex.style.color = 'var(--clr-buy)'; }
+                  else if (lastRex === false) { ccRex.textContent = 'DISAGREE'; ccRex.style.color = 'var(--clr-sell)'; }
+                  else { ccRex.textContent = '—'; ccRex.style.color = 'var(--text-muted)'; }
+                }
+
+                // P&L
+                var ccPnl = document.getElementById('cc-pnl');
+                if (ccPnl && state.daily_stats) {
+                  var pnlv = Number(state.daily_stats.pnl || 0);
+                  ccPnl.textContent = (pnlv >= 0 ? '+$' : '-$') + Math.abs(pnlv).toFixed(2);
+                  ccPnl.style.color = pnlv >= 0 ? 'var(--clr-buy)' : 'var(--clr-sell)';
+                }
+
+                // Countdown (shared with ticker)
+                var nca2 = state.floki_next_check_at;
+                if (nca2 && nca2 !== window._flokiCountdownRaw) {
+                  window._flokiCountdownRaw = nca2;
+                  window._flokiCountdownTarget = new Date(nca2.endsWith('Z') ? nca2 : nca2 + 'Z').getTime();
+                }
+              } catch(e) {}
+
               // FLO-146 Bug 3: Watch conditions from state
               try {
                 var wcEl = document.getElementById('ctx-watch-conditions');
@@ -3720,30 +3929,36 @@
         setInterval(loadOnce, POLL_MS);
 
         // FLO-143: 1-second live countdown ticker
+        // 1-second countdown ticker — updates both right-panel and command center
         setInterval(function() {
           try {
-            var cdEl = document.getElementById('proactive-countdown');
-            var cdLabel = document.getElementById('proactive-countdown-label');
-            if (!cdEl) return;
             var t = window._flokiCountdownTarget;
-            if (!t) { cdEl.textContent = '—'; cdEl.style.color = '#6b7280'; return; }
-            var diff = t - Date.now();
-            if (diff > 0) {
-              var sec = Math.floor(diff / 1000);
-              var m = Math.floor(sec / 60);
-              var s = sec % 60;
-              cdEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-              cdEl.style.color = '#34d399';
-              if (cdLabel) cdLabel.textContent = 'SCHEDULED';
-            } else if (diff > -120000) {
-              cdEl.textContent = 'NOW';
-              cdEl.style.color = '#fbbf24';
-              if (cdLabel) cdLabel.textContent = 'CHECKING...';
-            } else {
-              var overMin = Math.floor(Math.abs(diff) / 60000);
-              cdEl.textContent = '+' + overMin + 'm';
-              cdEl.style.color = '#ef4444';
-              if (cdLabel) cdLabel.textContent = 'OVERDUE';
+            var targets = [
+              {el: document.getElementById('proactive-countdown'), label: document.getElementById('proactive-countdown-label'), big: true},
+              {el: document.getElementById('cc-countdown'), label: null, big: false},
+            ];
+            for (var ti = 0; ti < targets.length; ti++) {
+              var tgt = targets[ti];
+              if (!tgt.el) continue;
+              if (!t) { tgt.el.textContent = '—'; tgt.el.style.color = '#6b7280'; continue; }
+              var diff = t - Date.now();
+              if (diff > 0) {
+                var sec = Math.floor(diff / 1000);
+                var m = Math.floor(sec / 60);
+                var s = sec % 60;
+                tgt.el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+                tgt.el.style.color = 'var(--clr-buy)';
+                if (tgt.label) tgt.label.textContent = 'SCHEDULED';
+              } else if (diff > -120000) {
+                tgt.el.textContent = 'NOW';
+                tgt.el.style.color = '#fbbf24';
+                if (tgt.label) tgt.label.textContent = 'CHECKING...';
+              } else {
+                var overMin = Math.floor(Math.abs(diff) / 60000);
+                tgt.el.textContent = '+' + overMin + 'm';
+                tgt.el.style.color = 'var(--clr-sell)';
+                if (tgt.label) tgt.label.textContent = 'OVERDUE';
+              }
             }
           } catch(e) {}
         }, 1000);
