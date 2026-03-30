@@ -4379,7 +4379,42 @@ class TradingBot:
             "original_decision": original_decision,
             "hold_reason": hold_reason,
         }
-        
+
+        # FLO-139: Regime detection — runs every Brain cycle, result used by proactive agent
+        try:
+            from regime_detector import detect_market_regime
+            atr_value = momentum_data.get("atr", {}).get("atr_value", 0)
+            atr_history = getattr(self, '_atr_history', [])
+            if atr_value:
+                atr_history.append(atr_value)
+                atr_history = atr_history[-120:]
+                self._atr_history = atr_history
+
+            luna_brief_data = None
+            try:
+                from luna_analyst import load_luna_brief
+                luna_brief_data = load_luna_brief()
+            except Exception:
+                pass
+
+            regime_result = detect_market_regime(
+                tech_data=tech_data,
+                momentum_data=momentum_data,
+                vol_status=vol_status,
+                brain_result=brain_result,
+                current_price=current_price,
+                atr_history=atr_history,
+                luna_brief=luna_brief_data,
+            )
+            self._last_regime_context = regime_result
+            log.info(
+                f"REGIME | {regime_result['regime']} | {regime_result['confidence']} | "
+                f"{regime_result['duration_display']} | {regime_result['stability']} | "
+                f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')}"
+            )
+        except Exception as e:
+            log.warning(f"REGIME | detection error: {e}")
+
         return (
             brain_result.decision,
             brain_result.final_score,
