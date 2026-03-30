@@ -715,13 +715,13 @@ class AgentTools:
                 rex = validate_with_rex(payload, timeout_seconds=60, agent_tools=self)
             except Exception as e:
                 self._log_tool("debate_with_rex", start, f"error={e}")
-                return {"success": False, "reason": "rex_unavailable"}
+                return {"success": False, "agree": False, "reason": "rex_unavailable"}
 
             if not isinstance(rex, dict) or not rex.get("success"):
                 _rex_reason = rex.get("reason") if isinstance(rex, dict) else "rex_failed"
                 log.warning(f"REX | debate_with_rex failed: {_rex_reason}")
                 self._log_tool("debate_with_rex", start, f"failed={_rex_reason}")
-                return {"success": False, "reason": _rex_reason}
+                return {"success": False, "agree": False, "reason": _rex_reason}
 
             agree = rex.get("agree")
             reasoning = str(rex.get("reasoning") or "").strip()

@@ -299,14 +299,48 @@ def _get_macro_data() -> Dict[str, Any]:
     if not gold.get("current"):
         gold = _get_gold_data()  # fallback to Yahoo if MT5 unavailable
 
-    # Yahoo/FRED data (no MT5 equivalent)
-    yields = get_yields_data()
-    gld = get_gld_data()
-    real_yields = get_real_yields()
-    fed_funds = get_fed_funds_rate()
-    breakeven = get_breakeven_inflation()
-    cpi = get_cpi_data()
-    gld_flows = get_gld_weekly_flows()
+    # Yahoo/FRED data (no MT5 equivalent) — P1-7: individually wrapped
+    yields = None
+    try:
+        yields = get_yields_data()
+    except Exception as e:
+        log.warning(f"LUNA: get_yields_data failed — {e}")
+
+    gld = None
+    try:
+        gld = get_gld_data()
+    except Exception as e:
+        log.warning(f"LUNA: get_gld_data failed — {e}")
+
+    real_yields = None
+    try:
+        real_yields = get_real_yields()
+    except Exception as e:
+        log.warning(f"LUNA: get_real_yields failed — {e}")
+
+    fed_funds = None
+    try:
+        fed_funds = get_fed_funds_rate()
+    except Exception as e:
+        log.warning(f"LUNA: get_fed_funds_rate failed — {e}")
+
+    breakeven = None
+    try:
+        breakeven = get_breakeven_inflation()
+    except Exception as e:
+        log.warning(f"LUNA: get_breakeven_inflation failed — {e}")
+
+    cpi = None
+    try:
+        cpi = get_cpi_data()
+    except Exception as e:
+        log.warning(f"LUNA: get_cpi_data failed — {e}")
+
+    gld_flows = None
+    try:
+        gld_flows = get_gld_weekly_flows()
+    except Exception as e:
+        log.warning(f"LUNA: get_gld_weekly_flows failed — {e}")
 
     # FLO-70: Sage performance insights
     sage_insights = None
@@ -728,10 +762,11 @@ def _save_macro_snapshot(macro: Dict[str, Any]) -> None:
         sorted_dates = sorted(history.keys(), reverse=True)[:MACRO_HISTORY_DAYS]
         pruned = {d: history[d] for d in sorted_dates}
 
-        MACRO_HISTORY_FILE.write_text(
-            json.dumps(pruned, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
+        macro_path = str(MACRO_HISTORY_FILE)
+        tmp_path = macro_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(pruned, f, indent=2, sort_keys=True)
+        os.replace(tmp_path, macro_path)
     except Exception as e:
         log.warning(f"LUNA: error saving macro history — {e}")
 
@@ -982,6 +1017,9 @@ def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
             log.error(f"LUNA: MiMo returned null content after {elapsed_ms}ms")
             return None
         parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            log.warning("LUNA: MiMo returned non-dict JSON")
+            return None
 
         # Track cost
         usage = response.usage
@@ -1015,12 +1053,40 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
     if not data_snapshot or not isinstance(data_snapshot, dict):
         data_snapshot = _build_data_snapshot(macro)
 
+    # P1-2: Validate environment
+    environment = str(parsed.get("environment", "SAFE")).upper()
+    if environment not in ("SAFE", "CAUTION", "DANGER"):
+        log.warning(f"LUNA: invalid environment '{environment}' from MiMo — defaulting to SAFE")
+        environment = "SAFE"
+
+    # P1-2: Validate risk_level (int 1-10, default 3)
+    try:
+        risk_level = int(parsed.get("risk_level", 3))
+        risk_level = max(1, min(10, risk_level))
+    except (ValueError, TypeError):
+        log.warning(f"LUNA: invalid risk_level '{parsed.get('risk_level')}' — defaulting to 3")
+        risk_level = 3
+
+    # P1-2: Validate directional_bias
+    directional_bias = str(parsed.get("directional_bias", "NEUTRAL")).upper()
+    if directional_bias not in ("BULLISH", "BEARISH", "NEUTRAL"):
+        log.warning(f"LUNA: invalid directional_bias '{directional_bias}' — defaulting to NEUTRAL")
+        directional_bias = "NEUTRAL"
+
+    # P1-2: Validate bias_confidence (int 1-10, default 3)
+    try:
+        bias_confidence = int(parsed.get("bias_confidence", 3))
+        bias_confidence = max(1, min(10, bias_confidence))
+    except (ValueError, TypeError):
+        log.warning(f"LUNA: invalid bias_confidence '{parsed.get('bias_confidence')}' — defaulting to 3")
+        bias_confidence = 3
+
     return LunaAnalysisResult(
         timestamp=datetime.now(timezone.utc).isoformat(),
-        environment=parsed.get("environment", "SAFE"),
-        risk_level=int(parsed.get("risk_level", 3)),
-        directional_bias=parsed.get("directional_bias", "NEUTRAL"),
-        bias_confidence=int(parsed.get("bias_confidence", 3)),
+        environment=environment,
+        risk_level=risk_level,
+        directional_bias=directional_bias,
+        bias_confidence=bias_confidence,
         key_factors=parsed.get("key_factors", []),
         patterns_detected=parsed.get("patterns_detected", []),
         pattern_details=parsed.get("pattern_details", {}),
@@ -1331,24 +1397,40 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
 # ---------------------------------------------------------------------------
 
 def _save_brief(result: LunaAnalysisResult) -> None:
-    """Save Luna analysis result to data/luna_brief.json."""
+    """Save Luna analysis result to data/luna_brief.json (atomic write)."""
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        BRIEF_FILE.write_text(
-            json.dumps(asdict(result), indent=2, default=str),
-            encoding="utf-8",
-        )
+        brief_path = str(BRIEF_FILE)
+        tmp_path = brief_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(asdict(result), f, indent=2, ensure_ascii=False, default=str)
+        os.replace(tmp_path, brief_path)
     except Exception as e:
         log.warning(f"LUNA: error saving brief — {e}")
 
 
 def load_luna_brief() -> Optional[Dict[str, Any]]:
-    """Load the latest Luna brief from disk. Returns None if unavailable."""
+    """Load the latest Luna brief from disk. Returns None if unavailable or stale (>30 min)."""
     try:
         if not BRIEF_FILE.exists():
             return None
         data = json.loads(BRIEF_FILE.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            return None
+        # P0-1: TTL check — brief older than 30 min is stale
+        ts = data.get("timestamp")
+        if ts:
+            try:
+                brief_time = datetime.fromisoformat(ts)
+                if brief_time.tzinfo is None:
+                    brief_time = brief_time.replace(tzinfo=timezone.utc)
+                age = datetime.now(timezone.utc) - brief_time
+                if age.total_seconds() > 1800:
+                    log.warning("LUNA | Brief stale (>30 min) — returning None")
+                    return None
+            except (ValueError, TypeError):
+                pass  # unparseable timestamp — let it through
+        return data
     except Exception:
         return None
 

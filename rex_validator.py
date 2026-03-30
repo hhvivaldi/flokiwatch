@@ -142,15 +142,20 @@ def _parse_rex_response(text: str) -> RexResult:
     if not raw:
         return RexResult(agree=False, reasoning="", concerns=[], suggested_adjustment="", raw=text)
 
+    # Primary: check end of string (standard format)
     m = re.search(r"\b(AGREE|DISAGREE)\b\s*[\.!\)]*\s*$", raw, flags=re.IGNORECASE)
     if m:
         agree = m.group(1).strip().upper() == "AGREE"
         body = raw[: m.start()].strip()
     else:
-        # Safe default: if Rex didn't clearly state AGREE/DISAGREE, treat as DISAGREE
-        # This prevents truncated or malformed responses from silently approving trades
-        log.warning("REX | No clear AGREE/DISAGREE found in response — defaulting to DISAGREE")
-        agree = False
+        # Fallback: find last occurrence anywhere in text
+        all_matches = re.findall(r"\b(AGREE|DISAGREE)\b", raw, flags=re.IGNORECASE)
+        if all_matches:
+            agree = all_matches[-1].upper() == "AGREE"
+        else:
+            # Safe default: if Rex didn't clearly state AGREE/DISAGREE, treat as DISAGREE
+            log.warning("REX | No clear AGREE/DISAGREE found in response — defaulting to DISAGREE")
+            agree = False
         body = raw
 
     concerns = []
@@ -356,7 +361,7 @@ def validate_with_rex(
 
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
-            return {"success": False, "reason": "OPENAI_API_KEY not set"}
+            return {"success": False, "agree": False, "reason": "OPENAI_API_KEY not set"}
 
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
@@ -374,7 +379,7 @@ def validate_with_rex(
 
     except Exception as e:
         log.warning(f"REX | unexpected error: {e}")
-        return {"success": False, "reason": "unexpected_error"}
+        return {"success": False, "agree": False, "reason": "unexpected_error"}
 
 
 def _rex_tool_loop(
@@ -408,7 +413,7 @@ def _rex_tool_loop(
             kwargs = {
                 "model": model,
                 "messages": messages,
-                "max_completion_tokens": 2000,
+                "max_completion_tokens": 3000,
                 "timeout": PER_CALL_TIMEOUT,
             }
             if use_tools:
@@ -440,7 +445,8 @@ def _rex_tool_loop(
                 fname = tc.function.name
                 try:
                     fargs = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                except Exception:
+                except Exception as e:
+                    log.warning(f"REX | tool arg parse failed | tool={fname} | error={e}")
                     fargs = {}
 
                 result_str = _execute_rex_tool(agent_tools, fname, fargs)
@@ -495,7 +501,7 @@ def _validate_with_rex_legacy(
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
-            max_completion_tokens=2000,
+            max_completion_tokens=3000,
             timeout=min(timeout_seconds, 20),
         )
 
@@ -506,7 +512,7 @@ def _validate_with_rex_legacy(
             content = None
 
         if not content:
-            return {"success": False, "reason": "empty_response"}
+            return {"success": False, "agree": False, "reason": "empty_response"}
 
         parsed = _parse_rex_response(content)
         latency_ms = int((time.time() - start) * 1000)
@@ -523,4 +529,4 @@ def _validate_with_rex_legacy(
         }
     except Exception as e:
         log.warning(f"REX | legacy fallback failed: {e}")
-        return {"success": False, "reason": f"legacy_failed: {e}"}
+        return {"success": False, "agree": False, "reason": f"legacy_failed: {e}"}
