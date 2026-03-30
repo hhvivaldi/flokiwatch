@@ -4,6 +4,7 @@ Complements state_writer (JSON for dashboard) with history for charts and statis
 Never throws exceptions outward — same pattern as state_writer.
 """
 
+import json
 import os
 import sqlite3
 from datetime import datetime

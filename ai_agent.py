@@ -1108,7 +1108,7 @@ class AIAgent:
 
             entry_conditions = parsed.get("entry_conditions")
             if entry_conditions is not None and not isinstance(entry_conditions, dict):
-                logger.warning("Invalid entry_conditions type (expected dict) — ignoring")
+                logger.debug("Invalid entry_conditions type (expected dict) — ignoring")
                 entry_conditions = None
 
             session_notes = None
