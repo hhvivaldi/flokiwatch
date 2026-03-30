@@ -3186,7 +3186,7 @@
             if (elM) elM.textContent = String((messages || []).length);
             if (elCalls) elCalls.textContent = String(Math.max(agreements + conflicts, 0));
 
-            // Investigation chain from most recent FLOKI decision message
+            // FLO-146 Bug 7: Investigation — tools from feed, fallback to proactive reasoning
             try {
               var invEl = document.getElementById('ctx-investigation');
               if (invEl) {
@@ -3203,7 +3203,19 @@
                   }
                   break;
                 }
-                invEl.innerHTML = renderToolPills(Array.isArray(chain) ? chain : []);
+                if (chain && chain.length) {
+                  invEl.innerHTML = renderToolPills(chain);
+                } else {
+                  // Fallback: show proactive reasoning summary
+                  var pa3 = (state && state.last_analysis) ? state.last_analysis.proactive_analysis : null;
+                  if (pa3 && pa3.reasoning) {
+                    var summary = pa3.reasoning.substring(0, 150);
+                    if (pa3.reasoning.length > 150) summary += '...';
+                    invEl.innerHTML = '<span style="font-size:9px;color:var(--text-secondary);line-height:1.4">' + summary + '</span>';
+                  } else {
+                    invEl.textContent = '—';
+                  }
+                }
               }
             } catch(e) {}
 

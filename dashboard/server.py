@@ -370,6 +370,15 @@ def _build_trade_room_messages(limit: int = 50) -> List[Dict[str, Any]]:
                 if not ts or not content:
                     continue
 
+                # FLO-146: Filter out Rex intermediate tool-call text
+                if author == "REX" and (
+                    "Calling functions." in content
+                    or '{"name":"functions.' in content
+                    or "I'll call function" in content
+                    or "I'll call the function" in content
+                ):
+                    continue
+
                 messages.append(
                     {
                         "id": f"e:{ev_id}",
