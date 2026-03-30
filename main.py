@@ -5466,8 +5466,9 @@ class TradingBot:
 
                     # FLO-137: Post-trade reflexion (GPT-5.4, daemon thread)
                     try:
-                        from trade_reflexion import run_trade_reflexion_async
+                        from trade_reflexion import run_trade_reflexion_async, schedule_delayed_hindsight
                         run_trade_reflexion_async(action)
+                        schedule_delayed_hindsight(action)
                     except Exception:
                         pass
                 

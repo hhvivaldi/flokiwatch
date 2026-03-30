@@ -361,3 +361,196 @@ def run_trade_reflexion_async(action: Dict) -> None:
     """Launch reflexion in a daemon thread. Never blocks the main loop."""
     t = threading.Thread(target=run_trade_reflexion, args=(action,), daemon=True)
     t.start()
+
+
+# -------------------------------------------------------------------------
+# FLO-147: Delayed hindsight analysis (runs 1-2h after trade close)
+# -------------------------------------------------------------------------
+
+HINDSIGHT_DELAY_SECONDS = 3600  # 1 hour
+HINDSIGHT_SYSTEM_PROMPT = """You are reviewing a completed trade WITH hindsight — you can see what price did AFTER the trade closed.
+
+Given: the original trade details, the original reflexion lesson, and the post-close price action — revise the lesson.
+
+Return JSON only:
+{
+  "original_lesson_correct": true/false,
+  "revised_lesson": "1-2 sentences — the corrected takeaway given what actually happened",
+  "would_original_sl_have_survived": true/false,
+  "would_tp_have_been_hit": true/false,
+  "post_close_move_pips": number,
+  "hindsight_tags": ["tag1", "tag2"]
+}
+
+hindsight_tags: lowercase snake_case. Examples: sl_tightening_saved_money, sl_tightening_cost_money, thesis_correct_bad_execution, thesis_wrong, patience_would_have_paid."""
+
+
+def _get_post_close_prices(close_time_str: str, direction: str, entry_price: float) -> Optional[Dict]:
+    """Fetch price at close+1h from MT5."""
+    try:
+        import MetaTrader5 as mt5
+        from datetime import timedelta
+
+        if not mt5.initialize():
+            return None
+
+        close_dt = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+        if close_dt.tzinfo is None:
+            close_dt = close_dt.replace(tzinfo=timezone.utc)
+
+        target_1h = close_dt + timedelta(hours=1)
+        bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, target_1h)
+        mt5.shutdown()
+
+        if bars is None or len(bars) == 0:
+            return None
+
+        import numpy as np
+        highs = [float(b[2]) for b in bars]  # high
+        lows = [float(b[3]) for b in bars]   # low
+        closes = [float(b[4]) for b in bars]  # close
+
+        last_close = closes[-1]
+        post_high = max(highs)
+        post_low = min(lows)
+
+        if direction == "BUY":
+            mfe_post = (post_high - entry_price) / 0.1
+            mae_post = (entry_price - post_low) / 0.1
+            move_pips = (last_close - entry_price) / 0.1
+        else:
+            mfe_post = (entry_price - post_low) / 0.1
+            mae_post = (post_high - entry_price) / 0.1
+            move_pips = (entry_price - last_close) / 0.1
+
+        return {
+            "price_at_1h": last_close,
+            "post_high": post_high,
+            "post_low": post_low,
+            "move_pips": round(move_pips),
+            "mfe_post": round(mfe_post),
+            "mae_post": round(mae_post),
+            "bars_count": len(bars),
+        }
+    except Exception as e:
+        log.debug(f"REFLEXION | failed to get post-close prices: {e}")
+        return None
+
+
+def run_delayed_hindsight(ticket: int, action: Dict) -> None:
+    """Run hindsight analysis for a trade. Called after HINDSIGHT_DELAY_SECONDS."""
+    try:
+        log.info(f"REFLEXION | hindsight starting for ticket={ticket}")
+
+        from db_writer import get_recent_reflexions, update_reflexion_hindsight
+
+        # Get original reflexion
+        refs = get_recent_reflexions(limit=50)
+        original = None
+        for r in refs:
+            if r.get("ticket") == ticket:
+                original = r
+                break
+
+        if not original:
+            log.debug(f"REFLEXION | hindsight: no reflexion found for ticket={ticket}")
+            return
+
+        # Get post-close price data
+        close_time = action.get("close_time") or action.get("open_time", "")
+        direction = action.get("direction", "BUY")
+        entry_price = float(action.get("open_price", 0))
+        exit_price = float(action.get("close_price", 0))
+        original_sl = float(action.get("original_sl", 0) or 0)
+
+        post_prices = _get_post_close_prices(close_time, direction, entry_price)
+        if not post_prices:
+            log.debug(f"REFLEXION | hindsight: no post-close data for ticket={ticket}")
+            return
+
+        # Check if original SL would have survived
+        sl_from_conditions = None
+        try:
+            conditions = _load_trade_conditions(ticket)
+            # Original SL is in the trade record, not conditions
+        except Exception:
+            pass
+
+        would_sl_survive = True
+        would_tp_hit = False
+        tp = float(action.get("tp", 0) or 0)
+
+        if direction == "BUY":
+            if original_sl > 0 and post_prices["post_low"] <= original_sl:
+                would_sl_survive = False
+            if tp > 0 and post_prices["post_high"] >= tp:
+                would_tp_hit = True
+        else:
+            if original_sl > 0 and post_prices["post_high"] >= original_sl:
+                would_sl_survive = False
+            if tp > 0 and post_prices["post_low"] <= tp:
+                would_tp_hit = True
+
+        # Build hindsight prompt
+        user_prompt = (
+            f"ORIGINAL TRADE: {direction} entry={entry_price} exit={exit_price} P&L=${action.get('profit', 0)}\n"
+            f"Original SL: {original_sl} | TP: {tp}\n"
+            f"Original lesson: {original.get('lesson', '?')}\n"
+            f"Original tags: {original.get('pattern_tags', [])}\n\n"
+            f"POST-CLOSE (1 hour later):\n"
+            f"Price at +1h: {post_prices['price_at_1h']}\n"
+            f"Post-close high: {post_prices['post_high']} | low: {post_prices['post_low']}\n"
+            f"Move since entry: {post_prices['move_pips']} pips\n"
+            f"Would original SL have been hit: {'YES' if not would_sl_survive else 'NO'}\n"
+            f"Would TP have been hit: {'YES' if would_tp_hit else 'NO'}\n"
+        )
+
+        result = _call_reflexion_llm(HINDSIGHT_SYSTEM_PROMPT, user_prompt)
+        parsed = result["parsed"]
+
+        revised_lesson = parsed.get("revised_lesson", "")
+        hindsight_data = {
+            "post_prices": post_prices,
+            "would_original_sl_survive": would_sl_survive,
+            "would_tp_hit": would_tp_hit,
+            "original_lesson_correct": parsed.get("original_lesson_correct"),
+            "hindsight_tags": parsed.get("hindsight_tags", []),
+            "revised_lesson": revised_lesson,
+            "model": result["model"],
+        }
+
+        update_reflexion_hindsight(ticket, json.dumps(hindsight_data), revised_lesson)
+
+        # Update ChromaDB with enriched data
+        try:
+            enriched_text = f"{revised_lesson} {' '.join(parsed.get('hindsight_tags', []))} {original.get('thesis_summary', '')}"
+            _embed_reflexion(ticket, enriched_text, {
+                "ticket": ticket,
+                "direction": direction,
+                "pnl": action.get("profit", 0),
+                "lesson": revised_lesson,
+                "pattern_tags": json.dumps(parsed.get("hindsight_tags", [])),
+            })
+        except Exception as e:
+            log.debug(f"REFLEXION | hindsight ChromaDB update failed: {e}")
+
+        log.info(f"REFLEXION | hindsight complete for ticket={ticket} | revised={revised_lesson[:80]}")
+
+    except Exception as e:
+        log.warning(f"REFLEXION | hindsight failed for ticket={ticket}: {e}")
+
+
+def schedule_delayed_hindsight(action: Dict) -> None:
+    """Schedule hindsight analysis to run after HINDSIGHT_DELAY_SECONDS."""
+    ticket = action.get("ticket")
+    if not ticket:
+        return
+
+    def _delayed():
+        import time as _time
+        _time.sleep(HINDSIGHT_DELAY_SECONDS)
+        run_delayed_hindsight(ticket, action)
+
+    t = threading.Thread(target=_delayed, daemon=True)
+    t.start()
+    log.info(f"REFLEXION | hindsight scheduled for ticket={ticket} in {HINDSIGHT_DELAY_SECONDS}s")

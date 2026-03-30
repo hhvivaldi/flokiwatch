@@ -349,6 +349,18 @@ def init_db() -> None:
             )
         """)
 
+        # FLO-147: Migration — add hindsight columns to trade_reflexions
+        for col_name, col_type in [
+            ("hindsight_json", "TEXT"),
+            ("revised_lesson", "TEXT"),
+            ("hindsight_timestamp", "TEXT"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE trade_reflexions ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
         conn.commit()
         conn.close()
         db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
@@ -1224,6 +1236,27 @@ def get_recent_reflexions(limit: int = 5) -> List[Dict[str, Any]]:
     except Exception as e:
         log.debug(f"db_writer: failed to get reflexions: {e}")
         return []
+
+
+def update_reflexion_hindsight(ticket: int, hindsight_json: str, revised_lesson: str) -> bool:
+    """FLO-147: Update a reflexion with delayed hindsight analysis."""
+    try:
+        conn = _get_connection()
+        try:
+            conn.execute(
+                """UPDATE trade_reflexions
+                   SET hindsight_json = ?, revised_lesson = ?, hindsight_timestamp = ?
+                   WHERE ticket = ?""",
+                (hindsight_json, revised_lesson, datetime.utcnow().isoformat(), ticket),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        log.info(f"REFLEXION | hindsight updated for ticket={ticket}")
+        return True
+    except Exception as e:
+        log.warning(f"db_writer: failed to update reflexion hindsight: {e}")
+        return False
 
 
 def search_reflexions(keywords: str, limit: int = 5) -> List[Dict[str, Any]]:
