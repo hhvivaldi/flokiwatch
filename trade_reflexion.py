@@ -108,7 +108,7 @@ def _call_reflexion_llm(system: str, user: str) -> Dict:
             {"role": "user", "content": user},
         ],
         temperature=0.3,
-        max_tokens=500,
+        max_completion_tokens=500,
         response_format={"type": "json_object"},
         timeout=30,
     )
