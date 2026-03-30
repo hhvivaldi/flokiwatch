@@ -173,10 +173,10 @@ Analisa o ambiente macro a cada 15 min (market open) ou 30 min (daily pause). **
 - `data_snapshot`: valores atuais de todos os indicadores macro
 
 **Integração com Floki:**
-- Floki chama `get_luna_brief` no início de cada ciclo
-- Quando Luna brief é fresh (< 30 min): `get_macro` e `get_headlines` são **removidos** da tool list do Floki (FLO-59)
-- Quando Luna brief é stale (> 30 min): fallback — tools macro restaurados automaticamente
-- `get_echo_alerts` mantém-se **sempre** (para CRITICAL emergencies via Simba wake)
+- Floki tem acesso a TODOS os tools macro: `get_macro`, `get_headlines`, `get_luna_brief`, `get_echo_alerts`
+- Floki decide autonomamente quais usar (FLO-105 removeu o tool hiding do FLO-59)
+- Na prática, Floki usa `get_macro` + `get_headlines` directamente em vez de `get_luna_brief`
+- `load_luna_brief()` tem TTL de 30 min — retorna None se brief estiver stale
 
 **Fallback:** Se MiMo API falha, Luna usa análise determinística local (regras if/else).
 
