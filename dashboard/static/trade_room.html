@@ -628,6 +628,44 @@
       }
       .cc-price { padding-left: 0; }
 
+      /* ── FLO-145 Proposal 3: Collapsible right panel tiers ── */
+      .ctx-tier {
+        border-top: 1px solid rgba(255,255,255,0.04);
+      }
+      .ctx-tier-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 6px 0;
+        user-select: none;
+      }
+      .ctx-tier-header:hover .ctx-tier-label { color: var(--text-secondary); }
+      .ctx-tier-label {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        transition: color 0.2s;
+      }
+      .ctx-tier-arrow {
+        font-size: 10px;
+        color: var(--text-dim);
+        transition: transform 0.2s;
+      }
+      .ctx-tier.collapsed .ctx-tier-arrow { transform: rotate(-90deg); }
+      .ctx-tier-body {
+        overflow: hidden;
+        max-height: 600px;
+        transition: max-height 0.3s ease, opacity 0.2s ease;
+        opacity: 1;
+      }
+      .ctx-tier.collapsed .ctx-tier-body {
+        max-height: 0;
+        opacity: 0;
+      }
+
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
         display: grid;
@@ -1295,59 +1333,9 @@
           <div id="ctx-change" class="text-[10px] font-mono mt-1 opacity-60">—</div>
         </div>
 
-        <!-- Market indicators -->
-        <div class="ctx-block">
-          <div class="ctx-label">MARKET INDICATORS</div>
-          <div class="ctx-row"><span class="ctx-key">RSI</span><span id="ctx-rsi" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">MACD</span><span id="ctx-macd" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">ATR</span><span id="ctx-atr" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">ADX</span><span id="ctx-adx" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">EMA50</span><span id="ctx-ema50" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">Bollinger</span><span id="ctx-bb" class="ctx-val">—</span></div>
-        </div>
+        <!-- ═══ TIER 1: Always visible ═══ -->
 
-        <!-- FLO-122: 5-section macro panel (same as dashboard) -->
-        <div id="tr-macro-container"></div>
-
-        <!-- Session win rate -->
-        <div class="ctx-block">
-          <div class="ctx-label">SESSION WR</div>
-          <div class="ctx-row"><span id="ctx-session-wr" class="ctx-val" style="font-size:10px">—</span></div>
-        </div>
-
-        <!-- Correlations block -->
-        <div class="ctx-block">
-          <div class="ctx-label">CORRELATIONS</div>
-          <div class="ctx-row"><span class="ctx-key">Gold-DXY</span><span id="ctx-corr-dxy" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">Gold-Yields</span><span id="ctx-corr-yields" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">Gold-S&P</span><span id="ctx-corr-sp500" class="ctx-val">—</span></div>
-        </div>
-
-        <!-- Floki last investigation -->
-        <div class="ctx-block">
-          <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
-          <div id="ctx-investigation">—</div>
-        </div>
-
-        <!-- Top patterns -->
-        <div class="ctx-block">
-          <div class="ctx-label">TOP PATTERNS</div>
-          <div id="ctx-top-patterns">—</div>
-        </div>
-
-        <!-- Watch conditions -->
-        <div class="ctx-block">
-          <div class="ctx-label">WATCH CONDITIONS</div>
-          <div id="ctx-watch-conditions">No active watch conditions</div>
-        </div>
-
-        <!-- FLO-146 Bug 4: Calendar upcoming events -->
-        <div class="ctx-block">
-          <div class="ctx-label">UPCOMING EVENTS</div>
-          <div id="ctx-calendar-events">No upcoming events</div>
-        </div>
-
-        <!-- Session block -->
+        <!-- Session + Regime + Countdown (always visible — at-a-glance) -->
         <div class="ctx-block">
           <div class="ctx-label">SESSION</div>
           <div class="ctx-row"><span class="ctx-key">STATE</span><span id="ctx-session" class="ctx-val">—</span></div>
@@ -1355,20 +1343,76 @@
           <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span id="ctx-wlbe" class="ctx-val">—</span></div>
         </div>
 
-        <!-- FLO-142: Market Regime badge -->
-        <div class="ctx-block border-t border-emerald-500/20">
+        <div class="ctx-block">
           <div class="ctx-label">MARKET REGIME</div>
           <div class="ctx-row" style="flex-direction:column;align-items:flex-start;gap:4px">
             <span id="ctx-regime-pill" class="bc-pill" style="font-size:11px;letter-spacing:0.5px;padding:2px 10px">—</span>
-            <span id="ctx-regime-detail" class="ctx-val" style="font-size:9px;color:#6b7280">—</span>
+            <span id="ctx-regime-detail" class="ctx-val" style="font-size:9px;color:var(--text-muted)">—</span>
           </div>
         </div>
 
-        <!-- Next trigger countdown (FLO-143: real Floki schedule) -->
-        <div class="ctx-block border-t border-emerald-500/20">
+        <div class="ctx-block">
           <div class="ctx-label">NEXT FLOKI CHECK</div>
-          <div id="proactive-countdown" class="font-mono text-3xl font-bold text-emerald-400 tracking-tighter">—</div>
-          <div id="proactive-countdown-label" class="text-[9px] text-gray-600 mt-1.5 uppercase tracking-widest font-bold">SCHEDULED</div>
+          <div id="proactive-countdown" class="font-mono text-2xl font-bold text-emerald-400 tracking-tighter">—</div>
+          <div id="proactive-countdown-label" class="text-[9px] text-gray-600 mt-1 uppercase tracking-widest font-bold">SCHEDULED</div>
+        </div>
+
+        <!-- ═══ TIER 2: Collapsible, open by default ═══ -->
+
+        <div class="ctx-tier" data-tier="t2-active">
+          <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="ctx-tier-label">ACTIVE MONITORING</span>
+            <span class="ctx-tier-arrow">▾</span>
+          </div>
+          <div class="ctx-tier-body">
+            <div class="ctx-block" style="border:none;padding-top:0">
+              <div class="ctx-label">UPCOMING EVENTS</div>
+              <div id="ctx-calendar-events">No upcoming events</div>
+            </div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">WATCH CONDITIONS</div>
+              <div id="ctx-watch-conditions">No active watch conditions</div>
+            </div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">MARKET INDICATORS</div>
+              <div class="ctx-row"><span class="ctx-key">RSI</span><span id="ctx-rsi" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">MACD</span><span id="ctx-macd" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">ATR</span><span id="ctx-atr" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">ADX</span><span id="ctx-adx" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">EMA50</span><span id="ctx-ema50" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">Bollinger</span><span id="ctx-bb" class="ctx-val">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ TIER 3: Collapsible, closed by default ═══ -->
+
+        <div class="ctx-tier collapsed" data-tier="t3-deep">
+          <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="ctx-tier-label">DEEP DIVE</span>
+            <span class="ctx-tier-arrow">▾</span>
+          </div>
+          <div class="ctx-tier-body">
+            <div id="tr-macro-container"></div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">CORRELATIONS</div>
+              <div class="ctx-row"><span class="ctx-key">Gold-DXY</span><span id="ctx-corr-dxy" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">Gold-Yields</span><span id="ctx-corr-yields" class="ctx-val">—</span></div>
+              <div class="ctx-row"><span class="ctx-key">Gold-S&P</span><span id="ctx-corr-sp500" class="ctx-val">—</span></div>
+            </div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
+              <div id="ctx-investigation">—</div>
+            </div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">TOP PATTERNS</div>
+              <div id="ctx-top-patterns">—</div>
+            </div>
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">SESSION WR</div>
+              <div class="ctx-row"><span id="ctx-session-wr" class="ctx-val" style="font-size:10px">—</span></div>
+            </div>
+          </div>
         </div>
 
       </div><!-- /col-right -->
