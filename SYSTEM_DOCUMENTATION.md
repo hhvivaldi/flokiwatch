@@ -128,6 +128,12 @@ O output do Brain é consumido por:
 
 Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação. **Apenas decisões OPEN/CLOSE ativam o Rex** — HOLD/WAIT/ADJUST são skippados (FLO-50, otimização de custo).
 
+**Floki-Rex debate protocol (FLO-128/FLO-86):**
+- Rex DISAGREE on DIRECTION → Floki seriously reconsiders thesis
+- Rex DISAGREE on EXECUTION (volume, R:R, timing) → Floki adjusts plan and can proceed if conviction ≥70%
+- Floki CAN override Rex on execution disagreements — logs "Proceeding despite Rex DISAGREE because [reason]"
+- Rex calibrates concerns to market conditions: off-hours low volume is normal, geopolitical events change thresholds, high-ADX trends don't need confirmation candles
+
 ---
 
 ## 6. Echo — News Sentinel (24/7)
