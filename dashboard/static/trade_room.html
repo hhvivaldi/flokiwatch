@@ -635,7 +635,7 @@
         grid-template-columns: 1fr 250px;
         gap: 12px 20px;
         padding: 12px 24px 20px;
-        height: calc(100vh - 94px);
+        height: calc(100vh - 140px);
         box-sizing: border-box;
         overflow: hidden;
       }
@@ -673,14 +673,14 @@
       .col-right::-webkit-scrollbar { width: 4px; }
       .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
 
-      /* ── Business-card agent cards (FLO-33 redesign) ── */
+      /* ── Business-card agent cards (FLO-145 Proposal 2: data-first) ── */
       .bc-card {
         flex: 1 1 180px;
         max-width: none;
         height: 132px;
         overflow: hidden;
         border-radius: 10px;
-        background: #1a1a2e;
+        background: var(--bg-card);
         border: 1px solid;
         display: flex;
         flex-direction: column;
@@ -697,66 +697,67 @@
         height: 132px;
         background: transparent;
         border: none;
-        padding: 10px 14px;
+        padding: 8px 12px;
         cursor: pointer;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         text-align: left;
         color: inherit;
         box-sizing: border-box;
         flex-shrink: 0;
       }
       .bc-btn:focus-visible { outline: 1px solid rgba(170,255,0,0.55); outline-offset: 4px; border-radius: 9px; }
-      .bc-row1 { display: flex; align-items: center; gap: 8px; }
+      /* Data-first: pills at top (order 1), metric (order 2), identity at bottom (order 3) */
+      .bc-row2 { display: flex; gap: 4px; align-items: center; order: 1; }
+      .bc-pill {
+        font-size: 10px;
+        padding: 3px 9px;
+        border-radius: 20px;
+        white-space: nowrap;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .bc-row3 { display: flex; flex-direction: column; gap: 4px; order: 2; flex: 1; justify-content: center; }
+      .bc-metric { display: flex; justify-content: space-between; align-items: center; }
+      .bc-metric-label { font-size: 8px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+      .bc-metric-val { font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+      .bc-row1 { display: flex; align-items: center; gap: 6px; order: 3; margin-top: auto; }
       .bc-avatar {
-        width: 38px;
-        height: 38px;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         background: #2a2a3e;
-        border: 2px solid;
+        border: 1.5px solid;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 13px;
+        font-size: 10px;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
         flex-shrink: 0;
         overflow: hidden;
       }
-      .bc-identity { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .bc-identity { display: flex; flex-direction: row; gap: 6px; align-items: center; min-width: 0; }
       .bc-name {
-        font-size: 13px;
+        font-size: 10px;
         font-weight: 700;
         font-family: 'JetBrains Mono', monospace;
-        line-height: 1.1;
+        line-height: 1;
         white-space: nowrap;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
       }
       .bc-role {
-        font-size: 10px;
-        color: #6a6a7a;
+        font-size: 8px;
+        color: var(--text-dim);
         font-family: 'JetBrains Mono', monospace;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.05em;
       }
-      .bc-row2 { display: flex; gap: 4px; align-items: center; margin-top: 1px; }
-      .bc-pill {
-        font-size: 9px;
-        padding: 2px 8px;
-        border-radius: 20px;
-        white-space: nowrap;
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-      }
-      .bc-row3 { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
-      .bc-metric { display: flex; justify-content: space-between; align-items: center; }
-      .bc-metric-label { font-size: 9px; color: #6a6a7a; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; }
-      .bc-metric-val { font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
       .bc-bar-track { height: 3px; background: #2a2a3e; border-radius: 2px; overflow: hidden; margin-top: 2px; }
       .bc-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
       .agent-expand {
