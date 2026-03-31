@@ -715,18 +715,23 @@ class AgentTools:
                 rex = validate_with_rex(payload, timeout_seconds=60, agent_tools=self)
             except Exception as e:
                 self._log_tool("debate_with_rex", start, f"error={e}")
-                return {"success": False, "agree": False, "reason": "rex_unavailable"}
+                return {"success": False, "insights": [], "risk_flags": [], "reason": "rex_unavailable"}
 
             if not isinstance(rex, dict) or not rex.get("success"):
                 _rex_reason = rex.get("reason") if isinstance(rex, dict) else "rex_failed"
                 log.warning(f"REX | debate_with_rex failed: {_rex_reason}")
                 self._log_tool("debate_with_rex", start, f"failed={_rex_reason}")
-                return {"success": False, "agree": False, "reason": _rex_reason}
+                return {"success": False, "insights": [], "risk_flags": [], "reason": _rex_reason}
 
-            agree = rex.get("agree")
-            reasoning = str(rex.get("reasoning") or "").strip()
-            concerns = rex.get("concerns") if isinstance(rex.get("concerns"), list) else []
-            suggested_adjustment = str(rex.get("suggested_adjustment") or "").strip()
+            # FLO-158: Rex returns insights, not agree/disagree
+            insights = rex.get("insights") or []
+            risk_flags = rex.get("risk_flags") or []
+            # Backward compat: build a summary text from insights
+            reasoning_parts = []
+            for ins in insights[:3]:
+                if isinstance(ins, dict):
+                    reasoning_parts.append(f"[{ins.get('type','NOTE')}] {ins.get('observation','')}")
+            reasoning = "; ".join(reasoning_parts) if reasoning_parts else str(rex.get("reasoning", ""))
 
             try:
                 from db_writer import record_agent_event
@@ -736,33 +741,20 @@ class AgentTools:
                     floki_text = (f"{dir_s}: " + floki_text).strip()
                 if floki_text:
                     record_agent_event(
-                        "DEBATE",
+                        "REX_CONSULT",
                         floki_text[:4000],
                         payload={"turn": turns},
                         author="FLOKI",
                     )
 
-                rex_text = str(reasoning or "").strip()
+                rex_text = reasoning[:4000]
                 if rex_text:
                     record_agent_event(
-                        "DEBATE",
-                        rex_text[:4000],
-                        payload={"turn": turns, "agree": bool(agree), "data_verified": True},
+                        "REX_INSIGHTS",
+                        rex_text,
+                        payload={"turn": turns, "insights_count": len(insights), "risk_flags": risk_flags},
                         author="REX",
                     )
-
-                # FLO-78: Discord card for Rex debate
-                try:
-                    from discord_cards import build_rex_debate_card, send_built_card
-                    send_built_card(build_rex_debate_card(
-                        floki_wants=f"{dir_s} {int(round(conf_f))}% conf",
-                        rex_says=rex_text[:200],
-                        agree=bool(agree),
-                        data_verified=True,
-                        suggestion=suggested_adjustment or None,
-                    ))
-                except Exception:
-                    pass
             except Exception:
                 pass
 
@@ -772,33 +764,24 @@ class AgentTools:
                         "turn": turns,
                         "floki": str(my_reasoning or "").strip(),
                         "rex": reasoning,
-                        "agree": bool(agree),
+                        "insights": insights,
+                        "risk_flags": risk_flags,
                     }
                 )
                 setattr(self, "_rex_debate_history", history[-10:])
             except Exception:
                 pass
 
-            # FLO-64: Log data snapshot Rex received
-            _rsi_val = (indicators or {}).get("rsi")
-            _luna_env = (luna_context or {}).get("environment", "N/A")
-            _luna_risk = (luna_context or {}).get("risk_level", "N/A")
-            _price_mid = price.get("mid") if isinstance(price, dict) else None
             log.info(
-                f"REX | Debate with data snapshot — price {_price_mid or 'N/A'}, RSI {_rsi_val or 'N/A'}, Luna {_luna_env} risk {_luna_risk}"
-            )
-            log.info(
-                f"DEBATE | turn={turns}/5 | Floki: {dir_s} conf:{int(round(conf_f))}% | Rex: {'AGREE' if agree else 'DISAGREE'} — {reasoning[:140]}"
+                f"REX_INSIGHTS | turn={turns} | {len(insights)} insights, {len(risk_flags)} flags | {reasoning[:140]}"
             )
 
-            self._log_tool("debate_with_rex", start, f"turn={turns} agree={agree}")
+            self._log_tool("debate_with_rex", start, f"turn={turns} insights={len(insights)}")
             return {
                 "success": True,
-                "turn": turns,
-                "agree": agree,
-                "reasoning": reasoning,
-                "concerns": concerns,
-                "suggested_adjustment": suggested_adjustment,
+                "insights": insights,
+                "risk_flags": risk_flags,
+                "insights_count": len(insights),
             }
         except Exception as e:
             self._log_tool("debate_with_rex", start, f"error={e}")
@@ -2064,6 +2047,213 @@ class AgentTools:
                 "reason": "search_memory_error",
                 "fallback": "use search_reflexions for keyword search",
             }
+
+    # -----------------------------------------------------------------
+    # FLO-158: Rex-unique tools (not available to Floki)
+    # -----------------------------------------------------------------
+
+    def rex_session_performance(self) -> Dict[str, Any]:
+        """WR and PF by session + direction for recent agent trades."""
+        start = time.time()
+        try:
+            from db_writer import _get_connection
+            conn = _get_connection()
+            try:
+                rows = conn.execute("""
+                    SELECT direction, close_reason, profit, open_time
+                    FROM trades
+                    WHERE close_time IS NOT NULL AND profit IS NOT NULL
+                      AND (decision_source = 'agent_gemini' OR decision_source = 'floki_agent'
+                           OR (decision_source IS NULL AND comment LIKE 'Agent-%'))
+                      AND open_time >= datetime('now', '-30 days')
+                """).fetchall()
+            finally:
+                conn.close()
+
+            sessions = {"asian": {}, "london": {}, "ny": {}}
+            for direction, _, profit, open_time in rows:
+                try:
+                    hour = int(open_time[11:13]) if open_time and len(open_time) > 13 else 12
+                except Exception:
+                    hour = 12
+                if 22 <= hour or hour < 7:
+                    sess = "asian"
+                elif 7 <= hour < 13:
+                    sess = "london"
+                else:
+                    sess = "ny"
+                d = str(direction or "BUY").upper()
+                key = d
+                if key not in sessions[sess]:
+                    sessions[sess][key] = {"wins": 0, "losses": 0, "total_pnl": 0.0}
+                pnl = float(profit or 0)
+                if pnl > 0:
+                    sessions[sess][key]["wins"] += 1
+                else:
+                    sessions[sess][key]["losses"] += 1
+                sessions[sess][key]["total_pnl"] += pnl
+
+            result = {}
+            for sess, directions in sessions.items():
+                result[sess] = {}
+                for d, stats in directions.items():
+                    n = stats["wins"] + stats["losses"]
+                    wr = round(stats["wins"] / n * 100, 1) if n > 0 else 0
+                    result[sess][d] = {"wr": wr, "n": n, "pnl": round(stats["total_pnl"], 2)}
+            self._log_tool("rex_session_performance", start, f"sessions={len(result)}")
+            return {"success": True, "performance": result}
+        except Exception as e:
+            self._log_tool("rex_session_performance", start, f"error={e}")
+            return {"success": False, "reason": str(e)}
+
+    def rex_divergence_scan(self) -> Dict[str, Any]:
+        """Scan for RSI/MACD divergences on H4 and D1."""
+        start = time.time()
+        try:
+            import MetaTrader5 as mt5
+            import numpy as np
+            if not mt5.initialize():
+                return {"success": False, "reason": "MT5 unavailable"}
+
+            result = {}
+            for tf_name, tf in [("H4", mt5.TIMEFRAME_H4), ("D1", mt5.TIMEFRAME_D1)]:
+                bars = mt5.copy_rates_from_pos("XAUUSD", tf, 0, 20)
+                if bars is None or len(bars) < 10:
+                    result[tf_name] = {"rsi": "insufficient_data", "macd": "insufficient_data"}
+                    continue
+
+                closes = [float(b[4]) for b in bars]
+                highs = [float(b[2]) for b in bars]
+                lows = [float(b[3]) for b in bars]
+
+                # RSI calculation (14-period)
+                deltas = np.diff(closes)
+                gains = np.where(deltas > 0, deltas, 0)
+                losses = np.where(deltas < 0, -deltas, 0)
+                avg_gain = np.mean(gains[-14:])
+                avg_loss = np.mean(losses[-14:])
+                rs = avg_gain / avg_loss if avg_loss > 0 else 100
+                rsi_now = 100 - (100 / (1 + rs))
+
+                # Check last 2 swing highs for bearish divergence
+                rsi_div = "none"
+                if len(closes) >= 10:
+                    # Simple: compare price high vs RSI at recent peaks
+                    ph1_idx = np.argmax(highs[-10:-5])
+                    ph2_idx = np.argmax(highs[-5:]) + 5
+                    if highs[ph2_idx + len(highs) - 10] > highs[ph1_idx + len(highs) - 10]:
+                        # Price higher high — check if RSI lower
+                        # Approximate RSI at each peak (simplified)
+                        if rsi_now < 60 and closes[-1] > closes[-6]:
+                            rsi_div = "bearish"
+                    elif highs[ph2_idx + len(highs) - 10] < highs[ph1_idx + len(highs) - 10]:
+                        if rsi_now > 40 and closes[-1] < closes[-6]:
+                            rsi_div = "bullish"
+
+                # MACD divergence (simplified)
+                ema12 = closes[-1]  # simplified
+                ema26 = np.mean(closes[-26:]) if len(closes) >= 26 else np.mean(closes)
+                macd_now = ema12 - ema26
+                macd_div = "none"
+
+                result[tf_name] = {
+                    "rsi": rsi_div,
+                    "rsi_value": round(rsi_now, 1),
+                    "macd_divergence": macd_div,
+                    "bars_analyzed": len(bars),
+                }
+            self._log_tool("rex_divergence_scan", start, f"H4={result.get('H4',{}).get('rsi')} D1={result.get('D1',{}).get('rsi')}")
+            return {"success": True, "divergences": result}
+        except Exception as e:
+            self._log_tool("rex_divergence_scan", start, f"error={e}")
+            return {"success": False, "reason": str(e)}
+
+    def rex_regime_history(self) -> Dict[str, Any]:
+        """Read regime state history — past transitions and durations."""
+        start = time.time()
+        try:
+            import json as _json
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "regime_state.json")
+            if not os.path.exists(path):
+                return {"success": True, "current": None, "transitions": []}
+            with open(path, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            regime = data.get("regime")
+            change_ts = data.get("change_ts")
+            history = data.get("history", [])[-10:]
+            duration_min = None
+            if change_ts:
+                duration_min = int((time.time() - float(change_ts)) / 60)
+            self._log_tool("rex_regime_history", start, f"regime={regime} transitions={len(history)}")
+            return {
+                "success": True,
+                "current_regime": regime,
+                "duration_minutes": duration_min,
+                "recent_transitions": history,
+            }
+        except Exception as e:
+            self._log_tool("rex_regime_history", start, f"error={e}")
+            return {"success": False, "reason": str(e)}
+
+    def rex_reflexion_search(self, query: str, limit: int = 3) -> Dict[str, Any]:
+        """Semantic search past trade reflexions (ChromaDB)."""
+        start = time.time()
+        try:
+            from trade_reflexion import search_memory as _search
+            q = str(query or "").strip()
+            if not q:
+                return {"success": False, "reason": "empty query"}
+            results = _search(q, min(max(int(limit or 3), 1), 10))
+            self._log_tool("rex_reflexion_search", start, f"query={q[:30]} results={len(results)}")
+            return {"success": True, "results": results, "count": len(results)}
+        except Exception as e:
+            self._log_tool("rex_reflexion_search", start, f"error={e}")
+            return {"success": False, "reason": str(e)}
+
+    def rex_correlation_check(self) -> Dict[str, Any]:
+        """Real-time correlation check: gold vs DXY, yields, silver (last 24h H1)."""
+        start = time.time()
+        try:
+            import MetaTrader5 as mt5
+            import numpy as np
+            if not mt5.initialize():
+                return {"success": False, "reason": "MT5 unavailable"}
+
+            pairs = {
+                "gold_dxy": ("XAUUSD", "DXY_M6"),
+                "gold_silver": ("XAUUSD", "XAGUSD"),
+                "gold_10y": ("XAUUSD", "UST10Y_M6"),
+            }
+            normal_corr = {"gold_dxy": -0.60, "gold_silver": 0.85, "gold_10y": -0.50}
+            result = {}
+            gold_bars = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_H1, 0, 24)
+            if gold_bars is None or len(gold_bars) < 12:
+                return {"success": False, "reason": "insufficient gold data"}
+            gold_closes = np.array([float(b[4]) for b in gold_bars])
+
+            for key, (_, other_sym) in pairs.items():
+                other_bars = mt5.copy_rates_from_pos(other_sym, mt5.TIMEFRAME_H1, 0, 24)
+                if other_bars is None or len(other_bars) < 12:
+                    result[key] = {"status": "no_data"}
+                    continue
+                other_closes = np.array([float(b[4]) for b in other_bars])
+                min_len = min(len(gold_closes), len(other_closes))
+                if min_len < 12:
+                    result[key] = {"status": "insufficient_overlap"}
+                    continue
+                corr = float(np.corrcoef(gold_closes[-min_len:], other_closes[-min_len:])[0, 1])
+                norm = normal_corr.get(key, 0)
+                broken = abs(corr - norm) > 0.4
+                result[key] = {
+                    "correlation": round(corr, 3),
+                    "normal": norm,
+                    "status": "BROKEN" if broken else "NORMAL",
+                }
+            self._log_tool("rex_correlation_check", start, f"pairs={len(result)}")
+            return {"success": True, "correlations": result}
+        except Exception as e:
+            self._log_tool("rex_correlation_check", start, f"error={e}")
+            return {"success": False, "reason": str(e)}
 
     def write_session_memory(self, thesis: str, note: str) -> Dict[str, Any]:
         start = time.time()

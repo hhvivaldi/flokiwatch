@@ -10,18 +10,15 @@ from logger import log
 
 @dataclass
 class RexResult:
-    agree: bool
-    reasoning: str
-    concerns: Any
-    suggested_adjustment: str
+    """FLO-158: Rex returns insights, not agree/disagree."""
+    insights: list  # [{type, observation, source, implication}, ...]
+    risk_flags: list  # [str, ...]
     raw: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "agree": bool(self.agree),
-            "reasoning": str(self.reasoning or "").strip(),
-            "concerns": self.concerns if self.concerns is not None else [],
-            "suggested_adjustment": str(self.suggested_adjustment or "").strip(),
+            "insights": self.insights or [],
+            "risk_flags": self.risk_flags or [],
         }
 
 
@@ -53,247 +50,112 @@ def _build_prompt_legacy(floki_summary: Dict[str, Any]) -> str:
 
 def _rex_system_prompt() -> str:
     return (
-        "You are Rex, a senior gold trader with 15 years on the desk. "
-        "You sit next to Floki and you two debate every trade before it goes live. "
-        "You have your own market view — you don't just react to Floki's thesis, you bring your own.\n\n"
+        "You are Rex, a senior gold analyst with 15 years on the desk. "
+        "You sit next to Floki and provide market intelligence before every trade. "
+        "You are NOT a judge — you never approve or reject. "
+        "You are an analyst who surfaces insights Floki might have missed.\n\n"
 
-        "When Floki pitches a trade, you think about it the way a senior trader would: "
-        "Does the thesis hold up? Is the risk/reward right? Is the timing good? "
-        "What's the market telling you that Floki might be missing — or getting right?\n\n"
+        "Your job: check the data yourself using your unique tools, then provide 0-3 INSIGHTS. "
+        "Each insight is something Floki may not have seen — a pattern, a divergence, "
+        "a historical precedent, a correlation shift.\n\n"
 
-        "You can:\n"
-        "- Challenge Floki's reasoning and ask him to explain: "
-        "'Walk me through why you think this breakout holds when volume is 0.5x average'\n"
-        "- Defend your own counter-thesis with data: "
-        "'I hear the safe-haven argument, but the H4 is printing lower highs since 4600. Structure says sell, not buy'\n"
-        "- Agree and sharpen the trade: "
-        "'Direction is right but your SL is too tight for this ATR — widen it 20 pips or you'll get stopped on noise'\n"
-        "- Disagree on timing, not direction: "
-        "'I like BUY here eventually, but not until we see a higher low on M5. Right now you're catching a knife'\n"
-        "- Change your mind when Floki makes a strong case — and say so: "
-        "'Fair point about the D1 close above the flip zone — that changes things. I'm in'\n\n"
+        "Focus on what YOUR unique tools reveal:\n"
+        "- Session performance: how has this setup performed historically?\n"
+        "- Divergences: is RSI or MACD diverging from price on H4/D1?\n"
+        "- Regime history: when the market last transitioned like this, what happened?\n"
+        "- Correlations: is the gold-DXY or gold-yields correlation normal or broken?\n"
+        "- Past reflexions: have similar setups led to wins or losses recently?\n\n"
 
-        "If Floki addresses your concern with real data, acknowledge it and move on. "
-        "Bring a new point or change your mind. "
-        "Each turn of the debate should advance the conversation, not repeat the same argument.\n\n"
+        "You also have standard tools (price, candles, indicators, S/R, fibonacci, positions) "
+        "to verify Floki's data.\n\n"
 
-        "You have tools to check the market yourself. Look at the data before agreeing or disagreeing — "
-        "don't rely only on what Floki tells you. If you disagree, show him what the data actually says.\n\n"
+        "Do NOT say AGREE or DISAGREE. Do NOT judge Floki's thesis. Instead:\n"
+        "- If you see risk: FLAG — describe the risk with specific data\n"
+        "- If you see opportunity: NOTE — describe the signal with specific data\n"
+        "- If you see a pattern: HISTORY — describe the historical precedent\n\n"
 
-        "Keep it concise — pick your strongest point and argue it with specific data you checked. "
-        "If you have a second point, keep it brief.\n\n"
+        "Only surface insights that are genuinely useful — if you checked the data "
+        "and found nothing noteworthy, return an empty insights array. "
+        "Do not fabricate observations.\n\n"
 
-        "Examples of good debate:\n\n"
+        "Respond with valid JSON only:\n"
+        "{\n"
+        '  "insights": [\n'
+        '    {"type": "FLAG|NOTE|HISTORY", "observation": "what you found", '
+        '"source": "which tool/data", "implication": "what it means for the trade"}\n'
+        "  ],\n"
+        '  "risk_flags": ["short summary of each risk"]\n'
+        "}\n\n"
 
-        "'Floki, the H4 structure supports your BUY — higher low at 4505 and D1 close above the flip zone. "
-        "But this H1 candle has zero follow-through, volume is 2900 vs 5000 average. "
-        "If you're going in, tighten the SL to 4495 so we're not sitting through a retest with full risk. AGREE'\n\n"
+        "0-3 insights maximum. 0-3 risk flags maximum. Quality over quantity.\n\n"
 
-        "'I get the macro case — DXY falling, yields down, safe-haven bid. "
-        "But look at the H1: three red candles in a row, MACD histogram deepening, and price just rejected off 4560 resistance. "
-        "The macro is bullish but the chart says wait. Show me a higher low first. DISAGREE'\n\n"
-
-        "'Floki, you're looking at RSI oversold as a buy signal, but RSI can stay oversold for days in a strong trend. "
-        "The real question is whether 4500 holds as structure — and right now we have no confirmation candle. "
-        "I'd wait for the next H1 close before pulling the trigger. DISAGREE'\n\n"
-
-        "You are Floki's co-pilot, not just his challenger. When Floki shares his plan, help him refine it — "
-        "suggest better entry levels, tighter stops, additional conditions. "
-        "When Floki's plan conditions are met, acknowledge it.\n\n"
-
-        "You can disagree and block. But you can also help. A good trading partner says "
-        "'I like the direction but let's adjust the entry' not just 'DISAGREE — volume is low.'\n\n"
-
-        "Trust your feel for the market too. If the price action tells you something the indicators don't, say it.\n\n"
-
-        "When reviewing Floki's proposal, check the data yourself first — does your analysis match his? "
-        "Then consider whether you agree with his interpretation — same data can mean different things. "
-        "Finally, decide how you can help — sharpen the plan if you agree, or propose a specific alternative if you disagree.\n\n"
-
-        "Do NOT end with 'I suggest we monitor...' or 'Consider setting alerts for...'. "
-        "End with your honest take — challenge Floki directly or say what would change your mind. "
-        "Be direct, not diplomatic.\n\n"
-
-        "Every point you make should reference specific data you checked. No generic concerns.\n\n"
-
-        "Speak naturally. Talk like you're standing next to Floki at the trading desk. "
-        "End your response with one word on its own line: AGREE or DISAGREE.\n\n"
-        "Write in flowing paragraphs, no lists or headers. End your response with AGREE or DISAGREE on its own line.\n\n"
-
-        "Calibrate your concerns to market conditions:\n"
-        "- Sunday night and Asian session have structurally low volume — this is normal, not a red flag. "
-        "Do not block trades solely for low off-hours volume.\n"
-        "- During extreme geopolitical events (war, crisis, major surprise), moves are conviction-driven "
-        "not volume-driven. Standard volume thresholds are less relevant. Focus on structure and direction, "
-        "not tick-by-tick participation.\n"
-        "- If Luna's environment is DANGER or risk is ≥7/10, the market is in an unusual regime. "
-        "Apply your analysis to the regime, not to peacetime norms.\n"
-        "- When ADX is >25 and a clear trend is established, demanding 'confirmation candles' or "
-        "'higher volume' before every entry delays trades that the trend has already confirmed.\n\n"
-
-        "Your job is to make Floki's trades BETTER. Block when the thesis is fundamentally wrong. "
-        "When the thesis is sound but execution needs work, say DISAGREE but offer a specific fix: "
-        "better entry, tighter stop, wait for next candle.\n\n"
-
-        "When ADX is high (>25) but the DI lines tell a different story — specifically, "
-        "if +DI has crossed above -DI while the thesis is bearish, or -DI has crossed above +DI "
-        "while the thesis is bullish — flag this explicitly. High ADX with a DI crossover against "
-        "the thesis means the trend is reversing, regardless of what the ADX number says."
+        "When ADX is high (>25) but +DI has crossed against the thesis direction, "
+        "flag this as a potential trend reversal."
     )
 
 
 def _parse_rex_response(text: str) -> RexResult:
+    """FLO-158: Parse Rex JSON insights response."""
     raw = str(text or "").strip()
     if not raw:
-        return RexResult(agree=False, reasoning="", concerns=[], suggested_adjustment="", raw=text)
+        return RexResult(insights=[], risk_flags=[], raw=text)
 
-    # Primary: check end of string (standard format)
-    m = re.search(r"\b(AGREE|DISAGREE)\b\s*[\.!\)]*\s*$", raw, flags=re.IGNORECASE)
-    if m:
-        agree = m.group(1).strip().upper() == "AGREE"
-        body = raw[: m.start()].strip()
-    else:
-        # Fallback: find last occurrence anywhere in text
-        all_matches = re.findall(r"\b(AGREE|DISAGREE)\b", raw, flags=re.IGNORECASE)
-        if all_matches:
-            agree = all_matches[-1].upper() == "AGREE"
-        else:
-            # Safe default: if Rex didn't clearly state AGREE/DISAGREE, treat as DISAGREE
-            log.warning("REX | No clear AGREE/DISAGREE found in response — defaulting to DISAGREE")
-            agree = False
-        body = raw
+    # Strip markdown fences
+    cleaned = raw
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].strip()
 
-    concerns = []
     try:
-        lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
-        idx = None
-        for i, ln in enumerate(lines):
-            if ln.lower().startswith("concerns"):
-                idx = i
-                break
-        if idx is not None:
-            after = lines[idx + 1 :]
-            for ln in after:
-                if ln.lower().startswith("adjust") or ln.lower().startswith("suggest"):
-                    break
-                s = re.sub(r"^[-*\d\.\)]+\s*", "", ln).strip()
-                if s:
-                    concerns.append(s)
-                if len(concerns) >= 3:
-                    break
-        else:
-            for ln in lines:
-                if re.match(r"^\d+[\.)]\s+", ln) or ln.startswith("-") or ln.startswith("*"):
-                    s = re.sub(r"^[-*\d\.\)]+\s*", "", ln).strip()
-                    if s:
-                        concerns.append(s)
-                if len(concerns) >= 3:
-                    break
+        import json
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            insights = parsed.get("insights", [])
+            if not isinstance(insights, list):
+                insights = []
+            # Validate each insight has required fields
+            valid_insights = []
+            for ins in insights[:3]:
+                if isinstance(ins, dict) and ins.get("observation"):
+                    valid_insights.append({
+                        "type": str(ins.get("type", "NOTE")).upper(),
+                        "observation": str(ins.get("observation", "")),
+                        "source": str(ins.get("source", "")),
+                        "implication": str(ins.get("implication", "")),
+                    })
+            risk_flags = parsed.get("risk_flags", [])
+            if not isinstance(risk_flags, list):
+                risk_flags = []
+            risk_flags = [str(f) for f in risk_flags[:3]]
+            return RexResult(insights=valid_insights, risk_flags=risk_flags, raw=raw)
     except Exception:
-        concerns = []
+        pass
 
-    suggested_adjustment = ""
-    try:
-        mm = re.search(
-            r"(?im)^(?:adjustment|suggested\s*adjustment|suggestion|adjust):\s*(.+?)\s*$",
-            body,
-        )
-        if mm:
-            suggested_adjustment = str(mm.group(1) or "").strip()
-    except Exception:
-        suggested_adjustment = ""
-
+    # Fallback: treat entire response as a single NOTE insight
+    log.warning("REX | Response not valid JSON — wrapping as single insight")
     return RexResult(
-        agree=agree,
-        reasoning=body,
-        concerns=concerns,
-        suggested_adjustment=suggested_adjustment,
+        insights=[{"type": "NOTE", "observation": raw[:500], "source": "rex_analysis", "implication": ""}],
+        risk_flags=[],
         raw=raw,
     )
 
 
-# FLO-125: Rex tool schemas — 6 tools for independent analysis
+# FLO-158: Rex tools — 6 standard + 5 unique (11 total)
 _REX_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_current_price",
-            "description": "Get current gold bid/ask/spread",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_candles",
-            "description": "Get OHLCV candles. Timeframes: M5, H1, H4, D1. Max 20 candles.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "timeframe": {"type": "string", "enum": ["M5", "H1", "H4", "D1"]},
-                    "count": {"type": "integer"},
-                },
-                "required": ["timeframe"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_indicators",
-            "description": "Get technical indicators: RSI, MACD, EMA50, EMA200, ATR, ADX, Bollinger",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_sr_zones",
-            "description": "Get support/resistance zones nearest to current price",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_market_context",
-            "description": "Get markets correlated with gold: metals (silver, platinum, gold/silver ratio), forex (dollar strength), indices, energy, crypto, futures (DXY, VIX, 10Y Bond)",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_luna_brief",
-            "description": "Get Luna's macro analysis: environment (SAFE/CAUTION/DANGER), risk level, directional bias, detected patterns",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_fibonacci_levels",
-            "description": "Get Fibonacci retracement levels and swing high/low for H1, H4, D1",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_trade_lessons",
-            "description": "Get statistical lessons from Floki's past trades — AVOID patterns (losing setups) and PREFERRED patterns (winning setups)",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_open_positions",
-            "description": "Get current open positions with ticket, direction, entry price, SL, TP, P&L",
-            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-        },
-    },
+    # Standard tools (verify Floki's data)
+    {"type": "function", "function": {"name": "get_current_price", "description": "Get current gold bid/ask/spread", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_candles", "description": "Get OHLCV candles. Timeframes: M5, H1, H4, D1. Max 20 candles.", "parameters": {"type": "object", "properties": {"timeframe": {"type": "string", "enum": ["M5", "H1", "H4", "D1"]}, "count": {"type": "integer"}}, "required": ["timeframe"], "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_indicators", "description": "Get technical indicators: RSI, MACD, EMA50, EMA200, ATR, ADX, Bollinger, +DI, -DI", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_sr_zones", "description": "Get support/resistance zones nearest to current price", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_fibonacci_levels", "description": "Get Fibonacci retracement levels and swing high/low for H1, H4, D1", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_open_positions", "description": "Get current open positions with ticket, direction, entry price, SL, TP, P&L", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    # Unique Rex tools (not available to Floki)
+    {"type": "function", "function": {"name": "rex_session_performance", "description": "Get win rate and P&L breakdown by session (Asian/London/NY) and direction (BUY/SELL) for recent agent trades (last 30 days)", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "rex_divergence_scan", "description": "Scan for RSI and MACD divergences on H4 and D1 timeframes — detects when price and indicators are telling different stories", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "rex_regime_history", "description": "Get market regime transition history — current regime, duration, and past transitions", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "rex_reflexion_search", "description": "Semantic search past trade reflexions — find similar setups and what happened. Query with natural language.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language description of the trade pattern"}}, "required": ["query"], "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "rex_correlation_check", "description": "Check real-time 24h correlations: gold vs DXY, gold vs silver, gold vs 10Y bonds. Shows if correlations are normal or broken.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
 ]
 
 
@@ -366,7 +228,7 @@ def validate_with_rex(
 
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
-            return {"success": False, "agree": False, "reason": "OPENAI_API_KEY not set"}
+            return {"success": False, "insights": [], "risk_flags": [], "reason": "OPENAI_API_KEY not set"}
 
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
@@ -384,7 +246,7 @@ def validate_with_rex(
 
     except Exception as e:
         log.warning(f"REX | unexpected error: {e}")
-        return {"success": False, "agree": False, "reason": "unexpected_error"}
+        return {"success": False, "insights": [], "risk_flags": [], "reason": "unexpected_error"}
 
 
 def _rex_tool_loop(
@@ -479,10 +341,8 @@ def _rex_tool_loop(
         log.info(f"REX | tool loop complete | iterations={iteration + 1} | tools_called={tool_calls_made} | {latency_ms}ms")
         return {
             "success": True,
-            "agree": bool(parsed.agree),
-            "reasoning": str(parsed.reasoning or "").strip(),
-            "concerns": parsed.concerns if isinstance(parsed.concerns, list) else [],
-            "suggested_adjustment": str(parsed.suggested_adjustment or "").strip(),
+            "insights": parsed.insights,
+            "risk_flags": parsed.risk_flags,
             "latency_ms": latency_ms,
             "model": model,
             "raw": content,
@@ -517,16 +377,14 @@ def _validate_with_rex_legacy(
             content = None
 
         if not content:
-            return {"success": False, "agree": False, "reason": "empty_response"}
+            return {"success": False, "insights": [], "risk_flags": [], "reason": "empty_response"}
 
         parsed = _parse_rex_response(content)
         latency_ms = int((time.time() - start) * 1000)
         return {
             "success": True,
-            "agree": bool(parsed.agree),
-            "reasoning": str(parsed.reasoning or "").strip(),
-            "concerns": parsed.concerns if isinstance(parsed.concerns, list) else [],
-            "suggested_adjustment": str(parsed.suggested_adjustment or "").strip(),
+            "insights": parsed.insights,
+            "risk_flags": parsed.risk_flags,
             "latency_ms": latency_ms,
             "model": model,
             "raw": content,
@@ -534,4 +392,4 @@ def _validate_with_rex_legacy(
         }
     except Exception as e:
         log.warning(f"REX | legacy fallback failed: {e}")
-        return {"success": False, "agree": False, "reason": f"legacy_failed: {e}"}
+        return {"success": False, "insights": [], "risk_flags": [], "reason": f"legacy_failed: {e}"}

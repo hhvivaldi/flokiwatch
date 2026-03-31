@@ -292,8 +292,9 @@ class AgentResult:
     invalidation: Optional[str] = None
     adjustment: Optional[Dict] = None
     close_reason: Optional[str] = None
-    rex_agreed: Optional[bool] = None
+    rex_agreed: Optional[bool] = None  # FLO-158: kept for DB compat, always None now
     rex_reasoning: Optional[str] = None
+    rex_insights: Optional[list] = None  # FLO-158: new insights format
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for logging/storage"""
@@ -337,6 +338,8 @@ class AgentResult:
             result["rex_agreed"] = self.rex_agreed
         if self.rex_reasoning:
             result["rex_reasoning"] = self.rex_reasoning
+        if self.rex_insights:
+            result["rex_insights"] = self.rex_insights
         return result
 
 
@@ -459,13 +462,14 @@ class AIAgent:
             except Exception:
                 pass
             
-            # FLO-137: attach Rex debate data to result for DB storage
+            # FLO-158: attach Rex insights to result for DB storage
             try:
                 rex_hist = getattr(tools, "_rex_debate_history", [])
                 if rex_hist:
                     last_rex = rex_hist[-1]
-                    result.rex_agreed = last_rex.get("agree")
+                    result.rex_insights = last_rex.get("insights", [])
                     result.rex_reasoning = (last_rex.get("rex") or "")[:4000]
+                    # rex_agreed stays None (FLO-158: no longer used)
             except Exception:
                 pass
 
