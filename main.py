@@ -3402,37 +3402,156 @@ class TradingBot:
             except Exception:
                 pass
 
-            # FLO-164 Fix 2: Inject multi-timeframe H4/D1 summary
+            # FLO-164 Evolution: Rich market structure + candle data
             try:
-                import MetaTrader5 as _mt5_mtf
-                import numpy as _np_mtf
+                import MetaTrader5 as _mt5_ms
+                import numpy as _np_ms
+                from datetime import datetime as _dt_ms
 
-                def _mtf_summary(tf_enum, n_candles, label):
-                    bars = _mt5_mtf.copy_rates_from_pos("XAUUSD", tf_enum, 0, n_candles + 15)
-                    if bars is None or len(bars) < n_candles:
-                        return f"{label}: insufficient data"
-                    closes = [float(b[4]) for b in bars]
-                    opens_arr = [float(b[1]) for b in bars]
-                    recent = bars[-n_candles:]
-                    bull = sum(1 for b in recent if float(b[4]) > float(b[1]))
-                    deltas = _np_mtf.diff(closes)
-                    gains = _np_mtf.where(deltas > 0, deltas, 0)
-                    losses = _np_mtf.where(deltas < 0, -deltas, 0)
-                    ag = float(_np_mtf.mean(gains[-14:]))
-                    al = float(_np_mtf.mean(losses[-14:]))
-                    rsi = round(100 - (100 / (1 + ag / al)), 0) if al > 0 else 100
+                def _calc_rsi(closes, period=14):
+                    if len(closes) < period + 1:
+                        return None
+                    d = _np_ms.diff(closes)
+                    g = float(_np_ms.mean(_np_ms.where(d > 0, d, 0)[-period:]))
+                    l = float(_np_ms.mean(_np_ms.where(d < 0, -d, 0)[-period:]))
+                    return round(100 - (100 / (1 + g / l)), 0) if l > 0 else 100
+
+                def _calc_ema(closes, period=50):
                     ema = closes[0]
-                    m = 2.0 / 51.0
+                    m = 2.0 / (period + 1)
                     for c in closes[1:]:
                         ema = c * m + ema * (1 - m)
-                    price = closes[-1]
-                    pos = "ABOVE" if price > ema else "BELOW"
-                    trend = "bullish" if bull > n_candles / 2 and price > ema else ("bearish" if bull < n_candles / 2 and price < ema else "mixed")
-                    return f"{label}: {bull}/{n_candles} bullish, RSI {rsi:.0f}, price {pos} EMA50 ({ema:.0f}). Trend: {trend}."
+                    return round(ema, 0)
 
-                h4_sum = _mtf_summary(_mt5_mtf.TIMEFRAME_H4, 5, "H4")
-                d1_sum = _mtf_summary(_mt5_mtf.TIMEFRAME_D1, 3, "D1")
-                trigger_context += f"\n<multi_timeframe>\n{h4_sum}\n{d1_sum}\n</multi_timeframe>\n"
+                def _find_swings(highs, lows, n=5):
+                    """Find swing high/low in last n bars."""
+                    sh_idx = int(_np_ms.argmax(highs[-n:])) + len(highs) - n
+                    sl_idx = int(_np_ms.argmin(lows[-n:])) + len(lows) - n
+                    return sh_idx, sl_idx
+
+                def _trend_label(highs, lows, n):
+                    """Count higher highs/lows pattern."""
+                    hh = 0; hl = 0; lh = 0; ll = 0
+                    for i in range(1, min(n, len(highs))):
+                        if highs[-i] > highs[-i-1]: hh += 1
+                        else: lh += 1
+                        if lows[-i] > lows[-i-1]: hl += 1
+                        else: ll += 1
+                    if hh >= n//2 and hl >= n//2: return f"UPTREND ({hh} higher highs, {hl} higher lows)"
+                    if lh >= n//2 and ll >= n//2: return f"DOWNTREND ({lh} lower highs, {ll} lower lows)"
+                    return "RANGING"
+
+                def _tf_block(tf_enum, n_candles, n_display, label, current_price):
+                    bars = _mt5_ms.copy_rates_from_pos("XAUUSD", tf_enum, 0, max(n_candles, 50) + 15)
+                    if bars is None or len(bars) < n_candles:
+                        return f"{label}: insufficient data", ""
+
+                    closes = [float(b[4]) for b in bars]
+                    highs = [float(b[2]) for b in bars]
+                    lows = [float(b[3]) for b in bars]
+                    recent_highs = highs[-n_candles:]
+                    recent_lows = lows[-n_candles:]
+
+                    trend = _trend_label(recent_highs, recent_lows, n_candles)
+                    rsi = _calc_rsi(closes)
+                    rsi_5ago = _calc_rsi(closes[:-5]) if len(closes) > 19 else rsi
+                    rsi_dir = "rising" if rsi and rsi_5ago and rsi - rsi_5ago > 3 else ("falling" if rsi and rsi_5ago and rsi_5ago - rsi > 3 else "flat")
+                    ema50 = _calc_ema(closes, 50)
+                    ema200 = _calc_ema(closes, 200) if len(closes) >= 200 else None
+
+                    sh_idx, sl_idx = _find_swings(highs, lows, n_candles)
+                    sh_price = round(highs[sh_idx])
+                    sl_price = round(lows[sl_idx])
+                    sh_dist = round(sh_price - current_price)
+                    sl_dist = round(current_price - sl_price)
+
+                    # Rejection count for swing high (how many bars touched within 10 pts)
+                    rejections = sum(1 for h in recent_highs if abs(h - sh_price) < 10)
+
+                    pos = f"price {'ABOVE' if current_price > ema50 else 'BELOW'} EMA50 ({ema50})"
+                    if ema200:
+                        pos += f" and {'ABOVE' if current_price > ema200 else 'BELOW'} EMA200 ({ema200})"
+
+                    summary = (
+                        f"{label}: {trend}\n"
+                        f"  Swing high: ${sh_price} ({'+' if sh_dist >= 0 else ''}{sh_dist} from price)"
+                        + (f" — rejected {rejections}x" if rejections >= 2 else "") +
+                        f" | Swing low: ${sl_price} (-{sl_dist} below)\n"
+                        f"  RSI: {rsi} {rsi_dir} | {pos}"
+                    )
+
+                    # Compact candle array for context
+                    display = bars[-n_display:]
+                    candle_lines = []
+                    for b in display:
+                        t = _dt_ms.fromtimestamp(int(b[0])).strftime("%b%d %H:%M") if label == "H4" else _dt_ms.fromtimestamp(int(b[0])).strftime("%b%d")
+                        candle_lines.append(f'{{t:"{t}",o:{round(b[1])},h:{round(b[2])},l:{round(b[3])},c:{round(b[4])},v:{int(b[5])}}}')
+                    candle_block = f"<{label.lower()}_candles>\n[{','.join(candle_lines)}]\n</{label.lower()}_candles>"
+
+                    return summary, candle_block
+
+                _cp = float(getattr(self, "last_known_price", 0) or 0)
+                if _cp > 0:
+                    h4_summary, h4_candles = _tf_block(_mt5_ms.TIMEFRAME_H4, 20, 20, "H4", _cp)
+                    d1_summary, d1_candles = _tf_block(_mt5_ms.TIMEFRAME_D1, 10, 10, "D1", _cp)
+
+                    # Confluence zones (simple: find price levels where 2+ of S/R, fib, EMA cluster within 50 pips)
+                    confluence = ""
+                    try:
+                        levels_res = []
+                        levels_sup = []
+                        sr = getattr(self, "_last_agent_data", None)
+                        if callable(sr):
+                            sr = sr()
+                        sr_zones = (sr or {}).get("sr_zones", [])
+                        if isinstance(sr_zones, dict):
+                            sr_zones = sr_zones.get("zones", [])
+                        for z in (sr_zones or [])[:20]:
+                            if isinstance(z, dict):
+                                mid = z.get("midpoint") or z.get("price", 0)
+                                if mid > _cp:
+                                    levels_res.append(round(float(mid)))
+                                else:
+                                    levels_sup.append(round(float(mid)))
+                        # Add EMAs as levels
+                        h4_ema50 = _calc_ema([float(b[4]) for b in _mt5_ms.copy_rates_from_pos("XAUUSD", _mt5_ms.TIMEFRAME_H4, 0, 60) or []], 50)
+                        if h4_ema50 < _cp: levels_sup.append(h4_ema50)
+                        else: levels_res.append(h4_ema50)
+
+                        def _cluster(levels, n=3):
+                            if not levels: return []
+                            levels.sort()
+                            clusters = []
+                            for i, l in enumerate(levels):
+                                nearby = [x for x in levels if abs(x - l) <= 50]
+                                if len(nearby) >= 2:
+                                    low = min(nearby)
+                                    high = max(nearby)
+                                    clusters.append((low, high, len(nearby)))
+                            # Dedupe overlapping clusters
+                            seen = set()
+                            unique = []
+                            for low, high, count in sorted(clusters, key=lambda x: -x[2]):
+                                key = round(low / 50) * 50
+                                if key not in seen:
+                                    seen.add(key)
+                                    unique.append(f"${low}-{high} [{count} levels]")
+                            return unique[:n]
+
+                        res_clusters = _cluster(levels_res)
+                        sup_clusters = _cluster(levels_sup)
+                        if res_clusters or sup_clusters:
+                            parts = []
+                            if res_clusters: parts.append(f"RESISTANCE: {', '.join(res_clusters)}")
+                            if sup_clusters: parts.append(f"SUPPORT: {', '.join(sup_clusters)}")
+                            confluence = "\nCONFLUENCE " + " | ".join(parts)
+                    except Exception:
+                        pass
+
+                    trigger_context += (
+                        f"\n<market_structure>\n{d1_summary}\n\n{h4_summary}{confluence}\n</market_structure>\n"
+                        f"\n{h4_candles}\n{d1_candles}\n"
+                    )
             except Exception:
                 pass
 
