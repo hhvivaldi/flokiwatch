@@ -2150,11 +2150,34 @@ class AgentTools:
                         if rsi_now > 40 and closes[-1] < closes[-6]:
                             rsi_div = "bullish"
 
-                # MACD divergence (simplified)
-                ema12 = closes[-1]  # simplified
-                ema26 = np.mean(closes[-26:]) if len(closes) >= 26 else np.mean(closes)
-                macd_now = ema12 - ema26
+                # MACD histogram divergence
                 macd_div = "none"
+                if len(closes) >= 26:
+                    ema12_arr = [closes[0]]
+                    ema26_arr = [closes[0]]
+                    m12 = 2.0 / 13.0
+                    m26 = 2.0 / 27.0
+                    for c in closes[1:]:
+                        ema12_arr.append(c * m12 + ema12_arr[-1] * (1 - m12))
+                        ema26_arr.append(c * m26 + ema26_arr[-1] * (1 - m26))
+                    macd_line = [e12 - e26 for e12, e26 in zip(ema12_arr, ema26_arr)]
+                    signal = [macd_line[0]]
+                    m9 = 2.0 / 10.0
+                    for v in macd_line[1:]:
+                        signal.append(v * m9 + signal[-1] * (1 - m9))
+                    hist = [m - s for m, s in zip(macd_line, signal)]
+                    # Compare histogram at recent swing highs/lows (last 10 bars split into 2 halves)
+                    if len(hist) >= 10:
+                        h1_peak = max(hist[-10:-5])
+                        h2_peak = max(hist[-5:])
+                        h1_trough = min(hist[-10:-5])
+                        h2_trough = min(hist[-5:])
+                        price_hh = max(highs[-5:]) > max(highs[-10:-5])
+                        price_ll = min(lows[-5:]) < min(lows[-10:-5])
+                        if price_hh and h2_peak < h1_peak and h1_peak > 0:
+                            macd_div = "bearish"
+                        elif price_ll and h2_trough > h1_trough and h1_trough < 0:
+                            macd_div = "bullish"
 
                 result[tf_name] = {
                     "rsi": rsi_div,
