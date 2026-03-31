@@ -2259,6 +2259,12 @@ class TradingBot:
             check_ea_bridge_status_and_alert()
             # Persist state for dashboard (must never block the bot)
             write_state(self)
+            # FLO-155: Periodic health check (every 60 min, never blocks)
+            try:
+                from health_check import maybe_run_health_check
+                maybe_run_health_check()
+            except Exception:
+                pass
 
     def execute_agent_trade(
         self,
