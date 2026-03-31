@@ -522,6 +522,18 @@ class AgentTools:
         start = time.time()
         try:
             now = time.time()
+
+            # FLO-158: Frequency limit for non-trade decisions (WAIT/HOLD)
+            dir_s_check = str(my_direction or "").upper().strip()
+            is_trade_decision = any(k in dir_s_check for k in ("BUY", "SELL", "OPEN", "CLOSE", "ADJUST"))
+            if not is_trade_decision:
+                last_non_trade_rex = getattr(self, "_rex_last_non_trade_ts", 0) or 0
+                if (now - float(last_non_trade_rex)) < 3600:
+                    elapsed = int(now - float(last_non_trade_rex))
+                    self._log_tool("debate_with_rex", start, f"skipped | WAIT/HOLD rate limit ({elapsed}s since last)")
+                    return {"success": True, "insights": [], "risk_flags": [], "reason": "rate_limited_non_trade"}
+                setattr(self, "_rex_last_non_trade_ts", now)
+
             last_ts = getattr(self, "_rex_debate_last_ts", None)
             if last_ts is None or (now - float(last_ts)) > 300:
                 setattr(self, "_rex_debate_turns", 0)
@@ -530,7 +542,7 @@ class AgentTools:
 
             turns = int(getattr(self, "_rex_debate_turns", 0) or 0)
             if turns >= 5:
-                return {"success": False, "reason": "debate_turn_limit"}
+                return {"success": False, "insights": [], "risk_flags": [], "reason": "debate_turn_limit"}
             turns += 1
             setattr(self, "_rex_debate_turns", turns)
 
