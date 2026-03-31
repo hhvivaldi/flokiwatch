@@ -1146,6 +1146,23 @@ def run_sage_auditor() -> SageRunResult:
 
         log.info(f"SAGE | report_written | trades={len(trades)} | path={out_path}")
 
+        # FLO-150: Post summary to Trade Room feed
+        try:
+            from db_writer import record_agent_event
+            _wr = report.get("win_rate")
+            _pf = report.get("profit_factor")
+            _recs = report.get("recommendations", [])
+            _top_rec = _recs[0] if _recs else "No recommendations"
+            _summary = (
+                f"Daily audit complete: {len(trades)} trades analyzed"
+                f"{f', WR {_wr:.1f}%' if _wr is not None else ''}"
+                f"{f', PF {_pf:.2f}' if _pf is not None else ''}. "
+                f"Top recommendation: {_top_rec}"
+            )
+            record_agent_event("DAILY_REPORT", _summary[:2000], payload={"trades": len(trades), "win_rate": _wr, "profit_factor": _pf}, author="SAGE")
+        except Exception:
+            pass
+
         # FLO-70: Generate Luna insights (every daily run)
         try:
             generate_luna_insights()
