@@ -160,19 +160,17 @@ def run_health_check() -> Dict:
         results.append(("OK", "Regime check skipped", ""))
 
     # ── 8. Balance mismatch ──
+    # NOTE: Do NOT call mt5.initialize()/mt5.shutdown() here — it kills
+    # the process-global MT5 connection used by executor and Brain.
+    # Instead, read balance from bot_state (already refreshed each cycle).
     try:
         state_bal = float((state.get("account") or {}).get("balance", 0))
-        import MetaTrader5 as mt5
-        mt5.initialize()
-        acct = mt5.account_info()
-        mt5_bal = acct.balance if acct else 0
-        mt5.shutdown()
-        if abs(state_bal - mt5_bal) > 0.01:
-            results.append(("WARNING", "Balance mismatch", f"state=${state_bal} MT5=${mt5_bal}"))
+        if state_bal > 0:
+            results.append(("OK", "Balance from state", f"${state_bal}"))
         else:
-            results.append(("OK", "Balance matches", f"${state_bal}"))
+            results.append(("WARNING", "Balance zero or missing", f"${state_bal}"))
     except Exception:
-        results.append(("OK", "Balance check skipped", "MT5 unavailable"))
+        results.append(("OK", "Balance check skipped", ""))
 
     # ── 9. Floki API errors ──
     api_errors = _count_log_pattern("API call failed", minutes=60)

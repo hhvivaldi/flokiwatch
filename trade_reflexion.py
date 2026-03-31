@@ -391,6 +391,8 @@ def _get_post_close_prices(close_time_str: str, direction: str, entry_price: flo
         import MetaTrader5 as mt5
         from datetime import timedelta
 
+        # NOTE: Do NOT call mt5.shutdown() — it kills the process-global connection.
+        # mt5.initialize() is safe to call if already initialized (returns True).
         if not mt5.initialize():
             return None
 
@@ -400,7 +402,6 @@ def _get_post_close_prices(close_time_str: str, direction: str, entry_price: flo
 
         target_1h = close_dt + timedelta(hours=1)
         bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, target_1h)
-        mt5.shutdown()
 
         if bars is None or len(bars) == 0:
             return None
