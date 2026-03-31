@@ -74,9 +74,9 @@ def _rex_system_prompt() -> str:
         "- If you see opportunity: NOTE — describe the signal with specific data\n"
         "- If you see a pattern: HISTORY — describe the historical precedent\n\n"
 
-        "Only surface insights that are genuinely useful — if you checked the data "
-        "and found nothing noteworthy, return an empty insights array. "
-        "Do not fabricate observations.\n\n"
+        "ALWAYS provide at least 1 insight from your unique tool data. "
+        "Even 'no divergence on H4/D1' or 'correlations normal' is useful context — it confirms or challenges Floki's thesis. "
+        "Absence of signal IS a signal. Do not fabricate data, but do interpret what you found.\n\n"
 
         "CRITICAL: Before providing insights, you MUST call at least 2 of your unique tools: "
         "rex_session_performance, rex_divergence_scan, rex_regime_history, rex_reflexion_search, "

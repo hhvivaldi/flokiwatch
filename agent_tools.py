@@ -738,12 +738,14 @@ class AgentTools:
             # FLO-158: Rex returns insights, not agree/disagree
             insights = rex.get("insights") or []
             risk_flags = rex.get("risk_flags") or []
-            # Backward compat: build a summary text from insights
+            # Build summary text from insights + risk_flags
             reasoning_parts = []
             for ins in insights[:3]:
                 if isinstance(ins, dict):
                     reasoning_parts.append(f"[{ins.get('type','NOTE')}] {ins.get('observation','')}")
-            reasoning = "; ".join(reasoning_parts) if reasoning_parts else str(rex.get("reasoning", ""))
+            for flag in risk_flags[:3]:
+                reasoning_parts.append(f"[FLAG] {flag}")
+            reasoning = "; ".join(reasoning_parts) if reasoning_parts else str(rex.get("raw", ""))[:200]
 
             try:
                 from db_writer import record_agent_event
