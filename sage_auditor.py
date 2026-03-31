@@ -577,20 +577,25 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
         this_week_start = (now - __import__("datetime").timedelta(days=7)).isoformat()
         last_week_start = (now - __import__("datetime").timedelta(days=14)).isoformat()
 
+        # FLO-152 Fix 1: Apply same agent-only population filter as daily report
+        _agent_filter = (
+            " AND (decision_source = 'agent_gemini' OR decision_source = 'floki_agent'"
+            "      OR (decision_source IS NULL AND comment LIKE 'Agent-%'))"
+        )
         this_week_rows = conn.execute(
-            """SELECT ticket, direction, profit, open_time, close_time, close_reason
+            f"""SELECT ticket, direction, profit, open_time, close_time, close_reason
                FROM trades
                WHERE close_time IS NOT NULL AND profit IS NOT NULL
-                 AND close_time >= ?
+                 AND close_time >= ? {_agent_filter}
                ORDER BY close_time ASC""",
             (this_week_start,),
         ).fetchall()
 
         last_week_rows = conn.execute(
-            """SELECT ticket, direction, profit, open_time, close_time, close_reason
+            f"""SELECT ticket, direction, profit, open_time, close_time, close_reason
                FROM trades
                WHERE close_time IS NOT NULL AND profit IS NOT NULL
-                 AND close_time >= ? AND close_time < ?
+                 AND close_time >= ? AND close_time < ? {_agent_filter}
                ORDER BY close_time ASC""",
             (last_week_start, this_week_start),
         ).fetchall()
@@ -617,6 +622,9 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
 
         report = {
             "generated": now.isoformat(),
+            "report_date": now.date().isoformat(),
+            "this_week_start": this_week_start[:10],
+            "last_week_start": last_week_start[:10],
             "this_week": tw,
             "last_week": lw,
             "comparison": {
@@ -1169,9 +1177,9 @@ def run_sage_auditor() -> SageRunResult:
         except Exception:
             pass
 
-        # FLO-69: Weekly report on Fridays (weekday 4)
+        # FLO-69/FLO-152: Weekly report on every daily run (was Fridays only)
         try:
-            if datetime.utcnow().weekday() == 4:
+            if True:  # was: datetime.utcnow().weekday() == 4
                 generate_weekly_report()
         except Exception:
             pass
