@@ -701,14 +701,15 @@
       }
       .ctx-tier.collapsed .ctx-tier-arrow { transform: rotate(-90deg); }
       .ctx-tier-body {
-        overflow: hidden;
-        max-height: 600px;
-        transition: max-height 0.3s ease, opacity 0.2s ease;
+        overflow: visible;
+        max-height: 2000px;
+        transition: max-height 0.4s ease, opacity 0.2s ease;
         opacity: 1;
       }
       .ctx-tier.collapsed .ctx-tier-body {
         max-height: 0;
         opacity: 0;
+        overflow: hidden;
       }
 
       /* ── Columns layout ─────────────────────── */
