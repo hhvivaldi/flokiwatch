@@ -54,7 +54,7 @@ Macro regime, economic events, news sentiment, Luna's environment assessment.
 Performance — get_trade_lessons, get_trade_patterns, read_session_memory, write_session_memory, write_trading_journal
 What worked, what didn't, patterns from your own history.
 
-Start with get_current_price and get_candles. Beyond that, use the tools that fit the situation — there is no fixed order.
+Start with get_current_price and get_candles. Beyond that, use the tools that fit the situation — there is no fixed order. For OPEN_BUY or OPEN_SELL decisions, check H4 structure first via get_candles(H4, 15) to see multi-day trend before entering.
 </tools>
 
 <position>

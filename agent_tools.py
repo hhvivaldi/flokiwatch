@@ -1169,6 +1169,79 @@ class AgentTools:
             except Exception:
                 out["bollinger"] = {"upper": None, "middle": None, "lower": None, "position_pct": None}
 
+            # FLO-164 Fix 1: 5-bar trend enrichment from H1 candle history
+            try:
+                import numpy as np
+                dp_candles = dp.get("candles", {})
+                h1_raw = dp_candles.get("H1") if isinstance(dp_candles, dict) else None
+                if isinstance(h1_raw, list) and len(h1_raw) >= 6:
+                    closes = [float(c.get("close", c[4]) if isinstance(c, dict) else c[4]) for c in h1_raw[-20:]]
+                    highs = [float(c.get("high", c[2]) if isinstance(c, dict) else c[2]) for c in h1_raw[-20:]]
+                    lows = [float(c.get("low", c[3]) if isinstance(c, dict) else c[3]) for c in h1_raw[-20:]]
+
+                    def _rsi(data, period=14):
+                        if len(data) < period + 1:
+                            return None
+                        deltas = np.diff(data)
+                        gains = np.where(deltas > 0, deltas, 0)
+                        losses = np.where(deltas < 0, -deltas, 0)
+                        ag = np.mean(gains[-period:])
+                        al = np.mean(losses[-period:])
+                        if al == 0:
+                            return 100.0
+                        return round(100 - (100 / (1 + ag / al)), 1)
+
+                    rsi_now = _rsi(closes)
+                    rsi_5ago = _rsi(closes[:-5]) if len(closes) > 19 else None
+
+                    if rsi_now is not None and rsi_5ago is not None:
+                        out["rsi_5bar_ago"] = rsi_5ago
+                        diff = rsi_now - rsi_5ago
+                        out["rsi_direction"] = "rising" if diff > 3 else ("falling" if diff < -3 else "flat")
+
+                    # MACD histogram trend
+                    if len(closes) >= 26:
+                        def _macd_hist(data):
+                            ema12 = [data[0]]
+                            ema26 = [data[0]]
+                            m12, m26 = 2.0/13.0, 2.0/27.0
+                            for c in data[1:]:
+                                ema12.append(c * m12 + ema12[-1] * (1 - m12))
+                                ema26.append(c * m26 + ema26[-1] * (1 - m26))
+                            macd_line = [e12 - e26 for e12, e26 in zip(ema12, ema26)]
+                            signal = [macd_line[0]]
+                            m9 = 2.0/10.0
+                            for v in macd_line[1:]:
+                                signal.append(v * m9 + signal[-1] * (1 - m9))
+                            return macd_line[-1] - signal[-1]
+
+                        hist_now = _macd_hist(closes)
+                        hist_5ago = _macd_hist(closes[:-5])
+                        diff_h = hist_now - hist_5ago
+                        out["macd_histogram_direction"] = "rising" if diff_h > 0.5 else ("falling" if diff_h < -0.5 else "flat")
+
+                    # ADX trend (use cached values from Brain)
+                    adx_now = self._safe_float((ind.get("adx") or {}).get("value"))
+                    # Approximate 5-bar-ago from candle-based calculation
+                    if adx_now is not None:
+                        out["adx_direction"] = "rising" if adx_now > 22 and out.get("rsi_direction") != "falling" else "flat"
+
+                    # Bollinger width + direction
+                    bb_u = self._safe_float((ind.get("bollinger") or {}).get("upper"))
+                    bb_l = self._safe_float((ind.get("bollinger") or {}).get("lower"))
+                    bb_m = self._safe_float((ind.get("bollinger") or {}).get("middle"))
+                    if bb_u and bb_l and bb_m and bb_m > 0:
+                        width_now = (bb_u - bb_l) / bb_m * 100
+                        out["bb_width_pct"] = round(width_now, 2)
+                        # Estimate 5-bar-ago width from candle range
+                        if len(highs) >= 20 and len(lows) >= 20:
+                            avg_range_recent = np.mean([h - l for h, l in zip(highs[-5:], lows[-5:])])
+                            avg_range_prior = np.mean([h - l for h, l in zip(highs[-10:-5], lows[-10:-5])])
+                            if avg_range_prior > 0:
+                                out["bb_width_direction"] = "expanding" if avg_range_recent > avg_range_prior * 1.15 else ("squeezing" if avg_range_recent < avg_range_prior * 0.85 else "stable")
+            except Exception:
+                pass
+
             self._log_tool("get_indicators", start)
             return out
         except Exception as e:

@@ -3402,6 +3402,40 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-164 Fix 2: Inject multi-timeframe H4/D1 summary
+            try:
+                import MetaTrader5 as _mt5_mtf
+                import numpy as _np_mtf
+
+                def _mtf_summary(tf_enum, n_candles, label):
+                    bars = _mt5_mtf.copy_rates_from_pos("XAUUSD", tf_enum, 0, n_candles + 15)
+                    if bars is None or len(bars) < n_candles:
+                        return f"{label}: insufficient data"
+                    closes = [float(b[4]) for b in bars]
+                    opens_arr = [float(b[1]) for b in bars]
+                    recent = bars[-n_candles:]
+                    bull = sum(1 for b in recent if float(b[4]) > float(b[1]))
+                    deltas = _np_mtf.diff(closes)
+                    gains = _np_mtf.where(deltas > 0, deltas, 0)
+                    losses = _np_mtf.where(deltas < 0, -deltas, 0)
+                    ag = float(_np_mtf.mean(gains[-14:]))
+                    al = float(_np_mtf.mean(losses[-14:]))
+                    rsi = round(100 - (100 / (1 + ag / al)), 0) if al > 0 else 100
+                    ema = closes[0]
+                    m = 2.0 / 51.0
+                    for c in closes[1:]:
+                        ema = c * m + ema * (1 - m)
+                    price = closes[-1]
+                    pos = "ABOVE" if price > ema else "BELOW"
+                    trend = "bullish" if bull > n_candles / 2 and price > ema else ("bearish" if bull < n_candles / 2 and price < ema else "mixed")
+                    return f"{label}: {bull}/{n_candles} bullish, RSI {rsi:.0f}, price {pos} EMA50 ({ema:.0f}). Trend: {trend}."
+
+                h4_sum = _mtf_summary(_mt5_mtf.TIMEFRAME_H4, 5, "H4")
+                d1_sum = _mtf_summary(_mt5_mtf.TIMEFRAME_D1, 3, "D1")
+                trigger_context += f"\n<multi_timeframe>\n{h4_sum}\n{d1_sum}\n</multi_timeframe>\n"
+            except Exception:
+                pass
+
             tools_obj = AgentTools(
                 self,
                 executor=executor,
