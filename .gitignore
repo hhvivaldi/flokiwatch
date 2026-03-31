@@ -42,6 +42,18 @@ data/*.json
 !data/sage_report.schema.json
 !data/sage_report.json
 
+# ChromaDB vector store (runtime, regenerated from SQLite)
+data/chromadb/
+
+# Trade conditions snapshots (per-ticket, regenerated)
+data/trade_conditions/
+
+# Database backups
+data/*.bak*
+
+# JSONL analysis dumps
+data/*.jsonl
+
 # ============================================================================
 # MODELS (binary files - regenerated from training scripts)
 # ============================================================================
@@ -64,6 +76,16 @@ dry_run_report_*.txt
 # ============================================================================
 *.mhtml
 ngrok.exe
+
+# Cloned repos (installed via git clone, not project code)
+claude-frontend-skills/
+
+# Temporary scripts
+tmp_*.py
+check_*.py
+
+# Zip archives
+*.zip
 
 # OS
 .DS_Store
