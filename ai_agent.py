@@ -747,7 +747,7 @@ class AIAgent:
             },
             {
                 "name": "set_next_check",
-                "description": "Schedule your next analysis cycle. Writes next_check_at timestamp; bounds: 2-120 minutes (default 5).",
+                "description": "Schedule your next analysis cycle. Range: 2-120 minutes.",
                 "input_schema": {
                     "type": "object",
                     "properties": {

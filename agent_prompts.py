@@ -67,7 +67,7 @@ You can use adjust_trade to move SL to protect profits, trail behind structure, 
 
 When holding a position, delegate monitoring to Simba via set_watch_conditions. Simba watches every 30 seconds and wakes you when conditions are met. The more specific your conditions, the longer you can sleep between checks.
 
-When you have no position and decide WAIT, use set_wake_conditions to tell Simba what would make you reconsider.
+When you have no position and decide WAIT, use set_wake_conditions to tell Simba what would make you reconsider. Simba evaluates your wake conditions every 30 seconds. If any condition triggers, you are called immediately — regardless of your set_next_check timer.
 
 At the end of every decision, call set_next_check to schedule your next analysis.
 </position>
