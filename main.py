@@ -468,7 +468,7 @@ class TradingBot:
                     # Derive decision_source from comment
                     deal_comment = deal.get('comment', '') or ''
                     if deal_comment.startswith('Brain-') or deal_comment.startswith('Bot-') or deal_comment.startswith('Agent-'):
-                        dec_source = 'agent_floki'
+                        dec_source = 'floki_agent'
                     else:
                         dec_source = None
 
@@ -520,7 +520,7 @@ class TradingBot:
                     if not (deal_comment.startswith('Brain-') or deal_comment.startswith('Bot-') or deal_comment.startswith('Agent-')):
                         continue
 
-                    dec_source = 'agent_floki'
+                    dec_source = 'floki_agent'
                     open_px = deal.get('open_price')
                     recon_comment = f"reconciled:{deal_comment}"
                     if open_px is None:
@@ -2496,7 +2496,7 @@ class TradingBot:
                         sl=sl_f,
                         tp=tp_f,
                         comment=comment,
-                        decision_source="agent_floki",
+                        decision_source="floki_agent",
                     )
                     return {"success": True, "ticket": 0, "reason": None, "used_ea_bridge": True}
 
@@ -2548,7 +2548,7 @@ class TradingBot:
                     sl=sl_f,
                     tp=tp_f,
                     comment=comment,
-                    decision_source="agent_floki",
+                    decision_source="floki_agent",
                 )
                 return {"success": True, "ticket": order_result.ticket, "reason": None, "used_ea_bridge": False}
 
