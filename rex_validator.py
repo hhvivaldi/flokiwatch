@@ -168,8 +168,8 @@ def _get_rex_model() -> str:
         pass
     return (
         (str(cfg_model).strip() if cfg_model else "")
-        or os.environ.get("REX_MODEL", "gpt-5-mini").strip()
-        or "gpt-5-mini"
+        or os.environ.get("REX_MODEL", "gpt-5").strip()
+        or "gpt-5"
     )
 
 
