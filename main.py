@@ -380,8 +380,15 @@ class TradingBot:
                 real_deals_by_pos[d['position_id']] = d
             
             # Separate today's deals vs historical
-            today_deals = [d for d in real_deals if d['close_time'].date() == today]
-            historical_deals = [d for d in real_deals if d['close_time'].date() != today]
+            # FLO-173: MT5 deal.time is server time which may be a different calendar day
+            # than local time. Include deals closed today OR within 6 hours after midnight
+            # (covers broker timezone offset up to UTC+6).
+            tomorrow = today + timedelta(days=1)
+            cutoff = datetime.combine(tomorrow, datetime.min.time()) + timedelta(hours=6)
+            today_deals = [d for d in real_deals if d['close_time'].date() == today
+                           or (d['close_time'].date() == tomorrow and d['close_time'] < cutoff)]
+            today_tickets = {d['position_id'] for d in today_deals}
+            historical_deals = [d for d in real_deals if d['position_id'] not in today_tickets]
             
             log.info(
                 f"Reconciliation: {len(real_deals)} total deals | "
