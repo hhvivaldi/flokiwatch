@@ -258,8 +258,8 @@ def _rex_tool_loop(
     timeout_seconds: int,
 ) -> Optional[Dict[str, Any]]:
     """Run Rex's tool-calling loop. Returns result dict or None (triggers fallback)."""
-    MAX_TOOL_ROUNDS = 3  # 3 tool rounds + 1 forced-text round = 4 API calls max
-    PER_CALL_TIMEOUT = 20
+    MAX_TOOL_ROUNDS = 2  # 2 tool rounds + 1 forced-text round = 3 API calls max
+    PER_CALL_TIMEOUT = 30
 
     prompt = _build_prompt_with_tools(floki_summary)
     messages = [
@@ -367,7 +367,7 @@ def _validate_with_rex_legacy(
             model=model,
             messages=[{"role": "system", "content": _rex_system_prompt()}, {"role": "user", "content": prompt}],
             max_completion_tokens=3000,
-            timeout=min(timeout_seconds, 20),
+            timeout=min(timeout_seconds, 45),
         )
 
         content = None
