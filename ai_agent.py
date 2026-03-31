@@ -507,16 +507,11 @@ class AIAgent:
             return False
 
     def _macro_tools_if_needed(self) -> List[Dict[str, Any]]:
-        """Return get_headlines + get_macro — always available (Floki decides what to use)."""
+        """Return get_headlines — always available. get_macro removed (FLO-156: 80% dead after FLO-121)."""
         return [
             {
                 "name": "get_headlines",
                 "description": "Get cached news headlines (max 10)",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
-            {
-                "name": "get_macro",
-                "description": "Get cached macro snapshot (DXY, VIX, yields, etc.)",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
         ]
@@ -561,7 +556,7 @@ class AIAgent:
                 "description": "Get cached Fibonacci levels and swing high/low",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-            # get_headlines + get_macro: conditionally excluded when Luna is active
+            # get_headlines: always available (get_macro removed FLO-156)
             *self._macro_tools_if_needed(),
             {
                 "name": "get_calendar",

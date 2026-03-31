@@ -26,7 +26,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
   │  FLOKI  │  │    BRAIN        │  │   ECHO    │ │
   │ Agent   │  │  Data Pipeline  │  │  News     │ │
   │ GPT-5.4 │  │  (Python, 60s)  │  │  Sentinel │ │
-  │ 31 tools│  │  Tech/ML/News/  │  │  MiMo-V2  │ │
+  │ 30 tools│  │  Tech/ML/News/  │  │  MiMo-V2  │ │
   │         │  │  Calendar/S&R   │  │  Flash    │ │
   │ DECIDES │  │  NO DECISIONS   │  │  24/7 RSS │ │
   └────┬────┘  └────────┬────────┘  └─────┬─────┘ │
@@ -88,8 +88,8 @@ The Brain runs every 60 seconds and feeds raw data to agents:
 flokiwatch/
 ├── main.py                 # Orchestrator — main loop, agent scheduling, thesis persistence
 ├── config.py               # Configuration (loads from .env)
-├── ai_agent.py             # Floki agent (GPT-5.4, OpenAI tool-use, 31 tools)
-├── agent_tools.py          # Floki's 31 tools (market data, trading, memory)
+├── ai_agent.py             # Floki agent (GPT-5.4, OpenAI tool-use, 30 tools)
+├── agent_tools.py          # Floki's 30 tools (market data, trading, memory)
 ├── agent_prompts.py        # System prompt (91 lines, ~1,314 tokens, 9 sections)
 ├── rex_validator.py        # Rex co-pilot (GPT-5 mini, 9 tools, independent analysis)
 ├── market_context_fetcher.py # MT5 correlated instruments (15 symbols, 60s cache)
