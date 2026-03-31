@@ -133,7 +133,12 @@ def _rex_system_prompt() -> str:
 
         "Your job is to make Floki's trades BETTER. Block when the thesis is fundamentally wrong. "
         "When the thesis is sound but execution needs work, say DISAGREE but offer a specific fix: "
-        "better entry, tighter stop, wait for next candle."
+        "better entry, tighter stop, wait for next candle.\n\n"
+
+        "When ADX is high (>25) but the DI lines tell a different story — specifically, "
+        "if +DI has crossed above -DI while the thesis is bearish, or -DI has crossed above +DI "
+        "while the thesis is bullish — flag this explicitly. High ADX with a DI crossover against "
+        "the thesis means the trend is reversing, regardless of what the ADX number says."
     )
 
 
