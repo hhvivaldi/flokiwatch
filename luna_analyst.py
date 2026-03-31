@@ -1474,6 +1474,44 @@ def run_luna_analysis() -> LunaAnalysisResult:
                 f"({result.bias_confidence}/10)"
             )
 
+        # FLO-87: Recovery detection heuristic — post-process Luna's bias
+        try:
+            import config as _rcfg
+            _recovery_threshold = float(getattr(_rcfg, "LUNA_RECOVERY_THRESHOLD_PCT", 50))
+            _gold_current = macro.get("gold", {}).get("current")
+            if _gold_current and result.directional_bias == "BEARISH":
+                import MetaTrader5 as _mt5r
+                _gi = _mt5r.symbol_info("XAUUSD")
+                if _gi:
+                    _day_high = getattr(_gi, "session_high", 0) or 0
+                    _day_low = getattr(_gi, "session_low", 0) or 0
+                    _day_range = _day_high - _day_low
+                    if _day_range > 0 and _day_low > 0:
+                        _recovery_pct = ((_gold_current - _day_low) / _day_range) * 100
+                        if _recovery_pct >= _recovery_threshold:
+                            log.info(
+                                f"LUNA | Recovery detected: price recovered {_recovery_pct:.0f}% from daily low "
+                                f"${_day_low:.2f} to ${_gold_current:.2f} (high ${_day_high:.2f}) "
+                                f"— shifting bias BEARISH → NEUTRAL"
+                            )
+                            result = LunaAnalysisResult(
+                                timestamp=result.timestamp,
+                                environment=result.environment,
+                                risk_level=result.risk_level,
+                                directional_bias="NEUTRAL",
+                                bias_confidence=max(1, result.bias_confidence - 2),
+                                key_factors=result.key_factors + [f"Recovery override: {_recovery_pct:.0f}% from daily low"],
+                                patterns_detected=result.patterns_detected,
+                                pattern_details=result.pattern_details,
+                                market_regime=result.market_regime,
+                                summary=result.summary + f" [Recovery override: BEARISH→NEUTRAL, {_recovery_pct:.0f}% from low]",
+                                data_snapshot=result.data_snapshot,
+                                source=result.source,
+                                correlations=result.correlations,
+                            )
+        except Exception as e:
+            log.debug(f"LUNA | recovery check error (ignored): {e}")
+
         # 4. Save macro history snapshot (one per day)
         _save_macro_snapshot(macro)
 
