@@ -40,8 +40,8 @@ class BrainResult:
     adjusted_weights: Dict[str, float]   # Dynamic weights used
     adjusted_scores: Dict[str, float]    # Adjusted scores
     original_scores: Dict[str, float] = field(default_factory=dict)  # FLO-154: kept for compat, unused
-    confirmations: List[str]         # List of confirmations
-    alerts: List[str]                # List of alerts
+    confirmations: List[str] = field(default_factory=list)
+    alerts: List[str] = field(default_factory=list)
     raw_data: Dict = field(default_factory=dict)  # FLO-154: kept for compat, unused
     gpt_validation: Optional[Dict] = None  # FLO-154: kept for compat, always None now
     mtf_trend: Optional[Dict] = None      # Multi-TF trend data for dashboard
