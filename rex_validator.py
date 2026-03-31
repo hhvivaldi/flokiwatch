@@ -90,7 +90,9 @@ def _rex_system_prompt() -> str:
         "0-3 insights maximum. 0-3 risk flags maximum. Quality over quantity.\n\n"
 
         "When ADX is high (>25) but +DI has crossed against the thesis direction, "
-        "flag this as a potential trend reversal."
+        "flag this as a potential trend reversal.\n\n"
+
+        "Respond with raw JSON only. No markdown fences, no ```json blocks, no text before or after the JSON."
     )
 
 
@@ -100,12 +102,12 @@ def _parse_rex_response(text: str) -> RexResult:
     if not raw:
         return RexResult(insights=[], risk_flags=[], raw=text)
 
-    # Strip markdown fences
-    cleaned = raw
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3].strip()
+    # Strip markdown fences (handles ```json, ``` , trailing ```)
+    import re
+    cleaned = raw.strip()
+    cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned)
+    cleaned = re.sub(r'\n?```\s*$', '', cleaned)
+    cleaned = cleaned.strip()
 
     try:
         import json
