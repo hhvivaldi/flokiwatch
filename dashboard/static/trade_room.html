@@ -1121,10 +1121,11 @@
                 <div class="bc-row2">
                   <span class="bc-pill" style="background:rgba(156,39,176,0.15);color:#9C27B0">ACTIVE</span>
                   <span id="rex-opinion-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">STANDBY</span>
+                  <span id="rex-insights-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
                 </div>
                 <div class="bc-row3">
                   <div class="bc-metric">
-                    <span class="bc-metric-label">Agreement</span>
+                    <span class="bc-metric-label">Insights</span>
                     <span id="rex-agree-text" class="bc-metric-val" style="color:#9C27B0">—</span>
                   </div>
                   <div class="bc-bar-track"><div id="rex-agree-bar" class="bc-bar-fill" style="width:0%;background:#9C27B0"></div></div>
@@ -1344,7 +1345,7 @@
               </div>
             </div>
 
-          <div id="agreement-banner" class="agreement-banner banner-conflict">⚡ CONFLICT — FLOKI vs REX</div>
+          <div id="agreement-banner" class="agreement-banner" style="display:none">—</div>
 
       </div>
 
@@ -1367,8 +1368,8 @@
         <!-- Session stats -->
         <div class="glass-panel-deep rounded-xl p-3">
           <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
-          <div class="stat-row"><span class="stat-label">AGREEMENTS</span><span id="stats-agreements" class="stat-val">—</span></div>
-          <div class="stat-row"><span class="stat-label">CONFLICTS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
+          <div class="stat-row"><span class="stat-label">REX INSIGHTS</span><span id="stats-agreements" class="stat-val">—</span></div>
+          <div class="stat-row"><span class="stat-label">RISK FLAGS</span>  <span id="stats-conflicts" class="stat-val" style="color:#f87171">—</span></div>
           <div class="stat-row"><span class="stat-label">MESSAGES</span>   <span id="stats-messages" class="stat-val">—</span></div>
           <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
         </div>
@@ -3312,34 +3313,37 @@
               }
             }
 
+            // FLO-158: Rex insights display (replaces AGREE/DISAGREE)
             if (!marketClosed) {
               var rexText = document.getElementById('rex-agree-text');
               var rexBar = document.getElementById('rex-agree-bar');
               var rexPill = document.getElementById('rex-opinion-pill');
+              var rexInsightsPill = document.getElementById('rex-insights-pill');
+              // Read insights from latest REX message metadata
+              var rexInsightsCount = 0;
+              var rexFlagsCount = 0;
+              try {
+                for (var ri2 = 0; ri2 < (messages || []).length; ri2++) {
+                  var rm2 = messages[ri2];
+                  if ((rm2.author || '').toUpperCase() === 'REX' && rm2.metadata) {
+                    rexInsightsCount = rm2.metadata.insights_count || 0;
+                    rexFlagsCount = (rm2.metadata.risk_flags || []).length;
+                    break;
+                  }
+                }
+              } catch(e) {}
               if (rexPill) {
                 rexPill.classList.remove('pill-buy','pill-sell','pill-wait','pill-hold','pill-standby');
-                rexPill.classList.add('pill-standby');
-                if (rexAgree === true) rexPill.textContent = 'LAST: AGREE';
-                else if (rexAgree === false) rexPill.textContent = 'LAST: DISAGREE';
-                else rexPill.textContent = 'STANDBY';
+                if (rexFlagsCount > 0) { rexPill.textContent = rexFlagsCount + ' FLAG' + (rexFlagsCount > 1 ? 'S' : ''); rexPill.classList.add('pill-sell'); }
+                else if (rexInsightsCount > 0) { rexPill.textContent = rexInsightsCount + ' INSIGHT' + (rexInsightsCount > 1 ? 'S' : ''); rexPill.classList.add('pill-hold'); }
+                else { rexPill.textContent = 'STANDBY'; rexPill.classList.add('pill-standby'); }
               }
-              if (rexText && rexBar) {
-                if (rexAgree === true) {
-                  rexText.textContent = 'YES';
-                  rexBar.style.width = '100%';
-                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                  rexBar.classList.add('conf-high');
-                } else if (rexAgree === false) {
-                  rexText.textContent = 'NO';
-                  rexBar.style.width = '100%';
-                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                  rexBar.classList.add('conf-low');
-                } else {
-                  rexText.textContent = '—';
-                  rexBar.style.width = '0%';
-                  rexBar.classList.remove('conf-low','conf-mid','conf-high');
-                  rexBar.classList.add('conf-mid');
-                }
+              if (rexInsightsPill) { rexInsightsPill.style.display = 'none'; }
+              if (rexText) rexText.textContent = rexInsightsCount > 0 ? rexInsightsCount + ' insights' : '—';
+              if (rexBar) {
+                rexBar.style.width = rexInsightsCount > 0 ? Math.min(rexInsightsCount * 33, 100) + '%' : '0%';
+                rexBar.classList.remove('conf-low','conf-mid','conf-high');
+                rexBar.classList.add(rexFlagsCount > 0 ? 'conf-low' : 'conf-mid');
               }
             }
             try {
@@ -3363,59 +3367,43 @@
               // silent
             }
 
-            // Agreement/conflict banner + stats
-            var conflicts = 0;
-            var agreements = 0;
-            var debateRex = 0;
+            // FLO-158: Rex insights stats (replaces agreement/conflict)
+            var totalInsights = 0;
+            var totalFlags = 0;
+            var rexConsults = 0;
             for (var k = 0; k < (messages || []).length; k++) {
               var mx = messages[k];
-              if ((mx.type || '').toString().toUpperCase() === 'DEBATE' && (mx.author || '').toString().toUpperCase() === 'REX') {
-                debateRex++;
-                var a = mx.metadata ? (mx.metadata.rex_agrees !== undefined ? mx.metadata.rex_agrees : mx.metadata.agree) : null;
-                if (a === true) agreements++;
-                if (a === false) conflicts++;
+              var mxAuthor = (mx.author || '').toString().toUpperCase();
+              var mxType = (mx.type || '').toString().toUpperCase();
+              if (mxAuthor === 'REX' && (mxType === 'REX_INSIGHTS' || mxType === 'DEBATE')) {
+                rexConsults++;
+                totalInsights += (mx.metadata || {}).insights_count || 0;
+                totalFlags += ((mx.metadata || {}).risk_flags || []).length;
               }
             }
 
             var banner = document.getElementById('agreement-banner');
-            if (banner) {
-              banner.classList.remove('banner-agree','banner-conflict');
-              if (conflicts > 0) {
-                banner.classList.add('banner-conflict');
-                banner.textContent = '⚡ CONFLICT — FLOKI vs REX';
-              } else {
-                banner.classList.add('banner-agree');
-                banner.textContent = '✓ AGREEMENT — FLOKI & REX';
-              }
-            }
+            if (banner) { banner.style.display = 'none'; }
 
             var elA = document.getElementById('stats-agreements');
             var elC = document.getElementById('stats-conflicts');
             var elM = document.getElementById('stats-messages');
             var elCalls = document.getElementById('stats-calls');
-            // Rex expand: debate summary
+            // Rex expand: insights summary
             try {
               var rds = document.getElementById('rex-debate-summary');
               if (rds) {
-                if (debateRex > 0) {
-                  var lastBadge = '';
-                  if (lastDebateAgree === true) {
-                    lastBadge = '<span style="background:rgba(74,222,128,0.2);color:#4ade80;border:1px solid rgba(74,222,128,0.3);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:900">AGREE</span>';
-                  } else if (lastDebateAgree === false) {
-                    lastBadge = '<span style="background:rgba(248,113,113,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:900">DISAGREE</span>';
-                  }
-                  if (lastDebateVerified) lastBadge += ' <span style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);padding:1px 5px;border-radius:3px;font-size:8px">\uD83D\uDCCA VERIFIED</span>';
-                  rds.innerHTML = '<div style="margin-bottom:4px"><span style="color:#6b7280">Debates today: </span><span style="color:#e2e8f0;font-weight:700">' + debateRex + '</span> <span style="color:#6b7280">\u2022</span> <span style="color:#4ade80">' + agreements + ' agree</span> <span style="color:#6b7280">/</span> <span style="color:#f87171">' + conflicts + ' disagree</span></div>' +
-                    (lastBadge ? '<div>Last: ' + lastBadge + '</div>' : '');
+                if (rexConsults > 0) {
+                  rds.innerHTML = '<div style="margin-bottom:4px"><span style="color:#6b7280">Rex consults: </span><span style="color:#e2e8f0;font-weight:700">' + rexConsults + '</span> <span style="color:#6b7280">\u2022</span> <span style="color:#f59e0b">' + totalInsights + ' insights</span> <span style="color:#6b7280">/</span> <span style="color:#f87171">' + totalFlags + ' flags</span></div>';
                 } else {
-                  rds.innerHTML = '<span style="color:#6b7280">No debates today</span>';
+                  rds.innerHTML = '<span style="color:#6b7280">No Rex consults today</span>';
                 }
               }
             } catch(e) {}
-            if (elA) elA.textContent = String(agreements);
-            if (elC) elC.textContent = String(conflicts);
+            if (elA) elA.textContent = String(totalInsights);
+            if (elC) elC.textContent = String(totalFlags);
             if (elM) elM.textContent = String((messages || []).length);
-            if (elCalls) elCalls.textContent = String(Math.max(agreements + conflicts, 0));
+            if (elCalls) elCalls.textContent = String(rexConsults);
 
             // FLO-146 Bug 7: Investigation — tools from feed, fallback to proactive reasoning
             try {
@@ -3819,19 +3807,23 @@
 
                 // Rex
                 var ccRex = document.getElementById('cc-rex-verdict');
+                // FLO-158: Command Center Rex shows insights/flags count
                 if (ccRex) {
-                  // Read from latest message or thesis
-                  var lastRex = null;
-                  for (var ri = 0; ri < (messages || []).length; ri++) {
-                    var rm = messages[ri];
-                    if ((rm.author || '').toUpperCase() === 'REX' && (rm.type || '').toUpperCase() === 'DEBATE') {
-                      lastRex = rm.metadata ? (rm.metadata.rex_agrees !== undefined ? rm.metadata.rex_agrees : rm.metadata.agree) : null;
-                      break;
+                  var ccRexFlags = 0;
+                  var ccRexIns = 0;
+                  try {
+                    for (var ri = 0; ri < (messages || []).length; ri++) {
+                      var rm = messages[ri];
+                      if ((rm.author || '').toUpperCase() === 'REX') {
+                        ccRexIns = (rm.metadata || {}).insights_count || 0;
+                        ccRexFlags = ((rm.metadata || {}).risk_flags || []).length;
+                        break;
+                      }
                     }
-                  }
-                  if (lastRex === true) { ccRex.textContent = 'AGREE'; ccRex.style.color = 'var(--clr-buy)'; }
-                  else if (lastRex === false) { ccRex.textContent = 'DISAGREE'; ccRex.style.color = 'var(--clr-sell)'; }
-                  else { ccRex.textContent = '—'; ccRex.style.color = 'var(--text-muted)'; }
+                  } catch(e) {}
+                  if (ccRexFlags > 0) { ccRex.textContent = ccRexFlags + ' FLAG' + (ccRexFlags > 1 ? 'S' : ''); ccRex.style.color = 'var(--clr-sell)'; }
+                  else if (ccRexIns > 0) { ccRex.textContent = ccRexIns + ' INSIGHTS'; ccRex.style.color = 'var(--clr-hold)'; }
+                  else { ccRex.textContent = 'CLEAR'; ccRex.style.color = 'var(--text-muted)'; }
                 }
 
                 // P&L

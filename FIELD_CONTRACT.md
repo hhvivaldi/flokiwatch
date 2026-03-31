@@ -571,7 +571,7 @@ The following elements have been added to the dashboard:
 | `#cc-regime-detail` | `market_regime.confidence` + `duration` | Sub-label |
 | `#cc-floki-decision` | `proactive_analysis.decision` | Floki decision, color-coded |
 | `#cc-floki-conf` | `proactive_analysis.confidence` | Confidence % |
-| `#cc-rex-verdict` | Latest REX debate message | AGREE/DISAGREE |
+| `#cc-rex-verdict` | Latest REX insights message | Insights count / FLAGS / CLEAR (FLO-158) |
 | `#cc-countdown` | `floki_next_check_at` | Live countdown (1s ticker) |
 | `#cc-pnl` | `daily_stats.pnl` | Session P&L |
 
