@@ -1384,14 +1384,14 @@ class AgentMonitor:
                 price = self._safe_float(ctx.get("current_price"))
                 if lvl is None or price is None:
                     return False, None
-                tol = 0.05
+                tol = 5.0
                 try:
                     if cond.get("tolerance") is not None:
                         tol = float(cond.get("tolerance"))
                     elif ctx.get("price_touch_default_tolerance") is not None:
                         tol = float(ctx.get("price_touch_default_tolerance"))
                 except Exception:
-                    tol = 0.05
+                    tol = 5.0
                 return abs(float(price) - float(lvl)) <= float(tol), None
 
             if ctype == "pnl_threshold":
