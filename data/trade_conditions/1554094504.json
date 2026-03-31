@@ -1,0 +1,20 @@
+{
+  "ticket": 1554094504,
+  "direction": "BUY",
+  "open_time": "2026-03-24T16:39:44.371665+00:00",
+  "conditions_at_open": {
+    "rsi_h1": 58.85,
+    "macd_h1": -0.9003518623812852,
+    "adx_h1": 14.6,
+    "atr_h1": 41.9007,
+    "ema50_distance_pct": null,
+    "volume_h1": null,
+    "session": "NY",
+    "utc_hour": 16,
+    "confidence": 65.0,
+    "rex_agreed": false,
+    "luna_environment": "DANGER",
+    "luna_risk_level": 8,
+    "luna_bias": "BULLISH"
+  }
+}

@@ -143,10 +143,6 @@ class TradingBot:
         # Sage daily auditor schedule guard (UTC date string)
         self._sage_last_run_date = None
         
-        # Cycle Memory (cycle memory for temporal context)
-        from cycle_memory import CycleMemory
-        self.cycle_memory = CycleMemory()
-        
         # Market state tracking (for open/close detection)
         self.market_was_open = True  # Assume open at startup
         self._last_keepalive_log = None  # Timestamp of last keepalive log (market closed)
@@ -4085,69 +4081,6 @@ class TradingBot:
         brain_result = analyze_with_brain(tech_data, ml_data, momentum_data, news_data, current_price, calendar_data=calendar_data, volatility_status=vol_status, m5_data=m5_status, sr_data=sr_brain_data)
         
         # Record snapshot in Cycle Memory
-        from cycle_memory import CycleSnapshot
-        snapshot = CycleSnapshot(
-            timestamp=datetime.now(),
-            score=brain_result.final_score,
-            confidence=brain_result.confidence,
-            decision=brain_result.decision,
-            scenario=brain_result.scenario,
-            tech_score=tech_data.get('score', 50),
-            ml_score=ml_data.get('score', 50),
-            momentum_score=momentum_data.get('score', 50),
-            momentum_direction=brain_result.explanation.split('Direction: ')[-1].split('\n')[0] if 'Direction: ' in brain_result.explanation else 'neutral',
-            momentum_strength=brain_result.explanation.split('Strength: ')[-1].split(' |')[0] if 'Strength: ' in brain_result.explanation else 'moderate',
-            news_score=news_data.get('score', 50),
-            current_price=current_price,
-        )
-        # self.cycle_memory.add(snapshot)
-        
-        # GPT Confidence Validator (disabled in Phase 0 — Agent is validator)
-        cycle_history = self.cycle_memory.format_for_gpt()
-        if False and getattr(config, 'USE_GPT_CONFIDENCE', False) and vol_status.get('status') != 'EXTREME':
-            try:
-                from gpt_confidence import validate_confidence
-                gpt_result = validate_confidence(
-                    brain_result, tech_data, ml_data, momentum_data,
-                    news_data, calendar_data, vol_status, current_price,
-                    cycle_history=cycle_history
-                )
-
-                if gpt_result["action"] == "BOOST" and gpt_result["adjustment"] > 0:
-                    brain_result.confidence = min(100, brain_result.confidence + gpt_result["adjustment"])
-                elif gpt_result["action"] == "REDUCE" and gpt_result["adjustment"] > 0:
-                    brain_result.confidence = max(0, brain_result.confidence - gpt_result["adjustment"])
-
-                # Re-classificar confidence_level
-                if brain_result.confidence >= 80:
-                    brain_result.confidence_level = "VERY_HIGH"
-                elif brain_result.confidence >= 65:
-                    brain_result.confidence_level = "HIGH"
-                elif brain_result.confidence >= 50:
-                    brain_result.confidence_level = "MEDIUM"
-                elif brain_result.confidence >= 35:
-                    brain_result.confidence_level = "LOW"
-                else:
-                    brain_result.confidence_level = "VERY_LOW"
-
-                brain_result.gpt_validation = gpt_result
-
-                # Increment stats
-                self.gpt_stats[gpt_result["action"].lower()] += 1
-                if gpt_result.get("from_cache"):
-                    self.gpt_stats["from_cache"] += 1
-
-                cache_tag = " (cache)" if gpt_result.get("from_cache") else ""
-                if gpt_result["action"] != "CONFIRM" and gpt_result["adjustment"] > 0:
-                    sign = "+" if gpt_result["action"] == "BOOST" else "-"
-                    log.info(f"   🤖 GPT: {gpt_result['action']} ({sign}{gpt_result['adjustment']}) — {gpt_result['reason']}{cache_tag}")
-                else:
-                    log.info(f"   🤖 GPT: CONFIRM — {gpt_result['reason']}{cache_tag}")
-
-            except Exception as e:
-                log.warning(f"GPT Confidence error (fallback CONFIRM): {e}")
-                self.gpt_stats["confirm"] += 1
-        
         # Detailed log
         log.info(f"   📊 Scenario: {brain_result.scenario_description}")
 

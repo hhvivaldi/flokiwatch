@@ -1,0 +1,38 @@
+{
+  "ticket": 1564593830,
+  "direction": "BUY",
+  "open_time": "2026-03-30T15:46:34.378186+00:00",
+  "conditions_at_open": {
+    "rsi_h1": 70.97,
+    "macd_h1": 22.149684176146366,
+    "adx_h1": 25.04,
+    "atr_h1": 30.5393,
+    "ema50_distance_pct": 1.41,
+    "volume_h1": null,
+    "session": "NY",
+    "utc_hour": 15,
+    "confidence": 73.0,
+    "rex_agreed": false,
+    "luna_environment": "CAUTION",
+    "luna_risk_level": 5,
+    "luna_bias": "BULLISH",
+    "thesis_at_open": {
+      "direction_bias": "NEUTRAL",
+      "key_levels": [
+        4512,
+        4532,
+        4536,
+        4549
+      ],
+      "conditions": [
+        "This is still a transitional market intraday, and my edge comes from waiting for the market to prove either reclaim strength above the gate or deeper discount toward support"
+      ],
+      "decision": "WAIT",
+      "confidence": 72
+    },
+    "rex_at_open": {
+      "agree": false,
+      "reasoning": "Floki, I like the direction \u2014 price did reclaim the 4536.74\u20134549.86 gate and H1 shows ADX 25 with +DI 26.26, RSI ~71 and EMA50 at 4491 supporting bulls \u2014 but your stop under 4541/4538 is too tight given ATR 30.54 and H1 volatility (recent H1 swing 4523\u20134578, last H1 vol 10,215); you'll get clipped on a normal retest. Either widen the invalidation to below the gate low 4536.7 (preferably down to H4 23.6 at 4530.30) or wait for clean H1 follow\u2011through above 4554\u20134559 before legging in."
+    }
+  }
+}

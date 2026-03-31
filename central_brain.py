@@ -39,11 +39,11 @@ class BrainResult:
     explanation: str                 # Full formatted explanation
     adjusted_weights: Dict[str, float]   # Dynamic weights used
     adjusted_scores: Dict[str, float]    # Adjusted scores
-    original_scores: Dict[str, float]    # Original scores
+    original_scores: Dict[str, float] = field(default_factory=dict)  # FLO-154: kept for compat, unused
     confirmations: List[str]         # List of confirmations
     alerts: List[str]                # List of alerts
-    raw_data: Dict                   # All raw data
-    gpt_validation: Optional[Dict] = None  # GPT Confidence Validator result
+    raw_data: Dict = field(default_factory=dict)  # FLO-154: kept for compat, unused
+    gpt_validation: Optional[Dict] = None  # FLO-154: kept for compat, always None now
     mtf_trend: Optional[Dict] = None      # Multi-TF trend data for dashboard
     volume_gate: Optional[Dict] = None    # Volume gate data for dashboard
     timestamp: datetime = field(default_factory=datetime.now)

@@ -1,0 +1,20 @@
+{
+  "ticket": 1551638302,
+  "direction": "SELL",
+  "open_time": "2026-03-24T00:41:10.568962+00:00",
+  "conditions_at_open": {
+    "rsi_h1": 57.42,
+    "macd_h1": -18.175753611293658,
+    "adx_h1": 25.12,
+    "atr_h1": 81.3171,
+    "ema50_distance_pct": null,
+    "volume_h1": null,
+    "session": "ASIAN",
+    "utc_hour": 0,
+    "confidence": 70.0,
+    "rex_agreed": false,
+    "luna_environment": "DANGER",
+    "luna_risk_level": 8,
+    "luna_bias": "NEUTRAL"
+  }
+}
