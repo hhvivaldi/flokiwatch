@@ -121,18 +121,19 @@ O output do Brain é consumido por:
 
 ---
 
-## 5. Rex — Debate Partner
+## 5. Rex — Market Analyst (FLO-158 redesign)
 
-**Modelo:** GPT-5 mini (`gpt-5-mini`) | **9 tools:** price, candles, indicators, S/R zones, market_context, luna_brief, fibonacci, trade_lessons, open_positions
+**Modelo:** GPT-5 mini (`gpt-5-mini`) | **11 tools:** 6 standard + 5 unique
 **Ficheiro:** `rex_validator.py`
 
-Chamado pelo Floki via ferramenta `debate_with_rex`. Recebe a direção, raciocínio, confiança e dados-chave do Floki. Responde com AGREE/DISAGREE e justificação. **Apenas decisões OPEN/CLOSE ativam o Rex** — HOLD/WAIT/ADJUST são skippados (FLO-50, otimização de custo).
+Chamado pelo Floki via ferramenta `debate_with_rex`. Rex é um analista, não um juiz — fornece 0-3 insights tipados (FLAG/NOTE/HISTORY) em vez de AGREE/DISAGREE. Floki decide sempre.
 
-**Floki-Rex debate protocol (FLO-128/FLO-86):**
-- Rex DISAGREE on DIRECTION → Floki seriously reconsiders thesis
-- Rex DISAGREE on EXECUTION (volume, R:R, timing) → Floki adjusts plan and can proceed if conviction ≥70%
-- Floki CAN override Rex on execution disagreements — logs "Proceeding despite Rex DISAGREE because [reason]"
-- Rex calibrates concerns to market conditions: off-hours low volume is normal, geopolitical events change thresholds, high-ADX trends don't need confirmation candles
+**Standard tools (6):** price, candles, indicators, S/R zones, fibonacci, open_positions
+**Unique tools (5):** rex_session_performance, rex_divergence_scan, rex_regime_history, rex_reflexion_search, rex_correlation_check
+
+**Frequência:** OPEN/CLOSE/ADJUST → sempre consulta Rex. WAIT/HOLD → máximo 1x por hora (rate limit).
+
+**Response format:** `{insights: [{type, observation, source, implication}], risk_flags: [...]}`
 
 ---
 

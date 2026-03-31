@@ -246,6 +246,7 @@ def init_db() -> None:
             ("tp_moment_assessment", "TEXT"),
             ("rex_agreed", "INTEGER"),
             ("rex_reasoning", "TEXT"),
+            ("rex_insights", "TEXT"),
         ]
 
         for col_name, col_type in agent_decisions_columns_to_add:
@@ -677,7 +678,7 @@ def record_agent_decision(
                 tp_risk_reward_ratio, tp_timing, tp_moment_assessment,
                 agreement, executed, outcome,
                 prompt_version, prompt_hash, model, input_tokens, output_tokens, latency_ms,
-                rex_agreed, rex_reasoning)
+                rex_agreed, rex_reasoning, rex_insights)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                        ?, ?, ?,
                        ?, ?,
@@ -685,7 +686,7 @@ def record_agent_decision(
                        ?, ?, ?,
                        ?, ?, ?,
                        ?, ?, ?, ?, ?, ?,
-                       ?, ?)""",
+                       ?, ?, ?)""",
             (
                 agent_result.get("timestamp", datetime.now().isoformat()),
                 brain_decision,
@@ -718,6 +719,7 @@ def record_agent_decision(
                 agent_result.get("latency_ms", 0),
                 1 if agent_result.get("rex_agreed") else (0 if agent_result.get("rex_agreed") is not None else None),
                 (agent_result.get("rex_reasoning") or "")[:4000] or None,
+                json.dumps(agent_result.get("rex_insights") or [])[:4000] if agent_result.get("rex_insights") else None,
             ),
         )
         conn.commit()

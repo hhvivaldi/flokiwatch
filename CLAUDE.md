@@ -21,7 +21,7 @@ python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 | Agent | Model | File | Role |
 |-------|-------|------|------|
 | Floki | GPT-5.4 | `ai_agent.py` | Sole trading decisor. 30 tools. Self-schedules 5-30 min. |
-| Rex | GPT-5 mini | `rex_validator.py` | Co-pilot. Debates trades. Advisory only (not a veto). |
+| Rex | GPT-5 mini | `rex_validator.py` | Analyst. 11 tools (6 standard + 5 unique). Provides insights, not AGREE/DISAGREE. |
 | Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. |
 | Sage | Gemini | `sage_auditor.py` | Daily auditor at 21:00 UTC. |
 | Echo | MiMo-V2-Flash | `echo_sentinel.py` | News sentinel. 25 RSS feeds. PULL-only. |
