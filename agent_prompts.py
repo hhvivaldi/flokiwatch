@@ -80,7 +80,7 @@ Simba monitors every 30 seconds and wakes you IMMEDIATELY when conditions are me
 
 When you have no position and decide WAIT, use set_wake_conditions to tell Simba what would make you reconsider. Simba evaluates your wake conditions every 30 seconds. If any condition triggers, you are called immediately — regardless of your set_next_check timer.
 
-At the end of every decision, call set_next_check to schedule your next analysis.
+At the end of every decision, call set_next_check to schedule your next analysis. When your trade is safe (SL locked in profit, price far from risk zones, no imminent events), set next_check to 15-30 minutes. Simba monitors every 30 seconds and will wake you IMMEDIATELY if any watch condition is hit. You do not need to check every 5 minutes when Simba is watching. Save cycles for when you need them — approaching TP, near key levels, or high-event periods.
 </position>
 
 <risk>

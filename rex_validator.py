@@ -208,6 +208,17 @@ def _execute_rex_tool(agent_tools: Any, name: str, args: dict) -> str:
             result = agent_tools.get_trade_lessons()
         elif name == "get_open_positions":
             result = agent_tools.get_open_positions()
+        # FLO-169: Rex unique tools (were missing since FLO-158)
+        elif name == "rex_session_performance":
+            result = agent_tools.rex_session_performance()
+        elif name == "rex_divergence_scan":
+            result = agent_tools.rex_divergence_scan()
+        elif name == "rex_regime_history":
+            result = agent_tools.rex_regime_history()
+        elif name == "rex_reflexion_search":
+            result = agent_tools.rex_reflexion_search(query=args.get("query", ""))
+        elif name == "rex_correlation_check":
+            result = agent_tools.rex_correlation_check()
         else:
             result = {"error": f"unknown tool: {name}"}
         dt = int((time.time() - t0) * 1000)
