@@ -16,13 +16,69 @@ from logger import log
 
 
 # ---------------------------------------------------------------------------
-# Temporal state (survives between cycles, not restarts)
+# Temporal state (FLO-144: persisted across restarts via regime_state.json)
 # ---------------------------------------------------------------------------
 _regime_history: List[Dict[str, Any]] = []  # [{timestamp, old, new}]
 _last_regime: Optional[str] = None
 _last_regime_change_ts: Optional[float] = None
 _prev_adx: Optional[float] = None
 _prev_bollinger_width: Optional[float] = None
+_state_loaded: bool = False
+
+_STATE_PATH = None  # set lazily
+
+
+def _get_state_path() -> str:
+    global _STATE_PATH
+    if _STATE_PATH is None:
+        import os
+        _STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "regime_state.json")
+    return _STATE_PATH
+
+
+def _load_regime_state() -> None:
+    """Load persisted regime state on first call."""
+    global _regime_history, _last_regime, _last_regime_change_ts, _state_loaded
+    if _state_loaded:
+        return
+    _state_loaded = True
+    try:
+        import json, os
+        path = _get_state_path()
+        if not os.path.exists(path):
+            return
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return
+        _last_regime = data.get("regime")
+        ts = data.get("change_ts")
+        if ts is not None:
+            _last_regime_change_ts = float(ts)
+        hist = data.get("history")
+        if isinstance(hist, list):
+            _regime_history = hist[-50:]  # cap
+        log.info(f"REGIME | state loaded: {_last_regime} since {_last_regime_change_ts}")
+    except Exception as e:
+        log.debug(f"REGIME | state load failed (ignored): {e}")
+
+
+def _save_regime_state() -> None:
+    """Persist regime state to disk (atomic write)."""
+    try:
+        import json, os
+        path = _get_state_path()
+        data = {
+            "regime": _last_regime,
+            "change_ts": _last_regime_change_ts,
+            "history": _regime_history[-50:],
+        }
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, default=str)
+        os.replace(tmp, path)
+    except Exception as e:
+        log.debug(f"REGIME | state save failed (ignored): {e}")
 
 
 def detect_market_regime(
@@ -56,6 +112,7 @@ def detect_market_regime(
     global _regime_history, _last_regime, _last_regime_change_ts
     global _prev_adx, _prev_bollinger_width
 
+    _load_regime_state()  # FLO-144: restore from disk on first call
     now = time.time()
 
     # -----------------------------------------------------------------------
@@ -310,6 +367,18 @@ def detect_market_regime(
         else:
             regime = "TRENDING_BEARISH"
         confidence = "high" if fast_trend_score >= 3 else "moderate"
+        # FLO-144: Range compression boost — if previous regime was RANGING/QUIET for >4h
+        _compression_min = 240  # configurable threshold
+        try:
+            import config as _rcfg
+            _compression_min = int(getattr(_rcfg, "REGIME_COMPRESSION_THRESHOLD_MINUTES", 240))
+        except Exception:
+            pass
+        if _last_regime in ("RANGING", "QUIET") and _last_regime_change_ts:
+            _prev_duration_min = (now - _last_regime_change_ts) / 60.0
+            if _prev_duration_min >= _compression_min and confidence == "moderate":
+                confidence = "high"
+                all_evidence.append(f"Range compression: {_prev_duration_min:.0f}min of {_last_regime}")
         all_evidence.insert(0, f"Fast detection: {fast_trend_score} signals (M5={m5_trending_signals} H1={h1_trending_signals})")
         result = _build_result(regime, confidence, all_evidence, adx, atr_current, atr_ratio, bb_width)
         _update_temporal(regime, now)
@@ -529,6 +598,8 @@ def _update_temporal(regime: str, now: float) -> None:
     elif _last_regime_change_ts is None:
         _last_regime = regime
         _last_regime_change_ts = now
+
+    _save_regime_state()  # FLO-144: persist to disk
 
 
 _TRANSITION_TEXTS = {
