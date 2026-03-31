@@ -145,7 +145,7 @@ def _parse_rex_response(text: str) -> RexResult:
 _REX_TOOLS = [
     # Standard tools (verify Floki's data)
     {"type": "function", "function": {"name": "get_current_price", "description": "Get current gold bid/ask/spread", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
-    {"type": "function", "function": {"name": "get_candles", "description": "Get OHLCV candles. Timeframes: M5, H1, H4, D1. Max 20 candles.", "parameters": {"type": "object", "properties": {"timeframe": {"type": "string", "enum": ["M5", "H1", "H4", "D1"]}, "count": {"type": "integer"}}, "required": ["timeframe"], "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "get_candles", "description": "Get OHLCV candles. Use H1 or H4 only (M5 and D1 are rarely needed). Max 15 candles.", "parameters": {"type": "object", "properties": {"timeframe": {"type": "string", "enum": ["M5", "H1", "H4", "D1"]}, "count": {"type": "integer"}}, "required": ["timeframe"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_indicators", "description": "Get technical indicators: RSI, MACD, EMA50, EMA200, ATR, ADX, Bollinger, +DI, -DI", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_sr_zones", "description": "Get support/resistance zones nearest to current price", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_fibonacci_levels", "description": "Get Fibonacci retracement levels and swing high/low for H1, H4, D1", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
@@ -181,7 +181,7 @@ def _execute_rex_tool(agent_tools: Any, name: str, args: dict) -> str:
             result = agent_tools.get_current_price()
         elif name == "get_candles":
             tf = args.get("timeframe", "H1")
-            count = min(int(args.get("count", 10) or 10), 20)
+            count = min(int(args.get("count", 10) or 10), 15)
             result = agent_tools.get_candles(tf, count)
         elif name == "get_indicators":
             result = agent_tools.get_indicators()
@@ -211,7 +211,7 @@ def _execute_rex_tool(agent_tools: Any, name: str, args: dict) -> str:
 def validate_with_rex(
     floki_summary: Dict[str, Any],
     *,
-    timeout_seconds: int = 60,
+    timeout_seconds: int = 90,
     agent_tools: Any = None,
 ) -> Dict[str, Any]:
     """Ask Rex for a debate response with independent tool access (GPT-5 mini).
