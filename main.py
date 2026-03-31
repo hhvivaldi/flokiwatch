@@ -4397,6 +4397,14 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-151: Pass M5 data and H1 candles for fast regime detection
+            _h1_candles_for_regime = None
+            try:
+                if df is not None and hasattr(df, 'values') and len(df) >= 3:
+                    _h1_candles_for_regime = df[['open', 'high', 'low', 'close']].tail(10).to_dict('records')
+            except Exception:
+                pass
+
             regime_result = detect_market_regime(
                 tech_data=tech_data,
                 momentum_data=momentum_data,
@@ -4405,12 +4413,15 @@ class TradingBot:
                 current_price=current_price,
                 atr_history=atr_history,
                 luna_brief=luna_brief_data,
+                m5_data=m5_status,
+                h1_candles=_h1_candles_for_regime,
             )
             self._last_regime_context = regime_result
+            _regime_src = "fast" if "Fast detection" in str(regime_result.get("evidence", [])) else "ADX"
             log.info(
                 f"REGIME | {regime_result['regime']} | {regime_result['confidence']} | "
                 f"{regime_result['duration_display']} | {regime_result['stability']} | "
-                f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')}"
+                f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')} | src={_regime_src}"
             )
         except Exception as e:
             log.warning(f"REGIME | detection error: {e}")

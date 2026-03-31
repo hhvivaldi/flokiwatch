@@ -33,6 +33,8 @@ def detect_market_regime(
     current_price: float,
     atr_history: List[float],
     luna_brief: Optional[Dict[str, Any]] = None,
+    m5_data: Optional[Dict[str, Any]] = None,
+    h1_candles: Optional[list] = None,
 ) -> Dict[str, Any]:
     """
     Detect market regime from raw analysis data.
@@ -45,6 +47,8 @@ def detect_market_regime(
         current_price: current gold price
         atr_history: rolling ATR values (last 120)
         luna_brief: optional Luna brief for VIX
+        m5_data: from get_m5_status() — M5 candle summary
+        h1_candles: list of H1 OHLCV dicts (most recent last)
 
     Returns:
         Dict with regime, confidence, evidence, temporal context
@@ -170,7 +174,161 @@ def detect_market_regime(
         return result
 
     # -----------------------------------------------------------------------
-    # REGIME 3: BREAKOUT_IMMINENT
+    # FLO-151 LAYER 1: M5 fast detection (early warning, ~30 min)
+    # -----------------------------------------------------------------------
+    m5_trending_signals = 0
+    m5_trending_evidence = []
+    m5_direction = None  # "bullish" or "bearish"
+
+    if m5_data and isinstance(m5_data, dict):
+        m5_green = m5_data.get("green_count", 0) or 0
+        m5_red = m5_data.get("red_count", 0) or 0
+        m5_move = abs(m5_data.get("move_pct", 0) or 0)
+        m5_total = m5_green + m5_red
+
+        # Criterion 5: M5 momentum burst — 6+ of last 10 candles same direction
+        if m5_total >= 6:
+            if m5_green >= 6:
+                m5_trending_signals += 1
+                m5_trending_evidence.append(f"M5 burst: {m5_green}g/{m5_red}r (bullish)")
+                m5_direction = "bullish"
+            elif m5_red >= 6:
+                m5_trending_signals += 1
+                m5_trending_evidence.append(f"M5 burst: {m5_green}g/{m5_red}r (bearish)")
+                m5_direction = "bearish"
+
+        # Criterion 6: M5 rate of change — moved > 1x ATR in last 30 min
+        if m5_move > 0 and atr_current and atr_current > 0:
+            move_points = m5_move / 100.0 * current_price if current_price else 0
+            if move_points > atr_current:
+                m5_trending_signals += 1
+                m5_trending_evidence.append(f"M5 move {move_points:.1f}pts > ATR {atr_current:.1f}")
+                if not m5_direction:
+                    m5_direction = "bullish" if (m5_data.get("move_pct", 0) or 0) > 0 else "bearish"
+
+        # Criterion 7: M5 volume surge (from momentum_data if available)
+        if volume_ratio > 2.0:
+            m5_trending_signals += 1
+            m5_trending_evidence.append(f"Volume surge {volume_ratio:.1f}x avg")
+
+    # -----------------------------------------------------------------------
+    # FLO-151 LAYER 2: H1 confirmation (3+ hours)
+    # -----------------------------------------------------------------------
+    h1_trending_signals = 0
+    h1_trending_evidence = []
+    h1_direction = None
+
+    if h1_candles and isinstance(h1_candles, list) and len(h1_candles) >= 3:
+        try:
+            # Get last 5 H1 candles
+            recent = h1_candles[-5:] if len(h1_candles) >= 5 else h1_candles
+
+            # Criterion 1: 3+ consecutive directional H1 closes
+            consec_bull = 0
+            consec_bear = 0
+            for c in recent:
+                o = float(c.get("open", c[1]) if isinstance(c, dict) else c[1])
+                cl = float(c.get("close", c[4]) if isinstance(c, dict) else c[4])
+                if cl > o:
+                    consec_bull += 1
+                    consec_bear = 0
+                elif cl < o:
+                    consec_bear += 1
+                    consec_bull = 0
+                else:
+                    consec_bull = 0
+                    consec_bear = 0
+
+            if consec_bull >= 3:
+                h1_trending_signals += 1
+                h1_trending_evidence.append(f"{consec_bull} consecutive bullish H1 closes")
+                h1_direction = "bullish"
+            elif consec_bear >= 3:
+                h1_trending_signals += 1
+                h1_trending_evidence.append(f"{consec_bear} consecutive bearish H1 closes")
+                h1_direction = "bearish"
+
+            # Criterion 2: Price > 2x ATR above/below EMA50
+            if ema50 and current_price and atr_current and atr_current > 0:
+                dist = current_price - ema50
+                if dist > atr_current * 2:
+                    h1_trending_signals += 1
+                    h1_trending_evidence.append(f"Price {dist:.1f}pts above EMA50 ({dist/atr_current:.1f}x ATR breakaway)")
+                    h1_direction = h1_direction or "bullish"
+                elif dist < -atr_current * 2:
+                    h1_trending_signals += 1
+                    h1_trending_evidence.append(f"Price {abs(dist):.1f}pts below EMA50 ({abs(dist)/atr_current:.1f}x ATR breakdown)")
+                    h1_direction = h1_direction or "bearish"
+
+            # Criterion 3: Price moved > 3x ATR in last 4 hours one direction
+            if len(h1_candles) >= 4 and atr_current and atr_current > 0:
+                last4 = h1_candles[-4:]
+                first_o = float(last4[0].get("open", last4[0][1]) if isinstance(last4[0], dict) else last4[0][1])
+                last_c = float(last4[-1].get("close", last4[-1][4]) if isinstance(last4[-1], dict) else last4[-1][4])
+                h1_4h_move = abs(last_c - first_o)
+                if h1_4h_move > atr_current * 3:
+                    h1_trending_signals += 1
+                    h1_trending_evidence.append(f"4h move {h1_4h_move:.1f}pts ({h1_4h_move/atr_current:.1f}x ATR)")
+                    if not h1_direction:
+                        h1_direction = "bullish" if last_c > first_o else "bearish"
+
+            # Criterion 4: 4 of last 5 H1 closed in upper/lower 30% of range
+            upper_closes = 0
+            lower_closes = 0
+            for c in recent:
+                h = float(c.get("high", c[2]) if isinstance(c, dict) else c[2])
+                l = float(c.get("low", c[3]) if isinstance(c, dict) else c[3])
+                cl = float(c.get("close", c[4]) if isinstance(c, dict) else c[4])
+                rng = h - l
+                if rng > 0:
+                    pos = (cl - l) / rng
+                    if pos >= 0.7:
+                        upper_closes += 1
+                    elif pos <= 0.3:
+                        lower_closes += 1
+            if upper_closes >= 4:
+                h1_trending_signals += 1
+                h1_trending_evidence.append(f"{upper_closes}/5 H1 closed in upper 30%")
+                h1_direction = h1_direction or "bullish"
+            elif lower_closes >= 4:
+                h1_trending_signals += 1
+                h1_trending_evidence.append(f"{lower_closes}/5 H1 closed in lower 30%")
+                h1_direction = h1_direction or "bearish"
+        except Exception as e:
+            log.debug(f"REGIME | H1 candle analysis error: {e}")
+
+    # -----------------------------------------------------------------------
+    # Fast-path: M5 + H1 signals can override ADX-only trending detection
+    # -----------------------------------------------------------------------
+    fast_trend_score = m5_trending_signals + h1_trending_signals
+    fast_direction = m5_direction or h1_direction
+
+    if fast_trend_score >= 2 and fast_direction:
+        all_evidence = m5_trending_evidence + h1_trending_evidence
+        if fast_direction == "bullish":
+            regime = "TRENDING_BULLISH"
+        else:
+            regime = "TRENDING_BEARISH"
+        confidence = "high" if fast_trend_score >= 3 else "moderate"
+        all_evidence.insert(0, f"Fast detection: {fast_trend_score} signals (M5={m5_trending_signals} H1={h1_trending_signals})")
+        result = _build_result(regime, confidence, all_evidence, adx, atr_current, atr_ratio, bb_width)
+        _update_temporal(regime, now)
+        _prev_adx = adx
+        _prev_bollinger_width = bb_width
+        return result
+
+    # If M5 alone has strong signal, flag BREAKOUT_IMMINENT instead
+    if m5_trending_signals >= 2 and fast_direction:
+        regime = "BREAKOUT_IMMINENT"
+        m5_trending_evidence.insert(0, f"M5 fast detection: {m5_trending_signals} signals ({fast_direction})")
+        result = _build_result(regime, "moderate", m5_trending_evidence, adx, atr_current, atr_ratio, bb_width)
+        _update_temporal(regime, now)
+        _prev_adx = adx
+        _prev_bollinger_width = bb_width
+        return result
+
+    # -----------------------------------------------------------------------
+    # REGIME 3: BREAKOUT_IMMINENT (original ADX-based)
     # -----------------------------------------------------------------------
     breakout_signals = 0
     breakout_evidence = []
