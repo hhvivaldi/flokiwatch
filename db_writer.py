@@ -1218,22 +1218,36 @@ def get_recent_reflexions(limit: int = 5) -> List[Dict[str, Any]]:
         try:
             rows = conn.execute(
                 """SELECT ticket, direction, pnl, close_reason, thesis_summary,
-                          lesson, pattern_tags, timestamp
+                          lesson, pattern_tags, timestamp, revised_lesson, hindsight_json
                    FROM trade_reflexions
                    ORDER BY id DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
         finally:
             conn.close()
-        return [
-            {
+        results = []
+        for r in rows:
+            entry = {
                 "ticket": r[0], "direction": r[1], "pnl": r[2],
                 "close_reason": r[3], "thesis_summary": r[4],
                 "lesson": r[5], "pattern_tags": json.loads(r[6]) if r[6] else [],
                 "timestamp": r[7],
             }
-            for r in rows
-        ]
+            # FLO-147: Include hindsight data if available
+            revised = r[8] if len(r) > 8 else None
+            hindsight = r[9] if len(r) > 9 else None
+            if revised:
+                entry["revised_lesson"] = revised
+                entry["lesson"] = revised  # Floki sees the corrected lesson
+            if hindsight:
+                try:
+                    h = json.loads(hindsight)
+                    entry["hindsight_tags"] = h.get("hindsight_tags", [])
+                    entry["original_lesson_correct"] = h.get("original_lesson_correct")
+                except Exception:
+                    pass
+            results.append(entry)
+        return results
     except Exception as e:
         log.debug(f"db_writer: failed to get reflexions: {e}")
         return []

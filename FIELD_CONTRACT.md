@@ -609,6 +609,7 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `market_regime.adx` | float | `state_writer.py` | `#regime-card-adx` (Trade Room) |
 | `market_regime.atr_ratio` | float | `state_writer.py` | `#regime-card-atr` (Trade Room) |
 | `market_regime.transition` | string | `state_writer.py` | `#regime-card-transition` (Trade Room) |
+| `market_regime.src` | string (`fast` \| `ADX`) | `state_writer.py` | `#ctx-regime-detail` + `#cc-regime-detail` (Trade Room) |
 
 ### `ea_bridge` Object in `bot_state.json`
 

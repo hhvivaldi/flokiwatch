@@ -3718,6 +3718,7 @@
                   if (mr.confidence) parts.push(mr.confidence + ' conf');
                   if (mr.duration) parts.push(mr.duration);
                   if (mr.stability) parts.push(mr.stability);
+                  if (mr.src) parts.push(mr.src);
                   if (regimeDetail) regimeDetail.textContent = parts.join(' · ') || '—';
                 } else if (regimePill) {
                   regimePill.textContent = '—';
@@ -3801,7 +3802,7 @@
                   var rvm2 = {'VOLATILE':'--clr-volatile','TRENDING_BULLISH':'--clr-trending-bull','TRENDING_BEARISH':'--clr-trending-bear','BREAKOUT_IMMINENT':'--clr-breakout','RANGING':'--clr-ranging','QUIET':'--clr-quiet','TRANSITIONAL':'--clr-transitional'};
                   var cv = rvm2[mr2.regime.toUpperCase()] || '--clr-ranging';
                   ccRegime.style.color = getComputedStyle(document.documentElement).getPropertyValue(cv).trim();
-                  if (ccRegDet) ccRegDet.textContent = (mr2.confidence || '') + ' · ' + (mr2.duration || '');
+                  if (ccRegDet) ccRegDet.textContent = (mr2.confidence || '') + ' · ' + (mr2.duration || '') + (mr2.src ? ' · ' + mr2.src : '');
                 }
 
                 // Floki decision + confidence

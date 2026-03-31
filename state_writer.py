@@ -255,6 +255,7 @@ def write_state(bot_instance: Any) -> None:
         try:
             _regime = getattr(bot_instance, "_last_regime_context", None)
             if isinstance(_regime, dict) and _regime.get("regime"):
+                _src = "fast" if "Fast detection" in str(_regime.get("evidence", [])) else "ADX"
                 state["market_regime"] = {
                     "regime": _regime["regime"],
                     "confidence": _regime.get("confidence"),
@@ -263,6 +264,7 @@ def write_state(bot_instance: Any) -> None:
                     "adx": _regime.get("adx"),
                     "atr_ratio": _regime.get("atr_ratio"),
                     "transition": _regime.get("transition"),
+                    "src": _src,
                 }
         except Exception as e:
             log.debug(f"state_writer: market_regime error: {e}")
