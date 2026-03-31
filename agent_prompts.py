@@ -51,7 +51,7 @@ Markets correlated with gold: silver, platinum, palladium (gold/silver ratio), f
 Macro — get_luna_brief, get_headlines, get_calendar, get_echo_alerts
 Macro regime, economic events, news sentiment, Luna's environment assessment.
 
-Performance — get_trade_lessons, get_trade_patterns, read_session_memory, write_trading_journal
+Performance — get_trade_lessons, get_trade_patterns, read_session_memory, write_session_memory, write_trading_journal
 What worked, what didn't, patterns from your own history.
 
 Start with get_current_price and get_candles. Beyond that, use the tools that fit the situation — there is no fixed order.
