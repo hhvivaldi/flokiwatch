@@ -3770,6 +3770,81 @@ class TradingBot:
                                                 break
                                         break  # Only check first breakout attempt per swing high
 
+                            # Head & Shoulders: middle swing high is highest, two flanking lows form neckline
+                            try:
+                                for a in range(len(swing_highs) - 2):
+                                    ai, ap = swing_highs[a]
+                                    bi, bp = swing_highs[a + 1]
+                                    ci, cp = swing_highs[a + 2]
+                                    if bp > ap and bp > cp and bi - ai >= 3 and ci - bi >= 3:
+                                        # Find swing lows between the three highs for neckline
+                                        neck_lows = [lp for li, lp in swing_lows if ai < li < ci]
+                                        if len(neck_lows) >= 2:
+                                            neckline = round(sum(neck_lows[:2]) / 2)
+                                            if abs(neck_lows[0] - neck_lows[1]) <= 50:
+                                                dist = round(_cp - neckline)
+                                                if 0 < dist < 150:
+                                                    detected.append(
+                                                        f"H&S forming, neckline at ${neckline} "
+                                                        f"(head ${round(bp)}, shoulders ${round(ap)} + ${round(cp)}, "
+                                                        f"price {dist} above neckline)"
+                                                    )
+                            except Exception:
+                                pass
+
+                            # Rising wedge: higher highs + higher lows but range narrowing (bearish)
+                            try:
+                                if len(swing_highs) >= 3 and len(swing_lows) >= 3:
+                                    sh3 = swing_highs[-3:]
+                                    sl3 = swing_lows[-3:]
+                                    hh_rising = sh3[0][1] < sh3[1][1] < sh3[2][1]
+                                    hl_rising = sl3[0][1] < sl3[1][1] < sl3[2][1]
+                                    range_first = sh3[0][1] - sl3[0][1]
+                                    range_last = sh3[2][1] - sl3[2][1]
+                                    if hh_rising and hl_rising and range_first > 0 and range_last < range_first * 0.8:
+                                        detected.append(
+                                            f"Rising wedge forming between ${round(sl3[2][1])}-${round(sh3[2][1])} "
+                                            f"(bearish, range narrowing {round(range_first)}->{round(range_last)} pips)"
+                                        )
+                            except Exception:
+                                pass
+
+                            # Falling wedge: lower highs + lower lows but range narrowing (bullish)
+                            try:
+                                if len(swing_highs) >= 3 and len(swing_lows) >= 3:
+                                    sh3 = swing_highs[-3:]
+                                    sl3 = swing_lows[-3:]
+                                    lh_falling = sh3[0][1] > sh3[1][1] > sh3[2][1]
+                                    ll_falling = sl3[0][1] > sl3[1][1] > sl3[2][1]
+                                    range_first = sh3[0][1] - sl3[0][1]
+                                    range_last = sh3[2][1] - sl3[2][1]
+                                    if lh_falling and ll_falling and range_first > 0 and range_last < range_first * 0.8:
+                                        detected.append(
+                                            f"Falling wedge forming between ${round(sl3[2][1])}-${round(sh3[2][1])} "
+                                            f"(bullish, range narrowing {round(range_first)}->{round(range_last)} pips)"
+                                        )
+                            except Exception:
+                                pass
+
+                            # Channel: swing highs at similar levels AND swing lows at similar levels
+                            try:
+                                if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+                                    sh_prices = [p for _, p in swing_highs[-4:]]
+                                    sl_prices = [p for _, p in swing_lows[-4:]]
+                                    sh_range = max(sh_prices) - min(sh_prices)
+                                    sl_range = max(sl_prices) - min(sl_prices)
+                                    if sh_range <= 50 and sl_range <= 50:
+                                        ch_top = round(sum(sh_prices) / len(sh_prices))
+                                        ch_bot = round(sum(sl_prices) / len(sl_prices))
+                                        if ch_top - ch_bot > 20:
+                                            detected.append(
+                                                f"Channel ${ch_bot}-${ch_top} "
+                                                f"({len(sh_prices)} highs within {round(sh_range)} pips, "
+                                                f"{len(sl_prices)} lows within {round(sl_range)} pips)"
+                                            )
+                            except Exception:
+                                pass
+
                             if detected:
                                 # Dedupe and limit
                                 seen_pat = set()
@@ -3779,7 +3854,7 @@ class TradingBot:
                                     if key not in seen_pat:
                                         seen_pat.add(key)
                                         unique_pats.append(d)
-                                patterns_block = "\nPATTERNS: " + ". ".join(unique_pats[:4])
+                                patterns_block = "\nPATTERNS: " + ". ".join(unique_pats[:6])
                     except Exception:
                         pass
 
