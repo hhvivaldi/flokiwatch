@@ -3503,61 +3503,289 @@ class TradingBot:
                     h4_summary, h4_candles = _tf_block(_mt5_ms.TIMEFRAME_H4, 20, 20, "H4", _cp)
                     d1_summary, d1_candles = _tf_block(_mt5_ms.TIMEFRAME_D1, 10, 10, "D1", _cp)
 
-                    # Confluence zones (simple: find price levels where 2+ of S/R, fib, EMA cluster within 50 pips)
+                    # -----------------------------------------------------------
+                    # FLO-167: Volume profile + momentum quality (H1 bars)
+                    # -----------------------------------------------------------
+                    volume_block = ""
+                    try:
+                        h1_bars = _mt5_ms.copy_rates_from_pos("XAUUSD", _mt5_ms.TIMEFRAME_H1, 0, 50)
+                        if h1_bars is not None and len(h1_bars) >= 10:
+                            h1_vols = [int(b[5]) for b in h1_bars]
+                            h1_highs = [float(b[2]) for b in h1_bars]
+                            h1_lows = [float(b[3]) for b in h1_bars]
+                            h1_closes = [float(b[4]) for b in h1_bars]
+
+                            # Volume trend: last 5 vs previous 5
+                            avg_last5 = sum(h1_vols[-5:]) / 5
+                            avg_prev5 = sum(h1_vols[-10:-5]) / 5
+                            if avg_prev5 > 0:
+                                vol_ratio = avg_last5 / avg_prev5
+                                if vol_ratio > 1.2:
+                                    vol_trend = "increasing"
+                                elif vol_ratio < 0.8:
+                                    vol_trend = "decreasing"
+                                else:
+                                    vol_trend = "flat"
+                            else:
+                                vol_trend = "unknown"
+                                vol_ratio = 0
+
+                            # Volume at swing high
+                            avg_vol = sum(h1_vols[-20:]) / min(len(h1_vols), 20)
+                            sh_idx = int(_np_ms.argmax(h1_highs[-20:])) + max(0, len(h1_highs) - 20)
+                            sh_vol = h1_vols[sh_idx]
+                            if avg_vol > 0 and sh_vol > avg_vol * 1.2:
+                                sh_vol_label = f"high_volume_rejection ({sh_vol:,} vs avg {int(avg_vol):,})"
+                            else:
+                                sh_vol_label = f"low_volume_test ({sh_vol:,} vs avg {int(avg_vol):,})"
+
+                            # ATR (H1) for momentum quality
+                            atr_vals = [h1_highs[i] - h1_lows[i] for i in range(len(h1_highs))]
+                            atr_avg = sum(atr_vals[-14:]) / min(len(atr_vals), 14)
+                            atr_5d_avg = sum(atr_vals[-120:]) / min(len(atr_vals), 120) if len(atr_vals) >= 20 else atr_avg
+
+                            vol_rising = vol_trend == "increasing"
+                            atr_above = atr_avg > atr_5d_avg * 1.1
+                            if vol_rising and atr_above:
+                                momentum_q = "strong (rising volume + above-avg ATR)"
+                            elif vol_trend == "decreasing" and atr_avg < atr_5d_avg * 0.9:
+                                momentum_q = "weak (declining volume + below-avg ATR)"
+                            else:
+                                momentum_q = "moderate"
+
+                            volume_block = (
+                                f"\nVOLUME: trend {vol_trend} (last 5 avg {int(avg_last5):,} vs prior 5 avg {int(avg_prev5):,})"
+                                f", swing high {sh_vol_label}"
+                                f"\nMOMENTUM: {momentum_q}"
+                            )
+                    except Exception:
+                        pass
+
+                    # -----------------------------------------------------------
+                    # FLO-168: Enhanced confluence (fibs, round numbers, rejection weighting)
+                    # -----------------------------------------------------------
                     confluence = ""
                     try:
-                        levels_res = []
-                        levels_sup = []
+                        # Collect levels with metadata: (price, label)
+                        level_entries_res = []  # [(price, label), ...]
+                        level_entries_sup = []
+
+                        # S/R zones with rejection data
                         sr = getattr(self, "_last_agent_data", None)
                         if callable(sr):
                             sr = sr()
                         sr_zones = (sr or {}).get("sr_zones", [])
                         if isinstance(sr_zones, dict):
                             sr_zones = sr_zones.get("zones", [])
-                        for z in (sr_zones or [])[:20]:
-                            if isinstance(z, dict):
-                                mid = z.get("midpoint") or z.get("price", 0)
-                                if mid > _cp:
-                                    levels_res.append(round(float(mid)))
-                                else:
-                                    levels_sup.append(round(float(mid)))
+                        sr_zone_meta = {}  # price → {touches, last_touch_age_bars, tf}
+                        for z in (sr_zones or [])[:30]:
+                            if not isinstance(z, dict):
+                                continue
+                            mid = z.get("midpoint") or z.get("price", 0)
+                            if not mid:
+                                continue
+                            mid = round(float(mid))
+                            touches = int(z.get("touches") or z.get("rejections") or 0)
+                            age = z.get("age_bars")
+                            tf_label = z.get("timeframe") or "S/R"
+                            sr_zone_meta[mid] = {"touches": touches, "age_bars": age, "tf": tf_label}
+                            label = f"{tf_label} S/R"
+                            if mid > _cp:
+                                level_entries_res.append((mid, label))
+                            else:
+                                level_entries_sup.append((mid, label))
+
                         # Add EMAs as levels
-                        h4_ema50 = _calc_ema([float(b[4]) for b in _mt5_ms.copy_rates_from_pos("XAUUSD", _mt5_ms.TIMEFRAME_H4, 0, 60) or []], 50)
-                        if h4_ema50 < _cp: levels_sup.append(h4_ema50)
-                        else: levels_res.append(h4_ema50)
+                        h4_bars_raw = _mt5_ms.copy_rates_from_pos("XAUUSD", _mt5_ms.TIMEFRAME_H4, 0, 60)
+                        h4_ema50 = _calc_ema([float(b[4]) for b in h4_bars_raw or []], 50)
+                        if h4_ema50 < _cp:
+                            level_entries_sup.append((h4_ema50, "H4 EMA50"))
+                        else:
+                            level_entries_res.append((h4_ema50, "H4 EMA50"))
 
-                        def _cluster(levels, n=3):
-                            if not levels: return []
-                            levels.sort()
+                        # Fibonacci levels (multi-timeframe)
+                        fib_dp = getattr(self, "_last_agent_data", None)
+                        if callable(fib_dp):
+                            fib_dp = fib_dp()
+                        fib_data = (fib_dp or {}).get("fibonacci") or {}
+                        if isinstance(fib_data, dict):
+                            for tf_key, tf_fib in fib_data.items():
+                                if not isinstance(tf_fib, dict):
+                                    continue
+                                levels = tf_fib.get("levels") or {}
+                                for pct, price in levels.items():
+                                    try:
+                                        p = round(float(price))
+                                        label = f"Fib {pct}% {tf_key}"
+                                        if p > _cp:
+                                            level_entries_res.append((p, label))
+                                        else:
+                                            level_entries_sup.append((p, label))
+                                    except Exception:
+                                        pass
+
+                        def _cluster_enhanced(entries, n=3):
+                            """Cluster levels within 50 pips, include labels and strength."""
+                            if not entries:
+                                return []
+                            entries.sort(key=lambda x: x[0])
                             clusters = []
-                            for i, l in enumerate(levels):
-                                nearby = [x for x in levels if abs(x - l) <= 50]
-                                if len(nearby) >= 2:
-                                    low = min(nearby)
-                                    high = max(nearby)
-                                    clusters.append((low, high, len(nearby)))
-                            # Dedupe overlapping clusters
-                            seen = set()
-                            unique = []
-                            for low, high, count in sorted(clusters, key=lambda x: -x[2]):
-                                key = round(low / 50) * 50
-                                if key not in seen:
-                                    seen.add(key)
-                                    unique.append(f"${low}-{high} [{count} levels]")
-                            return unique[:n]
+                            used = set()
+                            for i, (price, label) in enumerate(entries):
+                                if i in used:
+                                    continue
+                                nearby = [(j, p, lb) for j, (p, lb) in enumerate(entries) if abs(p - price) <= 50]
+                                if len(nearby) < 2:
+                                    continue
+                                for j, _, _ in nearby:
+                                    used.add(j)
+                                low = min(p for _, p, _ in nearby)
+                                high = max(p for _, p, _ in nearby)
+                                labels = [lb for _, _, lb in nearby]
 
-                        res_clusters = _cluster(levels_res)
-                        sup_clusters = _cluster(levels_sup)
+                                # Round number check ($xx00, $xx50 within 30 pips)
+                                for rn in range(int(low / 50) * 50, int(high / 50 + 1) * 50 + 1, 50):
+                                    if rn > 0 and any(abs(p - rn) <= 30 for _, p, _ in nearby):
+                                        if rn not in [p for _, p, _ in nearby]:
+                                            labels.append(f"round ${rn}")
+
+                                # Rejection weighting from S/R zone metadata
+                                strength = ""
+                                best_touches = 0
+                                recent_touch = False
+                                for _, p, _ in nearby:
+                                    meta = sr_zone_meta.get(round(p))
+                                    if meta:
+                                        t = meta["touches"]
+                                        if t > best_touches:
+                                            best_touches = t
+                                        age = meta.get("age_bars")
+                                        if age is not None and int(age) <= 48:
+                                            recent_touch = True
+
+                                if best_touches >= 20:
+                                    strength = "EXTREME"
+                                elif best_touches >= 10 and recent_touch:
+                                    strength = "STRONG"
+                                elif best_touches >= 5:
+                                    strength = "MODERATE"
+                                elif best_touches > 0:
+                                    strength = "WEAK"
+
+                                touch_info = ""
+                                if best_touches > 0:
+                                    touch_info = f", {best_touches} rejections"
+                                    if recent_touch:
+                                        touch_info += " (recent)"
+
+                                desc = f"${low}-{high}"
+                                if strength:
+                                    desc += f" [{strength} — {' + '.join(labels[:4])}{touch_info}]"
+                                else:
+                                    desc += f" [{' + '.join(labels[:4])}]"
+                                clusters.append((len(nearby), desc))
+                            clusters.sort(key=lambda x: -x[0])
+                            return [c[1] for c in clusters[:n]]
+
+                        res_clusters = _cluster_enhanced(level_entries_res)
+                        sup_clusters = _cluster_enhanced(level_entries_sup)
                         if res_clusters or sup_clusters:
                             parts = []
-                            if res_clusters: parts.append(f"RESISTANCE: {', '.join(res_clusters)}")
-                            if sup_clusters: parts.append(f"SUPPORT: {', '.join(sup_clusters)}")
+                            if res_clusters:
+                                parts.append(f"RESISTANCE: {', '.join(res_clusters)}")
+                            if sup_clusters:
+                                parts.append(f"SUPPORT: {', '.join(sup_clusters)}")
                             confluence = "\nCONFLUENCE " + " | ".join(parts)
                     except Exception:
                         pass
 
+                    # -----------------------------------------------------------
+                    # FLO-165: Multi-candle pattern detection (double top/bottom, failed breakout)
+                    # -----------------------------------------------------------
+                    patterns_block = ""
+                    try:
+                        h4_bars_pat = _mt5_ms.copy_rates_from_pos("XAUUSD", _mt5_ms.TIMEFRAME_H4, 0, 30)
+                        if h4_bars_pat is not None and len(h4_bars_pat) >= 10:
+                            pat_highs = [float(b[2]) for b in h4_bars_pat]
+                            pat_lows = [float(b[3]) for b in h4_bars_pat]
+                            pat_closes = [float(b[4]) for b in h4_bars_pat]
+                            pat_times = [_dt_ms.fromtimestamp(int(b[0])) for b in h4_bars_pat]
+                            n_bars = len(pat_highs)
+
+                            # Find all swing highs/lows (local max/min with 2 bars on each side)
+                            swing_highs = []  # (index, price)
+                            swing_lows = []
+                            for i in range(2, n_bars - 2):
+                                if pat_highs[i] >= max(pat_highs[i-2:i]) and pat_highs[i] >= max(pat_highs[i+1:i+3]):
+                                    swing_highs.append((i, pat_highs[i]))
+                                if pat_lows[i] <= min(pat_lows[i-2:i]) and pat_lows[i] <= min(pat_lows[i+1:i+3]):
+                                    swing_lows.append((i, pat_lows[i]))
+
+                            detected = []
+
+                            # Double top: two swing highs within 50 pips, separated by 3+ bars
+                            for a in range(len(swing_highs)):
+                                for b_idx in range(a + 1, len(swing_highs)):
+                                    ai, ap = swing_highs[a]
+                                    bi, bp = swing_highs[b_idx]
+                                    if bi - ai >= 3 and abs(ap - bp) <= 50:
+                                        avg_top = round((ap + bp) / 2)
+                                        dist = round(avg_top - _cp)
+                                        if dist > 0 and dist < 200:
+                                            detected.append(
+                                                f"Double top forming at ${avg_top} "
+                                                f"(swing highs ${round(ap)} + ${round(bp)}, "
+                                                f"+{dist} from price)"
+                                            )
+
+                            # Double bottom: two swing lows within 50 pips, separated by 3+ bars
+                            for a in range(len(swing_lows)):
+                                for b_idx in range(a + 1, len(swing_lows)):
+                                    ai, ap = swing_lows[a]
+                                    bi, bp = swing_lows[b_idx]
+                                    if bi - ai >= 3 and abs(ap - bp) <= 50:
+                                        avg_bot = round((ap + bp) / 2)
+                                        dist = round(_cp - avg_bot)
+                                        if dist > 0 and dist < 200:
+                                            detected.append(
+                                                f"Double bottom forming at ${avg_bot} "
+                                                f"(swing lows ${round(ap)} + ${round(bp)}, "
+                                                f"-{dist} below price)"
+                                            )
+
+                            # Failed breakout: price closed above a swing high then back below within 3 bars
+                            for si, sp in swing_highs:
+                                # Look for close above the swing high after it formed
+                                for j in range(si + 1, min(si + 6, n_bars)):
+                                    if pat_closes[j] > sp:
+                                        # Found a close above — now check if it failed back within 3 bars
+                                        for k in range(j + 1, min(j + 4, n_bars)):
+                                            if pat_closes[k] < sp:
+                                                t_break = pat_times[j].strftime("%b%d %H:%M")
+                                                t_fail = pat_times[k].strftime("%b%d %H:%M")
+                                                detected.append(
+                                                    f"Failed breakout at ${round(sp)} "
+                                                    f"(broke above at {t_break}, failed back below by {t_fail})"
+                                                )
+                                                break
+                                        break  # Only check first breakout attempt per swing high
+
+                            if detected:
+                                # Dedupe and limit
+                                seen_pat = set()
+                                unique_pats = []
+                                for d in detected:
+                                    key = d[:30]
+                                    if key not in seen_pat:
+                                        seen_pat.add(key)
+                                        unique_pats.append(d)
+                                patterns_block = "\nPATTERNS: " + ". ".join(unique_pats[:4])
+                    except Exception:
+                        pass
+
                     trigger_context += (
-                        f"\n<market_structure>\n{d1_summary}\n\n{h4_summary}{confluence}\n</market_structure>\n"
+                        f"\n<market_structure>\n{d1_summary}\n\n{h4_summary}"
+                        f"{volume_block}{confluence}{patterns_block}\n</market_structure>\n"
                         f"\n{h4_candles}\n{d1_candles}\n"
                     )
             except Exception:

@@ -1028,7 +1028,10 @@ class AgentTools:
             if c <= 0:
                 self._log_fail("get_candles", start, "count must be positive")
                 return {"success": False, "reason": "count must be positive"}
-            c = min(c, 50)
+            # FLO-166: H1 default 50 candles (2 days) for proper swing visibility
+            if tf == "H1":
+                c = max(c, 50)
+            c = min(c, 100)
 
             dp = self._last_agent_data() or {}
 
