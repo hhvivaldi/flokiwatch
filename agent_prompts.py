@@ -75,7 +75,8 @@ You can use adjust_trade to move SL to protect profits, trail behind structure, 
 
 When holding a trade, ALWAYS set both UPSIDE and DOWNSIDE watch conditions via set_watch_conditions:
 - Upside: TP approach, profit expansion targets
-- Downside: price_touch at your SL level, price_touch at key structural support from market_structure (e.g., H4 swing low), pnl_threshold at a drawdown level you won't accept (e.g., profit drops below $5)
+- Downside: price_touch at your SL level, price_touch at key structural support from market_structure (e.g., H4 swing low), pnl_threshold at a drawdown level you won't accept (e.g., -15 for max loss), pnl_below for profit drawdown (e.g., pnl_below value: 10 wakes you when profit drops below $10)
+- Indicators: indicator_threshold supports rsi, macd_histogram, adx, vix. Use for reversal detection — e.g., {type: 'indicator_threshold', indicator: 'rsi', direction: 'below', level: 40} wakes you when RSI collapses. {indicator: 'macd_histogram', direction: 'below', level: 0} catches MACD bearish crossover.
 Simba monitors every 30 seconds and wakes you IMMEDIATELY when conditions are met. Without downside conditions, you only discover reversals on your next scheduled check.
 
 When you have no position and decide WAIT, use set_wake_conditions to tell Simba what would make you reconsider. Simba evaluates your wake conditions every 30 seconds. If any condition triggers, you are called immediately — regardless of your set_next_check timer.

@@ -1360,10 +1360,14 @@ class AgentMonitor:
         except Exception:
             macro = {}
 
+        # FLO-172: inject indicators so indicator_threshold can read RSI/MACD/ADX
+        indicators = scanner_data.get("indicators") if isinstance(scanner_data.get("indicators"), dict) else {}
+
         ctx = {
             "current_price": current_price,
             "pnl_dollars": pnl_dollars,
             "macro": macro,
+            "indicators": indicators,
         }
         for c in conditions or []:
             if not isinstance(c, dict):
@@ -1405,17 +1409,53 @@ class AgentMonitor:
                     or thr == 0
                 ), None
 
+            # FLO-172: pnl_below — wake when profit drops below a positive threshold
+            if ctype == "pnl_below":
+                thr = self._safe_float(cond.get("value"))
+                pnl = self._safe_float(ctx.get("pnl_dollars"))
+                if thr is None or pnl is None:
+                    return False, None
+                return float(pnl) < float(thr), None
+
             if ctype == "indicator_threshold":
                 ind = str(cond.get("indicator") or "").strip().lower()
                 direction = str(cond.get("direction") or "").strip().lower()
                 lvl = self._safe_float(cond.get("level"))
-                if ind != "vix" or lvl is None or direction not in ("above", "below"):
+                if lvl is None or direction not in ("above", "below"):
                     return False, None
-                macro = ctx.get("macro") if isinstance(ctx.get("macro"), dict) else {}
-                vix_val = self._safe_float(macro.get("vix"))
-                if vix_val is None:
+
+                # FLO-172: dispatch by indicator type
+                cur = None
+                if ind == "vix":
+                    macro = ctx.get("macro") if isinstance(ctx.get("macro"), dict) else {}
+                    cur = self._safe_float(macro.get("vix"))
+                else:
+                    indicators = ctx.get("indicators") if isinstance(ctx.get("indicators"), dict) else {}
+                    # Map friendly names to nested dict paths
+                    _IND_MAP = {
+                        "rsi": ("rsi", "value"),
+                        "macd_histogram": ("macd", "histogram"),
+                        "macd_hist": ("macd", "histogram"),
+                        "adx": ("adx", "value"),
+                    }
+                    mapping = _IND_MAP.get(ind)
+                    if mapping:
+                        block = indicators.get(mapping[0])
+                        if isinstance(block, dict):
+                            cur = self._safe_float(block.get(mapping[1]))
+                        else:
+                            cur = self._safe_float(block)
+                    else:
+                        # Generic fallback: try indicators[ind] as dict or raw value
+                        raw = indicators.get(ind)
+                        if isinstance(raw, dict):
+                            cur = self._safe_float(raw.get("value"))
+                        else:
+                            cur = self._safe_float(raw)
+
+                if cur is None:
                     return False, None
-                ok = (direction == "above" and float(vix_val) >= float(lvl)) or (direction == "below" and float(vix_val) <= float(lvl))
+                ok = (direction == "above" and float(cur) >= float(lvl)) or (direction == "below" and float(cur) <= float(lvl))
                 return ok, None
 
             if ctype in ("price_above", "price_below", "h1_volume_above", "scanner_pattern", "indicator_above", "indicator_below"):

@@ -630,7 +630,7 @@ class AIAgent:
             },
             {
                 "name": "set_watch_conditions",
-                "description": "After opening a trade, set watch conditions for Simba to monitor the position. Supported types: price_touch (level + optional tolerance fields — triggers when price reaches level), pnl_threshold (value in dollars — negative for loss alert e.g. -15, positive for profit alert e.g. 20). Example: {type: 'pnl_threshold', value: -15, description: 'Max acceptable loss'}.",
+                "description": "After opening a trade, set watch conditions for Simba to monitor the position. Supported types: price_touch (level + optional tolerance fields — triggers when price reaches level), pnl_threshold (value in dollars — negative for loss alert e.g. -15, positive for profit alert e.g. 20), pnl_below (value in dollars — triggers when profit drops BELOW value, e.g. {type: 'pnl_below', value: 10} wakes you when profit drops below $10), indicator_threshold (indicator + direction + level fields — supports: rsi, macd_histogram, adx, vix. E.g. {type: 'indicator_threshold', indicator: 'rsi', direction: 'below', level: 40, description: 'RSI momentum collapse'}).",
                 "input_schema": {
                     "type": "object",
                     "properties": {
