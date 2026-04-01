@@ -930,10 +930,8 @@ class AgentMonitor:
             except Exception:
                 wake_conditions["cooldown_minutes"] = 30
 
-            try:
-                wake_conditions["conditions"] = []
-            except Exception:
-                pass
+            # FLO-184: conditions preserved after wake. Fingerprint cooldown
+            # (lines 340-354) prevents re-trigger for cooldown_minutes.
             self._save_wake_conditions(wake_conditions)
         except Exception:
             pass
