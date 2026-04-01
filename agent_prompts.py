@@ -51,7 +51,6 @@ You receive automatic context before each cycle:
 - <market_structure>: D1 and H4 trend, swing highs/lows with rejection counts, RSI direction, EMA positions, volume profile, momentum quality, confluence zones, and detected patterns (double top/bottom, H&S, wedges, channels, failed breakouts).
 - <h4_candles>: Last 20 H4 candles (OHLCV) \u2014 3-4 days of price action.
 - <d1_candles>: Last 10 D1 candles (OHLCV) \u2014 2 weeks of price action.
-- <active_thesis>: Your running thesis from the previous cycle.
 - <market_regime>: Current regime classification with confidence, duration, and transition state.
 </context>
 

@@ -3350,45 +3350,9 @@ class TradingBot:
                 trigger_context += f"Trigger data: {trigger_data}. "
             trigger_context += "Investigate using tools and respond with final decision JSON."
 
-            # FLO-127: Inject previous thesis for inter-cycle continuity
-            try:
-                _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
-                if os.path.exists(_thesis_path):
-                    with open(_thesis_path, "r", encoding="utf-8") as _tf:
-                        _prev = json.loads(_tf.read())
-                    if isinstance(_prev, dict) and _prev.get("direction_bias"):
-                        _pt_ts = _prev.get("timestamp", "?")[:16]
-                        _pt_bias = _prev.get("direction_bias", "?")
-                        _pt_price = _prev.get("price_at_decision")
-                        _pt_levels = _prev.get("key_levels", [])
-                        _pt_conds = _prev.get("conditions", [])
-                        _pt_decision = _prev.get("decision", "?")
-                        _cur_price = None
-                        try:
-                            _cur_price = float(getattr(self, "last_known_price", 0) or 0)
-                        except Exception:
-                            pass
-                        _price_move = ""
-                        if _cur_price and _pt_price:
-                            _diff = round(_cur_price - _pt_price, 1)
-                            _price_move = f"Price is now {_cur_price:.1f} (moved {'+' if _diff >= 0 else ''}{_diff} from your decision). "
-                        _levels_str = ", ".join(str(l) for l in _pt_levels[:5]) if _pt_levels else "none specified"
-                        _conds_str = "; ".join(_pt_conds[:2]) if _pt_conds else "none specified"
-                        _thesis_block = (
-                            f"\n<previous_thesis>\n"
-                            f"[{_pt_ts}] You were {_pt_bias} (decided {_pt_decision}). "
-                            f"Your plan: \"{_conds_str}\". "
-                            f"{_price_move}"
-                            f"Key levels: {_levels_str}.\n"
-                        )
-                        _unchanged = _prev.get("unchanged_since")
-                        if _unchanged:
-                            _thesis_block += f"Your thesis hasn't changed since {_unchanged[:16]}. Focus on what's NEW or different.\n"
-                        _thesis_block += "BEFORE you start your analysis: briefly state whether this thesis still holds or what changed. Then proceed.\n</previous_thesis>\n"
-                        trigger_context += _thesis_block
-                        log.info(f"FLOKI | previous_thesis injected: {_pt_bias} from {_pt_ts} | price_at_decision={_pt_price}")
-            except Exception:
-                pass
+            # FLO-179: previous_thesis injection removed to prevent confirmation bias.
+            # Floki sees market data first. He can check his own notes via read_session_memory.
+            # active_thesis.json is still WRITTEN after each decision (for dashboard + snapshots).
 
             # FLO-139: Inject market regime into trigger_context
             try:
@@ -5244,44 +5208,7 @@ class TradingBot:
             except Exception:
                 pass
 
-            # FLO-127: Inject previous thesis into reactive trigger_context (same as proactive)
-            try:
-                _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")
-                if os.path.exists(_thesis_path):
-                    with open(_thesis_path, "r", encoding="utf-8") as _tf:
-                        _prev = json.loads(_tf.read())
-                    if isinstance(_prev, dict) and _prev.get("direction_bias"):
-                        _pt_ts = _prev.get("timestamp", "?")[:16]
-                        _pt_bias = _prev.get("direction_bias", "?")
-                        _pt_price = _prev.get("price_at_decision")
-                        _pt_levels = _prev.get("key_levels", [])
-                        _pt_conds = _prev.get("conditions", [])
-                        _pt_decision = _prev.get("decision", "?")
-                        _cur_price = None
-                        try:
-                            _cur_price = float(getattr(self, "last_known_price", 0) or 0)
-                        except Exception:
-                            pass
-                        _price_move = ""
-                        if _cur_price and _pt_price:
-                            _diff = round(_cur_price - _pt_price, 1)
-                            _price_move = f"Price is now {_cur_price:.1f} (moved {'+' if _diff >= 0 else ''}{_diff} from your decision). "
-                        _levels_str = ", ".join(str(l) for l in _pt_levels[:5]) if _pt_levels else "none specified"
-                        _conds_str = "; ".join(_pt_conds[:2]) if _pt_conds else "none specified"
-                        _thesis_block = (
-                            f"\n<previous_thesis>\n"
-                            f"[{_pt_ts}] You were {_pt_bias} (decided {_pt_decision}). "
-                            f"Your plan: \"{_conds_str}\". "
-                            f"{_price_move}"
-                            f"Key levels: {_levels_str}.\n"
-                        )
-                        _unchanged = _prev.get("unchanged_since")
-                        if _unchanged:
-                            _thesis_block += f"Your thesis hasn't changed since {_unchanged[:16]}. Focus on what's NEW or different.\n"
-                        _thesis_block += "BEFORE you start your analysis: briefly state whether this thesis still holds or what changed. Then proceed.\n</previous_thesis>\n"
-                        trigger_context += _thesis_block
-            except Exception:
-                pass
+            # FLO-179: previous_thesis injection removed (reactive path, same as proactive).
 
             # FLO-139: Inject market regime into reactive trigger_context (same as proactive)
             try:
