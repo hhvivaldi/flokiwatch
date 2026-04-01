@@ -3354,6 +3354,122 @@ class TradingBot:
             # Floki sees market data first. He can check his own notes via read_session_memory.
             # active_thesis.json is still WRITTEN after each decision (for dashboard + snapshots).
 
+            # FLO-185: Inject objective deltas since last cycle (numbers only, no opinions)
+            try:
+                _snap_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "last_cycle_snapshot.json")
+                if os.path.exists(_snap_path):
+                    with open(_snap_path, "r", encoding="utf-8") as _sf:
+                        _prev_snap = json.load(_sf)
+                    if isinstance(_prev_snap, dict) and _prev_snap.get("price") is not None:
+                        # Read current values
+                        _cur_snap = {}
+                        try:
+                            _bs_path_d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                            with open(_bs_path_d, "r", encoding="utf-8") as _bsf:
+                                _bs_d = json.load(_bsf)
+                            _la_d = _bs_d.get("last_analysis", {})
+                            _ind_d = _la_d.get("indicators", {})
+                            _cur_snap["price"] = float(getattr(self, "last_known_price", 0) or 0) or None
+                            _cur_snap["rsi"] = _ind_d.get("rsi_14")
+                            _cur_snap["adx"] = _ind_d.get("adx_14")
+                            _cur_snap["macd_hist"] = _ind_d.get("macd_hist")
+                            _cur_snap["volume_ratio"] = _ind_d.get("volume_ratio")
+                            _cur_snap["atr"] = _ind_d.get("atr_14")
+                            _mr_d = _bs_d.get("market_regime", {})
+                            _cur_snap["regime"] = _mr_d.get("regime")
+                        except Exception:
+                            pass
+
+                        if _cur_snap.get("price") is not None:
+                            # Calculate interval
+                            _interval = ""
+                            try:
+                                _prev_ts = datetime.fromisoformat(_prev_snap["timestamp"].replace("Z", "+00:00"))
+                                _elapsed_m = int((datetime.now(timezone.utc) - _prev_ts).total_seconds() / 60)
+                                _interval = f' interval="{_elapsed_m}min"'
+                            except Exception:
+                                pass
+
+                            def _delta(key, fmt=".1f"):
+                                old = _prev_snap.get(key)
+                                new = _cur_snap.get(key)
+                                if old is None or new is None:
+                                    return None
+                                try:
+                                    o = float(old); n = float(new); d = n - o
+                                    sign = "+" if d >= 0 else ""
+                                    return f"{o:{fmt}} -> {n:{fmt}} ({sign}{d:{fmt}})"
+                                except Exception:
+                                    return None
+
+                            lines = []
+                            _pd = _delta("price", ".0f")
+                            if _pd:
+                                # Add percentage
+                                try:
+                                    _pp = (float(_cur_snap["price"]) - float(_prev_snap["price"])) / float(_prev_snap["price"]) * 100
+                                    _pd += f", {'+' if _pp >= 0 else ''}{_pp:.2f}%"
+                                except Exception:
+                                    pass
+                                lines.append(f"PRICE: {_pd}")
+                            _rd = _delta("rsi", ".1f")
+                            if _rd: lines.append(f"RSI: {_rd}")
+                            _ad = _delta("adx", ".1f")
+                            if _ad: lines.append(f"ADX: {_ad}")
+                            _md = _delta("macd_hist", ".2f")
+                            if _md:
+                                try:
+                                    _mold = float(_prev_snap.get("macd_hist", 0))
+                                    _mnew = float(_cur_snap.get("macd_hist", 0))
+                                    if abs(_mnew) > abs(_mold):
+                                        _md += " expanding"
+                                    else:
+                                        _md += " contracting"
+                                except Exception:
+                                    pass
+                                lines.append(f"MACD_HIST: {_md}")
+
+                            _vr = _cur_snap.get("volume_ratio")
+                            if _vr is not None:
+                                lines.append(f"VOLUME_RATIO: {_vr}")
+
+                            # Regime change detection
+                            _old_regime = _prev_snap.get("regime")
+                            _new_regime = _cur_snap.get("regime")
+                            if _old_regime and _new_regime:
+                                if _old_regime != _new_regime:
+                                    lines.append(f"REGIME: {_old_regime} -> {_new_regime} (CHANGED)")
+                                else:
+                                    lines.append(f"REGIME: {_new_regime} (unchanged)")
+
+                            # Simba status
+                            try:
+                                _wc_path_d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_wake_conditions.json")
+                                if os.path.exists(_wc_path_d):
+                                    with open(_wc_path_d, "r", encoding="utf-8") as _wcf:
+                                        _wc_d = json.load(_wcf)
+                                    _wc_conds = _wc_d.get("conditions", [])
+                                    if _wc_conds:
+                                        _nearest = None
+                                        _cprice = float(_cur_snap["price"])
+                                        for _wcc in _wc_conds:
+                                            _lvl = _wcc.get("level")
+                                            if _lvl is not None:
+                                                _dist = abs(float(_lvl) - _cprice)
+                                                if _nearest is None or _dist < _nearest[1]:
+                                                    _nearest = (_wcc.get("type", "?"), _dist, float(_lvl))
+                                        _simba_str = f"SIMBA: {len(_wc_conds)} conditions active"
+                                        if _nearest:
+                                            _simba_str += f", nearest: {_nearest[0]} {_nearest[2]:.0f} ({_nearest[1]:.0f} away)"
+                                        lines.append(_simba_str)
+                            except Exception:
+                                pass
+
+                            if lines:
+                                trigger_context += f"\n<since_last_cycle{_interval}>\n" + "\n".join(lines) + "\n</since_last_cycle>\n"
+            except Exception:
+                pass
+
             # FLO-139: Inject market regime into trigger_context
             try:
                 _regime = getattr(self, "_last_regime_context", None)
@@ -4123,6 +4239,41 @@ class TradingBot:
             os.replace(_tmp, _thesis_path)
         except Exception as e_thesis:
             log.warning(f"FLOKI | thesis persist failed: {e_thesis}")
+
+        # FLO-185: Save cycle snapshot for delta injection in next cycle
+        try:
+            _snap = {"timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z"}
+            _snap["price"] = _cur_price
+            try:
+                _bs_path_snap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                with open(_bs_path_snap, "r", encoding="utf-8") as _bsf:
+                    _bs_snap = json.load(_bsf)
+                _la_snap = _bs_snap.get("last_analysis", {})
+                _ind_snap = _la_snap.get("indicators", {})
+                _snap["rsi"] = _ind_snap.get("rsi_14")
+                _snap["adx"] = _ind_snap.get("adx_14")
+                _snap["macd_hist"] = _ind_snap.get("macd_hist")
+                _snap["volume_ratio"] = _ind_snap.get("volume_ratio")
+                _snap["atr"] = _ind_snap.get("atr_14")
+                _mr_snap = _bs_snap.get("market_regime", {})
+                _snap["regime"] = _mr_snap.get("regime")
+            except Exception:
+                pass
+            try:
+                _wc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_wake_conditions.json")
+                if os.path.exists(_wc_path):
+                    with open(_wc_path, "r", encoding="utf-8") as _wcf:
+                        _wc = json.load(_wcf)
+                    _snap["simba_conditions_count"] = len(_wc.get("conditions", []))
+            except Exception:
+                pass
+            _snap_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "last_cycle_snapshot.json")
+            _snap_tmp = _snap_path + ".tmp"
+            with open(_snap_tmp, "w", encoding="utf-8") as _sf:
+                json.dump(_snap, _sf, ensure_ascii=False)
+            os.replace(_snap_tmp, _snap_path)
+        except Exception:
+            pass
 
         try:
             alert_proactive_decision(agent_result)
@@ -5209,6 +5360,52 @@ class TradingBot:
                 pass
 
             # FLO-179: previous_thesis injection removed (reactive path, same as proactive).
+
+            # FLO-185: Delta injection for reactive path (same logic as proactive)
+            try:
+                _snap_path_r = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "last_cycle_snapshot.json")
+                if os.path.exists(_snap_path_r):
+                    with open(_snap_path_r, "r", encoding="utf-8") as _sf:
+                        _prev_snap_r = json.load(_sf)
+                    if isinstance(_prev_snap_r, dict) and _prev_snap_r.get("price") is not None:
+                        _cur_snap_r = {}
+                        try:
+                            _bs_path_r = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                            with open(_bs_path_r, "r", encoding="utf-8") as _bsf:
+                                _bs_r = json.load(_bsf)
+                            _la_r = _bs_r.get("last_analysis", {})
+                            _ind_r = _la_r.get("indicators", {})
+                            _cur_snap_r["price"] = float(getattr(self, "last_known_price", 0) or 0) or None
+                            _cur_snap_r["rsi"] = _ind_r.get("rsi_14")
+                            _cur_snap_r["adx"] = _ind_r.get("adx_14")
+                            _cur_snap_r["macd_hist"] = _ind_r.get("macd_hist")
+                            _cur_snap_r["regime"] = _bs_r.get("market_regime", {}).get("regime")
+                        except Exception:
+                            pass
+                        if _cur_snap_r.get("price") is not None:
+                            _interval_r = ""
+                            try:
+                                _prev_ts_r = datetime.fromisoformat(_prev_snap_r["timestamp"].replace("Z", "+00:00"))
+                                _elapsed_r = int((datetime.now(timezone.utc) - _prev_ts_r).total_seconds() / 60)
+                                _interval_r = f' interval="{_elapsed_r}min"'
+                            except Exception:
+                                pass
+                            _lines_r = []
+                            for _key, _label, _fmt in [("price", "PRICE", ".0f"), ("rsi", "RSI", ".1f"), ("adx", "ADX", ".1f"), ("macd_hist", "MACD_HIST", ".2f")]:
+                                _o = _prev_snap_r.get(_key); _n = _cur_snap_r.get(_key)
+                                if _o is not None and _n is not None:
+                                    try:
+                                        _ov = float(_o); _nv = float(_n); _dv = _nv - _ov
+                                        _lines_r.append(f"{_label}: {_ov:{_fmt}} -> {_nv:{_fmt}} ({'+' if _dv >= 0 else ''}{_dv:{_fmt}})")
+                                    except Exception:
+                                        pass
+                            _or = _prev_snap_r.get("regime"); _nr = _cur_snap_r.get("regime")
+                            if _or and _nr:
+                                _lines_r.append(f"REGIME: {_nr} ({'CHANGED from ' + _or if _or != _nr else 'unchanged'})")
+                            if _lines_r:
+                                trigger_context += f"\n<since_last_cycle{_interval_r}>\n" + "\n".join(_lines_r) + "\n</since_last_cycle>\n"
+            except Exception:
+                pass
 
             # FLO-139: Inject market regime into reactive trigger_context (same as proactive)
             try:
