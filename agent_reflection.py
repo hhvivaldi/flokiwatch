@@ -218,12 +218,14 @@ def _insight_label(trades: int, wr: float, pf: float) -> str:
 
 
 def _query_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.Row]:
+    # FLO-189: Only Floki trades — exclude legacy agent_gemini/brain
     cur = conn.execute(
         """
         SELECT ticket, direction, profit, open_time, close_time
         FROM trades
         WHERE close_time IS NOT NULL
           AND profit IS NOT NULL
+          AND decision_source IN ('floki_agent', 'agent_floki')
         ORDER BY close_time ASC
         """
     )

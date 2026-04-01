@@ -14,6 +14,9 @@ from logger import log
 POPULATION_B_MIN_TICKET = 8
 POPULATION_B_MIN_OPEN_TIME = "2026-02-16"
 
+# FLO-189: Only analyze Floki trades — exclude legacy agent_gemini/brain/NULL
+FLOKI_SOURCE_FILTER = "decision_source IN ('floki_agent', 'agent_floki')"
+
 
 def _utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -133,7 +136,8 @@ def _total_population_b_closed_trades(conn: sqlite3.Connection) -> int:
             "WHERE close_time IS NOT NULL "
             "  AND profit IS NOT NULL "
             "  AND ticket >= ? "
-            "  AND open_time >= ?"
+            "  AND open_time >= ? "
+            f"  AND {FLOKI_SOURCE_FILTER}"
         )
         row = conn.execute(q, (POPULATION_B_MIN_TICKET, POPULATION_B_MIN_OPEN_TIME)).fetchone()
         return _safe_int(row["c"] if row else 0, 0)
@@ -149,7 +153,7 @@ def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.
         "  AND profit IS NOT NULL "
         "  AND ticket >= ? "
         "  AND open_time >= ? "
-        "  AND (decision_source = 'agent_gemini' OR decision_source = 'floki_agent' OR (decision_source IS NULL AND comment LIKE 'Agent-%')) "
+        f"  AND {FLOKI_SOURCE_FILTER} "
         "ORDER BY open_time ASC"
     )
     rows = conn.execute(q, (POPULATION_B_MIN_TICKET, POPULATION_B_MIN_OPEN_TIME)).fetchall()
@@ -312,10 +316,11 @@ def check_intraday_drawdown(db_path: Optional[str] = None) -> Optional[Dict[str,
 
         # All trades closed today with known P&L
         rows = conn.execute(
-            """SELECT profit, close_time FROM trades
+            f"""SELECT profit, close_time FROM trades
                WHERE close_time IS NOT NULL
                  AND profit IS NOT NULL
                  AND close_time >= ?
+                 AND {FLOKI_SOURCE_FILTER}
                ORDER BY close_time ASC""",
             (today_str,),
         ).fetchall()
@@ -577,16 +582,12 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
         this_week_start = (now - __import__("datetime").timedelta(days=7)).isoformat()
         last_week_start = (now - __import__("datetime").timedelta(days=14)).isoformat()
 
-        # FLO-152 Fix 1: Apply same agent-only population filter as daily report
-        _agent_filter = (
-            " AND (decision_source = 'agent_gemini' OR decision_source = 'floki_agent'"
-            "      OR (decision_source IS NULL AND comment LIKE 'Agent-%'))"
-        )
+        # FLO-189: Floki-only filter (replaces legacy agent_gemini inclusion)
         this_week_rows = conn.execute(
             f"""SELECT ticket, direction, profit, open_time, close_time, close_reason
                FROM trades
                WHERE close_time IS NOT NULL AND profit IS NOT NULL
-                 AND close_time >= ? {_agent_filter}
+                 AND close_time >= ? AND {FLOKI_SOURCE_FILTER}
                ORDER BY close_time ASC""",
             (this_week_start,),
         ).fetchall()
@@ -595,7 +596,7 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
             f"""SELECT ticket, direction, profit, open_time, close_time, close_reason
                FROM trades
                WHERE close_time IS NOT NULL AND profit IS NOT NULL
-                 AND close_time >= ? AND close_time < ? {_agent_filter}
+                 AND close_time >= ? AND close_time < ? AND {FLOKI_SOURCE_FILTER}
                ORDER BY close_time ASC""",
             (last_week_start, this_week_start),
         ).fetchall()
@@ -718,10 +719,11 @@ def generate_luna_insights(db_path: Optional[str] = None) -> Optional[Dict[str, 
 
         cutoff = (datetime.utcnow() - timedelta(days=14)).isoformat()
         rows = conn.execute(
-            """SELECT ticket, direction, profit, open_time, close_time
+            f"""SELECT ticket, direction, profit, open_time, close_time
                FROM trades
                WHERE close_time IS NOT NULL AND profit IS NOT NULL
                  AND close_time >= ?
+                 AND {FLOKI_SOURCE_FILTER}
                ORDER BY close_time ASC""",
             (cutoff,),
         ).fetchall()

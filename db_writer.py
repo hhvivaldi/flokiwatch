@@ -1011,11 +1011,12 @@ def get_trade_feedback(limit: int = 5) -> Dict[str, Any]:
         conn = _get_connection()
         cursor = conn.cursor()
         
-        # Get recent closed trades
+        # FLO-189: Only Floki trades — exclude legacy agent_gemini/brain
         cursor.execute(
             """SELECT ticket, direction, profit, close_reason, open_time
                FROM trades
                WHERE close_time IS NOT NULL
+                 AND decision_source IN ('floki_agent', 'agent_floki')
                ORDER BY id DESC
                LIMIT ?""",
             (limit,)

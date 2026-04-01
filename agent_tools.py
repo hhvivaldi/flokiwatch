@@ -344,6 +344,7 @@ class AgentTools:
                   AND profit IS NOT NULL
                   AND profit < 0
                   AND UPPER(direction) = ?
+                  AND decision_source IN ('floki_agent', 'agent_floki')
                 ORDER BY close_time DESC
                 LIMIT 50
                 """,
@@ -2165,8 +2166,7 @@ class AgentTools:
                     SELECT direction, close_reason, profit, open_time
                     FROM trades
                     WHERE close_time IS NOT NULL AND profit IS NOT NULL
-                      AND (decision_source = 'agent_gemini' OR decision_source = 'floki_agent'
-                           OR (decision_source IS NULL AND comment LIKE 'Agent-%'))
+                      AND decision_source IN ('floki_agent', 'agent_floki')
                       AND open_time >= datetime('now', '-30 days')
                 """).fetchall()
             finally:
