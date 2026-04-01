@@ -277,6 +277,14 @@ def detect_market_regime(
 
     if h1_candles and isinstance(h1_candles, list) and len(h1_candles) >= 3:
         try:
+            # FLO-175: Helper to access candle fields from dicts or tuples/arrays.
+            # Python eagerly evaluates default args, so c.get("open", c[1]) crashes
+            # with KeyError when c is a dict — c[1] is evaluated before get() runs.
+            def _cf(c, key, idx):
+                if isinstance(c, dict):
+                    return float(c[key])
+                return float(c[idx])
+
             # Get last 5 H1 candles
             recent = h1_candles[-5:] if len(h1_candles) >= 5 else h1_candles
 
@@ -284,8 +292,8 @@ def detect_market_regime(
             consec_bull = 0
             consec_bear = 0
             for c in recent:
-                o = float(c.get("open", c[1]) if isinstance(c, dict) else c[1])
-                cl = float(c.get("close", c[4]) if isinstance(c, dict) else c[4])
+                o = _cf(c, "open", 1)
+                cl = _cf(c, "close", 4)
                 if cl > o:
                     consec_bull += 1
                     consec_bear = 0
@@ -320,8 +328,8 @@ def detect_market_regime(
             # Criterion 3: Price moved > 3x ATR in last 4 hours one direction
             if len(h1_candles) >= 4 and atr_current and atr_current > 0:
                 last4 = h1_candles[-4:]
-                first_o = float(last4[0].get("open", last4[0][1]) if isinstance(last4[0], dict) else last4[0][1])
-                last_c = float(last4[-1].get("close", last4[-1][4]) if isinstance(last4[-1], dict) else last4[-1][4])
+                first_o = _cf(last4[0], "open", 1)
+                last_c = _cf(last4[-1], "close", 4)
                 h1_4h_move = abs(last_c - first_o)
                 if h1_4h_move > atr_current * 3:
                     h1_trending_signals += 1
@@ -333,9 +341,9 @@ def detect_market_regime(
             upper_closes = 0
             lower_closes = 0
             for c in recent:
-                h = float(c.get("high", c[2]) if isinstance(c, dict) else c[2])
-                l = float(c.get("low", c[3]) if isinstance(c, dict) else c[3])
-                cl = float(c.get("close", c[4]) if isinstance(c, dict) else c[4])
+                h = _cf(c, "high", 2)
+                l = _cf(c, "low", 3)
+                cl = _cf(c, "close", 4)
                 rng = h - l
                 if rng > 0:
                     pos = (cl - l) / rng
