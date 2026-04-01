@@ -579,8 +579,10 @@ def generate_weekly_report(db_path: Optional[str] = None) -> Optional[Dict[str, 
         conn.row_factory = sqlite3.Row
 
         now = datetime.utcnow()
-        this_week_start = (now - __import__("datetime").timedelta(days=7)).isoformat()
-        last_week_start = (now - __import__("datetime").timedelta(days=14)).isoformat()
+        # FLO-189: Fixed calendar weeks (Monday 00:00 UTC boundaries)
+        days_since_monday = now.weekday()  # 0=Mon, 6=Sun
+        this_week_start = (now - __import__("datetime").timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        last_week_start = (now - __import__("datetime").timedelta(days=days_since_monday + 7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # FLO-189: Floki-only filter (replaces legacy agent_gemini inclusion)
         this_week_rows = conn.execute(
