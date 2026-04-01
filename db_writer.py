@@ -1220,7 +1220,8 @@ def get_recent_reflexions(limit: int = 5) -> List[Dict[str, Any]]:
         try:
             rows = conn.execute(
                 """SELECT ticket, direction, pnl, close_reason, thesis_summary,
-                          lesson, pattern_tags, timestamp, revised_lesson, hindsight_json
+                          lesson, pattern_tags, timestamp, revised_lesson, hindsight_json,
+                          entry_price, exit_price
                    FROM trade_reflexions
                    ORDER BY id DESC LIMIT ?""",
                 (limit,),
@@ -1235,6 +1236,11 @@ def get_recent_reflexions(limit: int = 5) -> List[Dict[str, Any]]:
                 "lesson": r[5], "pattern_tags": json.loads(r[6]) if r[6] else [],
                 "timestamp": r[7],
             }
+            # FLO-177: Include entry/exit prices for enriched embeds
+            if len(r) > 10 and r[10] is not None:
+                entry["entry_price"] = r[10]
+            if len(r) > 11 and r[11] is not None:
+                entry["exit_price"] = r[11]
             # FLO-147: Include hindsight data if available
             revised = r[8] if len(r) > 8 else None
             hindsight = r[9] if len(r) > 9 else None

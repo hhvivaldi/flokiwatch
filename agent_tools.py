@@ -1780,6 +1780,18 @@ class AgentTools:
                         pass
                     conds.update(luna_ctx)
 
+                    # FLO-177: snapshot market regime at trade open
+                    try:
+                        _bs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                        if os.path.exists(_bs_path):
+                            with open(_bs_path, "r", encoding="utf-8") as _bsf:
+                                _bs = json.load(_bsf)
+                            _mr = _bs.get("market_regime") or {}
+                            if isinstance(_mr, dict) and _mr.get("regime"):
+                                conds["regime"] = _mr["regime"]
+                    except Exception:
+                        pass
+
                     # FLO-137: snapshot active thesis at trade open
                     try:
                         _thesis_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "active_thesis.json")

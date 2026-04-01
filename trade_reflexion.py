@@ -14,6 +14,79 @@ from typing import Any, Dict, Optional
 from logger import log
 
 
+def _build_rich_embed_text(
+    lesson: str,
+    tags: list,
+    thesis_summary: str,
+    action: Optional[Dict] = None,
+    conditions: Optional[Dict] = None,
+) -> str:
+    """FLO-177: Build enriched embed text with full trade context for ChromaDB.
+    All three embed points (close, hindsight, startup sync) use this."""
+    parts = [lesson, " ".join(tags) if tags else ""]
+    action = action or {}
+    conditions = conditions or {}
+
+    # Trade entry/exit context
+    direction = action.get("direction", "")
+    open_price = action.get("open_price") or action.get("entry_price")
+    close_price = action.get("close_price") or action.get("exit_price")
+    profit = action.get("profit") or action.get("pnl")
+    reason = action.get("reason") or action.get("close_reason", "")
+    sl = action.get("original_sl") or action.get("sl")
+    tp = action.get("tp")
+
+    if direction and open_price is not None:
+        entry = f"ENTRY: {direction} at ${open_price}"
+        if sl is not None:
+            entry += f" SL=${sl}"
+        if tp is not None:
+            entry += f" TP=${tp}"
+        parts.append(entry)
+    if close_price is not None and profit is not None:
+        parts.append(f"EXIT: ${close_price} P&L=${profit:.2f} {reason}")
+
+    # Indicator snapshot from conditions
+    rsi = conditions.get("rsi_h1")
+    adx = conditions.get("adx_h1")
+    atr = conditions.get("atr_h1")
+    if any(v is not None for v in (rsi, adx, atr)):
+        ind_parts = []
+        if rsi is not None:
+            ind_parts.append(f"RSI={rsi}")
+        if adx is not None:
+            ind_parts.append(f"ADX={adx}")
+        if atr is not None:
+            ind_parts.append(f"ATR={atr}")
+        parts.append(f"INDICATORS: {' '.join(ind_parts)}")
+
+    # Regime + session
+    regime = conditions.get("regime")
+    session = conditions.get("session")
+    if regime or session:
+        ctx = []
+        if regime:
+            ctx.append(f"REGIME: {regime}")
+        if session:
+            ctx.append(f"SESSION: {session}")
+        parts.append(" ".join(ctx))
+
+    # Luna context
+    luna_bias = conditions.get("luna_bias")
+    luna_env = conditions.get("luna_environment")
+    if luna_bias or luna_env:
+        luna = f"LUNA: {luna_bias or '?'}"
+        if luna_env:
+            luna += f" ({luna_env})"
+        parts.append(luna)
+
+    # Thesis
+    if thesis_summary:
+        parts.append(f"THESIS: {thesis_summary}")
+
+    return " | ".join(p for p in parts if p)
+
+
 REFLEXION_SYSTEM_PROMPT = """You are a trade analyst reviewing a completed XAU/USD trade. Given the thesis at entry, Rex's debate, market conditions, and the actual outcome — analyze what happened.
 
 Return JSON only:
@@ -181,9 +254,9 @@ def run_trade_reflexion(action: Dict) -> None:
 
         log.info(f"REFLEXION | ticket={ticket} | lesson={lesson[:80]} | tags={tags}")
 
-        # FLO-138 Phase 2: embed into ChromaDB for semantic search
+        # FLO-138 Phase 2 + FLO-177: embed enriched context into ChromaDB
         try:
-            embed_text = f"{lesson} {' '.join(tags)} {thesis_summary}"
+            embed_text = _build_rich_embed_text(lesson, tags, thesis_summary, action, conditions)
             _embed_reflexion(ticket, embed_text, {
                 "ticket": ticket,
                 "direction": action.get("direction", ""),
@@ -339,7 +412,22 @@ def sync_chromadb_on_startup() -> int:
             doc_id = f"ticket_{ref['ticket']}"
             if doc_id in existing_ids:
                 continue
-            text = f"{ref.get('lesson', '')} {' '.join(ref.get('pattern_tags', []))} {ref.get('thesis_summary', '')}"
+            # FLO-177: Enrich startup sync embeds with trade conditions
+            sync_conditions = _load_trade_conditions(ref["ticket"])
+            sync_action = {
+                "direction": ref.get("direction", ""),
+                "entry_price": ref.get("entry_price"),
+                "exit_price": ref.get("exit_price"),
+                "pnl": ref.get("pnl"),
+                "close_reason": ref.get("close_reason", ""),
+            }
+            text = _build_rich_embed_text(
+                ref.get("lesson", ""),
+                ref.get("pattern_tags", []),
+                ref.get("thesis_summary", ""),
+                sync_action,
+                sync_conditions,
+            )
             meta = {
                 "ticket": ref["ticket"],
                 "direction": ref.get("direction", ""),
@@ -522,9 +610,16 @@ def run_delayed_hindsight(ticket: int, action: Dict) -> None:
 
         update_reflexion_hindsight(ticket, json.dumps(hindsight_data), revised_lesson)
 
-        # Update ChromaDB with enriched data
+        # FLO-177: Update ChromaDB with enriched data
         try:
-            enriched_text = f"{revised_lesson} {' '.join(parsed.get('hindsight_tags', []))} {original.get('thesis_summary', '')}"
+            hindsight_conditions = _load_trade_conditions(ticket)
+            enriched_text = _build_rich_embed_text(
+                revised_lesson,
+                parsed.get("hindsight_tags", []),
+                original.get("thesis_summary", ""),
+                action,
+                hindsight_conditions,
+            )
             _embed_reflexion(ticket, enriched_text, {
                 "ticket": ticket,
                 "direction": direction,
