@@ -1213,6 +1213,7 @@ def get_recent_closed_deals(hours: int = 48) -> List[dict]:
                 'commission': deal.commission,
                 'swap': deal.swap,
                 'reason': reason,
+                'open_time': datetime.fromtimestamp(open_deal.time) if open_deal else None,
                 'close_time': datetime.fromtimestamp(deal.time),
                 'comment': getattr(open_deal, 'comment', '') if open_deal else '',
             })
