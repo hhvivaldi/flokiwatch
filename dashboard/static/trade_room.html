@@ -718,20 +718,14 @@
       }
       .ctx-tier.collapsed .ctx-tier-arrow { transform: rotate(-90deg); }
       .ctx-tier-body {
-        overflow: visible;
         background: rgba(10,10,18,0.4);
         border: 1px solid rgba(255,255,255,0.03);
         border-top: none;
         border-radius: 0 0 6px 6px;
         padding: 6px;
-        max-height: 2000px;
-        transition: max-height 0.4s ease, opacity 0.2s ease;
-        opacity: 1;
       }
       .ctx-tier.collapsed .ctx-tier-body {
-        max-height: 0;
-        opacity: 0;
-        overflow: hidden;
+        display: none;
       }
 
       /* ── Columns layout ─────────────────────── */
@@ -857,10 +851,10 @@
         overflow-y: auto;
         scrollbar-width: thin;
       }
-      .col-right::-webkit-scrollbar { width: 5px; }
-      .col-right::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 10px; }
-      .col-right::-webkit-scrollbar-thumb { background: rgba(138,154,176,0.25); border-radius: 10px; }
-      .col-right::-webkit-scrollbar-thumb:hover { background: rgba(138,154,176,0.4); }
+      .col-right::-webkit-scrollbar { width: 6px; }
+      .col-right::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 6px; }
+      .col-right::-webkit-scrollbar-thumb { background: rgba(138,154,176,0.35); border-radius: 6px; min-height: 40px; }
+      .col-right::-webkit-scrollbar-thumb:hover { background: rgba(138,154,176,0.5); }
 
       /* ── Business-card agent cards (FLO-145 Proposal 2: data-first) ── */
       .bc-card {
