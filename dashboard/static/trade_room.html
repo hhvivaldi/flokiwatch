@@ -437,6 +437,11 @@
         border: 1px solid rgba(99, 102, 241, 0.15);
         border-top-right-radius: 2px;
       }
+      .bubble-journal {
+        background: rgba(88, 28, 135, 0.15);
+        border: 1px solid rgba(192, 132, 252, 0.15);
+        border-top-left-radius: 2px;
+      }
       .bubble-echo {
         background: rgba(0, 188, 212, 0.08);
         border: 1px solid rgba(0, 188, 212, 0.2);
@@ -1670,6 +1675,7 @@
             <button class="filter-tab" data-filter="news">NEWS</button>
             <button class="filter-tab" data-filter="macro">MACRO</button>
             <button class="filter-tab" data-filter="alert">ALERTS</button>
+            <button class="filter-tab" data-filter="journal" style="color:#c084fc" id="journal-tab">&#x1F9E0; JOURNAL</button>
             <button id="compact-toggle" class="filter-tab" style="margin-left:auto;border:1px solid var(--border-subtle)" onclick="document.getElementById('feed').classList.toggle('feed-compact');this.classList.toggle('active')">⊟ COMPACT</button>
           </div>
           <div class="feed-scroll" id="feed"></div>
@@ -2439,6 +2445,8 @@
 
         function shouldShowMessage(m) {
           if (!m) return false;
+          if (m.__kind === 'journal') return currentFilter === 'journal';
+          if (currentFilter === 'journal') return false;
           var type = dataType(m.type);
           if (currentFilter === 'all') return true;
           if (currentFilter === 'conflict') {
@@ -2571,7 +2579,12 @@
             var bubbleCls = isRex ? 'msg-bubble bubble-rex' : 'msg-bubble bubble-floki';
             var nameCls = isRex ? 'name-rex' : 'name-floki';
 
-            if (isSimba) {
+            if (m.__kind === 'journal') {
+              sideCls = 'msg-row msg-right';
+              bubbleCls = 'msg-bubble bubble-journal';
+              nameCls = 'name-floki';
+            }
+            else if (isSimba) {
               sideCls = 'msg-row msg-left';
               bubbleCls = 'msg-bubble bubble-rex';
               nameCls = 'name-rex';
@@ -2652,7 +2665,16 @@
             // ── Structured renderers for Floki / Rex / Simba ──
             var structuredContent = null;
             try {
-              if (isFloki && (type === 'FLOKI_DECISION' || type === 'DECISION')) {
+              // FLO-206: Journal entry renderer
+              if (m.__kind === 'journal') {
+                structuredContent =
+                  '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+                    '<span style="background:rgba(192,132,252,0.15);color:#c084fc;border:1px solid rgba(192,132,252,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">\uD83E\uDDE0 JOURNAL</span>' +
+                    (m.timestamp ? '<span style="color:#6b7280;font-size:9px;font-family:\'JetBrains Mono\',monospace">' + esc(m.timestamp) + '</span>' : '') +
+                  '</div>' +
+                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45;font-family:\'JetBrains Mono\',monospace;border-left:2px solid rgba(192,132,252,0.3);padding-left:8px">' + esc(m.content || '') + '</div>';
+              }
+              else if (isFloki && (type === 'FLOKI_DECISION' || type === 'DECISION')) {
                 // Parse: "WAIT (85%). Reasoning text..."
                 var raw = (m.content || '').toString();
                 var decMatch = raw.match(/^(WAIT|OPEN_BUY|OPEN_SELL|CLOSE_TRADE|HOLD_TRADE|HOLD|ADJUST_TRADE)\s*\((\d+)%?\)/i);
@@ -4523,6 +4545,23 @@
           ]).then(function(res) {
             var msgPayload = res[0] || {};
             latestMessages = (msgPayload.messages || []).slice();
+            // FLO-206: Inject journal entries as pseudo-messages
+            var journalNotes = msgPayload.journal || [];
+            journalNotes.forEach(function(j) {
+              latestMessages.push({
+                __kind: 'journal',
+                author: 'FLOKI',
+                type: 'JOURNAL',
+                content: j.text || '',
+                timestamp: j.time || '',
+                metadata: {source: j.source || 'floki'}
+              });
+            });
+            // Update journal tab badge
+            var jTab = document.getElementById('journal-tab');
+            if (jTab && journalNotes.length > 0) {
+              jTab.textContent = '\uD83E\uDDE0 JOURNAL ' + journalNotes.length;
+            }
             // Ensure descending order (API is desc); renderer expects desc
             renderFeed();
             updatePanels(latestMessages, res[1]);

@@ -751,9 +751,20 @@ def state():
 def trade_room_api(limit: int = 50):
     try:
         msgs = _build_trade_room_messages(limit=limit)
-        return JSONResponse({"messages": msgs})
+        # FLO-206: Include Floki journal notes
+        journal = []
+        try:
+            sm = _read_agent_session_memory()
+            for n in (sm.get("notes") or []):
+                if isinstance(n, dict):
+                    journal.append({"text": n.get("note", n.get("text", "")), "time": n.get("time", ""), "source": n.get("source", "floki")})
+                elif isinstance(n, str):
+                    journal.append({"text": n, "time": "", "source": "floki"})
+        except Exception:
+            pass
+        return JSONResponse({"messages": msgs, "journal": journal})
     except Exception:
-        return JSONResponse({"messages": []})
+        return JSONResponse({"messages": [], "journal": []})
 
 
 @app.get("/api/agent-watch-conditions")
