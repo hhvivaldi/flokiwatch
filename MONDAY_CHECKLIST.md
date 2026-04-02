@@ -44,10 +44,12 @@ Access: http://localhost:8080/trade-room
 - MACRO tab shows Luna messages
 - **CRITICAL**: If Luna log says "AI unavailable — using local fallback", check LUNA_API_KEY
 
-### 2.3 Rex (GPT-5 mini) — co-pilot with 9 tools
-- Rex debates Floki's reasoning (AGREE/DISAGREE)
-- HOLD/WAIT/ADJUST decisions **skip Rex** (cost optimization FLO-50)
-- Trade Room shows Rex message with structured badge
+### 2.3 Rex (GPT-4o) — analyst with 11 tools + Bull/Bear debate
+- Rex Bull/Bear debate injects into trigger_context before each Floki cycle
+- Check log for `REX_DEBATE | INJECTED` (both sides succeeded) or `REX_DEBATE | SKIPPED` (one/both failed)
+- Check log for `REX_BULL | OK | direction=BUY/SELL | conviction=X` and `REX_BEAR | OK | danger=X`
+- Floki can also call `debate_with_rex` tool during his cycle for neutral insights
+- bot_state.json `last_analysis.debate` shows Bull/Bear results for dashboard
 
 ### 2.4 Simba (Python) — every 30s
 - `SIMBA_CHECK` events in log

@@ -10,7 +10,7 @@ Bot de trading algorítmico automatizado para XAU/USD com arquitetura **Agent-fi
 
 - **Brain (Python)**: pipeline de dados e cálculo (60s). Busca dados do MT5, calcula indicadores, executa ML, busca news/macro/calendário, calcula zonas de S/R. **Não decide trades** e **não executa ordens**.
 - **Floki (GPT-5.4, 28 tools)**: portfolio manager e único decisor. Agenda o próprio ciclo via `set_next_check` (5-120 min). Decide **WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST**. Active thesis persistence (active_thesis.json). 91-line prompt (FLO-128).
-- **Rex (GPT-5 mini, 9 tools)**: co-pilot com acesso independente a dados. Verifica dados antes de concordar/discordar. Ajuda refinar planos (SL, entry, timing). Debates em qualquer decisão.
+- **Rex (GPT-4o, 11 tools)**: analyst com acesso independente a dados (5 ferramentas únicas: session performance, divergence scan, correlation check, regime history, reflexion search). Fornece insights, não AGREE/DISAGREE. Também executa Bull/Bear debate (FLO-190): Rex Bull argumenta a FAVOR de entrar, Rex Bear argumenta CONTRA, ambos em paralelo antes de cada ciclo Floki.
 - **Simba (Python, zero AI cost)**: watchdog. Monitoriza 10 tipos de condições (price, RSI, volume, ADX, scanner_pattern, pnl_threshold, indicator) a cada 30s. Acorda o Floki quando condições são atingidas.
 - **Luna (MiMo-V2-Flash)**: macro analyst. Analisa DXY, VIX, yields, oil, S&P 500, gold, Echo alerts + calendário a cada 15 min. Produz `luna_brief.json` com environment (SAFE/CAUTION/DANGER), padrões (forced_liquidation, safe_haven_flow, etc.), bias direcional. Quando Luna está ativa, Floki perde acesso a `get_macro` e `get_headlines` (Luna já processou esses dados).
 - **Echo (MiMo-V2-Flash)**: news sentinel 24/7. Monitoriza 25 feeds RSS (11 diretos + 14 Google News) a cada 5 min. Classifica headlines como CRITICAL/IMPORTANT/ROUTINE. CRITICAL acorda Floki imediatamente (max 2/hora) + trigger Luna out-of-cycle. Feed health tracking com alerta a 3+ falhas consecutivas.
@@ -44,8 +44,9 @@ main.py (Orquestrador — Trading Office)
   ├── Floki (GPT-5.4, 28 tools, self-scheduled 5-120 min) → ai_agent.py
   │     ├── 20+ tools (market data, trading, memory, debate)
   │     └── decide: WAIT / OPEN_BUY / OPEN_SELL / HOLD / CLOSE / ADJUST
-  ├── Rex (GPT-5 mini, 9 tools, co-pilot) → rex_validator.py
-  │     └── AGREE / DISAGREE + reasoning (HOLD/WAIT/ADJUST skipped)
+  ├── Rex (GPT-4o, 11 tools, analyst + Bull/Bear debate) → rex_validator.py
+  │     ├── Insights mode: 0-3 insights per debate_with_rex call
+  │     └── Bull/Bear debate (FLO-190): parallel pre-cycle, injected as <debate> block
   ├── Luna (MiMo-V2-Flash, every 15 min) → luna_analyst.py
   │     ├── DXY/VIX/yields/oil/S&P 500/gold + Echo alerts + calendar
   │     ├── Environment: SAFE/CAUTION/DANGER + pattern detection

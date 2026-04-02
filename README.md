@@ -57,7 +57,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
 | Agent | Model | Role | Tools | Cadence |
 |-------|-------|------|-------|---------|
 | **Floki** | GPT-5.4 | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 28 | 5-30 min (self-scheduled) |
-| **Rex** | GPT-5 mini | Analyst — provides insights (divergences, session stats, correlations, regime history). 6 standard + 5 unique tools. | 11 | On trade decisions + 1x/hour WAIT |
+| **Rex** | GPT-4o | Analyst — provides insights + Bull/Bear structured debate (FLO-190). 6 standard + 5 unique tools. | 11 | Bull/Bear every cycle + insights on demand |
 | **Simba** | Python (no AI cost) | Watchdog — monitors conditions, wakes Floki | — | Every 30s |
 | **Sage** | Gemini | Performance auditor — daily trade review + recommendations | — | Daily at 21:00 UTC |
 | **Echo** | MiMo-V2-Flash | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | — | Every 5 min |
@@ -65,8 +65,8 @@ The bot operates **100% autonomously** on MetaTrader 5:
 
 ### Key Features
 
-- **Active thesis persistence**: Floki's thesis saved to `active_thesis.json` between cycles. Next cycle shows what changed.
-- **Anti-repetition**: If thesis unchanged for 3+ cycles, Floki is prompted to focus on what's new.
+- **Delta-based continuity**: Each cycle shows objective numeric deltas since the last cycle (price, RSI, ADX, MACD, regime). No thesis anchoring.
+- **Rex Bull/Bear debate (FLO-190)**: Before each Floki cycle, Rex Bull argues FOR entering and Rex Bear argues AGAINST, both in parallel. Floki sees both perspectives and decides.
 - **Cross-market context**: 15 MT5 instruments (metals, forex, indices, energy, crypto, futures) + Yahoo/FRED data.
 - **Rex market intelligence**: 11 tools (5 unique: session performance, divergence scan, correlation check, regime history, reflexion search). Provides insights, not approval.
 - **FOLLOWUP mechanism**: If Floki decides OPEN/CLOSE/ADJUST but forgets to call the tool, system injects a reminder turn.
