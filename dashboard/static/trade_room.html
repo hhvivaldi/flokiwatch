@@ -728,11 +728,52 @@
         grid-column: 1 / -1;
         grid-row: 1;
         display: flex;
+        flex-direction: column;
+        gap: 6px;
+        overflow-x: auto;
+      }
+
+      /* FLO-195: Room sections */
+      .room-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .room-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 2px 4px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .room-header:hover { opacity: 0.8; }
+      .room-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 200;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: #4a5568;
+      }
+      .room-line {
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(74,85,104,0.4) 0%, transparent 100%);
+      }
+      .room-toggle {
+        font-size: 8px;
+        color: #4a5568;
+        transition: transform 0.2s ease;
+      }
+      .room-section.collapsed .room-toggle { transform: rotate(-90deg); }
+      .room-cards {
+        display: flex;
         flex-wrap: wrap;
         gap: 8px;
         align-items: flex-start;
-        overflow-x: auto;
       }
+      .room-section.collapsed .room-cards { display: none; }
       .agent-top-strip::-webkit-scrollbar { height: 3px; }
       .agent-top-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
       .agent-top-strip #agreement-banner { flex: 1 1 100%; }
@@ -1075,6 +1116,15 @@
     <div class="trade-room-grid page-content">
 
       <div class="agent-top-strip">
+
+        <!-- SALA 3: DECISION -->
+        <div class="room-section" id="room-decision">
+          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="room-label">&#x1F3AF; decision</span>
+            <span class="room-line"></span>
+            <span class="room-toggle">&#x25BC;</span>
+          </div>
+          <div class="room-cards">
             <!-- FLOKI -->
             <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
               <button type="button" class="bc-btn" data-expand-target="floki-expand" aria-expanded="false">
@@ -1106,6 +1156,17 @@
               </div>
             </div>
 
+          </div>
+        </div>
+
+        <!-- SALA 2: DEBATE TEAM -->
+        <div class="room-section" id="room-debate">
+          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="room-label">&#x2694;&#xFE0F; debate team</span>
+            <span class="room-line"></span>
+            <span class="room-toggle">&#x25BC;</span>
+          </div>
+          <div class="room-cards">
             <!-- REX -->
             <div class="bc-card" id="rex-card" style="border-color:#9C27B0">
               <button type="button" class="bc-btn" data-expand-target="rex-expand" aria-expanded="false">
@@ -1197,6 +1258,47 @@
               </div>
             </div>
 
+            <!-- RESEARCH MANAGER VERDICT (FLO-195) -->
+            <div class="bc-card" id="verdict-card" style="border-color:#FFD700">
+              <button type="button" class="bc-btn" data-expand-target="verdict-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border-color:#FFD700;background:rgba(255,215,0,0.1)">
+                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x2696;</span>
+                  </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#FFD700">VERDICT</span>
+                    <span class="bc-role">RESEARCH MGR</span>
+                  </div>
+                </div>
+                <div class="bc-row2">
+                  <span id="verdict-winner-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
+                  <span id="verdict-rec-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Conviction</span>
+                    <span id="verdict-conv-text" class="bc-metric-val" style="color:#FFD700">&#x2014;</span>
+                  </div>
+                  <div class="bc-bar-track"><div id="verdict-conv-bar" class="bc-bar-fill" style="width:0%;background:#FFD700"></div></div>
+                </div>
+              </button>
+              <div id="verdict-expand" class="agent-expand">
+                <div id="verdict-reasoning" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:60px;overflow-y:auto">No verdict yet.</div>
+                <div id="verdict-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SALA 4: OVERSIGHT -->
+        <div class="room-section" id="room-oversight">
+          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="room-label">&#x1F6E1;&#xFE0F; oversight</span>
+            <span class="room-line"></span>
+            <span class="room-toggle">&#x25BC;</span>
+          </div>
+          <div class="room-cards">
             <!-- SIMBA -->
             <div class="bc-card" id="simba-card" style="border-color:#00E5FF">
               <button type="button" class="bc-btn" data-expand-target="simba-expand" aria-expanded="false">
@@ -1269,6 +1371,17 @@
               </div>
             </div>
 
+          </div>
+        </div>
+
+        <!-- SALA 1: DATA TEAM -->
+        <div class="room-section" id="room-data">
+          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="room-label">&#x1F4CA; data team</span>
+            <span class="room-line"></span>
+            <span class="room-toggle">&#x25BC;</span>
+          </div>
+          <div class="room-cards">
             <!-- ECHO -->
             <div class="bc-card" id="echo-card" style="border-color:#00BCD4">
               <button type="button" class="bc-btn" data-expand-target="echo-expand" aria-expanded="false">
@@ -1406,6 +1519,9 @@
             </div>
 
           <div id="agreement-banner" class="agreement-banner" style="display:none">—</div>
+
+          </div>
+        </div>
 
       </div>
 
@@ -3302,7 +3418,7 @@
               if (rexTextClosed) rexTextClosed.textContent = '—';
 
               // Dim resting cards + hide metrics, keep Echo bright
-              var restingCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'simba-card', 'sage-card', 'luna-card'];
+              var restingCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'verdict-card', 'simba-card', 'sage-card', 'luna-card'];
               restingCards.forEach(function(id) {
                 var card = document.getElementById(id);
                 if (card) {
@@ -3323,7 +3439,7 @@
               // Luna dims like other resting agents during market closed
             } else {
               // Market open — restore all pills visible, full brightness
-              var allCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'simba-card', 'sage-card', 'echo-card', 'luna-card'];
+              var allCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'verdict-card', 'simba-card', 'sage-card', 'echo-card', 'luna-card'];
               allCards.forEach(function(id) {
                 var card = document.getElementById(id);
                 if (!card) return;
@@ -3517,6 +3633,58 @@
             } catch(debErr) {
               // silent
             }
+
+            // FLO-195: Research Manager Verdict card
+            try {
+              var verdict = (state && state.last_analysis && state.last_analysis.verdict) ? state.last_analysis.verdict : {};
+              var vStatus = verdict.status || '';
+              var vWinnerPill = document.getElementById('verdict-winner-pill');
+              var vRecPill = document.getElementById('verdict-rec-pill');
+              var vConvText = document.getElementById('verdict-conv-text');
+              var vConvBar = document.getElementById('verdict-conv-bar');
+              var vReasoning = document.getElementById('verdict-reasoning');
+              var vLevels = document.getElementById('verdict-levels');
+
+              if (vStatus === 'OK' && verdict.winner) {
+                var vWinner = verdict.winner;
+                var vRec = verdict.recommendation || '?';
+                var vConv = parseInt(verdict.conviction) || 0;
+
+                if (vWinnerPill) {
+                  vWinnerPill.textContent = vWinner + ' WINS';
+                  vWinnerPill.style.background = vWinner === 'BULL' ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)';
+                  vWinnerPill.style.color = vWinner === 'BULL' ? '#4CAF50' : '#F44336';
+                }
+                if (vRecPill) {
+                  vRecPill.textContent = vRec.replace('_', ' ');
+                  vRecPill.style.background = vRec === 'ENTER_BUY' ? 'rgba(76,175,80,0.2)' : vRec === 'ENTER_SELL' ? 'rgba(244,67,54,0.2)' : 'rgba(100,100,100,0.15)';
+                  vRecPill.style.color = vRec === 'ENTER_BUY' ? '#4CAF50' : vRec === 'ENTER_SELL' ? '#F44336' : '#8a8a9a';
+                }
+                if (vConvText) vConvText.textContent = vConv + '/10';
+                if (vConvBar) vConvBar.style.width = (vConv * 10) + '%';
+                if (vReasoning) vReasoning.textContent = verdict.reasoning || '\u2014';
+                if (vLevels) {
+                  var vParts = [];
+                  if (vRec === 'NO_TRADE') {
+                    if (verdict.trigger_buy) vParts.push('BUY trigger: ' + verdict.trigger_buy);
+                    if (verdict.trigger_sell) vParts.push('SELL trigger: ' + verdict.trigger_sell);
+                  } else {
+                    if (verdict.entry != null) vParts.push('Entry $' + verdict.entry);
+                    if (verdict.sl != null) vParts.push('SL $' + verdict.sl);
+                    if (verdict.target != null) vParts.push('Target $' + verdict.target);
+                  }
+                  vLevels.textContent = vParts.join(' | ');
+                }
+              } else {
+                var vSkip = vStatus === 'FAILED' ? '[verdict unavailable]' : '\u2014';
+                if (vWinnerPill) { vWinnerPill.textContent = '\u2014'; vWinnerPill.style.background = 'rgba(100,100,100,0.15)'; vWinnerPill.style.color = '#8a8a9a'; }
+                if (vRecPill) { vRecPill.textContent = '\u2014'; vRecPill.style.background = 'rgba(100,100,100,0.15)'; vRecPill.style.color = '#8a8a9a'; }
+                if (vConvText) vConvText.textContent = '\u2014';
+                if (vConvBar) vConvBar.style.width = '0%';
+                if (vReasoning) vReasoning.textContent = vSkip;
+                if (vLevels) vLevels.textContent = '';
+              }
+            } catch(verdErr) {}
 
             // FLO-158: Rex insights stats (replaces agreement/conflict)
             var totalInsights = 0;
