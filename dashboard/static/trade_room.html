@@ -714,62 +714,82 @@
 
       /* ── Columns layout ─────────────────────── */
       .trade-room-grid {
-        display: grid;
-        grid-template-rows: auto 1fr;
-        grid-template-columns: 1fr 250px;
-        gap: 12px 20px;
-        padding: 12px 24px 20px;
-        height: calc(100vh - 140px);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 20px 20px;
+        min-height: calc(100vh - 140px);
         box-sizing: border-box;
-        overflow: hidden;
       }
 
       .agent-top-strip {
-        grid-column: 1 / -1;
-        grid-row: 1;
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        overflow-y: auto;
-        max-height: 420px;
-        scrollbar-width: thin;
+        gap: 3px;
       }
 
-      /* FLO-195: Room sections */
+      /* FLO-196: Accordion room sections */
       .room-section {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        border-radius: 6px;
+        overflow: hidden;
       }
       .room-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 3px 6px;
+        gap: 10px;
+        padding: 7px 12px;
         cursor: pointer;
         user-select: none;
-        transition: opacity 0.15s ease;
-        border-radius: 4px;
+        background: linear-gradient(90deg, rgba(22,22,36,0.95) 0%, rgba(16,16,28,0.9) 100%);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 6px;
+        transition: background 0.2s ease, border-color 0.2s ease;
       }
-      .room-header:hover { opacity: 0.7; }
+      .room-header:hover {
+        background: linear-gradient(90deg, rgba(28,28,44,0.95) 0%, rgba(20,20,34,0.9) 100%);
+        border-color: rgba(255,255,255,0.08);
+      }
+      .room-section:not(.collapsed) .room-header {
+        border-radius: 6px 6px 0 0;
+        border-bottom-color: transparent;
+      }
       .room-label {
         font-family: 'JetBrains Mono', monospace;
         font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.12em;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #7a8a9e;
+        color: #8a9ab0;
+        white-space: nowrap;
+        min-width: 100px;
+      }
+      .room-summary {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex: 1;
+        overflow: hidden;
+      }
+      .room-summary-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
         white-space: nowrap;
       }
       .room-line {
         flex: 1;
         height: 1px;
-        background: linear-gradient(90deg, rgba(122,138,158,0.2) 0%, transparent 60%);
+        background: linear-gradient(90deg, rgba(138,154,176,0.12) 0%, transparent 50%);
       }
       .room-toggle {
         font-size: 9px;
-        color: #7a8a9e;
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        color: #8a9ab0;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        flex-shrink: 0;
       }
       .room-section.collapsed .room-toggle { transform: rotate(-90deg); }
       .room-cards {
@@ -777,18 +797,27 @@
         flex-wrap: wrap;
         gap: 8px;
         align-items: flex-start;
-        transition: max-height 0.3s ease, opacity 0.2s ease;
+        padding: 8px;
+        background: rgba(10,10,18,0.5);
+        border: 1px solid rgba(255,255,255,0.03);
+        border-top: none;
+        border-radius: 0 0 6px 6px;
       }
       .room-section.collapsed .room-cards {
         display: none;
       }
-      .agent-top-strip::-webkit-scrollbar { height: 3px; }
-      .agent-top-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
-      .agent-top-strip #agreement-banner { flex: 1 1 100%; }
+
+      /* Chat + stats layout below agents */
+      .trade-room-bottom {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        gap: 12px;
+        flex: 1;
+        min-height: 300px;
+      }
 
       .col-center {
-        grid-column: 1;
-        grid-row: 2;
+        flex: 1;
         display: flex;
         flex-direction: column;
         min-width: 0;
@@ -796,12 +825,11 @@
       }
 
       .col-right {
-        grid-column: 2;
-        grid-row: 2;
         display: flex;
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
+        max-height: calc(100vh - 400px);
       }
       .col-right::-webkit-scrollbar { width: 4px; }
       .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
@@ -1091,9 +1119,7 @@
           height: auto;
           overflow: visible;
         }
-        .agent-top-strip { grid-column: 1; grid-row: 1; }
-        .col-center { grid-column: 1; grid-row: 3; }
-        .col-right { grid-column: 1; grid-row: 2; }
+        .trade-room-bottom { grid-template-columns: 1fr; }
         .feed-scroll { max-height: 600px; }
       }
 
@@ -1202,8 +1228,9 @@
 
         <!-- SALA 3: DECISION -->
         <div class="room-section" id="room-decision">
-          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <div class="room-header" onclick="toggleRoom('room-decision')">
             <span class="room-label">&#x1F3AF; decision</span>
+            <span class="room-summary" id="room-decision-summary"></span>
             <span class="room-line"></span>
             <span class="room-toggle">&#x25BC;</span>
           </div>
@@ -1243,9 +1270,10 @@
         </div>
 
         <!-- SALA 2: DEBATE TEAM -->
-        <div class="room-section" id="room-debate">
-          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
-            <span class="room-label">&#x2694;&#xFE0F; debate team</span>
+        <div class="room-section collapsed" id="room-debate">
+          <div class="room-header" onclick="toggleRoom('room-debate')">
+            <span class="room-label">&#x2694;&#xFE0F; debate</span>
+            <span class="room-summary" id="room-debate-summary"></span>
             <span class="room-line"></span>
             <span class="room-toggle">&#x25BC;</span>
           </div>
@@ -1375,9 +1403,10 @@
         </div>
 
         <!-- SALA 4: OVERSIGHT -->
-        <div class="room-section" id="room-oversight">
-          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
+        <div class="room-section collapsed" id="room-oversight">
+          <div class="room-header" onclick="toggleRoom('room-oversight')">
             <span class="room-label">&#x1F6E1;&#xFE0F; oversight</span>
+            <span class="room-summary" id="room-oversight-summary"></span>
             <span class="room-line"></span>
             <span class="room-toggle">&#x25BC;</span>
           </div>
@@ -1458,9 +1487,10 @@
         </div>
 
         <!-- SALA 1: DATA TEAM -->
-        <div class="room-section" id="room-data">
-          <div class="room-header" onclick="this.parentElement.classList.toggle('collapsed')">
-            <span class="room-label">&#x1F4CA; data team</span>
+        <div class="room-section collapsed" id="room-data">
+          <div class="room-header" onclick="toggleRoom('room-data')">
+            <span class="room-label">&#x1F4CA; data</span>
+            <span class="room-summary" id="room-data-summary"></span>
             <span class="room-line"></span>
             <span class="room-toggle">&#x25BC;</span>
           </div>
@@ -1608,6 +1638,7 @@
 
       </div>
 
+      <div class="trade-room-bottom">
       <div class="col-center">
           <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap" style="align-items:center">
             <button class="filter-tab active" data-filter="all">ALL</button>
@@ -1723,6 +1754,7 @@
         </div>
 
       </div><!-- /col-right -->
+      </div><!-- /trade-room-bottom -->
 
     </div><!-- /trade-room-grid -->
 
@@ -1731,6 +1763,18 @@
          INLINE SCRIPT — poll /api/trade-room + /api/state
     ════════════════════════════════════════════════ -->
     <script>
+      // FLO-196: Accordion room toggle (global scope for onclick)
+      function toggleRoom(roomId) {
+        var rooms = document.querySelectorAll('.room-section');
+        rooms.forEach(function(r) {
+          if (r.id === roomId) {
+            r.classList.toggle('collapsed');
+          } else {
+            r.classList.add('collapsed');
+          }
+        });
+      }
+
       (function () {
         'use strict';
 
@@ -3768,6 +3812,45 @@
                 if (vLevels) vLevels.textContent = '';
               }
             } catch(verdErr) {}
+
+            // FLO-196: Update room summary pills
+            try {
+              // DECISION summary
+              var decSum = document.getElementById('room-decision-summary');
+              if (decSum) {
+                var flokiDec = (state.active_thesis || {}).decision || '?';
+                var flokiConf = (state.active_thesis || {}).confidence || '?';
+                decSum.innerHTML =
+                  '<span class="room-summary-pill" style="background:rgba(170,255,0,0.15);color:#AAFF00">' + flokiDec + ' ' + flokiConf + '%</span>';
+              }
+              // DEBATE summary
+              var debSum = document.getElementById('room-debate-summary');
+              if (debSum && debate) {
+                var dParts = [];
+                if (bull.direction) dParts.push('<span class="room-summary-pill" style="background:rgba(76,175,80,0.15);color:#4CAF50">' + bull.direction + ' ' + (bull.conviction || '?') + '/10</span>');
+                if (bear.direction) dParts.push('<span class="room-summary-pill" style="background:rgba(244,67,54,0.15);color:#F44336">' + bear.direction + ' ' + (bear.conviction || '?') + '/10</span>');
+                if (verdict.winner) dParts.push('<span class="room-summary-pill" style="background:rgba(255,215,0,0.15);color:#FFD700">' + verdict.winner + ' WINS</span>');
+                debSum.innerHTML = dParts.join(' ');
+              }
+              // OVERSIGHT summary
+              var ovrSum = document.getElementById('room-oversight-summary');
+              if (ovrSum) {
+                var wc = (state.wake_conditions || {});
+                var wcCount = wc.count || 0;
+                ovrSum.innerHTML =
+                  '<span class="room-summary-pill" style="background:rgba(0,229,255,0.12);color:#00E5FF">Simba: ' + wcCount + ' conditions</span>' +
+                  '<span class="room-summary-pill" style="background:rgba(255,179,0,0.12);color:#FFB300">Sage: ready</span>';
+              }
+              // DATA summary
+              var datSum = document.getElementById('room-data-summary');
+              if (datSum) {
+                var lunaEnv = ((state.last_analysis || {}).luna_brief || {}).environment || '?';
+                var lunaRisk = ((state.last_analysis || {}).luna_brief || {}).risk_level || '?';
+                datSum.innerHTML =
+                  '<span class="room-summary-pill" style="background:rgba(0,188,212,0.12);color:#00BCD4">Echo: active</span>' +
+                  '<span class="room-summary-pill" style="background:rgba(224,64,251,0.12);color:#E040FB">Luna: ' + lunaEnv + ' ' + lunaRisk + '/10</span>';
+              }
+            } catch(sumErr) {}
 
             // FLO-158: Rex insights stats (replaces agreement/conflict)
             var totalInsights = 0;
