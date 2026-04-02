@@ -67,7 +67,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
 ### Key Features
 
 - **Delta-based continuity**: Each cycle shows objective numeric deltas since the last cycle (price, RSI, ADX, MACD, regime). No thesis anchoring.
-- **Rex Bull/Bear debate (FLO-190)**: Before each Floki cycle, Rex Bull argues FOR entering and Rex Bear argues AGAINST, both in parallel. Floki sees both perspectives and decides.
+- **Rex Bull/Bear debate (FLO-190/194)**: Before each Floki cycle, Rex Bull argues gold goes UP (BUY) and Rex Bear argues gold goes DOWN (SELL), both in parallel. Research Manager picks the winner and produces a verdict for Floki.
 - **Cross-market context**: 15 MT5 instruments (metals, forex, indices, energy, crypto, futures) + Yahoo/FRED data.
 - **Rex market intelligence**: 11 tools (5 unique: session performance, divergence scan, correlation check, regime history, reflexion search). Provides insights, not approval.
 - **FOLLOWUP mechanism**: If Floki decides OPEN/CLOSE/ADJUST but forgets to call the tool, system injects a reminder turn.

@@ -56,7 +56,7 @@ main.py (orchestrator)
 ## Key Design Decisions
 
 - **Floki is sole decisor.** Rex is advisory ("DISAGREE is feedback, not a veto").
-- **Rex Bull/Bear debate (FLO-190):** Before each Floki cycle, two Rex instances run in parallel — Bull (argues FOR entering) and Bear (argues AGAINST). Both inject into `<debate>` block in trigger_context. Both must succeed or neither is shown (Rule 1). Existing `debate_with_rex` tool stays for Floki's own use.
+- **Rex Bull/Bear debate (FLO-190/194):** Before each Floki cycle, Rex Bull argues gold goes UP (BUY) and Rex Bear argues gold goes DOWN (SELL) in parallel. Research Manager (Gemini) picks the winner → `<verdict>` block in trigger_context. If RM fails, falls back to `<debate>` block. Both Bull and Bear must succeed or neither is shown (Rule 1).
 - **Rex defaults to DISAGREE on failure.** Truncation/parse error = no agreement.
 - **EA is pure executor.** `FLOKI_MANAGES_POSITION = True`. 9999-pip triggers never fire.
 - **Echo is pull-based.** Floki pulls alerts via tool, Echo does not push.
