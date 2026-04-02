@@ -29,14 +29,15 @@ _SYSTEM_PROMPT = (
     "- If performance data says SELL has poor win rate, be cautious about recommending SELL\n"
     "- If most news headlines are BULLISH, that context matters even if short-term "
     "momentum is bearish\n\n"
-    "Your options: ENTER_BUY, ENTER_SELL, or NO_TRADE.\n"
-    "If NO_TRADE: define trigger levels for both directions.\n"
-    "If ENTER: define entry, SL, target.\n"
+    "You MUST choose a direction: ENTER_BUY or ENTER_SELL. There is no NO_TRADE option. "
+    "Use conviction (1-10) to express certainty. Low conviction (1-4) = weak signal. "
+    "High conviction (7-10) = strong signal.\n"
+    "Always define entry, SL, target.\n"
     "Be DECISIVE but INFORMED.\n\n"
     "Return this exact JSON schema:\n"
     '{"winner":"BULL" or "BEAR",'
     '"reasoning":"1-2 sentences why, referencing which reports influenced you",'
-    '"recommendation":"ENTER_BUY" or "ENTER_SELL" or "NO_TRADE",'
+    '"recommendation":"ENTER_BUY" or "ENTER_SELL",'
     '"entry":price_or_null,"sl":price_or_null,"target":price_or_null,'
     '"trigger_buy":"price+condition or null","trigger_sell":"price+condition or null",'
     '"conviction":1_to_10}'
@@ -85,7 +86,7 @@ def _validate(parsed: dict) -> bool:
         return False
     if parsed.get("winner") not in ("BULL", "BEAR"):
         return False
-    if parsed.get("recommendation") not in ("ENTER_BUY", "ENTER_SELL", "NO_TRADE"):
+    if parsed.get("recommendation") not in ("ENTER_BUY", "ENTER_SELL"):
         return False
     if not isinstance(parsed.get("reasoning"), str) or not parsed["reasoning"]:
         return False
