@@ -3842,19 +3842,16 @@
                 }
                 if (vRecPill) {
                   vRecPill.textContent = vRec.replace('_', ' ');
-                  vRecPill.style.background = vRec === 'ENTER_BUY' ? 'rgba(76,175,80,0.2)' : vRec === 'ENTER_SELL' ? 'rgba(244,67,54,0.2)' : 'rgba(100,100,100,0.15)';
-                  vRecPill.style.color = vRec === 'ENTER_BUY' ? '#4CAF50' : vRec === 'ENTER_SELL' ? '#F44336' : '#8a8a9a';
+                  vRecPill.style.background = vRec === 'ENTER_BUY' ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)';
+                  vRecPill.style.color = vRec === 'ENTER_BUY' ? '#4CAF50' : '#F44336';
                 }
                 if (vConvText) vConvText.textContent = vConv + '/10';
                 if (vConvBar) vConvBar.style.width = (vConv * 10) + '%';
                 if (vReasoning) vReasoning.textContent = verdict.reasoning || '\u2014';
                 if (vLevels) {
                   var vParts = [];
-                  if (vRec === 'NO_TRADE') {
-                    if (verdict.trigger_buy) vParts.push('BUY trigger: ' + verdict.trigger_buy);
-                    if (verdict.trigger_sell) vParts.push('SELL trigger: ' + verdict.trigger_sell);
-                  } else {
-                    if (verdict.entry != null) vParts.push('Entry $' + verdict.entry);
+                  // FLO-203: NO_TRADE removed — always show entry/SL/target
+                  if (verdict.entry != null) vParts.push('Entry $' + verdict.entry);
                     if (verdict.sl != null) vParts.push('SL $' + verdict.sl);
                     if (verdict.target != null) vParts.push('Target $' + verdict.target);
                   }

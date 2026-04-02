@@ -25,7 +25,7 @@ _SYSTEM_PROMPT = (
     "Your job: Read ALL reports. Form your OWN opinion. Do NOT just pick the best "
     "argument between Bull and Bear. Consider the FULL picture:\n"
     "- If momentum says SELL but macro says BULLISH, that is a DIVERGENCE \u2014 "
-    "flag it and lean toward NO_TRADE\n"
+    "flag it in reasoning and lower conviction\n"
     "- If performance data says SELL has poor win rate, be cautious about recommending SELL\n"
     "- If most news headlines are BULLISH, that context matters even if short-term "
     "momentum is bearish\n\n"
