@@ -81,14 +81,29 @@ main.py (orchestrator)
 
 **Rule 17 — Push Immediately.** Every commit pushed to GitHub. No local-only commits.
 
-**Rule 18 — Use Appropriate Skills Before Implementing.** Before implementing ANY change, read the relevant skill for the type of work. This is NOT optional.
-- **Frontend** (trade_room.html, app.js, style.css, index.html, ANY HTML/CSS/JS): `/read-skill senior-frontend` then `/read-skill frontend-design`
-- **Backend** (main.py, server.py, ANY Python logic, API endpoints): `/read-skill senior-backend`
-- **Architecture** (new agents, system redesign, data flow changes, new files): `/read-skill senior-architect`
-- **Security** (API keys, validation, authentication, rate limiting): `/read-skill senior-security`
-- **ML / Data** (ml_predictor.py, training scripts, SQLite queries, data pipelines): `/read-skill senior-ml-engineer` then `/read-skill senior-data-engineer`
-- **Text / Prompts** (agent_prompts.py, system prompts, user-facing text): `/read-skill humanizer`
-- **Full-stack** (when a change touches BOTH frontend and backend in same commit): `/read-skill senior-fullstack`
+**Rule 18 — Use Appropriate Skills Before Implementing.** Before implementing ANY change, read the relevant skill SKILL.md. This is NOT optional.
+- **Frontend** (trade_room.html, app.js, style.css, index.html, ANY HTML/CSS/JS):
+  Read: `engineering-skills/senior-frontend/SKILL.md` then invoke `/distinctive-frontend`
+- **Backend** (main.py, server.py, ANY Python logic, API endpoints):
+  Read: `engineering-skills/senior-backend/SKILL.md`
+- **Architecture** (new agents, system redesign, data flow changes, new files):
+  Read: `engineering-skills/senior-architect/SKILL.md`
+- **Security** (API keys, validation, authentication, rate limiting):
+  Read: `engineering-skills/senior-security/SKILL.md`
+- **ML / Data** (ml_predictor.py, training scripts, SQLite queries, data pipelines):
+  Read: `engineering-skills/senior-ml-engineer/SKILL.md` + `engineering-skills/senior-data-engineer/SKILL.md`
+- **Prompts** (agent_prompts.py, system prompts):
+  Read: `engineering-skills/senior-prompt-engineer/SKILL.md`
+- **Full-stack** (when a change touches BOTH frontend and backend):
+  Read: `engineering-skills/senior-fullstack/SKILL.md`
+- **Agent design** (new agent architecture, multi-agent patterns):
+  Read: `engineering-advanced-skills/agent-designer/SKILL.md`
+- **Database** (schema changes, migrations, query optimization):
+  Read: `engineering-advanced-skills/database-designer/SKILL.md`
+- **Code review** (pre-push review, quality gates):
+  Read: `engineering-skills/code-reviewer/SKILL.md`
+Plugin skills are at: `~/.claude/plugins/cache/claude-code-skills/{plugin}/{version}/{skill}/SKILL.md`
+User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `/{skill-name}`
 
 **Bug Classification:** P0=crash/corruption → fix now. P1=logic error → with approval. P2=smell → deferred.
 
