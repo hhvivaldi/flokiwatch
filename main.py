@@ -3471,8 +3471,19 @@ class TradingBot:
                 pass
 
             # FLO-190: Rex Bull / Rex Bear structured debate (runs BEFORE Floki, injected into context)
+            # FLO-203: SKIP debate+RM when position is open — RM is for ENTRY decisions only
             _debate_result = None
+            _has_open_position = False
             try:
+                _pos_check = getattr(self, "_executor", None)
+                if _pos_check:
+                    _open_pos = _pos_check.get_open_positions() or []
+                    _has_open_position = len(_open_pos) > 0
+            except Exception:
+                pass
+
+            if not _has_open_position:
+             try:
                 from rex_validator import run_bull_bear_debate
 
                 # Build data package from available caches
@@ -3605,17 +3616,19 @@ class TradingBot:
                         if _bear.get("entry") is not None:
                             _bear_text += f" Entry ${_bear['entry']}, SL ${_bear.get('sl', '?')}, target ${_bear.get('target', '?')}."
                         trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
-            except Exception as _deb_err:
+             except Exception as _deb_err:
                 log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")
 
-            # Write debate + verdict to bot_state for dashboard
-            try:
+             # Write debate + verdict to bot_state for dashboard
+             try:
                 if _debate_result and isinstance(_debate_result, dict):
                     self._last_debate_result = _debate_result
                 if _verdict_result and isinstance(_verdict_result, dict):
                     self._last_verdict_result = _verdict_result
-            except Exception:
+             except Exception:
                 pass
+            else:
+                log.info("REX_DEBATE | SKIPPED — position open, RM only for entry decisions")
 
             # FLO-139: Inject market regime into trigger_context
             try:

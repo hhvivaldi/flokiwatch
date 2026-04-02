@@ -337,7 +337,7 @@ class AgentMonitor:
                 _persisted = int(cw.get("cooldown_minutes") or _DEFAULT_COOLDOWN)
                 cooldown_minutes = min(_persisted, _DEFAULT_COOLDOWN)  # Clamp to configured max
             except Exception:
-                cooldown_minutes = 5
+                cooldown_minutes = 30
 
             last_wake_at = cw.get("last_wake_at")
             last_fp = str(cw.get("cooldown_fingerprint") or "").strip() or None
