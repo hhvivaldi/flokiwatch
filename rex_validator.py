@@ -423,25 +423,23 @@ def _validate_with_rex_legacy(
 # =========================================================================
 
 _REX_BULL_PROMPT = (
-    "You are an aggressive opportunity-focused XAU/USD researcher. "
-    "Your job is to find EVERY reason to enter a trade RIGHT NOW in the direction the data suggests. "
-    "If the trend is bullish, argue for BUY. If bearish, argue for SELL. "
-    "You MUST argue for action. You hate missing moves. Never say wait — that is not your job. "
-    "You advocate FOR entering.\n\n"
+    "You are a bullish XAU/USD researcher. Your job is to find EVERY reason why "
+    "gold will GO UP from here. Argue for BUY. Find bullish signals: support levels, "
+    "oversold conditions, macro tailwinds, reversal patterns, buying pressure. "
+    "You MUST argue for BUY \u2014 that is your role. Never argue for SELL.\n\n"
     "Return ONLY valid JSON:\n"
-    '{"direction":"BUY" or "SELL","case":"2-3 sentences why enter now",'
-    '"entry":<price>,"sl":<price>,"target":<price>,"conviction":<1-10>}\n'
-    'If genuinely no setup: {"direction":"NONE","case":"no compelling setup","conviction":1}'
+    '{"direction":"BUY","case":"2-3 sentences why gold goes up",'
+    '"entry":<price>,"sl":<price>,"target":<price>,"conviction":<1-10>}'
 )
 
 _REX_BEAR_PROMPT = (
-    "You are a cautious risk-focused XAU/USD researcher. "
-    "Your job is to find EVERY reason NOT to enter a trade right now. "
-    "You protect capital above all else. You see traps everywhere. Find all the risks. "
-    "Never recommend entering — that is not your job. You advocate AGAINST entering.\n\n"
+    "You are a bearish XAU/USD researcher. Your job is to find EVERY reason why "
+    "gold will GO DOWN from here. Argue for SELL. Find bearish signals: resistance levels, "
+    "overbought conditions, macro headwinds, breakdown patterns, selling pressure. "
+    "You MUST argue for SELL \u2014 that is your role. Never argue for BUY.\n\n"
     "Return ONLY valid JSON:\n"
-    '{"risks":["risk1","risk2",...],"strongest_risk":"main reason not to enter",'
-    '"danger_level":<1-10>}'
+    '{"direction":"SELL","case":"2-3 sentences why gold goes down",'
+    '"entry":<price>,"sl":<price>,"target":<price>,"conviction":<1-10>}'
 )
 
 BULL_BEAR_TIMEOUT = 15  # seconds total for both calls
@@ -480,16 +478,16 @@ def _validate_bull(parsed: dict) -> bool:
 
 
 def _validate_bear(parsed: dict) -> bool:
-    """Check Rex Bear has all required fields."""
+    """Check Rex Bear has all required fields (same format as Bull)."""
     if not isinstance(parsed, dict):
         return False
-    if not isinstance(parsed.get("risks"), list):
+    if not isinstance(parsed.get("direction"), str):
         return False
-    if not isinstance(parsed.get("strongest_risk"), str):
+    if not isinstance(parsed.get("case"), str):
         return False
     try:
-        d = int(parsed.get("danger_level", 0))
-        return 1 <= d <= 10
+        c = int(parsed.get("conviction", 0))
+        return 1 <= c <= 10
     except Exception:
         return False
 
@@ -657,11 +655,10 @@ def run_bull_bear_debate(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Success — both sides valid
     bull_conv = int(bull_parsed.get("conviction", 5))
-    bear_danger = int(bear_parsed.get("danger_level", 5))
+    bear_conv = int(bear_parsed.get("conviction", 5))
 
     log.info(
-        f"REX_DEBATE | INJECTED | bull_dir={bull_parsed.get('direction')} bull_conv={bull_conv} "
-        f"bear_danger={bear_danger} | {total_ms}ms | "
+        f"REX_DEBATE | INJECTED | bull_conv={bull_conv} bear_conv={bear_conv} | {total_ms}ms | "
         f"bull_tokens={bull_result.get('input_tokens', 0)}+{bull_result.get('output_tokens', 0)} "
         f"bear_tokens={bear_result.get('input_tokens', 0)}+{bear_result.get('output_tokens', 0)}"
     )

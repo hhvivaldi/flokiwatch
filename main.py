@@ -3544,18 +3544,17 @@ class TradingBot:
                     else:
                         # Fallback: inject <debate> block (FLO-190 behavior)
                         _bull_text = (
-                            f"REX BULL (advocates FOR entering \u2014 conviction {_bull.get('conviction', '?')}/10): "
+                            f"REX BULL (argues gold goes UP \u2014 conviction {_bull.get('conviction', '?')}/10): "
                             f"\"{_bull.get('case', '')}\""
                         )
                         if _bull.get("entry") is not None:
                             _bull_text += f" Entry ${_bull['entry']}, SL ${_bull.get('sl', '?')}, target ${_bull.get('target', '?')}."
-                        _bear_risks = ", ".join(str(r) for r in (_bear.get("risks", []))[:4])
                         _bear_text = (
-                            f"REX BEAR (advocates AGAINST entering \u2014 danger {_bear.get('danger_level', '?')}/10): "
-                            f"\"{_bear.get('strongest_risk', '')}\""
+                            f"REX BEAR (argues gold goes DOWN \u2014 conviction {_bear.get('conviction', '?')}/10): "
+                            f"\"{_bear.get('case', '')}\""
                         )
-                        if _bear_risks:
-                            _bear_text += f" Other risks: {_bear_risks}."
+                        if _bear.get("entry") is not None:
+                            _bear_text += f" Entry ${_bear['entry']}, SL ${_bear.get('sl', '?')}, target ${_bear.get('target', '?')}."
                         trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
             except Exception as _deb_err:
                 log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")

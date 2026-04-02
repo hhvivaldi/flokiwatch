@@ -112,9 +112,12 @@
 | `last_analysis.debate.rex_bull.entry` | float \| null | `state_writer.py` | Dashboard debate card |
 | `last_analysis.debate.rex_bull.sl` | float \| null | `state_writer.py` | Dashboard debate card |
 | `last_analysis.debate.rex_bull.target` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.risks` | array of strings | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.strongest_risk` | string | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.danger_level` | int (1-10) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.direction` | string (`"SELL"`) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.case` | string | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.conviction` | int (1-10) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.entry` | float \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.sl` | float \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.target` | float \| null | `state_writer.py` | Dashboard debate card |
 
 ### `last_analysis.verdict` Object (FLO-194 Research Manager)
 

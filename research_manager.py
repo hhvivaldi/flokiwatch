@@ -17,17 +17,22 @@ RESEARCH_MANAGER_TIMEOUT = 10  # seconds
 
 _SYSTEM_PROMPT = (
     "You are a senior research manager at a gold (XAU/USD) trading firm. "
-    "You receive two opposing arguments from your researchers. "
-    "Pick the stronger argument. Be DECISIVE. Never say both have valid points.\n\n"
+    "You receive two opposing arguments:\n"
+    "- Rex Bull argues gold will go UP (BUY)\n"
+    "- Rex Bear argues gold will go DOWN (SELL)\n\n"
+    "Your job:\n"
+    "1. Pick who has the stronger argument.\n"
+    "2. If BULL wins: recommendation = ENTER_BUY with entry, SL, target.\n"
+    "3. If BEAR wins: recommendation = ENTER_SELL with entry, SL, target.\n"
+    "4. If NEITHER is convincing: recommendation = NO_TRADE with trigger levels.\n"
+    "5. Be DECISIVE. Pick a side.\n\n"
     "Return this exact JSON schema:\n"
     '{"winner":"BULL" or "BEAR",'
     '"reasoning":"1-2 sentences why this side wins",'
     '"recommendation":"ENTER_BUY" or "ENTER_SELL" or "NO_TRADE",'
     '"entry":price_or_null,"sl":price_or_null,"target":price_or_null,'
     '"trigger_buy":"price+condition or null","trigger_sell":"price+condition or null",'
-    '"conviction":1_to_10}\n\n'
-    "If NO_TRADE: set trigger_buy and trigger_sell with specific prices. "
-    "If ENTER: set entry, sl, target. Keep reasoning under 2 sentences."
+    '"conviction":1_to_10}'
 )
 
 
@@ -88,28 +93,20 @@ def _build_user_message(bull: Dict[str, Any], bear: Dict[str, Any]) -> str:
     """Build the user prompt from Bull and Bear results."""
     parts = []
 
-    # Bull argument
-    bull_dir = bull.get("direction", "?")
+    # Bull argument (argues gold goes UP → BUY)
     bull_conv = bull.get("conviction", "?")
     bull_case = bull.get("case", "no argument")
-    parts.append(
-        f"Rex Bull (advocates FOR entering — conviction {bull_conv}/10):\n"
-        f"Direction: {bull_dir}\n"
-        f"Case: {bull_case}"
-    )
+    bull_text = f"Rex Bull (argues gold goes UP — conviction {bull_conv}/10):\nCase: {bull_case}"
     if bull.get("entry") is not None:
-        parts[-1] += f"\nEntry: ${bull['entry']} SL: ${bull.get('sl', '?')} Target: ${bull.get('target', '?')}"
+        bull_text += f"\nEntry: ${bull['entry']} SL: ${bull.get('sl', '?')} Target: ${bull.get('target', '?')}"
+    parts.append(bull_text)
 
-    # Bear argument
-    bear_danger = bear.get("danger_level", "?")
-    bear_strongest = bear.get("strongest_risk", "no argument")
-    bear_risks = bear.get("risks", [])
-    bear_text = (
-        f"Rex Bear (advocates AGAINST entering — danger {bear_danger}/10):\n"
-        f"Strongest risk: {bear_strongest}"
-    )
-    if bear_risks:
-        bear_text += "\nAll risks: " + "; ".join(str(r) for r in bear_risks[:5])
+    # Bear argument (argues gold goes DOWN → SELL)
+    bear_conv = bear.get("conviction", "?")
+    bear_case = bear.get("case", "no argument")
+    bear_text = f"Rex Bear (argues gold goes DOWN — conviction {bear_conv}/10):\nCase: {bear_case}"
+    if bear.get("entry") is not None:
+        bear_text += f"\nEntry: ${bear['entry']} SL: ${bear.get('sl', '?')} Target: ${bear.get('target', '?')}"
     parts.append(bear_text)
 
     return "\n\n".join(parts)

@@ -1146,7 +1146,7 @@
                   </div>
                   <div class="bc-identity">
                     <span class="bc-name" style="color:#4CAF50">REX BULL</span>
-                    <span class="bc-role">FOR ENTERING</span>
+                    <span class="bc-role">ARGUES BUY</span>
                   </div>
                 </div>
                 <div class="bc-row2">
@@ -1167,32 +1167,33 @@
               </div>
             </div>
 
-            <!-- REX BEAR (FLO-191) -->
+            <!-- REX BEAR (FLO-191, updated FLO-194) -->
             <div class="bc-card" id="rex-bear-card" style="border-color:#F44336">
               <button type="button" class="bc-btn" data-expand-target="rex-bear-expand" aria-expanded="false">
                 <div class="bc-row1">
                   <div class="bc-avatar" style="border-color:#F44336;background:rgba(244,67,54,0.1)">
-                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F6E1;</span>
+                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C9;</span>
                   </div>
                   <div class="bc-identity">
                     <span class="bc-name" style="color:#F44336">REX BEAR</span>
-                    <span class="bc-role">AGAINST ENTERING</span>
+                    <span class="bc-role">ARGUES SELL</span>
                   </div>
                 </div>
                 <div class="bc-row2">
-                  <span id="rex-bear-danger-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                  <span id="rex-bear-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                  <span id="rex-bear-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
                 </div>
                 <div class="bc-row3">
                   <div class="bc-metric">
-                    <span class="bc-metric-label">Danger</span>
-                    <span id="rex-bear-danger-text" class="bc-metric-val" style="color:#F44336">—</span>
+                    <span class="bc-metric-label">Conviction</span>
+                    <span id="rex-bear-conv-text" class="bc-metric-val" style="color:#F44336">—</span>
                   </div>
-                  <div class="bc-bar-track"><div id="rex-bear-danger-bar" class="bc-bar-fill" style="width:0%;background:#F44336"></div></div>
+                  <div class="bc-bar-track"><div id="rex-bear-conv-bar" class="bc-bar-fill" style="width:0%;background:#F44336"></div></div>
                 </div>
               </button>
               <div id="rex-bear-expand" class="agent-expand">
-                <div id="rex-bear-strongest" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#fca5a5;font-weight:bold;max-height:40px;overflow-y:auto">No debate yet.</div>
-                <div id="rex-bear-risks" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#9ca3af;max-height:80px;overflow-y:auto;margin-top:4px"></div>
+                <div id="rex-bear-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
+                <div id="rex-bear-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
               </div>
             </div>
 
@@ -3473,33 +3474,45 @@
                 if (bullLevels) bullLevels.textContent = '';
               }
 
-              // Rex Bear card
-              var bearDangerPill = document.getElementById('rex-bear-danger-pill');
-              var bearDangerText = document.getElementById('rex-bear-danger-text');
-              var bearDangerBar = document.getElementById('rex-bear-danger-bar');
-              var bearStrongest = document.getElementById('rex-bear-strongest');
-              var bearRisks = document.getElementById('rex-bear-risks');
+              // Rex Bear card (same format as Bull — direction/case/conviction/entry/sl/target)
+              var bearDirPill = document.getElementById('rex-bear-dir-pill');
+              var bearConvPill = document.getElementById('rex-bear-conv-pill');
+              var bearConvText = document.getElementById('rex-bear-conv-text');
+              var bearConvBar = document.getElementById('rex-bear-conv-bar');
+              var bearCase = document.getElementById('rex-bear-case');
+              var bearLevels = document.getElementById('rex-bear-levels');
 
-              if (debateStatus === 'INJECTED' && bear.strongest_risk) {
-                var bDanger = parseInt(bear.danger_level) || 0;
-                if (bearDangerPill) {
-                  bearDangerPill.textContent = 'DANGER ' + bDanger + '/10';
-                  bearDangerPill.style.background = bDanger >= 7 ? 'rgba(244,67,54,0.2)' : bDanger >= 4 ? 'rgba(255,152,0,0.2)' : 'rgba(100,100,100,0.15)';
-                  bearDangerPill.style.color = bDanger >= 7 ? '#F44336' : bDanger >= 4 ? '#FF9800' : '#8a8a9a';
+              if (debateStatus === 'INJECTED' && bear.direction) {
+                var brDir = (bear.direction || '').toUpperCase();
+                var brConv = parseInt(bear.conviction) || 0;
+                if (bearDirPill) {
+                  bearDirPill.textContent = brDir;
+                  bearDirPill.style.background = 'rgba(239,83,80,0.2)';
+                  bearDirPill.style.color = '#EF5350';
                 }
-                if (bearDangerText) bearDangerText.textContent = bDanger + '/10';
-                if (bearDangerBar) bearDangerBar.style.width = (bDanger * 10) + '%';
-                if (bearStrongest) bearStrongest.textContent = bear.strongest_risk || '—';
-                if (bearRisks && Array.isArray(bear.risks)) {
-                  bearRisks.innerHTML = bear.risks.slice(0, 5).map(function(r) { return '\u2022 ' + r; }).join('<br>');
+                if (bearConvPill) {
+                  bearConvPill.textContent = brConv + '/10';
+                  bearConvPill.style.background = brConv >= 7 ? 'rgba(244,67,54,0.2)' : brConv >= 4 ? 'rgba(255,152,0,0.2)' : 'rgba(100,100,100,0.15)';
+                  bearConvPill.style.color = brConv >= 7 ? '#F44336' : brConv >= 4 ? '#FF9800' : '#8a8a9a';
+                }
+                if (bearConvText) bearConvText.textContent = brConv + '/10';
+                if (bearConvBar) bearConvBar.style.width = (brConv * 10) + '%';
+                if (bearCase) bearCase.textContent = bear.case || '—';
+                if (bearLevels) {
+                  var brParts = [];
+                  if (bear.entry != null) brParts.push('Entry $' + bear.entry);
+                  if (bear.sl != null) brParts.push('SL $' + bear.sl);
+                  if (bear.target != null) brParts.push('Target $' + bear.target);
+                  bearLevels.textContent = brParts.join(' | ');
                 }
               } else {
                 var skipMsg2 = debateStatus === 'SKIPPED' ? '[unavailable \u2014 ' + (debate.skip_reason || '?') + ']' : '—';
-                if (bearDangerPill) { bearDangerPill.textContent = '—'; bearDangerPill.style.background = 'rgba(100,100,100,0.15)'; bearDangerPill.style.color = '#8a8a9a'; }
-                if (bearDangerText) bearDangerText.textContent = '—';
-                if (bearDangerBar) bearDangerBar.style.width = '0%';
-                if (bearStrongest) bearStrongest.textContent = skipMsg2;
-                if (bearRisks) bearRisks.innerHTML = '';
+                if (bearDirPill) { bearDirPill.textContent = '—'; bearDirPill.style.background = 'rgba(100,100,100,0.15)'; bearDirPill.style.color = '#8a8a9a'; }
+                if (bearConvPill) { bearConvPill.textContent = '—'; bearConvPill.style.background = 'rgba(100,100,100,0.15)'; bearConvPill.style.color = '#8a8a9a'; }
+                if (bearConvText) bearConvText.textContent = '—';
+                if (bearConvBar) bearConvBar.style.width = '0%';
+                if (bearCase) bearCase.textContent = skipMsg2;
+                if (bearLevels) bearLevels.textContent = '';
               }
             } catch(debErr) {
               // silent
