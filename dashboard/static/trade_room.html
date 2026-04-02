@@ -754,21 +754,21 @@
       .room-header:hover { opacity: 0.7; }
       .room-label {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 9px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #5a6a7e;
+        color: #7a8a9e;
         white-space: nowrap;
       }
       .room-line {
         flex: 1;
         height: 1px;
-        background: linear-gradient(90deg, rgba(90,106,126,0.25) 0%, transparent 70%);
+        background: linear-gradient(90deg, rgba(122,138,158,0.2) 0%, transparent 60%);
       }
       .room-toggle {
-        font-size: 8px;
-        color: #5a6a7e;
+        font-size: 9px;
+        color: #7a8a9e;
         transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .room-section.collapsed .room-toggle { transform: rotate(-90deg); }
@@ -812,8 +812,8 @@
         max-width: none;
         height: 132px;
         overflow: hidden;
-        border-radius: 10px;
-        background: linear-gradient(168deg, rgba(26,26,46,0.95) 0%, rgba(18,18,32,0.98) 100%);
+        border-radius: 8px;
+        background: var(--card-bg, linear-gradient(168deg, #12121e 0%, #0d0d18 100%));
         border: 1px solid;
         display: flex;
         flex-direction: column;
@@ -821,35 +821,79 @@
         transition: border-color 0.3s ease, transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease;
         position: relative;
       }
-      .bc-card::after {
+      /* Top accent bar */
+      .bc-card::before {
         content: '';
         position: absolute;
-        inset: 0;
-        border-radius: 10px;
-        pointer-events: none;
-        opacity: 0.06;
-        background: radial-gradient(ellipse at 30% 20%, currentColor, transparent 70%);
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: var(--card-accent, #444);
+        border-radius: 8px 8px 0 0;
+        z-index: 1;
       }
       .bc-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(var(--card-glow, 100,100,100), 0.08);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 20px rgba(var(--card-glow, 100,100,100), 0.07);
       }
       .bc-card:has(.agent-expand.open) {
         height: auto;
         max-height: 240px;
         overflow: visible;
       }
-      /* Card accent glow tints */
-      #floki-card { --card-glow: 170,255,0; flex: 1 1 100%; max-width: 100%; border-width: 1.5px; }
-      #rex-card { --card-glow: 156,39,176; }
-      #rex-bull-card { --card-glow: 76,175,80; }
-      #rex-bear-card { --card-glow: 244,67,54; }
-      #verdict-card { --card-glow: 255,215,0; }
-      #simba-card { --card-glow: 0,229,255; }
-      #sage-card { --card-glow: 255,179,0; }
-      #echo-card { --card-glow: 0,188,212; }
-      #luna-card { --card-glow: 224,64,251; }
-      #regime-card { --card-glow: 100,100,140; }
+
+      /* Per-card color systems: tinted bg + accent bar + glow */
+      #floki-card {
+        --card-bg: linear-gradient(168deg, #111a0d 0%, #0b100a 100%);
+        --card-accent: linear-gradient(90deg, #AAFF00, #6a9900);
+        --card-glow: 170,255,0;
+        flex: 1 1 100%; max-width: 100%; border-width: 1.5px;
+      }
+      #floki-card::before { height: 3px; }
+      #rex-card {
+        --card-bg: linear-gradient(168deg, #160d1a 0%, #0f0a12 100%);
+        --card-accent: #9C27B0;
+        --card-glow: 156,39,176;
+      }
+      #rex-bull-card {
+        --card-bg: linear-gradient(168deg, #0d1a0f 0%, #0a120b 100%);
+        --card-accent: #4CAF50;
+        --card-glow: 76,175,80;
+      }
+      #rex-bear-card {
+        --card-bg: linear-gradient(168deg, #1a0d0d 0%, #120a0a 100%);
+        --card-accent: #F44336;
+        --card-glow: 244,67,54;
+      }
+      #verdict-card {
+        --card-bg: linear-gradient(168deg, #1a180d 0%, #12100a 100%);
+        --card-accent: linear-gradient(90deg, #FFD700, #B8860B);
+        --card-glow: 255,215,0;
+      }
+      #simba-card {
+        --card-bg: linear-gradient(168deg, #0d171a 0%, #0a1012 100%);
+        --card-accent: #00E5FF;
+        --card-glow: 0,229,255;
+      }
+      #sage-card {
+        --card-bg: linear-gradient(168deg, #1a150d 0%, #120e0a 100%);
+        --card-accent: #FFB300;
+        --card-glow: 255,179,0;
+      }
+      #echo-card {
+        --card-bg: linear-gradient(168deg, #0d181a 0%, #0a1112 100%);
+        --card-accent: #00BCD4;
+        --card-glow: 0,188,212;
+      }
+      #luna-card {
+        --card-bg: linear-gradient(168deg, #1a0d1a 0%, #120a12 100%);
+        --card-accent: #E040FB;
+        --card-glow: 224,64,251;
+      }
+      #regime-card {
+        --card-bg: linear-gradient(168deg, #13131a 0%, #0d0d14 100%);
+        --card-accent: #6b7280;
+        --card-glow: 100,100,140;
+      }
 
       .bc-btn {
         width: 100%;
