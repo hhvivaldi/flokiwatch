@@ -478,15 +478,26 @@ def _get_post_close_prices(close_time_str: str, direction: str, entry_price: flo
     try:
         import MetaTrader5 as mt5
         from datetime import timedelta
+        import time as _time
 
         # NOTE: Do NOT call mt5.shutdown() — it kills the process-global connection.
         # mt5.initialize() is safe to call if already initialized (returns True).
         if not mt5.initialize():
             return None
 
+        # FLO-198: DB close_time is in MT5 server time (UTC+N), not UTC.
+        # Compute server offset dynamically and convert to UTC for copy_rates_range.
         close_dt = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
         if close_dt.tzinfo is None:
             close_dt = close_dt.replace(tzinfo=timezone.utc)
+
+        try:
+            tick = mt5.symbol_info_tick("XAUUSD")
+            if tick and tick.time:
+                server_offset_s = int(tick.time) - int(_time.time())
+                close_dt = close_dt - timedelta(seconds=server_offset_s)
+        except Exception:
+            pass
 
         target_1h = close_dt + timedelta(hours=1)
         bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, target_1h)

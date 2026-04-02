@@ -1038,7 +1038,37 @@ def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
 
     except json.JSONDecodeError as e:
         elapsed_ms = int((time.time() - t0) * 1000)
-        log.error(f"LUNA: MiMo returned invalid JSON ({elapsed_ms}ms) — {e}")
+        log.warning(f"LUNA: MiMo returned invalid JSON ({elapsed_ms}ms) — {e} — retrying once...")
+        # FLO-199: Single retry on JSON parse failure
+        try:
+            time.sleep(3)
+            t1 = time.time()
+            response2 = client.chat.completions.create(
+                model=LUNA_MODEL,
+                messages=[
+                    {"role": "system", "content": LUNA_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_completion_tokens=1024,
+                response_format={"type": "json_object"},
+                timeout=30,
+            )
+            elapsed2 = int((time.time() - t1) * 1000)
+            raw2 = response2.choices[0].message.content if response2.choices else ""
+            if raw2:
+                parsed2 = json.loads(raw2)
+                if isinstance(parsed2, dict):
+                    usage2 = response2.usage
+                    if usage2:
+                        est2 = _estimate_cost(usage2.prompt_tokens, usage2.completion_tokens)
+                        cost_data["total_usd"] = round(cost_data["total_usd"] + est2, 4)
+                        cost_data["calls"] += 1
+                        _save_daily_cost(cost_data)
+                    log.info(f"LUNA: MiMo retry succeeded ({elapsed2}ms)")
+                    return parsed2
+        except Exception as e2:
+            log.warning(f"LUNA: MiMo retry also failed — {e2}")
         return None
     except Exception as e:
         elapsed_ms = int((time.time() - t0) * 1000)
