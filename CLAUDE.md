@@ -81,6 +81,15 @@ main.py (orchestrator)
 
 **Rule 17 — Push Immediately.** Every commit pushed to GitHub. No local-only commits.
 
+**Rule 18 — Use Appropriate Skills Before Implementing.** Before implementing ANY change, read the relevant skill for the type of work. This is NOT optional.
+- **Frontend** (trade_room.html, app.js, style.css, index.html, ANY HTML/CSS/JS): `/read-skill senior-frontend` then `/read-skill frontend-design`
+- **Backend** (main.py, server.py, ANY Python logic, API endpoints): `/read-skill senior-backend`
+- **Architecture** (new agents, system redesign, data flow changes, new files): `/read-skill senior-architect`
+- **Security** (API keys, validation, authentication, rate limiting): `/read-skill senior-security`
+- **ML / Data** (ml_predictor.py, training scripts, SQLite queries, data pipelines): `/read-skill senior-ml-engineer` then `/read-skill senior-data-engineer`
+- **Text / Prompts** (agent_prompts.py, system prompts, user-facing text): `/read-skill humanizer`
+- **Full-stack** (when a change touches BOTH frontend and backend in same commit): `/read-skill senior-fullstack`
+
 **Bug Classification:** P0=crash/corruption → fix now. P1=logic error → with approval. P2=smell → deferred.
 
 ## File Conventions
