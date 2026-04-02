@@ -325,7 +325,7 @@
       .feed-compact .msg-bubble br:first-of-type { display: inline; }
       .feed-compact .msg-content {
         display: -webkit-box;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 6;
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
@@ -2395,11 +2395,10 @@
                   var kfIdx = reasoning.indexOf('KEY FACTORS:');
                   if (kdIdx >= 0) reasoning = reasoning.slice(0, kdIdx).trim();
                   if (kfIdx >= 0) reasoning = reasoning.slice(0, kfIdx).trim();
-                  // Split reasoning into sentences — show 4 with expand for rest
+                  // Split reasoning into sentences — show all (FLO-192: removed truncation)
                   var sentences = reasoning.split(/\.(?=\s+[A-Z])/).map(function(s,i,a){return s.trim()+(i<a.length-1?'.':'');}).filter(Boolean);
-                  var shortLines = sentences.slice(0, 4).map(function(s) { return esc(s.trim()); }).join('<br>');
-                  var lines = shortLines;
-                  if (sentences.length > 4) {
+                  var lines = sentences.map(function(s) { return esc(s.trim()); }).join('<br>');
+                  if (false) { // FLO-192: disabled sentence truncation — show full reasoning
                     var fullLines = sentences.map(function(s) { return esc(s.trim()); }).join('<br>');
                     var eid = 'expand-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
                     lines = '<span id="' + eid + '-short">' + shortLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-short\').style.display=\'none\';document.getElementById(\'' + eid + '-full\').style.display=\'inline\';return false">Show more</a></span>' +

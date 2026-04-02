@@ -4431,9 +4431,8 @@ class TradingBot:
             except Exception:
                 conf_s = ""
 
+            # FLO-192: Full reasoning in chat feed (was truncated to 380 chars)
             reason_s = reasoning
-            if len(reason_s) > 380:
-                reason_s = reason_s[:380].rstrip() + "..."
 
             content = f"{d}{conf_s}. {reason_s}".strip()
             if content:
