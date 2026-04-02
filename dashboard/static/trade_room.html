@@ -849,11 +849,12 @@
         max-height: calc(100vh - 160px);
         overflow-y: auto;
         scrollbar-width: thin;
+        scrollbar-color: rgba(90, 106, 126, 0.3) transparent;
       }
-      .col-right::-webkit-scrollbar { width: 6px; }
-      .col-right::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 6px; }
-      .col-right::-webkit-scrollbar-thumb { background: rgba(138,154,176,0.35); border-radius: 6px; min-height: 40px; }
-      .col-right::-webkit-scrollbar-thumb:hover { background: rgba(138,154,176,0.5); }
+      .col-right::-webkit-scrollbar { width: 4px; }
+      .col-right::-webkit-scrollbar-track { background: transparent; }
+      .col-right::-webkit-scrollbar-thumb { background: rgba(90, 106, 126, 0.3); border-radius: 4px; }
+      .col-right::-webkit-scrollbar-thumb:hover { background: rgba(90, 106, 126, 0.5); }
 
       /* ── Business-card agent cards (FLO-145 Proposal 2: data-first) ── */
       .bc-card {
