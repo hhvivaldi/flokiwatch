@@ -3899,14 +3899,18 @@
                   '<span class="room-summary-pill" style="background:rgba(0,229,255,0.12);color:#00E5FF">Simba: ' + wcCount + ' conditions</span>' +
                   '<span class="room-summary-pill" style="background:rgba(255,179,0,0.12);color:#FFB300">Sage: ready</span>';
               }
-              // DATA summary
+              // DATA summary — read Luna from already-rendered card pills (populated by renderLuna)
               var datSum = document.getElementById('room-data-summary');
               if (datSum) {
-                var lunaEnv = ((state.last_analysis || {}).luna_brief || {}).environment || '?';
-                var lunaRisk = ((state.last_analysis || {}).luna_brief || {}).risk_level || '?';
+                var lunaEnvPill = document.getElementById('luna-env-pill');
+                var lunaRiskEl = document.getElementById('luna-risk-text');
+                var lunaEnv = lunaEnvPill ? lunaEnvPill.textContent.trim() : '?';
+                var lunaRisk = lunaRiskEl ? lunaRiskEl.textContent.trim() : '?';
+                var lunaColor = lunaEnv === 'DANGER' ? '#ef4444' : (lunaEnv === 'CAUTION' ? '#f59e0b' : '#E040FB');
+                var lunaBg = lunaEnv === 'DANGER' ? 'rgba(239,68,68,0.12)' : (lunaEnv === 'CAUTION' ? 'rgba(245,158,11,0.12)' : 'rgba(224,64,251,0.12)');
                 datSum.innerHTML =
                   '<span class="room-summary-pill" style="background:rgba(0,188,212,0.12);color:#00BCD4">Echo: active</span>' +
-                  '<span class="room-summary-pill" style="background:rgba(224,64,251,0.12);color:#E040FB">Luna: ' + lunaEnv + ' ' + lunaRisk + '/10</span>';
+                  '<span class="room-summary-pill" style="background:' + lunaBg + ';color:' + lunaColor + '">Luna: ' + lunaEnv + ' ' + lunaRisk + '</span>';
               }
             } catch(sumErr) {}
 
