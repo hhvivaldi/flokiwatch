@@ -333,7 +333,9 @@ class AgentMonitor:
 
             cw = wake_conditions if isinstance(wake_conditions, dict) else {}
             try:
-                cooldown_minutes = int(cw.get("cooldown_minutes") or 5)
+                _DEFAULT_COOLDOWN = 5  # FLO-200 configured default
+                _persisted = int(cw.get("cooldown_minutes") or _DEFAULT_COOLDOWN)
+                cooldown_minutes = min(_persisted, _DEFAULT_COOLDOWN)  # Clamp to configured max
             except Exception:
                 cooldown_minutes = 5
 
