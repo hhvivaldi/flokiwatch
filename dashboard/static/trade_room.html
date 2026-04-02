@@ -3850,11 +3850,9 @@
                 if (vReasoning) vReasoning.textContent = verdict.reasoning || '\u2014';
                 if (vLevels) {
                   var vParts = [];
-                  // FLO-203: NO_TRADE removed — always show entry/SL/target
                   if (verdict.entry != null) vParts.push('Entry $' + verdict.entry);
-                    if (verdict.sl != null) vParts.push('SL $' + verdict.sl);
-                    if (verdict.target != null) vParts.push('Target $' + verdict.target);
-                  }
+                  if (verdict.sl != null) vParts.push('SL $' + verdict.sl);
+                  if (verdict.target != null) vParts.push('Target $' + verdict.target);
                   vLevels.textContent = vParts.join(' | ');
                 }
               } else {
