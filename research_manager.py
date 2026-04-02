@@ -17,15 +17,17 @@ RESEARCH_MANAGER_TIMEOUT = 10  # seconds
 
 _SYSTEM_PROMPT = (
     "You are a senior research manager at a gold (XAU/USD) trading firm. "
-    "You receive two opposing arguments from your researchers — one advocating "
-    "FOR entering a trade and one advocating AGAINST. Your job is:\n"
-    "1. Pick the stronger argument and explain WHY in 1-2 sentences.\n"
-    "2. Produce ONE clear recommendation: ENTER_BUY, ENTER_SELL, or NO_TRADE.\n"
-    "3. If NO_TRADE: define exactly TWO trigger levels with specific prices — "
-    "one for buy entry, one for sell entry.\n"
-    "4. If ENTER: define entry price, SL, and target.\n"
-    "5. Be DECISIVE — never say 'both have valid points.' Pick a side.\n"
-    "6. Respond ONLY with valid JSON."
+    "You receive two opposing arguments from your researchers. "
+    "Pick the stronger argument. Be DECISIVE. Never say both have valid points.\n\n"
+    "Return this exact JSON schema:\n"
+    '{"winner":"BULL" or "BEAR",'
+    '"reasoning":"1-2 sentences why this side wins",'
+    '"recommendation":"ENTER_BUY" or "ENTER_SELL" or "NO_TRADE",'
+    '"entry":price_or_null,"sl":price_or_null,"target":price_or_null,'
+    '"trigger_buy":"price+condition or null","trigger_sell":"price+condition or null",'
+    '"conviction":1_to_10}\n\n'
+    "If NO_TRADE: set trigger_buy and trigger_sell with specific prices. "
+    "If ENTER: set entry, sl, target. Keep reasoning under 2 sentences."
 )
 
 
@@ -133,11 +135,12 @@ def run_research_manager(bull: Dict[str, Any], bear: Dict[str, Any]) -> Optional
 
         resp = client.models.generate_content(
             model=model,
-            contents=[
-                {"role": "user", "parts": [{"text": _SYSTEM_PROMPT}]},
-                {"role": "user", "parts": [{"text": user_msg}]},
-            ],
-            config={"max_output_tokens": 500},
+            contents=user_msg,
+            config={
+                "system_instruction": _SYSTEM_PROMPT,
+                "response_mime_type": "application/json",
+                "max_output_tokens": 2000,
+            },
         )
 
         latency_ms = int((time.time() - t0) * 1000)
