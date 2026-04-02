@@ -857,8 +857,10 @@
         overflow-y: auto;
         scrollbar-width: thin;
       }
-      .col-right::-webkit-scrollbar { width: 4px; }
-      .col-right::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
+      .col-right::-webkit-scrollbar { width: 5px; }
+      .col-right::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 10px; }
+      .col-right::-webkit-scrollbar-thumb { background: rgba(138,154,176,0.25); border-radius: 10px; }
+      .col-right::-webkit-scrollbar-thumb:hover { background: rgba(138,154,176,0.4); }
 
       /* ── Business-card agent cards (FLO-145 Proposal 2: data-first) ── */
       .bc-card {
@@ -2560,6 +2562,10 @@
 
             // Allow known agent events to display as feed messages.
             if (!isFloki && !isRex && !isSimba && !isSage && !isEcho && !isLuna) {
+              continue;
+            }
+            // FLO-202: Skip Floki REX_CONSULT messages (duplicate of FLOKI_DECISION)
+            if (isFloki && type === 'REX_CONSULT') {
               continue;
             }
 
