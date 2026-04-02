@@ -1684,19 +1684,9 @@ class AgentMonitor:
         return True
 
     def _fire_fast_decision(self, trigger_type: str, trigger_data: Dict[str, Any]) -> None:
-        try:
-            if self.bot is None:
-                return
-            if not hasattr(self.bot, "agent_fast_decide"):
-                return
-            t = threading.Thread(
-                target=self.bot.agent_fast_decide,
-                args=(trigger_type, trigger_data),
-                daemon=True,
-            )
-            t.start()
-        except Exception as e:
-            log.debug(f"AGENT_MONITOR | fast_decision error (ignored): {e}")
+        # FLO-118/FLO-200: Agent Fast DISABLED — Floki manages positions via proactive cycles + Simba wakes.
+        # Agent Fast was redundant and wasted ~$1/day on GPT-5.4 calls for HOLD decisions.
+        return
 
     def _fire_proactive_out_of_cycle(self, trigger_type: str, trigger_data: Dict[str, Any]) -> None:
         try:
