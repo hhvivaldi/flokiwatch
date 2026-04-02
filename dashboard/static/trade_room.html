@@ -254,12 +254,12 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       }
       .stat-row:last-child { border-bottom: none; }
-      .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
-      .stat-val   { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+      .stat-label { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #546478; }
+      .stat-val   { font-size: 11px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #e2e8f0; }
 
       /* ── Filter tabs ────────────────────────── */
       .filter-tab {
@@ -513,32 +513,39 @@
 
       /* ── Right column blocks ────────────────── */
       .ctx-block {
-        background: rgba(18, 18, 18, 0.6);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 12px;
-        padding: 12px 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        background: linear-gradient(168deg, rgba(20,20,32,0.8) 0%, rgba(14,14,24,0.9) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 10px 12px;
+        position: relative;
+      }
+      .ctx-block::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(138,154,176,0.2) 0%, transparent 80%);
+        border-radius: 8px 8px 0 0;
       }
       .ctx-label {
-        font-size: 9.5px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: #475569;
-        margin-bottom: 10px;
+        color: #5a6a7e;
+        margin-bottom: 8px;
       }
       .ctx-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 6px;
-        font-size: 10.5px;
+        margin-bottom: 5px;
+        font-size: 10px;
         font-family: 'JetBrains Mono', monospace;
       }
       .ctx-row:last-child { margin-bottom: 0; }
-      .ctx-key { color: #64748b; }
-      .ctx-val { color: #f1f5f9; font-weight: 700; }
+      .ctx-key { color: #546478; font-weight: 500; }
+      .ctx-val { color: #e2e8f0; font-weight: 800; }
 
       .pillar-bar-track {
         flex: 1;
@@ -675,33 +682,48 @@
 
       /* ── FLO-145 Proposal 3: Collapsible right panel tiers ── */
       .ctx-tier {
-        border-top: 1px solid rgba(255,255,255,0.04);
+        border-radius: 6px;
+        overflow: hidden;
       }
       .ctx-tier-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         cursor: pointer;
-        padding: 6px 0;
+        padding: 6px 10px;
         user-select: none;
+        background: linear-gradient(90deg, rgba(22,22,36,0.9) 0%, rgba(16,16,28,0.85) 100%);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 6px;
+        transition: background 0.2s ease, border-color 0.2s ease;
       }
-      .ctx-tier-header:hover .ctx-tier-label { color: var(--text-secondary); }
+      .ctx-tier:not(.collapsed) .ctx-tier-header {
+        border-radius: 6px 6px 0 0;
+        border-bottom: none;
+      }
+      .ctx-tier-header:hover { background: linear-gradient(90deg, rgba(28,28,44,0.9) 0%, rgba(20,20,34,0.85) 100%); border-color: rgba(255,255,255,0.08); }
+      .ctx-tier-header:hover .ctx-tier-label { color: #8a9ab0; }
       .ctx-tier-label {
-        font-size: 8px;
-        font-weight: 800;
-        letter-spacing: 0.14em;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: var(--text-dim);
+        color: #6a7a8e;
         transition: color 0.2s;
       }
       .ctx-tier-arrow {
-        font-size: 10px;
-        color: var(--text-dim);
-        transition: transform 0.2s;
+        font-size: 9px;
+        color: #6a7a8e;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .ctx-tier.collapsed .ctx-tier-arrow { transform: rotate(-90deg); }
       .ctx-tier-body {
         overflow: visible;
+        background: rgba(10,10,18,0.4);
+        border: 1px solid rgba(255,255,255,0.03);
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        padding: 6px;
         max-height: 2000px;
         transition: max-height 0.4s ease, opacity 0.2s ease;
         opacity: 1;
