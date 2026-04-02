@@ -21,7 +21,7 @@ python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 | Agent | Model | File | Role |
 |-------|-------|------|------|
 | Floki | GPT-5.4 | `ai_agent.py` | Sole trading decisor. 30 tools. Self-schedules 5-30 min. |
-| Rex | GPT-5 mini | `rex_validator.py` | Analyst. 11 tools (6 standard + 5 unique). Provides insights, not AGREE/DISAGREE. |
+| Rex | GPT-5 mini | `rex_validator.py` | Analyst. 11 tools (6 standard + 5 unique). Provides insights, not AGREE/DISAGREE. Also runs Bull/Bear debate (FLO-190). |
 | Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. |
 | Sage | Gemini | `sage_auditor.py` | Daily auditor at 21:00 UTC. |
 | Echo | MiMo-V2-Flash | `echo_sentinel.py` | News sentinel. 25 RSS feeds. PULL-only. |
@@ -55,6 +55,7 @@ main.py (orchestrator)
 ## Key Design Decisions
 
 - **Floki is sole decisor.** Rex is advisory ("DISAGREE is feedback, not a veto").
+- **Rex Bull/Bear debate (FLO-190):** Before each Floki cycle, two Rex instances run in parallel — Bull (argues FOR entering) and Bear (argues AGAINST). Both inject into `<debate>` block in trigger_context. Both must succeed or neither is shown (Rule 1). Existing `debate_with_rex` tool stays for Floki's own use.
 - **Rex defaults to DISAGREE on failure.** Truncation/parse error = no agreement.
 - **EA is pure executor.** `FLOKI_MANAGES_POSITION = True`. 9999-pip triggers never fire.
 - **Echo is pull-based.** Floki pulls alerts via tool, Echo does not push.

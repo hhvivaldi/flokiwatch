@@ -3470,6 +3470,78 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-190: Rex Bull / Rex Bear structured debate (runs BEFORE Floki, injected into context)
+            _debate_result = None
+            try:
+                from rex_validator import run_bull_bear_debate
+
+                # Build data package from available caches
+                _debate_data = {}
+                try:
+                    _debate_data["price"] = float(getattr(self, "last_known_price", 0) or 0) or None
+                except Exception:
+                    pass
+                try:
+                    _regime_ctx = getattr(self, "_last_regime_context", None)
+                    if isinstance(_regime_ctx, dict):
+                        _debate_data["regime"] = _regime_ctx.get("regime")
+                except Exception:
+                    pass
+                try:
+                    _bs_debate = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                    with open(_bs_debate, "r", encoding="utf-8") as _bsf:
+                        _bs_d2 = json.load(_bsf)
+                    _debate_data["indicators"] = _bs_d2.get("last_analysis", {}).get("indicators", {})
+                except Exception:
+                    pass
+                try:
+                    from luna_analyst import load_luna_brief
+                    _lb = load_luna_brief()
+                    if isinstance(_lb, dict):
+                        _debate_data["luna"] = _lb
+                except Exception:
+                    pass
+                try:
+                    from echo_sentinel import get_recent_alerts
+                    _alerts = get_recent_alerts(3)
+                    if _alerts:
+                        _debate_data["echo_summary"] = "; ".join(
+                            str(a.get("headline", ""))[:80] + f" ({a.get('sentiment', '?')})"
+                            for a in (_alerts if isinstance(_alerts, list) else [])
+                        )[:300]
+                except Exception:
+                    pass
+
+                _debate_result = run_bull_bear_debate(_debate_data)
+
+                if _debate_result and _debate_result.get("status") == "INJECTED":
+                    _bull = _debate_result["rex_bull"]
+                    _bear = _debate_result["rex_bear"]
+                    _bull_text = (
+                        f"REX BULL (advocates FOR entering \u2014 conviction {_bull.get('conviction', '?')}/10): "
+                        f"\"{_bull.get('case', '')}\""
+                    )
+                    if _bull.get("entry") is not None:
+                        _bull_text += f" Entry ${_bull['entry']}, SL ${_bull.get('sl', '?')}, target ${_bull.get('target', '?')}."
+                    _bear_risks = ", ".join(str(r) for r in (_bear.get("risks", []))[:4])
+                    _bear_text = (
+                        f"REX BEAR (advocates AGAINST entering \u2014 danger {_bear.get('danger_level', '?')}/10): "
+                        f"\"{_bear.get('strongest_risk', '')}\""
+                    )
+                    if _bear_risks:
+                        _bear_text += f" Other risks: {_bear_risks}."
+
+                    trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
+            except Exception as _deb_err:
+                log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")
+
+            # Write debate to bot_state for dashboard
+            try:
+                if _debate_result and isinstance(_debate_result, dict):
+                    self._last_debate_result = _debate_result
+            except Exception:
+                pass
+
             # FLO-139: Inject market regime into trigger_context
             try:
                 _regime = getattr(self, "_last_regime_context", None)

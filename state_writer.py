@@ -316,6 +316,23 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-190: Inject debate results for dashboard
+        try:
+            _debate = getattr(bot_instance, "_last_debate_result", None)
+            if isinstance(_debate, dict):
+                from datetime import datetime as _dt_deb
+                _deb_out = {
+                    "status": _debate.get("status", "DISABLED"),
+                    "skip_reason": _debate.get("skip_reason"),
+                    "timestamp": _dt_deb.utcnow().isoformat(timespec="seconds") + "Z",
+                }
+                if _debate.get("status") == "INJECTED":
+                    _deb_out["rex_bull"] = _debate.get("rex_bull", {})
+                    _deb_out["rex_bear"] = _debate.get("rex_bear", {})
+                last_analysis["debate"] = _deb_out
+        except Exception:
+            pass
+
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 
     except Exception as e:

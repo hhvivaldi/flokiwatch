@@ -99,6 +99,23 @@
 | `last_analysis.simba.summary` | string | `main.py` | Trade Room Simba card |
 | `last_analysis.simba.timestamp` | string (ISO) | `main.py` | Trade Room Simba card |
 
+### `last_analysis.debate` Object (FLO-190 Rex Bull/Bear)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `last_analysis.debate.status` | string (`"INJECTED"` \| `"SKIPPED"` \| `"DISABLED"`) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.skip_reason` | string \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.timestamp` | string (ISO) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.direction` | string (`"BUY"` \| `"SELL"` \| `"NONE"`) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.case` | string | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.conviction` | int (1-10) | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.entry` | float \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.sl` | float \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bull.target` | float \| null | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.risks` | array of strings | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.strongest_risk` | string | `state_writer.py` | Dashboard debate card |
+| `last_analysis.debate.rex_bear.danger_level` | int (1-10) | `state_writer.py` | Dashboard debate card |
+
 ### `last_analysis.intel_feed` Object (OSINT)
 
 | Field | Type | Writer | Reader (app.js) |

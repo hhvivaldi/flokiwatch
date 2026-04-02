@@ -2,8 +2,9 @@ import json
 import os
 import time
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from logger import log
 
@@ -415,3 +416,267 @@ def _validate_with_rex_legacy(
     except Exception as e:
         log.warning(f"REX | legacy fallback failed: {e}")
         return {"success": False, "insights": [], "risk_flags": [], "reason": f"legacy_failed: {e}"}
+
+
+# =========================================================================
+# FLO-190: Rex Bull / Rex Bear structured debate
+# =========================================================================
+
+_REX_BULL_PROMPT = (
+    "You are an aggressive opportunity-focused XAU/USD researcher. "
+    "Your job is to find EVERY reason to enter a trade RIGHT NOW in the direction the data suggests. "
+    "If the trend is bullish, argue for BUY. If bearish, argue for SELL. "
+    "You MUST argue for action. You hate missing moves. Never say wait — that is not your job. "
+    "You advocate FOR entering.\n\n"
+    "Return ONLY valid JSON:\n"
+    '{"direction":"BUY" or "SELL","case":"2-3 sentences why enter now",'
+    '"entry":<price>,"sl":<price>,"target":<price>,"conviction":<1-10>}\n'
+    'If genuinely no setup: {"direction":"NONE","case":"no compelling setup","conviction":1}'
+)
+
+_REX_BEAR_PROMPT = (
+    "You are a cautious risk-focused XAU/USD researcher. "
+    "Your job is to find EVERY reason NOT to enter a trade right now. "
+    "You protect capital above all else. You see traps everywhere. Find all the risks. "
+    "Never recommend entering — that is not your job. You advocate AGAINST entering.\n\n"
+    "Return ONLY valid JSON:\n"
+    '{"risks":["risk1","risk2",...],"strongest_risk":"main reason not to enter",'
+    '"danger_level":<1-10>}'
+)
+
+BULL_BEAR_TIMEOUT = 15  # seconds total for both calls
+
+
+def _parse_json_response(raw: str) -> Optional[dict]:
+    """Strip markdown fences and parse JSON. Returns None on failure."""
+    if not raw:
+        return None
+    try:
+        text = raw.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end + 1])
+    except Exception:
+        pass
+    return None
+
+
+def _validate_bull(parsed: dict) -> bool:
+    """Check Rex Bull has all required fields."""
+    if not isinstance(parsed, dict):
+        return False
+    if not isinstance(parsed.get("direction"), str):
+        return False
+    if not isinstance(parsed.get("case"), str):
+        return False
+    try:
+        c = int(parsed.get("conviction", 0))
+        return 1 <= c <= 10
+    except Exception:
+        return False
+
+
+def _validate_bear(parsed: dict) -> bool:
+    """Check Rex Bear has all required fields."""
+    if not isinstance(parsed, dict):
+        return False
+    if not isinstance(parsed.get("risks"), list):
+        return False
+    if not isinstance(parsed.get("strongest_risk"), str):
+        return False
+    try:
+        d = int(parsed.get("danger_level", 0))
+        return 1 <= d <= 10
+    except Exception:
+        return False
+
+
+def _build_debate_context(data: Dict[str, Any]) -> str:
+    """Build the user message for both Rex Bull and Rex Bear from available data."""
+    parts = []
+    try:
+        price = data.get("price")
+        if price is not None:
+            parts.append(f"Current price: ${price}")
+    except Exception:
+        pass
+    try:
+        regime = data.get("regime")
+        if regime:
+            parts.append(f"Regime: {regime}")
+    except Exception:
+        pass
+    try:
+        ind = data.get("indicators", {})
+        if ind:
+            ind_parts = []
+            for k in ("rsi_14", "adx_14", "macd_hist", "macd_signal", "ema_9", "ema_21", "ema_50", "atr_14", "bb_position", "volume_ratio", "plus_di", "minus_di"):
+                v = ind.get(k)
+                if v is not None:
+                    ind_parts.append(f"{k}={v}")
+            if ind_parts:
+                parts.append(f"Indicators: {', '.join(ind_parts)}")
+    except Exception:
+        pass
+    try:
+        ms = data.get("market_structure")
+        if ms:
+            parts.append(f"Market structure:\n{ms}")
+    except Exception:
+        pass
+    try:
+        luna = data.get("luna")
+        if luna:
+            parts.append(f"Luna: environment={luna.get('environment')}, bias={luna.get('directional_bias')}, risk={luna.get('risk_level')}")
+    except Exception:
+        pass
+    try:
+        echo = data.get("echo_summary")
+        if echo:
+            parts.append(f"Echo alerts: {echo}")
+    except Exception:
+        pass
+    try:
+        candles = data.get("candle_summary")
+        if candles:
+            parts.append(f"Recent candles:\n{candles}")
+    except Exception:
+        pass
+    return "\n\n".join(parts) if parts else "No data available."
+
+
+def _call_rex_side(system_prompt: str, user_msg: str, label: str) -> Dict[str, Any]:
+    """Make a single Rex Bull or Rex Bear API call. Returns result dict."""
+    t0 = time.time()
+    try:
+        from openai import OpenAI
+        model = _get_rex_model()
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            max_completion_tokens=500,
+            timeout=12,
+        )
+
+        latency_ms = int((time.time() - t0) * 1000)
+        content = ""
+        input_tokens = 0
+        output_tokens = 0
+        try:
+            content = resp.choices[0].message.content or ""
+            input_tokens = getattr(resp.usage, "prompt_tokens", 0) or 0
+            output_tokens = getattr(resp.usage, "completion_tokens", 0) or 0
+        except Exception:
+            pass
+
+        parsed = _parse_json_response(content)
+        if parsed is None:
+            log.warning(f"{label} | JSON_FAIL | raw={content[:200]} | {latency_ms}ms")
+            return {"success": False, "reason": "json_fail", "raw": content[:200], "latency_ms": latency_ms}
+
+        log.info(f"{label} | OK | {latency_ms}ms | {input_tokens}+{output_tokens} tokens")
+        return {
+            "success": True,
+            "parsed": parsed,
+            "raw": content,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "latency_ms": latency_ms,
+        }
+    except Exception as e:
+        latency_ms = int((time.time() - t0) * 1000)
+        log.warning(f"{label} | ERROR | {e} | {latency_ms}ms")
+        return {"success": False, "reason": str(e), "latency_ms": latency_ms}
+
+
+def run_bull_bear_debate(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    FLO-190: Run Rex Bull and Rex Bear in parallel.
+    Returns debate dict with both sides, or status="SKIPPED" on failure.
+    Both must succeed or neither is used (Rule 1).
+    """
+    t0 = time.time()
+    user_msg = _build_debate_context(data)
+
+    bull_result = None
+    bear_result = None
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            bull_future = executor.submit(_call_rex_side, _REX_BULL_PROMPT, user_msg, "REX_BULL")
+            bear_future = executor.submit(_call_rex_side, _REX_BEAR_PROMPT, user_msg, "REX_BEAR")
+
+            try:
+                bull_result = bull_future.result(timeout=BULL_BEAR_TIMEOUT)
+            except Exception:
+                bull_result = {"success": False, "reason": "timeout"}
+
+            try:
+                bear_result = bear_future.result(timeout=max(1, BULL_BEAR_TIMEOUT - (time.time() - t0)))
+            except Exception:
+                bear_result = {"success": False, "reason": "timeout"}
+    except Exception as e:
+        log.warning(f"REX_DEBATE | executor error: {e}")
+        return {"status": "SKIPPED", "skip_reason": f"executor_error: {e}", "timestamp": time.time()}
+
+    total_ms = int((time.time() - t0) * 1000)
+
+    # Rule 1: Both must succeed
+    if not bull_result.get("success"):
+        reason = f"Bull failed: {bull_result.get('reason', '?')}"
+        log.info(f"REX_DEBATE | SKIPPED | {reason} | {total_ms}ms")
+        return {"status": "SKIPPED", "skip_reason": reason, "timestamp": time.time()}
+
+    if not bear_result.get("success"):
+        reason = f"Bear failed: {bear_result.get('reason', '?')}"
+        log.info(f"REX_DEBATE | SKIPPED | {reason} | {total_ms}ms")
+        return {"status": "SKIPPED", "skip_reason": reason, "timestamp": time.time()}
+
+    bull_parsed = bull_result["parsed"]
+    bear_parsed = bear_result["parsed"]
+
+    # Rule 2: Validate required fields
+    if not _validate_bull(bull_parsed):
+        reason = f"Bull validation failed: {json.dumps(bull_parsed)[:200]}"
+        log.info(f"REX_DEBATE | SKIPPED | {reason} | {total_ms}ms")
+        return {"status": "SKIPPED", "skip_reason": reason, "timestamp": time.time()}
+
+    if not _validate_bear(bear_parsed):
+        reason = f"Bear validation failed: {json.dumps(bear_parsed)[:200]}"
+        log.info(f"REX_DEBATE | SKIPPED | {reason} | {total_ms}ms")
+        return {"status": "SKIPPED", "skip_reason": reason, "timestamp": time.time()}
+
+    # Success — both sides valid
+    bull_conv = int(bull_parsed.get("conviction", 5))
+    bear_danger = int(bear_parsed.get("danger_level", 5))
+
+    log.info(
+        f"REX_DEBATE | INJECTED | bull_dir={bull_parsed.get('direction')} bull_conv={bull_conv} "
+        f"bear_danger={bear_danger} | {total_ms}ms | "
+        f"bull_tokens={bull_result.get('input_tokens', 0)}+{bull_result.get('output_tokens', 0)} "
+        f"bear_tokens={bear_result.get('input_tokens', 0)}+{bear_result.get('output_tokens', 0)}"
+    )
+
+    return {
+        "status": "INJECTED",
+        "rex_bull": bull_parsed,
+        "rex_bear": bear_parsed,
+        "bull_model": bull_result.get("model"),
+        "bear_model": bear_result.get("model"),
+        "bull_latency_ms": bull_result.get("latency_ms"),
+        "bear_latency_ms": bear_result.get("latency_ms"),
+        "bull_tokens": {"input": bull_result.get("input_tokens", 0), "output": bull_result.get("output_tokens", 0)},
+        "bear_tokens": {"input": bear_result.get("input_tokens", 0), "output": bear_result.get("output_tokens", 0)},
+        "total_ms": total_ms,
+        "timestamp": time.time(),
+        "skip_reason": None,
+    }
