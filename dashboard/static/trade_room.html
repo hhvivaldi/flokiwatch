@@ -1137,6 +1137,65 @@
               </div>
             </div>
 
+            <!-- REX BULL (FLO-191) -->
+            <div class="bc-card" id="rex-bull-card" style="border-color:#4CAF50">
+              <button type="button" class="bc-btn" data-expand-target="rex-bull-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border-color:#4CAF50;background:rgba(76,175,80,0.1)">
+                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C8;</span>
+                  </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#4CAF50">REX BULL</span>
+                    <span class="bc-role">FOR ENTERING</span>
+                  </div>
+                </div>
+                <div class="bc-row2">
+                  <span id="rex-bull-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                  <span id="rex-bull-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Conviction</span>
+                    <span id="rex-bull-conv-text" class="bc-metric-val" style="color:#4CAF50">—</span>
+                  </div>
+                  <div class="bc-bar-track"><div id="rex-bull-conv-bar" class="bc-bar-fill" style="width:0%;background:#4CAF50"></div></div>
+                </div>
+              </button>
+              <div id="rex-bull-expand" class="agent-expand">
+                <div id="rex-bull-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
+                <div id="rex-bull-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
+              </div>
+            </div>
+
+            <!-- REX BEAR (FLO-191) -->
+            <div class="bc-card" id="rex-bear-card" style="border-color:#F44336">
+              <button type="button" class="bc-btn" data-expand-target="rex-bear-expand" aria-expanded="false">
+                <div class="bc-row1">
+                  <div class="bc-avatar" style="border-color:#F44336;background:rgba(244,67,54,0.1)">
+                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F6E1;</span>
+                  </div>
+                  <div class="bc-identity">
+                    <span class="bc-name" style="color:#F44336">REX BEAR</span>
+                    <span class="bc-role">AGAINST ENTERING</span>
+                  </div>
+                </div>
+                <div class="bc-row2">
+                  <span id="rex-bear-danger-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                </div>
+                <div class="bc-row3">
+                  <div class="bc-metric">
+                    <span class="bc-metric-label">Danger</span>
+                    <span id="rex-bear-danger-text" class="bc-metric-val" style="color:#F44336">—</span>
+                  </div>
+                  <div class="bc-bar-track"><div id="rex-bear-danger-bar" class="bc-bar-fill" style="width:0%;background:#F44336"></div></div>
+                </div>
+              </button>
+              <div id="rex-bear-expand" class="agent-expand">
+                <div id="rex-bear-strongest" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#fca5a5;font-weight:bold;max-height:40px;overflow-y:auto">No debate yet.</div>
+                <div id="rex-bear-risks" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#9ca3af;max-height:80px;overflow-y:auto;margin-top:4px"></div>
+              </div>
+            </div>
+
             <!-- SIMBA -->
             <div class="bc-card" id="simba-card" style="border-color:#00E5FF">
               <button type="button" class="bc-btn" data-expand-target="simba-expand" aria-expanded="false">
@@ -3243,7 +3302,7 @@
               if (rexTextClosed) rexTextClosed.textContent = '—';
 
               // Dim resting cards + hide metrics, keep Echo bright
-              var restingCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'luna-card'];
+              var restingCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'simba-card', 'sage-card', 'luna-card'];
               restingCards.forEach(function(id) {
                 var card = document.getElementById(id);
                 if (card) {
@@ -3264,7 +3323,7 @@
               // Luna dims like other resting agents during market closed
             } else {
               // Market open — restore all pills visible, full brightness
-              var allCards = ['floki-card', 'rex-card', 'simba-card', 'sage-card', 'echo-card', 'luna-card'];
+              var allCards = ['floki-card', 'rex-card', 'rex-bull-card', 'rex-bear-card', 'simba-card', 'sage-card', 'echo-card', 'luna-card'];
               allCards.forEach(function(id) {
                 var card = document.getElementById(id);
                 if (!card) return;
@@ -3364,6 +3423,86 @@
                 setText('rex-last-debate', lastDebateContent);
               }
             } catch (e) {
+              // silent
+            }
+
+            // FLO-191: Rex Bull / Rex Bear debate cards
+            try {
+              var debate = (state && state.last_analysis && state.last_analysis.debate) ? state.last_analysis.debate : {};
+              var debateStatus = debate.status || '';
+              var bull = debate.rex_bull || {};
+              var bear = debate.rex_bear || {};
+
+              // Rex Bull card
+              var bullDirPill = document.getElementById('rex-bull-dir-pill');
+              var bullConvPill = document.getElementById('rex-bull-conv-pill');
+              var bullConvText = document.getElementById('rex-bull-conv-text');
+              var bullConvBar = document.getElementById('rex-bull-conv-bar');
+              var bullCase = document.getElementById('rex-bull-case');
+              var bullLevels = document.getElementById('rex-bull-levels');
+
+              if (debateStatus === 'INJECTED' && bull.direction) {
+                var bDir = (bull.direction || '').toUpperCase();
+                var bConv = parseInt(bull.conviction) || 0;
+                if (bullDirPill) {
+                  bullDirPill.textContent = bDir;
+                  bullDirPill.style.background = bDir === 'BUY' ? 'rgba(76,175,80,0.2)' : bDir === 'SELL' ? 'rgba(239,83,80,0.2)' : 'rgba(100,100,100,0.15)';
+                  bullDirPill.style.color = bDir === 'BUY' ? '#4CAF50' : bDir === 'SELL' ? '#EF5350' : '#8a8a9a';
+                }
+                if (bullConvPill) {
+                  bullConvPill.textContent = bConv + '/10';
+                  bullConvPill.style.background = bConv >= 7 ? 'rgba(76,175,80,0.2)' : bConv >= 4 ? 'rgba(255,179,0,0.2)' : 'rgba(100,100,100,0.15)';
+                  bullConvPill.style.color = bConv >= 7 ? '#4CAF50' : bConv >= 4 ? '#FFB300' : '#8a8a9a';
+                }
+                if (bullConvText) bullConvText.textContent = bConv + '/10';
+                if (bullConvBar) bullConvBar.style.width = (bConv * 10) + '%';
+                if (bullCase) bullCase.textContent = bull.case || '—';
+                if (bullLevels) {
+                  var lvlParts = [];
+                  if (bull.entry != null) lvlParts.push('Entry $' + bull.entry);
+                  if (bull.sl != null) lvlParts.push('SL $' + bull.sl);
+                  if (bull.target != null) lvlParts.push('Target $' + bull.target);
+                  bullLevels.textContent = lvlParts.join(' | ');
+                }
+              } else {
+                var skipMsg = debateStatus === 'SKIPPED' ? '[unavailable \u2014 ' + (debate.skip_reason || '?') + ']' : '—';
+                if (bullDirPill) { bullDirPill.textContent = '—'; bullDirPill.style.background = 'rgba(100,100,100,0.15)'; bullDirPill.style.color = '#8a8a9a'; }
+                if (bullConvPill) { bullConvPill.textContent = '—'; bullConvPill.style.background = 'rgba(100,100,100,0.15)'; bullConvPill.style.color = '#8a8a9a'; }
+                if (bullConvText) bullConvText.textContent = '—';
+                if (bullConvBar) bullConvBar.style.width = '0%';
+                if (bullCase) bullCase.textContent = skipMsg;
+                if (bullLevels) bullLevels.textContent = '';
+              }
+
+              // Rex Bear card
+              var bearDangerPill = document.getElementById('rex-bear-danger-pill');
+              var bearDangerText = document.getElementById('rex-bear-danger-text');
+              var bearDangerBar = document.getElementById('rex-bear-danger-bar');
+              var bearStrongest = document.getElementById('rex-bear-strongest');
+              var bearRisks = document.getElementById('rex-bear-risks');
+
+              if (debateStatus === 'INJECTED' && bear.strongest_risk) {
+                var bDanger = parseInt(bear.danger_level) || 0;
+                if (bearDangerPill) {
+                  bearDangerPill.textContent = 'DANGER ' + bDanger + '/10';
+                  bearDangerPill.style.background = bDanger >= 7 ? 'rgba(244,67,54,0.2)' : bDanger >= 4 ? 'rgba(255,152,0,0.2)' : 'rgba(100,100,100,0.15)';
+                  bearDangerPill.style.color = bDanger >= 7 ? '#F44336' : bDanger >= 4 ? '#FF9800' : '#8a8a9a';
+                }
+                if (bearDangerText) bearDangerText.textContent = bDanger + '/10';
+                if (bearDangerBar) bearDangerBar.style.width = (bDanger * 10) + '%';
+                if (bearStrongest) bearStrongest.textContent = bear.strongest_risk || '—';
+                if (bearRisks && Array.isArray(bear.risks)) {
+                  bearRisks.innerHTML = bear.risks.slice(0, 5).map(function(r) { return '\u2022 ' + r; }).join('<br>');
+                }
+              } else {
+                var skipMsg2 = debateStatus === 'SKIPPED' ? '[unavailable \u2014 ' + (debate.skip_reason || '?') + ']' : '—';
+                if (bearDangerPill) { bearDangerPill.textContent = '—'; bearDangerPill.style.background = 'rgba(100,100,100,0.15)'; bearDangerPill.style.color = '#8a8a9a'; }
+                if (bearDangerText) bearDangerText.textContent = '—';
+                if (bearDangerBar) bearDangerBar.style.width = '0%';
+                if (bearStrongest) bearStrongest.textContent = skipMsg2;
+                if (bearRisks) bearRisks.innerHTML = '';
+              }
+            } catch(debErr) {
               // silent
             }
 
