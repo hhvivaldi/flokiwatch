@@ -3517,28 +3517,55 @@ class TradingBot:
                 if _debate_result and _debate_result.get("status") == "INJECTED":
                     _bull = _debate_result["rex_bull"]
                     _bear = _debate_result["rex_bear"]
-                    _bull_text = (
-                        f"REX BULL (advocates FOR entering \u2014 conviction {_bull.get('conviction', '?')}/10): "
-                        f"\"{_bull.get('case', '')}\""
-                    )
-                    if _bull.get("entry") is not None:
-                        _bull_text += f" Entry ${_bull['entry']}, SL ${_bull.get('sl', '?')}, target ${_bull.get('target', '?')}."
-                    _bear_risks = ", ".join(str(r) for r in (_bear.get("risks", []))[:4])
-                    _bear_text = (
-                        f"REX BEAR (advocates AGAINST entering \u2014 danger {_bear.get('danger_level', '?')}/10): "
-                        f"\"{_bear.get('strongest_risk', '')}\""
-                    )
-                    if _bear_risks:
-                        _bear_text += f" Other risks: {_bear_risks}."
 
-                    trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
+                    # FLO-194: Research Manager picks the winner
+                    _verdict_result = None
+                    try:
+                        from research_manager import run_research_manager
+                        _verdict_result = run_research_manager(_bull, _bear)
+                    except Exception as _vm_err:
+                        log.debug(f"RESEARCH_MANAGER | import/call error (ignored): {_vm_err}")
+
+                    if _verdict_result and _verdict_result.get("status") == "OK":
+                        # Inject <verdict> block (replaces <debate>)
+                        _v = _verdict_result
+                        _verdict_text = (
+                            f"RESEARCH MANAGER VERDICT: {_v['winner']} WINS. Conviction {_v['conviction']}/10.\n"
+                            f"{_v['reasoning']}\n"
+                            f"Recommendation: {_v['recommendation']}"
+                        )
+                        if _v.get("entry") is not None:
+                            _verdict_text += f"\nEntry: ${_v['entry']}, SL: ${_v.get('sl', '?')}, Target: ${_v.get('target', '?')}"
+                        if _v.get("trigger_buy"):
+                            _verdict_text += f"\nBUY trigger: {_v['trigger_buy']}"
+                        if _v.get("trigger_sell"):
+                            _verdict_text += f"\nSELL trigger: {_v['trigger_sell']}"
+                        trigger_context += f"\n<verdict>\n{_verdict_text}\n</verdict>\n"
+                    else:
+                        # Fallback: inject <debate> block (FLO-190 behavior)
+                        _bull_text = (
+                            f"REX BULL (advocates FOR entering \u2014 conviction {_bull.get('conviction', '?')}/10): "
+                            f"\"{_bull.get('case', '')}\""
+                        )
+                        if _bull.get("entry") is not None:
+                            _bull_text += f" Entry ${_bull['entry']}, SL ${_bull.get('sl', '?')}, target ${_bull.get('target', '?')}."
+                        _bear_risks = ", ".join(str(r) for r in (_bear.get("risks", []))[:4])
+                        _bear_text = (
+                            f"REX BEAR (advocates AGAINST entering \u2014 danger {_bear.get('danger_level', '?')}/10): "
+                            f"\"{_bear.get('strongest_risk', '')}\""
+                        )
+                        if _bear_risks:
+                            _bear_text += f" Other risks: {_bear_risks}."
+                        trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
             except Exception as _deb_err:
                 log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")
 
-            # Write debate to bot_state for dashboard
+            # Write debate + verdict to bot_state for dashboard
             try:
                 if _debate_result and isinstance(_debate_result, dict):
                     self._last_debate_result = _debate_result
+                if _verdict_result and isinstance(_verdict_result, dict):
+                    self._last_verdict_result = _verdict_result
             except Exception:
                 pass
 

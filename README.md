@@ -58,6 +58,7 @@ The bot operates **100% autonomously** on MetaTrader 5:
 |-------|-------|------|-------|---------|
 | **Floki** | GPT-5.4 | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 28 | 5-30 min (self-scheduled) |
 | **Rex** | GPT-4o | Analyst — provides insights + Bull/Bear structured debate (FLO-190). 6 standard + 5 unique tools. | 11 | Bull/Bear every cycle + insights on demand |
+| **Research Mgr** | Gemini 3 Flash | Picks winner between Rex Bull and Rex Bear. Produces verdict with trigger levels (FLO-194). | — | Every Floki cycle (after debate) |
 | **Simba** | Python (no AI cost) | Watchdog — monitors conditions, wakes Floki | — | Every 30s |
 | **Sage** | Gemini | Performance auditor — daily trade review + recommendations | — | Daily at 21:00 UTC |
 | **Echo** | MiMo-V2-Flash | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | — | Every 5 min |

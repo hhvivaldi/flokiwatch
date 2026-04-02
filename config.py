@@ -418,6 +418,9 @@ SAGE_RUN_TIME_UTC = "21:00"
 SAGE_API_KEY = os.environ.get("SAGE_API_KEY", "")
 SAGE_MODEL = os.environ.get("SAGE_MODEL", "gemini-3-flash-preview")
 
+# FLO-194: Research Manager (Gemini — picks winner between Rex Bull and Rex Bear)
+RESEARCH_MANAGER_MODEL = os.environ.get("RESEARCH_MANAGER_MODEL", "gemini-3-flash-preview")
+
 # Intraday drawdown alerts (FLO-68)
 SAGE_INTRADAY_DRAWDOWN_ALERT = float(os.environ.get("SAGE_INTRADAY_DRAWDOWN_ALERT", "-30"))   # dollars — alert if daily P&L <= this
 SAGE_INTRADAY_LOSS_STREAK_ALERT = int(os.environ.get("SAGE_INTRADAY_LOSS_STREAK_ALERT", "3"))  # consecutive losses — alert if streak >= this

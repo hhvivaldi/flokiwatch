@@ -333,6 +333,23 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-194: Inject Research Manager verdict for dashboard
+        try:
+            _verdict = getattr(bot_instance, "_last_verdict_result", None)
+            if isinstance(_verdict, dict):
+                from datetime import datetime as _dt_verd
+                _v_out = {
+                    "status": _verdict.get("status", "DISABLED"),
+                    "timestamp": _dt_verd.utcnow().isoformat(timespec="seconds") + "Z",
+                }
+                if _verdict.get("status") == "OK":
+                    for _vk in ("winner", "reasoning", "recommendation", "entry", "sl",
+                                "target", "trigger_buy", "trigger_sell", "conviction"):
+                        _v_out[_vk] = _verdict.get(_vk)
+                last_analysis["verdict"] = _v_out
+        except Exception:
+            pass
+
         _atomic_write_json(getattr(config, "DASHBOARD_STATE_FILE", "data/bot_state.json"), state)
 
     except Exception as e:

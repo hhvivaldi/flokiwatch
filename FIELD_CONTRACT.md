@@ -116,6 +116,22 @@
 | `last_analysis.debate.rex_bear.strongest_risk` | string | `state_writer.py` | Dashboard debate card |
 | `last_analysis.debate.rex_bear.danger_level` | int (1-10) | `state_writer.py` | Dashboard debate card |
 
+### `last_analysis.verdict` Object (FLO-194 Research Manager)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `last_analysis.verdict.status` | string (`"OK"` \| `"FAILED"` \| `"DISABLED"`) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.winner` | string (`"BULL"` \| `"BEAR"`) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.reasoning` | string | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.recommendation` | string (`"ENTER_BUY"` \| `"ENTER_SELL"` \| `"NO_TRADE"`) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.entry` | float \| null | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.sl` | float \| null | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.target` | float \| null | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.trigger_buy` | string \| null | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.trigger_sell` | string \| null | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.conviction` | int (1-10) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.timestamp` | string (ISO) | `state_writer.py` | Dashboard verdict card |
+
 ### `last_analysis.intel_feed` Object (OSINT)
 
 | Field | Type | Writer | Reader (app.js) |

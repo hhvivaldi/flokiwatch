@@ -51,6 +51,12 @@ Access: http://localhost:8080/trade-room
 - Floki can also call `debate_with_rex` tool during his cycle for neutral insights
 - bot_state.json `last_analysis.debate` shows Bull/Bear results for dashboard
 
+### 2.3.1 Research Manager (Gemini 3 Flash) — verdict after debate
+- Check log for `RESEARCH_MANAGER | OK | winner=BULL/BEAR | rec=ENTER_BUY/ENTER_SELL/NO_TRADE | conv=X`
+- If OK: `<verdict>` block injected into Floki context (replaces `<debate>`)
+- If FAIL: falls back to `<debate>` block (FLO-190 behavior)
+- bot_state.json `last_analysis.verdict` shows verdict for dashboard
+
 ### 2.4 Simba (Python) — every 30s
 - `SIMBA_CHECK` events in log
 - Trade Room shows patrol reports (price, conditions, trend, levels)
