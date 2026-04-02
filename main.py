@@ -3475,10 +3475,8 @@ class TradingBot:
             _debate_result = None
             _has_open_position = False
             try:
-                _pos_check = getattr(self, "_executor", None)
-                if _pos_check:
-                    _open_pos = _pos_check.get_open_positions() or []
-                    _has_open_position = len(_open_pos) > 0
+                _open_pos = executor.get_open_positions() or []
+                _has_open_position = len(_open_pos) > 0
             except Exception:
                 pass
 
