@@ -325,7 +325,7 @@ class AgentMonitor:
                 pass
 
         in_cooldown = False
-        cooldown_minutes = 5  # FLO-200: Reduced from 30 to 5 minutes
+        cooldown_minutes = 30  # Reverted from 5 (FLO-204 will implement proper FIRED flag)
         mins_remaining = None
         next_eligible_iso = None
         try:
@@ -333,7 +333,7 @@ class AgentMonitor:
 
             cw = wake_conditions if isinstance(wake_conditions, dict) else {}
             try:
-                _DEFAULT_COOLDOWN = 5  # FLO-200 configured default
+                _DEFAULT_COOLDOWN = 30  # Reverted from 5 (caused wake loops — FLO-204 is proper fix)
                 _persisted = int(cw.get("cooldown_minutes") or _DEFAULT_COOLDOWN)
                 cooldown_minutes = min(_persisted, _DEFAULT_COOLDOWN)  # Clamp to configured max
             except Exception:
