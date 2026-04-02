@@ -1,7 +1,6 @@
 """
-FLO-194: Research Manager agent.
-Receives Rex Bull and Rex Bear arguments, picks the winner,
-produces a clear verdict with trigger levels for Floki.
+FLO-203: Research Manager v2 — full context (Bull + Bear + Luna + Echo + Sage).
+Reads 5 reports from the team and forms an independent verdict.
 Uses Gemini (same API as Sage, separate model variable).
 """
 
@@ -16,19 +15,27 @@ from logger import log
 RESEARCH_MANAGER_TIMEOUT = 10  # seconds
 
 _SYSTEM_PROMPT = (
-    "You are a senior research manager at a gold (XAU/USD) trading firm. "
-    "You receive two opposing arguments:\n"
-    "- Rex Bull argues gold will go UP (BUY)\n"
-    "- Rex Bear argues gold will go DOWN (SELL)\n\n"
-    "Your job:\n"
-    "1. Pick who has the stronger argument.\n"
-    "2. If BULL wins: recommendation = ENTER_BUY with entry, SL, target.\n"
-    "3. If BEAR wins: recommendation = ENTER_SELL with entry, SL, target.\n"
-    "4. If NEITHER is convincing: recommendation = NO_TRADE with trigger levels.\n"
-    "5. Be DECISIVE. Pick a side.\n\n"
+    "You are a senior research director at a gold (XAU/USD) trading firm. "
+    "Every cycle you receive up to 5 reports from your team:\n"
+    "1. Rex Bull \u2014 argues gold will go UP (BUY)\n"
+    "2. Rex Bear \u2014 argues gold will go DOWN (SELL)\n"
+    "3. Luna \u2014 macro environment assessment (SAFE/CAUTION/DANGER + directional bias)\n"
+    "4. Echo \u2014 news sentiment summary (BULLISH vs BEARISH headline count)\n"
+    "5. Sage \u2014 recent trading performance (win rates by direction)\n\n"
+    "Your job: Read ALL reports. Form your OWN opinion. Do NOT just pick the best "
+    "argument between Bull and Bear. Consider the FULL picture:\n"
+    "- If momentum says SELL but macro says BULLISH, that is a DIVERGENCE \u2014 "
+    "flag it and lean toward NO_TRADE\n"
+    "- If performance data says SELL has poor win rate, be cautious about recommending SELL\n"
+    "- If most news headlines are BULLISH, that context matters even if short-term "
+    "momentum is bearish\n\n"
+    "Your options: ENTER_BUY, ENTER_SELL, or NO_TRADE.\n"
+    "If NO_TRADE: define trigger levels for both directions.\n"
+    "If ENTER: define entry, SL, target.\n"
+    "Be DECISIVE but INFORMED.\n\n"
     "Return this exact JSON schema:\n"
     '{"winner":"BULL" or "BEAR",'
-    '"reasoning":"1-2 sentences why this side wins",'
+    '"reasoning":"1-2 sentences why, referencing which reports influenced you",'
     '"recommendation":"ENTER_BUY" or "ENTER_SELL" or "NO_TRADE",'
     '"entry":price_or_null,"sl":price_or_null,"target":price_or_null,'
     '"trigger_buy":"price+condition or null","trigger_sell":"price+condition or null",'
@@ -89,42 +96,84 @@ def _validate(parsed: dict) -> bool:
         return False
 
 
-def _build_user_message(bull: Dict[str, Any], bear: Dict[str, Any]) -> str:
-    """Build the user prompt from Bull and Bear results."""
+def _build_user_message(
+    bull: Dict[str, Any],
+    bear: Dict[str, Any],
+    luna_brief: Optional[Dict[str, Any]] = None,
+    echo_summary: Optional[Dict[str, Any]] = None,
+    sage_note: Optional[str] = None,
+) -> str:
+    """Build user prompt from all 5 reports."""
     parts = []
 
-    # Bull argument (argues gold goes UP → BUY)
+    # REPORT 1: Rex Bull
     bull_conv = bull.get("conviction", "?")
     bull_case = bull.get("case", "no argument")
-    bull_text = f"Rex Bull (argues gold goes UP — conviction {bull_conv}/10):\nCase: {bull_case}"
+    bull_text = f"REPORT 1 \u2014 Rex Bull (argues gold goes UP \u2014 conviction {bull_conv}/10):\n{bull_case}"
     if bull.get("entry") is not None:
         bull_text += f"\nEntry: ${bull['entry']} SL: ${bull.get('sl', '?')} Target: ${bull.get('target', '?')}"
     parts.append(bull_text)
 
-    # Bear argument (argues gold goes DOWN → SELL)
+    # REPORT 2: Rex Bear
     bear_conv = bear.get("conviction", "?")
     bear_case = bear.get("case", "no argument")
-    bear_text = f"Rex Bear (argues gold goes DOWN — conviction {bear_conv}/10):\nCase: {bear_case}"
+    bear_text = f"REPORT 2 \u2014 Rex Bear (argues gold goes DOWN \u2014 conviction {bear_conv}/10):\n{bear_case}"
     if bear.get("entry") is not None:
         bear_text += f"\nEntry: ${bear['entry']} SL: ${bear.get('sl', '?')} Target: ${bear.get('target', '?')}"
     parts.append(bear_text)
 
+    # REPORT 3: Luna Macro Brief
+    if luna_brief and isinstance(luna_brief, dict):
+        env = luna_brief.get("environment", "?")
+        risk = luna_brief.get("risk_level", "?")
+        bias = luna_brief.get("directional_bias", "?")
+        bias_conf = luna_brief.get("bias_confidence", "?")
+        patterns = luna_brief.get("patterns") or luna_brief.get("patterns_detected") or []
+        regime = luna_brief.get("regime") or luna_brief.get("market_regime") or "?"
+        luna_text = (
+            f"REPORT 3 \u2014 Luna Macro Brief:\n"
+            f"Environment: {env} | Risk: {risk}/10 | Bias: {bias} ({bias_conf}/10)\n"
+            f"Patterns: {', '.join(patterns) if isinstance(patterns, list) and patterns else 'none'}\n"
+            f"Regime: {regime}"
+        )
+        parts.append(luna_text)
+
+    # REPORT 4: Echo News Summary
+    if echo_summary and isinstance(echo_summary, dict):
+        bullish_n = echo_summary.get("bullish_count", 0)
+        bearish_n = echo_summary.get("bearish_count", 0)
+        headline = echo_summary.get("key_headline", "")
+        echo_text = f"REPORT 4 \u2014 Echo News Summary:\nBULLISH headlines: {bullish_n} | BEARISH headlines: {bearish_n}"
+        if headline:
+            echo_text += f"\nKey headline: {headline}"
+        parts.append(echo_text)
+
+    # REPORT 5: Sage Performance
+    if sage_note and isinstance(sage_note, str) and sage_note.strip():
+        parts.append(f"REPORT 5 \u2014 Sage Performance:\n{sage_note.strip()}")
+
     return "\n\n".join(parts)
 
 
-def run_research_manager(bull: Dict[str, Any], bear: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def run_research_manager(
+    bull: Dict[str, Any],
+    bear: Dict[str, Any],
+    luna_brief: Optional[Dict[str, Any]] = None,
+    echo_summary: Optional[Dict[str, Any]] = None,
+    sage_note: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """
-    FLO-194: Run Research Manager to pick winner between Bull and Bear.
+    FLO-203: Research Manager v2 — reads 5 reports and forms verdict.
     Returns verdict dict or None on failure.
     """
     t0 = time.time()
     api_key = _get_api_key()
     if not api_key:
-        log.warning("RESEARCH_MANAGER | SKIPPED — no API key")
+        log.warning("RESEARCH_MANAGER | SKIPPED \u2014 no API key")
         return None
 
     model = _get_model()
-    user_msg = _build_user_message(bull, bear)
+    user_msg = _build_user_message(bull, bear, luna_brief, echo_summary, sage_note)
 
     try:
         from google import genai

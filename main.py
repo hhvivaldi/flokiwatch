@@ -3518,11 +3518,60 @@ class TradingBot:
                     _bull = _debate_result["rex_bull"]
                     _bear = _debate_result["rex_bear"]
 
-                    # FLO-194: Research Manager picks the winner
+                    # FLO-203: Research Manager v2 — reads 5 reports (Bull, Bear, Luna, Echo, Sage)
                     _verdict_result = None
                     try:
                         from research_manager import run_research_manager
-                        _verdict_result = run_research_manager(_bull, _bear)
+
+                        # Gather Luna brief
+                        _rm_luna = None
+                        try:
+                            _luna_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "luna_brief.json")
+                            if os.path.exists(_luna_path):
+                                with open(_luna_path, "r", encoding="utf-8") as _lf:
+                                    _rm_luna = json.load(_lf)
+                        except Exception:
+                            pass
+
+                        # Gather Echo sentiment (count BULLISH vs BEARISH from recent agent_events)
+                        _rm_echo = None
+                        try:
+                            from db_writer import _get_connection as _get_conn_echo
+                            _ec = _get_conn_echo()
+                            try:
+                                _echo_rows = _ec.execute(
+                                    "SELECT content FROM agent_events WHERE author='ECHO' AND timestamp >= datetime('now', '-4 hours') ORDER BY timestamp DESC LIMIT 20"
+                                ).fetchall()
+                            finally:
+                                _ec.close()
+                            _bull_n = sum(1 for r in _echo_rows if "BULLISH" in str(r[0]).upper())
+                            _bear_n = sum(1 for r in _echo_rows if "BEARISH" in str(r[0]).upper())
+                            _key_hl = ""
+                            if _echo_rows:
+                                _key_hl = str(_echo_rows[0][0])[:120]
+                            _rm_echo = {"bullish_count": _bull_n, "bearish_count": _bear_n, "key_headline": _key_hl}
+                        except Exception:
+                            pass
+
+                        # Gather Sage performance note from session memory
+                        _rm_sage = None
+                        try:
+                            _sm_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_session_memory.json")
+                            if os.path.exists(_sm_path):
+                                with open(_sm_path, "r", encoding="utf-8") as _smf:
+                                    _sm = json.load(_smf)
+                                _notes = _sm.get("notes", [])
+                                for _n in reversed(_notes):
+                                    if isinstance(_n, dict) and "sage" in str(_n.get("source", "")).lower():
+                                        _rm_sage = str(_n.get("text", _n.get("content", "")))[:300]
+                                        break
+                                    elif isinstance(_n, str) and "sage" in _n.lower():
+                                        _rm_sage = _n[:300]
+                                        break
+                        except Exception:
+                            pass
+
+                        _verdict_result = run_research_manager(_bull, _bear, _rm_luna, _rm_echo, _rm_sage)
                     except Exception as _vm_err:
                         log.debug(f"RESEARCH_MANAGER | import/call error (ignored): {_vm_err}")
 
