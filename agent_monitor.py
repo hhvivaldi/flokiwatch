@@ -325,7 +325,7 @@ class AgentMonitor:
                 pass
 
         in_cooldown = False
-        cooldown_minutes = 30
+        cooldown_minutes = 5  # FLO-200: Reduced from 30 to 5 minutes
         mins_remaining = None
         next_eligible_iso = None
         try:
@@ -333,9 +333,9 @@ class AgentMonitor:
 
             cw = wake_conditions if isinstance(wake_conditions, dict) else {}
             try:
-                cooldown_minutes = int(cw.get("cooldown_minutes") or 30)
+                cooldown_minutes = int(cw.get("cooldown_minutes") or 5)
             except Exception:
-                cooldown_minutes = 30
+                cooldown_minutes = 5
 
             last_wake_at = cw.get("last_wake_at")
             last_fp = str(cw.get("cooldown_fingerprint") or "").strip() or None

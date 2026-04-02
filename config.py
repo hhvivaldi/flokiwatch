@@ -230,7 +230,7 @@ BRAIN_LATERAL_SELL = 30
 BRAIN_LATERAL_STRONG_SELL = 20
 
 # Minimum confidence to execute trade
-BRAIN_MIN_CONFIDENCE = 55.0  # Don't execute if confidence < 55% (reduces overtrading — backtest showed 56 trades/3 weeks with 35%)
+BRAIN_MIN_CONFIDENCE = 0  # FLO-200: Removed — Floki decides his own confidence threshold (was 55.0)
 
 # Momentum Detector
 MOMENTUM_ADX_PERIOD = 14

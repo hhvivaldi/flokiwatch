@@ -1921,17 +1921,8 @@ class AgentTools:
             if sl_f is None and tp_f is None:
                 return {"success": False, "reason": "invalid new sl/tp"}
 
-            # --- Rate limit check (FLO-141) ---
-            import config as _cfg
-            _max_adj = getattr(_cfg, "MAX_ADJUSTMENTS_PER_HOUR", 3)
-            if self._is_adjust_rate_limited(t, _max_adj):
-                log.warning(f"ADJUST_TRADE | BLOCKED | reason=rate_limit | ticket={t} | max={_max_adj}/hour")
-                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | rate_limit")
-                return {
-                    "success": False,
-                    "reason": "rate_limit",
-                    "detail": f"{_max_adj} adjustments already made in last hour for ticket {t}",
-                }
+            # FLO-200: adjust rate limit REMOVED — Floki has full autonomy
+            # (was: 3/hour max, cost $22 on 2026-04-02 when blocked at 15:44)
 
             # --- Get current position (live MT5) for old values + direction ---
             old_sl = None
@@ -1948,21 +1939,8 @@ class AgentTools:
             except Exception:
                 pass
 
-            # --- SL-widening guard (FLO-141) ---
-            if sl_f is not None and old_sl is not None and direction_type is not None and old_sl > 0:
-                if self._is_sl_widening(direction_type, old_sl, sl_f):
-                    dir_label = "BUY" if direction_type == 0 else "SELL"
-                    log.warning(
-                        f"ADJUST_TRADE | BLOCKED | reason=sl_widening | ticket={t} | "
-                        f"{dir_label} | old_sl={old_sl:.2f} → new_sl={sl_f:.2f}"
-                    )
-                    self._log_tool("adjust_trade", start, f"ticket={t} | blocked | sl_widening")
-                    return {
-                        "success": False,
-                        "reason": "sl_widening_blocked",
-                        "detail": f"New SL {sl_f:.2f} widens risk vs current SL {old_sl:.2f} on {dir_label} position. "
-                                  f"To reduce risk, move SL closer to entry (higher for BUY, lower for SELL).",
-                    }
+            # FLO-200: SL widening guard REMOVED — Floki has full autonomy
+            # (was: blocked SL moves further from entry)
 
             # --- Execute modification ---
             res = self._executor.modify_position(t, new_sl=sl_f, new_tp=tp_f)

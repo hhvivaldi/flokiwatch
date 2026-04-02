@@ -260,35 +260,8 @@ class SafetyChecker:
         return True, ""
 
     def check_overtrading(self, direction: str) -> Tuple[bool, str]:
-        """
-        Check if enough time has passed since last trade in same direction.
-        Dynamic cooldown: trailing close → 30 min, SL close → 45 min, default → 45 min.
-        """
-        direction = direction.upper()
-        if direction not in self.last_trade_time:
-            return True, ""
-        
-        last_time = self.last_trade_time.get(direction)
-        if last_time is None:
-            return True, ""
-        
-        # Dynamic cooldown based on close type
-        close_type = self.last_close_type.get(direction)
-        if close_type == "breakeven":
-            min_minutes = getattr(config, 'MIN_MINUTES_AFTER_BREAKEVEN', 5)
-        elif close_type == "trailing":
-            min_minutes = getattr(config, 'MIN_MINUTES_AFTER_TRAILING', 30)
-        elif close_type == "sl":
-            min_minutes = getattr(config, 'MIN_MINUTES_AFTER_SL', 45)
-        else:
-            min_minutes = getattr(config, 'MIN_MINUTES_BETWEEN_TRADES', 45)
-        
-        elapsed = (datetime.now() - last_time).total_seconds() / 60
-        
-        if elapsed < min_minutes:
-            remaining = int(min_minutes - elapsed)
-            return False, f"Wait {remaining}min before new {direction} (anti-overtrading)"
-        
+        """FLO-200: Anti-overtrading cooldown REMOVED — Floki has full autonomy.
+        Was: 30-45 min cooldown after trade close. Now: always passes."""
         return True, ""
     
     def record_trade_opened(self, direction: str):
