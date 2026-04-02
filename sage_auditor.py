@@ -1164,7 +1164,14 @@ def run_sage_auditor() -> SageRunResult:
             _wr = report.get("win_rate")
             _pf = report.get("profit_factor")
             _recs = report.get("recommendations", [])
-            _top_rec = _recs[0] if _recs else "No recommendations"
+            _raw_rec = _recs[0] if _recs else None
+            # FLO-207: Extract instruction text if recommendation is a dict
+            if isinstance(_raw_rec, dict):
+                _top_rec = _raw_rec.get("instruction", str(_raw_rec))
+            elif _raw_rec:
+                _top_rec = str(_raw_rec)
+            else:
+                _top_rec = "No recommendations"
             _summary = (
                 f"Daily audit complete: {len(trades)} trades analyzed"
                 f"{f', WR {_wr:.1f}%' if _wr is not None else ''}"
