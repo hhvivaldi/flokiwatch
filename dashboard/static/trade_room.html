@@ -2674,11 +2674,12 @@
                     lines = '<span id="' + eid + '-short">' + shortLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-short\').style.display=\'none\';document.getElementById(\'' + eid + '-full\').style.display=\'inline\';return false">Show more</a></span>' +
                             '<span id="' + eid + '-full" style="display:none">' + fullLines + '<br><a href="#" style="color:#60a5fa;font-size:10px" onclick="document.getElementById(\'' + eid + '-full\').style.display=\'none\';document.getElementById(\'' + eid + '-short\').style.display=\'inline\';return false">Show less</a></span>';
                   }
-                  // Decision badge color
+                  // Decision badge color — FLO-202 consistent for ALL types
                   var dColor = '#f59e0b'; // amber default (WAIT)
                   if (dec === 'OPEN_BUY') dColor = '#4ade80';
                   else if (dec === 'OPEN_SELL') dColor = '#f87171';
                   else if (dec === 'CLOSE_TRADE') dColor = '#c084fc';
+                  else if (dec === 'ADJUST_TRADE') dColor = '#fbbf24';
                   else if (dec.indexOf('HOLD') >= 0) dColor = '#60a5fa';
 
                   // FLO-94: Link to matching ANALYSIS for expand-in-place
@@ -2733,6 +2734,37 @@
                 structuredContent =
                   '<div style="margin-bottom:3px">' + stanceHtml + '<span style="color:#6b7280;font-size:9px;font-weight:600;letter-spacing:0.08em">DEBATE</span></div>' +
                   '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + lines + '</div>';
+              }
+              else if (isRex && (type === 'REX_INSIGHTS' || type === 'DEBATE' && (m.content || '').indexOf('[') >= 0)) {
+                // FLO-202: Rex insights with [FLAG]/[HISTORY]/[NOTE] badges
+                var raw = (m.content || '').toString();
+                var badgeHtml = '';
+                var cleanText = raw;
+                // Extract and replace tags with badges
+                var tagMap = {
+                  'FLAG': {bg: 'rgba(248,113,113,0.15)', color: '#f87171', border: 'rgba(248,113,113,0.3)'},
+                  'HISTORY': {bg: 'rgba(192,132,252,0.15)', color: '#c084fc', border: 'rgba(192,132,252,0.3)'},
+                  'NOTE': {bg: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: 'rgba(96,165,250,0.3)'}
+                };
+                var foundTags = [];
+                ['FLAG', 'HISTORY', 'NOTE'].forEach(function(tag) {
+                  if (raw.indexOf('[' + tag + ']') >= 0) {
+                    foundTags.push(tag);
+                    cleanText = cleanText.replace(new RegExp('\\[' + tag + '\\]\\s*', 'g'), '');
+                  }
+                });
+                if (foundTags.length > 0) {
+                  badgeHtml = '<div style="display:flex;gap:4px;margin-bottom:5px">' +
+                    foundTags.map(function(tag) {
+                      var s = tagMap[tag];
+                      return '<span style="background:' + s.bg + ';color:' + s.color + ';border:1px solid ' + s.border + ';padding:1px 6px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.06em">' + tag + '</span>';
+                    }).join('') + '</div>';
+                }
+                // Split into segments separated by ; and show cleanly
+                var segments = cleanText.split(/;\s*/).filter(Boolean);
+                var segHtml = segments.map(function(s) { return esc(s.trim()); }).join('<br>');
+                structuredContent = badgeHtml +
+                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45">' + segHtml + '</div>';
               }
               else if (isRex && type === 'DEBATE') {
                 var meta = m.metadata || {};
