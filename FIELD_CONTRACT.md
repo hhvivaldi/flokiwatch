@@ -145,6 +145,25 @@
 | `monitor.age_minutes` | float \| null | `server.py` | Rex card pill ("Xm ago") |
 | `stale` | boolean | `server.py` | Rex card pill ("stale" suffix) |
 
+### FLO-215 Phase 3: Adaptive Main Area IDs
+
+| ID | Purpose | Writer | Notes |
+|----|---------|--------|-------|
+| `main-has-position` | Container visible when position(s) open | JS toggle | `display:none` when 0 positions |
+| `main-no-position` | Container visible when no positions | JS toggle | `display:none` when positions > 0 |
+| `position-bar` | Position rows container | `_renderPositionBar()` | innerHTML rebuilt each poll |
+| `position-direction` | Direction pill (first position only) | `_renderPositionBar()` | BUY green / SELL red |
+| `position-entry` | Entry price (first position only) | `_renderPositionBar()` | — |
+| `position-pnl` | Live P&L (first position only) | `_renderPositionBar()` | Green if +, red if - |
+| `position-sl` | Stop loss (first position only) | `_renderPositionBar()` | — |
+| `position-tp` | Take profit (first position only) | `_renderPositionBar()` | — |
+| `position-duration` | Time since open (first position only) | `_renderPositionBar()` | Computed client-side |
+| `position-phase` | Phase pill (first position only) | `_renderPositionBar()` | OPEN/BE/TRAILING |
+| `position-hold-reasoning` | Floki's last reasoning text | `updatePanels()` | From `proactive_analysis.reasoning` |
+| `position-watch-conditions` | Simba watch conditions compact | `_renderPositionBar()` | From `wake_conditions.conditions[]` |
+
+**Note:** Static IDs (`position-direction`, etc.) reference the **first position only**. Additional positions (max 3) are rendered as anonymous rows without unique IDs.
+
 ### `last_analysis.intel_feed` Object (OSINT)
 
 | Field | Type | Writer | Reader (app.js) |

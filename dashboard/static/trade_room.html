@@ -799,6 +799,52 @@
         align-items: flex-start;
       }
 
+      /* FLO-215 Phase 3: Position bar */
+      .position-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 14px;
+        background: rgba(8,8,16,0.7);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace;
+        margin-bottom: 6px;
+      }
+      .position-row .pos-label {
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #5a6a7e;
+      }
+      .position-row .pos-val {
+        font-size: 13px;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+      .position-row .pos-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .pos-pill-buy {
+        background: rgba(74,222,128,0.15);
+        color: #4ade80;
+        border: 1px solid rgba(74,222,128,0.3);
+      }
+      .pos-pill-sell {
+        background: rgba(248,113,113,0.15);
+        color: #f87171;
+        border: 1px solid rgba(248,113,113,0.3);
+      }
+      .pos-pill-phase {
+        font-size: 9px;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-weight: 700;
+      }
+
       /* Feed below main cards */
       .main-feed {
         grid-column: 2;
@@ -1482,6 +1528,18 @@
 
       <!-- ═══ CENTER: Main decision area ═══ -->
       <div class="main-center">
+        <!-- FLO-215 Phase 3: Position view (hidden when no position) -->
+        <div id="main-has-position" style="display:none">
+          <div id="position-bar"></div>
+          <div id="position-hold-reasoning" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#94a3b8;padding:8px 12px;background:rgba(8,8,16,0.5);border-radius:4px;margin-top:6px;line-height:1.5">—</div>
+          <div style="margin-top:6px">
+            <div style="font-size:8px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#5a6a7e;margin-bottom:4px">WATCH CONDITIONS</div>
+            <div id="position-watch-conditions" style="font-size:9px;font-family:'JetBrains Mono',monospace;color:#94a3b8">No active conditions</div>
+          </div>
+        </div>
+
+        <!-- FLO-215 Phase 3: No-position view (default) -->
+        <div id="main-no-position">
         <div class="main-cards-row">
           <!-- FLOKI -->
           <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
@@ -1636,6 +1694,7 @@
             </div>
           </div>
         </div>
+        </div><!-- /main-no-position -->
       </div><!-- /main-center -->
 
       <!-- ═══ RIGHT SIDEBAR: Operations ═══ -->
@@ -2004,6 +2063,101 @@
             sbRex.style.color = c.fg;
             sbRex.style.background = c.bg;
             sbRex.style.borderColor = c.border;
+          }
+        }
+
+        /* FLO-215 Phase 3: Render position bar(s) from state.positions[] */
+        function _renderPositionBar(positions, state) {
+          var barEl = document.getElementById('position-bar');
+          var holdEl = document.getElementById('position-hold-reasoning');
+          var watchEl = document.getElementById('position-watch-conditions');
+          if (!barEl) return;
+
+          var html = '';
+          for (var pi = 0; pi < positions.length; pi++) {
+            var p = positions[pi];
+            var dir = (p.direction || '?').toUpperCase();
+            var dirClass = dir === 'BUY' ? 'pos-pill-buy' : 'pos-pill-sell';
+            var pnl = Number(p.profit || 0);
+            var pnlColor = pnl >= 0 ? '#4ade80' : '#f87171';
+            var pnlStr = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            var pips = p.profit_pips != null ? (Number(p.profit_pips) >= 0 ? '+' : '') + Number(p.profit_pips).toFixed(1) + 'p' : '';
+            var phase = (p.phase || 'OPEN').toUpperCase();
+            var phaseColors = { OPEN: '#60a5fa', BE: '#fbbf24', TRAILING: '#22d3ee' };
+            var phaseColor = phaseColors[phase] || '#60a5fa';
+            var phaseBg = phase === 'OPEN' ? 'rgba(96,165,250,0.15)' : phase === 'BE' ? 'rgba(251,191,36,0.15)' : 'rgba(34,211,238,0.15)';
+
+            /* Duration */
+            var durStr = '—';
+            if (p.open_time) {
+              try {
+                var ot = new Date(p.open_time.endsWith('Z') ? p.open_time : p.open_time + 'Z').getTime();
+                var diffMin = Math.floor((Date.now() - ot) / 60000);
+                if (diffMin < 60) durStr = diffMin + 'm';
+                else if (diffMin < 1440) durStr = Math.floor(diffMin / 60) + 'h ' + (diffMin % 60) + 'm';
+                else durStr = Math.floor(diffMin / 1440) + 'd ' + Math.floor((diffMin % 1440) / 60) + 'h';
+              } catch(e) {}
+            }
+
+            /* Border accent matches direction */
+            var borderLeft = dir === 'BUY' ? '3px solid rgba(74,222,128,0.5)' : '3px solid rgba(248,113,113,0.5)';
+
+            html += '<div class="position-row" style="border-left:' + borderLeft + '">';
+            html += '<span class="bc-pill ' + dirClass + '" style="font-size:11px;font-weight:800;padding:3px 10px"' +
+                    (pi === 0 ? ' id="position-direction"' : '') + '>' + dir + ' ' + (p.volume || '') + '</span>';
+
+            html += '<div class="pos-group"><span class="pos-label">Entry</span><span class="pos-val"' +
+                    (pi === 0 ? ' id="position-entry"' : '') + '>' + (p.open_price != null ? Number(p.open_price).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">P&L</span><span class="pos-val" style="color:' + pnlColor + '"' +
+                    (pi === 0 ? ' id="position-pnl"' : '') + '>' + pnlStr + ' <span style="font-size:10px;opacity:0.7">' + pips + '</span></span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">SL</span><span class="pos-val" style="font-size:11px"' +
+                    (pi === 0 ? ' id="position-sl"' : '') + '>' + (p.sl != null ? Number(p.sl).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">TP</span><span class="pos-val" style="font-size:11px"' +
+                    (pi === 0 ? ' id="position-tp"' : '') + '>' + (p.tp != null ? Number(p.tp).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">Duration</span><span class="pos-val" style="font-size:11px"' +
+                    (pi === 0 ? ' id="position-duration"' : '') + '>' + durStr + '</span></div>';
+
+            html += '<span class="bc-pill pos-pill-phase" style="background:' + phaseBg + ';color:' + phaseColor + ';border:1px solid ' + phaseColor + '"' +
+                    (pi === 0 ? ' id="position-phase"' : '') + '>' + phase + '</span>';
+
+            html += '</div>';
+          }
+          barEl.innerHTML = html;
+
+          /* Hold reasoning from last Floki decision */
+          if (holdEl) {
+            try {
+              var pa = (state.last_analysis || {}).proactive_analysis;
+              var reasoning = pa ? (pa.reasoning || pa.summary || '') : '';
+              holdEl.textContent = reasoning ? reasoning.substring(0, 300) : 'Awaiting Floki analysis...';
+            } catch(e) {
+              holdEl.textContent = '—';
+            }
+          }
+
+          /* Watch conditions compact */
+          if (watchEl) {
+            try {
+              var wc = (state.wake_conditions || {}).conditions || [];
+              if (wc.length > 0) {
+                var wcHtml = '';
+                for (var wi = 0; wi < wc.length; wi++) {
+                  var c = wc[wi];
+                  var typ = (c.type || '').replace(/_/g, ' ');
+                  var lvl = c.level != null ? Number(c.level).toFixed(1) : '?';
+                  wcHtml += '<span style="margin-right:12px"><span style="color:#00E5FF">' + (c.id || 'c' + (wi + 1)) + '</span> ' + typ + ' <strong style="color:#e2e8f0">' + lvl + '</strong></span>';
+                }
+                watchEl.innerHTML = wcHtml;
+              } else {
+                watchEl.textContent = 'No active watch conditions';
+              }
+            } catch(e) {
+              watchEl.textContent = '—';
+            }
           }
         }
 
@@ -4531,6 +4685,22 @@
                     else if (_hasPos && _pnl >= 0) _borderColor = 'rgba(96,165,250,0.20)';
                     else _borderColor = 'rgba(16,185,129,0.12)';
                     ccBar.style.borderBottomColor = _borderColor;
+                  }
+                } catch(e) {}
+
+                // FLO-215 Phase 3: Adaptive main area toggle
+                try {
+                  var _posC = document.getElementById('main-has-position');
+                  var _noPosC = document.getElementById('main-no-position');
+                  if (_posC && _noPosC) {
+                    if (_pos.length > 0) {
+                      _posC.style.display = '';
+                      _noPosC.style.display = 'none';
+                      _renderPositionBar(_pos, state);
+                    } else {
+                      _posC.style.display = 'none';
+                      _noPosC.style.display = '';
+                    }
                   }
                 } catch(e) {}
               } catch(e) {}
