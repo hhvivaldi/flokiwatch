@@ -396,9 +396,25 @@ def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str
 
         conn = _get_connection()
         try:
+            # FLO-47: Dedup ECHO events — skip if identical content exists within last 6 hours
+            author_s = str(author or "SIMBA")
+            if author_s.upper() == "ECHO":
+                try:
+                    dup = conn.execute(
+                        "SELECT 1 FROM agent_events WHERE author='ECHO' AND timestamp > datetime('now', '-6 hours') "
+                        "AND content IS NOT NULL AND length(content) > 0 "
+                        "AND substr(content, 1, 200) = substr(?, 1, 200) LIMIT 1",
+                        (content_s,),
+                    ).fetchone()
+                    if dup:
+                        log.debug(f"db_writer: ECHO dedup — skipping duplicate event: {content_s[:80]}")
+                        return
+                except Exception as e_dup:
+                    log.debug(f"db_writer: ECHO dedup check failed (proceeding): {e_dup}")
+
             conn.execute(
                 "INSERT INTO agent_events (timestamp, event_type, author, content, payload_json) VALUES (?, ?, ?, ?, ?)",
-                (datetime.now().isoformat(), et, str(author or "SIMBA"), content_s[:4000], payload_json),
+                (datetime.now().isoformat(), et, author_s, content_s[:4000], payload_json),
             )
             conn.commit()
         finally:
