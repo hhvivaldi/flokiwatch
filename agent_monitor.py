@@ -325,7 +325,7 @@ class AgentMonitor:
                 pass
 
         in_cooldown = False
-        cooldown_minutes = 30  # Reverted from 5 (FLO-204 will implement proper FIRED flag)
+        cooldown_minutes = 30  # FLO-204: per-condition FIRED flag now prevents wake loops
         mins_remaining = None
         next_eligible_iso = None
         try:
@@ -333,7 +333,7 @@ class AgentMonitor:
 
             cw = wake_conditions if isinstance(wake_conditions, dict) else {}
             try:
-                _DEFAULT_COOLDOWN = 30  # Reverted from 5 (caused wake loops — FLO-204 is proper fix)
+                _DEFAULT_COOLDOWN = 30  # FLO-204: FIRED flag is the proper dedup; cooldown is secondary
                 _persisted = int(cw.get("cooldown_minutes") or _DEFAULT_COOLDOWN)
                 cooldown_minutes = min(_persisted, _DEFAULT_COOLDOWN)  # Clamp to configured max
             except Exception:
@@ -932,6 +932,16 @@ class AgentMonitor:
             except Exception:
                 wake_conditions["cooldown_minutes"] = 30
 
+            # FLO-204: Mark triggered conditions as FIRED so they don't re-trigger
+            if triggered_ids:
+                try:
+                    existing_fired = list(wake_conditions.get("fired_ids") or [])
+                    updated_fired = list(set(str(x) for x in existing_fired) | set(str(x) for x in triggered_ids))
+                    wake_conditions["fired_ids"] = updated_fired
+                    log.info(f"SIMBA_WAKE | Marking fired: {triggered_ids} | total fired: {updated_fired}")
+                except Exception:
+                    pass
+
             # FLO-184: conditions preserved after wake. Fingerprint cooldown
             # (lines 340-354) prevents re-trigger for cooldown_minutes.
             self._save_wake_conditions(wake_conditions)
@@ -1071,6 +1081,15 @@ class AgentMonitor:
             "price_touch_default_tolerance": tol_default,
         }
 
+        # FLO-204: Load fired condition IDs to skip already-triggered conditions
+        fired_ids = set()
+        try:
+            _fi = wake_conditions.get("fired_ids")
+            if isinstance(_fi, list):
+                fired_ids = {str(x) for x in _fi if x}
+        except Exception:
+            fired_ids = set()
+
         for idx, c in enumerate(conditions or [], start=1):
             if not isinstance(c, dict):
                 continue
@@ -1078,6 +1097,15 @@ class AgentMonitor:
             ctype = str(c.get("type") or "").strip()
             cid = str(c.get("id") or "").strip() or f"c{idx}"
             if not ctype:
+                continue
+
+            # FLO-204: Skip conditions that already fired in this condition set
+            if cid in fired_ids:
+                try:
+                    _lvl = c.get("level") or c.get("threshold") or c.get("pattern") or ""
+                    log.debug(f"SIMBA | condition {cid} ({ctype} {_lvl}) already FIRED — skipping")
+                except Exception:
+                    pass
                 continue
 
             checked += 1
