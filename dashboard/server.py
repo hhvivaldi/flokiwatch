@@ -954,6 +954,45 @@ def luna_brief_api():
         return JSONResponse({"brief": None, "stale": True})
 
 
+@app.get("/api/rex-monitor")
+def rex_monitor_api():
+    """Return Rex proactive monitor scan for Trade Room badge (FLO-214)."""
+    try:
+        data_dir = Path(__file__).parent.parent / "data"
+        mon_file = data_dir / "rex_monitor.json"
+
+        if not mon_file.exists():
+            return JSONResponse({"monitor": None, "stale": True})
+
+        monitor = json.loads(mon_file.read_text(encoding="utf-8"))
+        if not isinstance(monitor, dict):
+            return JSONResponse({"monitor": None, "stale": True})
+
+        stale = False
+        age_minutes = None
+        ts = monitor.get("timestamp")
+        if ts:
+            try:
+                scan_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                now_utc = datetime.now(tz=scan_time.tzinfo) if scan_time.tzinfo else datetime.utcnow()
+                age_minutes = round((now_utc - scan_time).total_seconds() / 60, 1)
+                stale = age_minutes > 30
+            except Exception:
+                pass
+
+        return JSONResponse({
+            "monitor": {
+                "alert_level": monitor.get("alert_level", "QUIET"),
+                "finding_count": monitor.get("finding_count", 0),
+                "timestamp": ts,
+                "age_minutes": age_minutes,
+            },
+            "stale": stale,
+        })
+    except Exception:
+        return JSONResponse({"monitor": None, "stale": True})
+
+
 @app.get("/api/sage-weekly")
 def sage_weekly_api():
     """Return Sage weekly trending report."""

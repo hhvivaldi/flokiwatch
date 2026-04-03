@@ -135,6 +135,16 @@
 | `last_analysis.verdict.conviction` | int (1-10) | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.timestamp` | string (ISO) | `state_writer.py` | Dashboard verdict card |
 
+### `/api/rex-monitor` Endpoint (FLO-214 Rex Proactive Monitor)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `monitor.alert_level` | string (`"QUIET"` \| `"NORMAL"` \| `"ELEVATED"` \| `"CRITICAL"`) | `rex_monitor.py` | Rex card pill `#rex-monitor-pill` |
+| `monitor.finding_count` | int (0+) | `rex_monitor.py` | Rex card pill |
+| `monitor.timestamp` | string (ISO) | `rex_monitor.py` | Rex card pill (age calc) |
+| `monitor.age_minutes` | float \| null | `server.py` | Rex card pill ("Xm ago") |
+| `stale` | boolean | `server.py` | Rex card pill ("stale" suffix) |
+
 ### `last_analysis.intel_feed` Object (OSINT)
 
 | Field | Type | Writer | Reader (app.js) |

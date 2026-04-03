@@ -1333,6 +1333,7 @@
                   <span class="bc-pill" style="background:rgba(156,39,176,0.15);color:#9C27B0">ACTIVE</span>
                   <span id="rex-opinion-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">STANDBY</span>
                   <span id="rex-insights-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
+                  <span id="rex-monitor-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
                 </div>
                 <div class="bc-row3">
                   <div class="bc-metric">
@@ -1933,6 +1934,53 @@
           }).catch(function() {
             renderLuna(null);
           });
+        }
+
+        /* FLO-214: Rex Monitor badge */
+        function refreshRexMonitor() {
+          return fetchJson('/api/rex-monitor').then(function(data) {
+            renderRexMonitor(data);
+          }).catch(function() {
+            renderRexMonitor(null);
+          });
+        }
+
+        function renderRexMonitor(data) {
+          var pill = document.getElementById('rex-monitor-pill');
+          if (!pill) return;
+
+          if (!data || !data.monitor) {
+            pill.textContent = '—';
+            pill.style.color = '#8a8a9a';
+            pill.style.background = 'rgba(156,39,176,0.08)';
+            pill.style.borderColor = 'rgba(148,163,184,0.2)';
+            return;
+          }
+
+          var m = data.monitor;
+          var level = (m.alert_level || 'QUIET').toUpperCase();
+          var count = m.finding_count || 0;
+          var age = m.age_minutes;
+
+          /* Color map matching Luna's pill pattern */
+          var colorMap = {
+            CRITICAL: { fg: '#ef4444', bg: 'rgba(239,68,68,0.2)', border: 'rgba(239,68,68,0.4)' },
+            ELEVATED: { fg: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)' },
+            NORMAL:   { fg: '#60a5fa', bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.25)' },
+            QUIET:    { fg: '#6b7280', bg: 'rgba(107,114,128,0.1)', border: 'rgba(148,163,184,0.2)' },
+          };
+          var c = colorMap[level] || colorMap.QUIET;
+
+          /* Build label: "ELEVATED · 2 · 12m" */
+          var parts = [level];
+          if (count > 0) parts.push(count + (count === 1 ? ' finding' : ' findings'));
+          if (age != null) parts.push(Math.round(age) + 'm ago');
+          if (data.stale) parts.push('(stale)');
+
+          pill.textContent = parts.join(' · ');
+          pill.style.color = c.fg;
+          pill.style.background = c.bg;
+          pill.style.borderColor = c.border;
         }
 
         function refreshWatchConditions() {
@@ -4554,6 +4602,7 @@
             refreshEcho(),
             refreshEchoHealth(),
             refreshLuna(),
+            refreshRexMonitor(),
           ]).then(function(res) {
             var msgPayload = res[0] || {};
             latestMessages = (msgPayload.messages || []).slice();
