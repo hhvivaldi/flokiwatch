@@ -81,6 +81,17 @@ MARKET_DAILY_OPEN_HOUR = int(os.environ.get("MARKET_DAILY_OPEN_HOUR", "22"))
 MARKET_CLOSE_BUFFER_MINUTES = 60  # Don't open new positions 60 min before close (backtest: 64% losses were gaps)
 MARKET_OPEN_BUFFER_MINUTES = 60   # Don't open new positions in 1st hour after open (22:00-23:00 UTC)
 
+# FLO-208: Market holidays — XAU/USD closed all day (no trading)
+MARKET_HOLIDAYS = {
+    "2026-01-01": "New Year's Day",
+    "2026-04-03": "Good Friday",
+    "2026-05-25": "Memorial Day",
+    "2026-07-04": "Independence Day",
+    "2026-09-07": "Labor Day",
+    "2026-11-26": "Thanksgiving Day",
+    "2026-12-25": "Christmas Day",
+}
+
 # Maximum open position time
 MAX_POSITION_HOURS = 24  # Close position after 24h if profit < 5 pips
 MAX_POSITION_MIN_PROFIT_PIPS = 5  # Minimum profit to keep position

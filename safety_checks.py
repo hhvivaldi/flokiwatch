@@ -304,7 +304,15 @@ class SafetyChecker:
         """
         if now_utc is None:
             now_utc = datetime.utcnow()
-        
+
+        # FLO-208: Check market holidays
+        holidays = getattr(config, "MARKET_HOLIDAYS", {})
+        today_str = now_utc.strftime("%Y-%m-%d")
+        if today_str in holidays:
+            holiday_name = holidays[today_str]
+            next_open = now_utc.replace(hour=22, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            return False, f"Holiday: {holiday_name} \u2014 market closed", next_open
+
         weekday = now_utc.weekday()  # 0=Mon, 4=Fri, 5=Sat, 6=Sun
         hour = now_utc.hour
         minute = now_utc.minute

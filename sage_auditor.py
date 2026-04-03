@@ -1165,13 +1165,22 @@ def run_sage_auditor() -> SageRunResult:
             _pf = report.get("profit_factor")
             _recs = report.get("recommendations", [])
             _raw_rec = _recs[0] if _recs else None
-            # FLO-207: Extract instruction text if recommendation is a dict
+            # FLO-207: Extract instruction text from recommendation
+            _top_rec = "No recommendations"
             if isinstance(_raw_rec, dict):
                 _top_rec = _raw_rec.get("instruction", str(_raw_rec))
-            elif _raw_rec:
-                _top_rec = str(_raw_rec)
-            else:
-                _top_rec = "No recommendations"
+            elif isinstance(_raw_rec, str):
+                # Recommendations may be stringified dicts: "{'instruction': '...', 'rank': 1}"
+                _s = _raw_rec.strip()
+                if _s.startswith("{") and "instruction" in _s:
+                    try:
+                        import ast
+                        _parsed = ast.literal_eval(_s)
+                        _top_rec = _parsed.get("instruction", _s) if isinstance(_parsed, dict) else _s
+                    except Exception:
+                        _top_rec = _s
+                else:
+                    _top_rec = _s
             _summary = (
                 f"Daily audit complete: {len(trades)} trades analyzed"
                 f"{f', WR {_wr:.1f}%' if _wr is not None else ''}"
