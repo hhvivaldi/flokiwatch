@@ -743,20 +743,95 @@
         display: none;
       }
 
-      /* ── Columns layout ─────────────────────── */
+      /* ── FLO-215 Phase 2: 3-column layout ─────────────────────── */
       .trade-room-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 8px 20px 20px;
+        display: grid;
+        grid-template-columns: 240px 1fr 260px;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+        padding: 8px 16px 20px;
         min-height: calc(100vh - 140px);
         box-sizing: border-box;
       }
 
-      .agent-top-strip {
+      /* Sidebars */
+      .sidebar-intel {
+        grid-column: 1;
+        grid-row: 1 / 3;
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 6px;
+        position: sticky;
+        top: 8px;
+        max-height: calc(100vh - 160px);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(90,106,126,0.3) transparent;
+      }
+      .sidebar-ops {
+        grid-column: 3;
+        grid-row: 1 / 3;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: sticky;
+        top: 8px;
+        max-height: calc(100vh - 160px);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(90,106,126,0.3) transparent;
+      }
+
+      /* Main center area */
+      .main-center {
+        grid-column: 2;
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* Main center cards row (Floki + Debate + Verdict) */
+      .main-cards-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: flex-start;
+      }
+
+      /* Feed below main cards */
+      .main-feed {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      /* Sidebar section labels */
+      .sidebar-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #5a6a7e;
+        padding: 4px 4px 2px;
+      }
+
+      /* Cards in sidebars: full width, auto height */
+      .sidebar-intel .bc-card,
+      .sidebar-ops .bc-card {
+        flex: none;
+        width: 100%;
+        height: auto;
+        min-height: 100px;
+      }
+
+      /* Keep room-section styles for legacy compat but hide rooms */
+      .agent-top-strip {
+        display: none;
       }
 
       /* FLO-196: Accordion room sections */
@@ -839,14 +914,9 @@
         display: none;
       }
 
-      /* Chat + stats layout below agents */
+      /* Legacy: trade-room-bottom hidden — replaced by 3-column grid */
       .trade-room-bottom {
-        display: grid;
-        grid-template-columns: 1fr 260px;
-        gap: 12px;
-        flex: 1;
-        min-height: 300px;
-        align-items: start;
+        display: none;
       }
 
       .col-center {
@@ -1268,440 +1338,383 @@
     ════════════════════════════════════════════════ -->
     <div class="trade-room-grid page-content">
 
-      <div class="agent-top-strip">
+      <!-- ═══ LEFT SIDEBAR: Intelligence ═══ -->
+      <div class="sidebar-intel">
+        <div class="sidebar-label">Intelligence</div>
 
-        <!-- SALA 3: DECISION -->
-        <div class="room-section stagger-in stagger-1" id="room-decision">
-          <div class="room-header" onclick="toggleRoom('room-decision')">
-            <span class="room-label">&#x1F3AF; decision</span>
-            <span class="room-summary" id="room-decision-summary"></span>
-            <span class="room-line"></span>
-            <span class="room-toggle">&#x25BC;</span>
-          </div>
-          <div class="room-cards">
-            <!-- FLOKI -->
-            <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
-              <button type="button" class="bc-btn" data-expand-target="floki-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-floki" style="border-color:#AAFF00">
-                    <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#AAFF00">FLOKI</span>
-                    <span class="bc-role">Portfolio manager</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span class="bc-pill" style="background:rgba(170,255,0,0.15);color:#AAFF00">ACTIVE</span>
-                  <span id="floki-decision-pill" class="bc-pill" style="background:rgba(170,255,0,0.08);color:#8a8a9a">WAIT</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Confidence</span>
-                    <span id="floki-conf-text" class="bc-metric-val" style="color:#AAFF00">—%</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="floki-conf-bar" class="bc-bar-fill" style="width:0%;background:#AAFF00"></div></div>
-                </div>
-              </button>
-              <div id="floki-expand" class="agent-expand">
-                <div id="floki-summary" style="max-height:80px;overflow-y:auto">—</div>
-                <span id="floki-thesis-tag" style="display:none"></span>
-                <div id="floki-session-notes" style="display:none"></div>
+        <!-- LUNA — Macro Analyst -->
+        <div class="bc-card" id="luna-card" style="border-color:#E040FB">
+          <button type="button" class="bc-btn" data-expand-target="luna-expand" aria-expanded="false">
+            <div class="bc-row1">
+              <div class="bc-avatar" id="avatar-luna" style="border-color:#E040FB"><img src="/image/luna-video-trade-room.gif" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div>
+              <div class="bc-identity">
+                <span class="bc-name" style="color:#E040FB">LUNA</span>
+                <span class="bc-role">Macro Analyst</span>
               </div>
             </div>
-
-          </div>
-        </div>
-
-        <!-- SALA 2: DEBATE TEAM -->
-        <div class="room-section collapsed stagger-in stagger-2" id="room-debate">
-          <div class="room-header" onclick="toggleRoom('room-debate')">
-            <span class="room-label">&#x2694;&#xFE0F; debate</span>
-            <span class="room-summary" id="room-debate-summary"></span>
-            <span class="room-line"></span>
-            <span class="room-toggle">&#x25BC;</span>
-          </div>
-          <div class="room-cards">
-            <!-- REX -->
-            <div class="bc-card" id="rex-card" style="border-color:#9C27B0">
-              <button type="button" class="bc-btn" data-expand-target="rex-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-rex" style="border-color:#9C27B0">
-                    <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#9C27B0">REX</span>
-                    <span class="bc-role">Debate partner</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span class="bc-pill" style="background:rgba(156,39,176,0.15);color:#9C27B0">ACTIVE</span>
-                  <span id="rex-opinion-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">STANDBY</span>
-                  <span id="rex-insights-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
-                  <span id="rex-monitor-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Insights</span>
-                    <span id="rex-agree-text" class="bc-metric-val" style="color:#9C27B0">—</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="rex-agree-bar" class="bc-bar-fill" style="width:0%;background:#9C27B0"></div></div>
-                </div>
-              </button>
-              <div id="rex-expand" class="agent-expand">
-                <div id="rex-debate-summary" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:4px"></div>
-                <div id="rex-last-debate" style="max-height:80px;overflow-y:auto;font-size:10px;color:#9ca3af">No debate yet.</div>
+            <div class="bc-row2">
+              <span id="luna-env-pill" class="bc-pill" style="background:rgba(224,64,251,0.15);color:#E040FB">STANDBY</span>
+              <span id="luna-bias-pill" class="bc-pill" style="background:rgba(224,64,251,0.08);color:#8a8a9a">—</span>
+            </div>
+            <div class="bc-row3">
+              <div class="bc-metric">
+                <span class="bc-metric-label">Risk</span>
+                <span id="luna-risk-text" class="bc-metric-val" style="color:#E040FB">—/10</span>
+              </div>
+              <div class="bc-bar-track">
+                <div id="luna-risk-bar" class="bc-bar-fill" style="width:0%;background:#E040FB"></div>
               </div>
             </div>
-
-            <!-- REX BULL (FLO-191) -->
-            <div class="bc-card" id="rex-bull-card" style="border-color:#4CAF50">
-              <button type="button" class="bc-btn" data-expand-target="rex-bull-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" style="border-color:#4CAF50;background:rgba(76,175,80,0.1)">
-                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C8;</span>
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#4CAF50">REX BULL</span>
-                    <span class="bc-role">ARGUES BUY</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="rex-bull-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
-                  <span id="rex-bull-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Conviction</span>
-                    <span id="rex-bull-conv-text" class="bc-metric-val" style="color:#4CAF50">—</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="rex-bull-conv-bar" class="bc-bar-fill" style="width:0%;background:#4CAF50"></div></div>
-                </div>
-              </button>
-              <div id="rex-bull-expand" class="agent-expand">
-                <div id="rex-bull-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
-                <div id="rex-bull-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
-              </div>
+          </button>
+          <div id="luna-expand" class="agent-expand">
+            <div id="luna-summary" style="font-size:10px;color:#d1d5db;line-height:1.4;margin-bottom:6px">—</div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Regime</span>
+              <span id="luna-regime" class="bc-metric-val" style="color:#E040FB">—</span>
             </div>
-
-            <!-- REX BEAR (FLO-191, updated FLO-194) -->
-            <div class="bc-card" id="rex-bear-card" style="border-color:#F44336">
-              <button type="button" class="bc-btn" data-expand-target="rex-bear-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" style="border-color:#F44336;background:rgba(244,67,54,0.1)">
-                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C9;</span>
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#F44336">REX BEAR</span>
-                    <span class="bc-role">ARGUES SELL</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="rex-bear-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
-                  <span id="rex-bear-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Conviction</span>
-                    <span id="rex-bear-conv-text" class="bc-metric-val" style="color:#F44336">—</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="rex-bear-conv-bar" class="bc-bar-fill" style="width:0%;background:#F44336"></div></div>
-                </div>
-              </button>
-              <div id="rex-bear-expand" class="agent-expand">
-                <div id="rex-bear-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
-                <div id="rex-bear-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
-              </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Patterns</span>
+              <span id="luna-patterns" class="bc-metric-val" style="color:#f59e0b">none</span>
             </div>
-
-            <!-- RESEARCH MANAGER VERDICT (FLO-195) -->
-            <div class="bc-card" id="verdict-card" style="border-color:#FFD700">
-              <button type="button" class="bc-btn" data-expand-target="verdict-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" style="border-color:#FFD700;background:rgba(255,215,0,0.1)">
-                    <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x2696;</span>
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#FFD700">VERDICT</span>
-                    <span class="bc-role">RESEARCH MGR</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="verdict-winner-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
-                  <span id="verdict-rec-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Conviction</span>
-                    <span id="verdict-conv-text" class="bc-metric-val" style="color:#FFD700">&#x2014;</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="verdict-conv-bar" class="bc-bar-fill" style="width:0%;background:#FFD700"></div></div>
-                </div>
-              </button>
-              <div id="verdict-expand" class="agent-expand">
-                <div id="verdict-reasoning" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:60px;overflow-y:auto">No verdict yet.</div>
-                <div id="verdict-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
-              </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Last brief</span>
+              <span id="luna-last-brief" class="bc-metric-val" style="color:#E040FB">—</span>
             </div>
-
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Source</span>
+              <span id="luna-source" class="bc-metric-val" style="color:#9ca3af">—</span>
+            </div>
+            <div id="luna-factors" style="font-size:9px;color:#6b7280;margin-top:4px"></div>
+            <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+            <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+            <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+            <div id="luna-sage-insights" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
           </div>
         </div>
 
-        <!-- SALA 4: OVERSIGHT -->
-        <div class="room-section collapsed stagger-in stagger-3" id="room-oversight">
-          <div class="room-header" onclick="toggleRoom('room-oversight')">
-            <span class="room-label">&#x1F6E1;&#xFE0F; oversight</span>
-            <span class="room-summary" id="room-oversight-summary"></span>
-            <span class="room-line"></span>
-            <span class="room-toggle">&#x25BC;</span>
-          </div>
-          <div class="room-cards">
-            <!-- SIMBA -->
-            <div class="bc-card" id="simba-card" style="border-color:#00E5FF">
-              <button type="button" class="bc-btn" data-expand-target="simba-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-simba" style="border-color:#00E5FF">
-                    <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#00E5FF">SIMBA</span>
-                    <span class="bc-role">Watchdog</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="simba-mode-tag" class="bc-pill" style="background:rgba(0,229,255,0.15);color:#00E5FF">OFF</span>
-                  <span id="simba-status-pill" class="bc-pill" style="background:rgba(0,229,255,0.08);color:#8a8a9a">OFF</span>
-                  <span id="simba-summary-tag" style="display:none"></span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Conditions</span>
-                    <span id="simba-conditions-text" class="bc-metric-val" style="color:#00E5FF">—</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="simba-conditions-bar" class="bc-bar-fill" style="width:0%;background:#00E5FF"></div></div>
-                </div>
-              </button>
-              <div id="simba-expand" class="agent-expand">
-                <div id="simba-watch-conditions" style="max-height:80px;overflow-y:auto">No active conditions.</div>
-                <div id="simba-patrol-report" style="display:none"></div>
+        <!-- ECHO — News Sentinel -->
+        <div class="bc-card" id="echo-card" style="border-color:#00BCD4">
+          <button type="button" class="bc-btn" data-expand-target="echo-expand" aria-expanded="false">
+            <div class="bc-row1">
+              <div class="bc-avatar" id="avatar-echo" style="border-color:#00BCD4">
+                <img class="avatar-img" id="avatar-echo-img" alt="ECHO" src="/image/echo-video-trade-room.gif" />
+              </div>
+              <div class="bc-identity">
+                <span class="bc-name" style="color:#00BCD4">ECHO</span>
+                <span class="bc-role">News Sentinel</span>
               </div>
             </div>
-
-            <!-- SAGE -->
-            <div class="bc-card" id="sage-card" style="border-color:#FFB300">
-              <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-sage" style="border-color:#FFB300">
-                    <img class="avatar-img" id="avatar-sage-img" alt="SAGE" src="/image/sage-video-trade-room.gif" data-variant="1" />
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#FFB300">SAGE</span>
-                    <span class="bc-role">Auditor</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="sage-status" class="bc-pill" style="background:rgba(255,179,0,0.15);color:#FFB300">STANDBY</span>
-                  <span id="sage-summary" class="bc-pill" style="background:rgba(255,179,0,0.08);color:#8a8a9a">STANDBY</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Last run</span>
-                    <span id="sage-last-run" class="bc-metric-val" style="color:#FFB300">—</span>
-                  </div>
-                  <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#FFB300"></div></div>
-                </div>
-              </button>
-              <div id="sage-expand" class="agent-expand">
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Win rate</span>
-                  <span id="sage-report-win-rate" class="bc-metric-val" style="color:#FFB300">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Profit factor</span>
-                  <span id="sage-report-profit-factor" class="bc-metric-val" style="color:#FFB300">—</span>
-                </div>
-                <div id="sage-today-pnl" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:3px"></div>
-                <div id="sage-weekly-summary" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-bottom:3px;color:#9ca3af"></div>
-                <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
-                <span id="sage-report-period" style="display:none"></span>
-                <span id="sage-report-trades" style="display:none"></span>
-              </div>
+            <div class="bc-row2">
+              <span id="echo-status-pill" class="bc-pill" style="background:rgba(0,188,212,0.15);color:#00BCD4">STANDBY</span>
+              <span id="echo-alert-pill" class="bc-pill" style="background:rgba(0,188,212,0.08);color:#8a8a9a">0 alerts</span>
             </div>
-
+            <div class="bc-row3">
+              <div class="bc-metric">
+                <span class="bc-metric-label">Last scan</span>
+                <span id="echo-last-scan" class="bc-metric-val" style="color:#00BCD4">—</span>
+              </div>
+              <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#00BCD4"></div></div>
+            </div>
+          </button>
+          <div id="echo-expand" class="agent-expand">
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Headlines scanned</span>
+              <span id="echo-scan-count" class="bc-metric-val" style="color:#00BCD4">—</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">CRITICAL today</span>
+              <span id="echo-critical-count" class="bc-metric-val" style="color:#ef4444">0</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">IMPORTANT today</span>
+              <span id="echo-important-count" class="bc-metric-val" style="color:#f59e0b">0</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Feed health</span>
+              <span id="echo-feed-health" class="bc-metric-val" style="color:#4ade80">—</span>
+            </div>
+            <div id="echo-failing-feeds" style="font-size:9px;color:#6b7280;margin-top:2px"></div>
+            <div id="echo-sentiment" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:3px"></div>
+            <div id="echo-clusters" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:2px;color:#6b7280"></div>
           </div>
         </div>
 
-        <!-- SALA 1: DATA TEAM -->
-        <div class="room-section collapsed stagger-in stagger-4" id="room-data">
-          <div class="room-header" onclick="toggleRoom('room-data')">
-            <span class="room-label">&#x1F4CA; data</span>
-            <span class="room-summary" id="room-data-summary"></span>
-            <span class="room-line"></span>
-            <span class="room-toggle">&#x25BC;</span>
-          </div>
-          <div class="room-cards">
-            <!-- ECHO -->
-            <div class="bc-card" id="echo-card" style="border-color:#00BCD4">
-              <button type="button" class="bc-btn" data-expand-target="echo-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-echo" style="border-color:#00BCD4">
-                    <img class="avatar-img" id="avatar-echo-img" alt="ECHO" src="/image/echo-video-trade-room.gif" />
-                  </div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#00BCD4">ECHO</span>
-                    <span class="bc-role">News Sentinel</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="echo-status-pill" class="bc-pill" style="background:rgba(0,188,212,0.15);color:#00BCD4">STANDBY</span>
-                  <span id="echo-alert-pill" class="bc-pill" style="background:rgba(0,188,212,0.08);color:#8a8a9a">0 alerts</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Last scan</span>
-                    <span id="echo-last-scan" class="bc-metric-val" style="color:#00BCD4">—</span>
-                  </div>
-                  <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#00BCD4"></div></div>
-                </div>
-              </button>
-              <div id="echo-expand" class="agent-expand">
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Headlines scanned</span>
-                  <span id="echo-scan-count" class="bc-metric-val" style="color:#00BCD4">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">CRITICAL today</span>
-                  <span id="echo-critical-count" class="bc-metric-val" style="color:#ef4444">0</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">IMPORTANT today</span>
-                  <span id="echo-important-count" class="bc-metric-val" style="color:#f59e0b">0</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Feed health</span>
-                  <span id="echo-feed-health" class="bc-metric-val" style="color:#4ade80">—</span>
-                </div>
-                <div id="echo-failing-feeds" style="font-size:9px;color:#6b7280;margin-top:2px"></div>
-                <div id="echo-sentiment" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:3px"></div>
-                <div id="echo-clusters" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-top:2px;color:#6b7280"></div>
+        <!-- MARKET REGIME card -->
+        <div class="bc-card" id="regime-card" style="border-color:var(--clr-ranging)">
+          <button type="button" class="bc-btn" data-expand-target="regime-expand" aria-expanded="false">
+            <div class="bc-row1">
+              <div class="bc-avatar" id="avatar-regime" style="border-color:var(--clr-ranging);background:rgba(99,102,241,0.08);font-size:18px;color:var(--clr-ranging)">◈</div>
+              <div class="bc-identity">
+                <span class="bc-name" id="regime-card-name" style="color:var(--clr-ranging)">MARKET</span>
+                <span class="bc-role">Regime detector</span>
               </div>
             </div>
-
-            <!-- LUNA — Macro Analyst -->
-            <div class="bc-card" id="luna-card" style="border-color:#E040FB">
-              <button type="button" class="bc-btn" data-expand-target="luna-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-luna" style="border-color:#E040FB"><img src="/image/luna-video-trade-room.gif" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div>
-                  <div class="bc-identity">
-                    <span class="bc-name" style="color:#E040FB">LUNA</span>
-                    <span class="bc-role">Macro Analyst</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="luna-env-pill" class="bc-pill" style="background:rgba(224,64,251,0.15);color:#E040FB">STANDBY</span>
-                  <span id="luna-bias-pill" class="bc-pill" style="background:rgba(224,64,251,0.08);color:#8a8a9a">—</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Risk</span>
-                    <span id="luna-risk-text" class="bc-metric-val" style="color:#E040FB">—/10</span>
-                  </div>
-                  <div class="bc-bar-track">
-                    <div id="luna-risk-bar" class="bc-bar-fill" style="width:0%;background:#E040FB"></div>
-                  </div>
-                </div>
-              </button>
-              <div id="luna-expand" class="agent-expand">
-                <div id="luna-summary" style="font-size:10px;color:#d1d5db;line-height:1.4;margin-bottom:6px">—</div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Regime</span>
-                  <span id="luna-regime" class="bc-metric-val" style="color:#E040FB">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Patterns</span>
-                  <span id="luna-patterns" class="bc-metric-val" style="color:#f59e0b">none</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Last brief</span>
-                  <span id="luna-last-brief" class="bc-metric-val" style="color:#E040FB">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Source</span>
-                  <span id="luna-source" class="bc-metric-val" style="color:#9ca3af">—</span>
-                </div>
-                <div id="luna-factors" style="font-size:9px;color:#6b7280;margin-top:4px"></div>
-                <div id="luna-macro-snapshot" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
-                <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
-                <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
-                <div id="luna-sage-insights" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
-              </div>
+            <div class="bc-row2">
+              <span id="regime-card-pill" class="bc-pill" style="background:rgba(99,102,241,0.15);color:var(--clr-ranging)">—</span>
+              <span id="regime-card-conf" class="bc-pill" style="background:rgba(99,102,241,0.08);color:var(--text-secondary)">—</span>
             </div>
-
-            <!-- MARKET REGIME card (FLO-145 Proposal 6) -->
-            <div class="bc-card" id="regime-card" style="border-color:var(--clr-ranging)">
-              <button type="button" class="bc-btn" data-expand-target="regime-expand" aria-expanded="false">
-                <div class="bc-row1">
-                  <div class="bc-avatar" id="avatar-regime" style="border-color:var(--clr-ranging);background:rgba(99,102,241,0.08);font-size:18px;color:var(--clr-ranging)">◈</div>
-                  <div class="bc-identity">
-                    <span class="bc-name" id="regime-card-name" style="color:var(--clr-ranging)">MARKET</span>
-                    <span class="bc-role">Regime detector</span>
-                  </div>
-                </div>
-                <div class="bc-row2">
-                  <span id="regime-card-pill" class="bc-pill" style="background:rgba(99,102,241,0.15);color:var(--clr-ranging)">—</span>
-                  <span id="regime-card-conf" class="bc-pill" style="background:rgba(99,102,241,0.08);color:var(--text-secondary)">—</span>
-                </div>
-                <div class="bc-row3">
-                  <div class="bc-metric">
-                    <span class="bc-metric-label">Duration</span>
-                    <span id="regime-card-duration" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
-                  </div>
-                  <div class="bc-bar-track"><div id="regime-card-bar" class="bc-bar-fill" style="width:0%;background:var(--clr-ranging)"></div></div>
-                </div>
-              </button>
-              <div id="regime-expand" class="agent-expand">
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">Stability</span>
-                  <span id="regime-card-stability" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">ADX</span>
-                  <span id="regime-card-adx" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
-                </div>
-                <div class="bc-metric" style="margin-bottom:3px">
-                  <span class="bc-metric-label">ATR ratio</span>
-                  <span id="regime-card-atr" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
-                </div>
-                <div id="regime-card-transition" style="font-size:9px;color:var(--text-muted);margin-top:4px">—</div>
+            <div class="bc-row3">
+              <div class="bc-metric">
+                <span class="bc-metric-label">Duration</span>
+                <span id="regime-card-duration" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
               </div>
+              <div class="bc-bar-track"><div id="regime-card-bar" class="bc-bar-fill" style="width:0%;background:var(--clr-ranging)"></div></div>
             </div>
-
-          <div id="agreement-banner" class="agreement-banner" style="display:none">—</div>
-
+          </button>
+          <div id="regime-expand" class="agent-expand">
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Stability</span>
+              <span id="regime-card-stability" class="bc-metric-val" style="color:var(--clr-ranging)">—</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">ADX</span>
+              <span id="regime-card-adx" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">ATR ratio</span>
+              <span id="regime-card-atr" class="bc-metric-val" style="color:var(--text-secondary)">—</span>
+            </div>
+            <div id="regime-card-transition" style="font-size:9px;color:var(--text-muted);margin-top:4px">—</div>
           </div>
         </div>
 
-      </div>
+      </div><!-- /sidebar-intel -->
 
-      <div class="trade-room-bottom">
-      <div class="col-center stagger-in stagger-5">
-          <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap" style="align-items:center">
-            <button class="filter-tab active" data-filter="all">ALL</button>
-            <button class="filter-tab" data-filter="decision">DECISIONS</button>
-            <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
-            <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
-            <button class="filter-tab" data-filter="news">NEWS</button>
-            <button class="filter-tab" data-filter="macro">MACRO</button>
-            <button class="filter-tab" data-filter="alert">ALERTS</button>
-            <button class="filter-tab" data-filter="journal" id="journal-tab" style="color:#c084fc;border:1px solid rgba(192,132,252,0.15)">JOURNAL</button>
-            <button id="compact-toggle" class="filter-tab" style="margin-left:auto;border:1px solid var(--border-subtle)" onclick="document.getElementById('feed').classList.toggle('feed-compact');this.classList.toggle('active')">⊟ COMPACT</button>
+      <!-- ═══ CENTER: Main decision area ═══ -->
+      <div class="main-center">
+        <div class="main-cards-row">
+          <!-- FLOKI -->
+          <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
+            <button type="button" class="bc-btn" data-expand-target="floki-expand" aria-expanded="false">
+              <div class="bc-row1">
+                <div class="bc-avatar" id="avatar-floki" style="border-color:#AAFF00">
+                  <img class="avatar-img" id="avatar-floki-img" alt="FLOKI" src="/image/floki-video-trade-room.gif" data-variant="1" />
+                </div>
+                <div class="bc-identity">
+                  <span class="bc-name" style="color:#AAFF00">FLOKI</span>
+                  <span class="bc-role">Portfolio manager</span>
+                </div>
+              </div>
+              <div class="bc-row2">
+                <span class="bc-pill" style="background:rgba(170,255,0,0.15);color:#AAFF00">ACTIVE</span>
+                <span id="floki-decision-pill" class="bc-pill" style="background:rgba(170,255,0,0.08);color:#8a8a9a">WAIT</span>
+              </div>
+              <div class="bc-row3">
+                <div class="bc-metric">
+                  <span class="bc-metric-label">Confidence</span>
+                  <span id="floki-conf-text" class="bc-metric-val" style="color:#AAFF00">—%</span>
+                </div>
+                <div class="bc-bar-track"><div id="floki-conf-bar" class="bc-bar-fill" style="width:0%;background:#AAFF00"></div></div>
+              </div>
+            </button>
+            <div id="floki-expand" class="agent-expand">
+              <div id="floki-summary" style="max-height:80px;overflow-y:auto">—</div>
+              <span id="floki-thesis-tag" style="display:none"></span>
+              <div id="floki-session-notes" style="display:none"></div>
+            </div>
           </div>
-          <div class="feed-scroll" id="feed"></div>
+
+          <!-- REX -->
+          <div class="bc-card" id="rex-card" style="border-color:#9C27B0">
+            <button type="button" class="bc-btn" data-expand-target="rex-expand" aria-expanded="false">
+              <div class="bc-row1">
+                <div class="bc-avatar" id="avatar-rex" style="border-color:#9C27B0">
+                  <img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif" data-variant="1" />
+                </div>
+                <div class="bc-identity">
+                  <span class="bc-name" style="color:#9C27B0">REX</span>
+                  <span class="bc-role">Debate partner</span>
+                </div>
+              </div>
+              <div class="bc-row2">
+                <span class="bc-pill" style="background:rgba(156,39,176,0.15);color:#9C27B0">ACTIVE</span>
+                <span id="rex-opinion-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">STANDBY</span>
+                <span id="rex-insights-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
+                <span id="rex-monitor-pill" class="bc-pill" style="background:rgba(156,39,176,0.08);color:#8a8a9a">—</span>
+              </div>
+              <div class="bc-row3">
+                <div class="bc-metric">
+                  <span class="bc-metric-label">Insights</span>
+                  <span id="rex-agree-text" class="bc-metric-val" style="color:#9C27B0">—</span>
+                </div>
+                <div class="bc-bar-track"><div id="rex-agree-bar" class="bc-bar-fill" style="width:0%;background:#9C27B0"></div></div>
+              </div>
+            </button>
+            <div id="rex-expand" class="agent-expand">
+              <div id="rex-debate-summary" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:4px"></div>
+              <div id="rex-last-debate" style="max-height:80px;overflow-y:auto;font-size:10px;color:#9ca3af">No debate yet.</div>
+            </div>
+          </div>
+
+          <!-- REX BULL -->
+          <div class="bc-card" id="rex-bull-card" style="border-color:#4CAF50">
+            <button type="button" class="bc-btn" data-expand-target="rex-bull-expand" aria-expanded="false">
+              <div class="bc-row1">
+                <div class="bc-avatar" style="border-color:#4CAF50;background:rgba(76,175,80,0.1)">
+                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C8;</span>
+                </div>
+                <div class="bc-identity">
+                  <span class="bc-name" style="color:#4CAF50">REX BULL</span>
+                  <span class="bc-role">ARGUES BUY</span>
+                </div>
+              </div>
+              <div class="bc-row2">
+                <span id="rex-bull-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                <span id="rex-bull-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+              </div>
+              <div class="bc-row3">
+                <div class="bc-metric">
+                  <span class="bc-metric-label">Conviction</span>
+                  <span id="rex-bull-conv-text" class="bc-metric-val" style="color:#4CAF50">—</span>
+                </div>
+                <div class="bc-bar-track"><div id="rex-bull-conv-bar" class="bc-bar-fill" style="width:0%;background:#4CAF50"></div></div>
+              </div>
+            </button>
+            <div id="rex-bull-expand" class="agent-expand">
+              <div id="rex-bull-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
+              <div id="rex-bull-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
+            </div>
+          </div>
+
+          <!-- REX BEAR -->
+          <div class="bc-card" id="rex-bear-card" style="border-color:#F44336">
+            <button type="button" class="bc-btn" data-expand-target="rex-bear-expand" aria-expanded="false">
+              <div class="bc-row1">
+                <div class="bc-avatar" style="border-color:#F44336;background:rgba(244,67,54,0.1)">
+                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C9;</span>
+                </div>
+                <div class="bc-identity">
+                  <span class="bc-name" style="color:#F44336">REX BEAR</span>
+                  <span class="bc-role">ARGUES SELL</span>
+                </div>
+              </div>
+              <div class="bc-row2">
+                <span id="rex-bear-dir-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+                <span id="rex-bear-conv-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">—</span>
+              </div>
+              <div class="bc-row3">
+                <div class="bc-metric">
+                  <span class="bc-metric-label">Conviction</span>
+                  <span id="rex-bear-conv-text" class="bc-metric-val" style="color:#F44336">—</span>
+                </div>
+                <div class="bc-bar-track"><div id="rex-bear-conv-bar" class="bc-bar-fill" style="width:0%;background:#F44336"></div></div>
+              </div>
+            </button>
+            <div id="rex-bear-expand" class="agent-expand">
+              <div id="rex-bear-case" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:80px;overflow-y:auto">No debate yet.</div>
+              <div id="rex-bear-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
+            </div>
+          </div>
+
+          <!-- VERDICT -->
+          <div class="bc-card" id="verdict-card" style="border-color:#FFD700">
+            <button type="button" class="bc-btn" data-expand-target="verdict-expand" aria-expanded="false">
+              <div class="bc-row1">
+                <div class="bc-avatar" style="border-color:#FFD700;background:rgba(255,215,0,0.1)">
+                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x2696;</span>
+                </div>
+                <div class="bc-identity">
+                  <span class="bc-name" style="color:#FFD700">VERDICT</span>
+                  <span class="bc-role">RESEARCH MGR</span>
+                </div>
+              </div>
+              <div class="bc-row2">
+                <span id="verdict-winner-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
+                <span id="verdict-rec-pill" class="bc-pill" style="background:rgba(100,100,100,0.15);color:#8a8a9a">&#x2014;</span>
+              </div>
+              <div class="bc-row3">
+                <div class="bc-metric">
+                  <span class="bc-metric-label">Conviction</span>
+                  <span id="verdict-conv-text" class="bc-metric-val" style="color:#FFD700">&#x2014;</span>
+                </div>
+                <div class="bc-bar-track"><div id="verdict-conv-bar" class="bc-bar-fill" style="width:0%;background:#FFD700"></div></div>
+              </div>
+            </button>
+            <div id="verdict-expand" class="agent-expand">
+              <div id="verdict-reasoning" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#d1d5db;max-height:60px;overflow-y:auto">No verdict yet.</div>
+              <div id="verdict-levels" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280;margin-top:4px"></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /main-center -->
+
+      <!-- ═══ RIGHT SIDEBAR: Operations ═══ -->
+      <div class="sidebar-ops">
+        <div class="sidebar-label">Operations</div>
+
+        <!-- SIMBA -->
+        <div class="bc-card" id="simba-card" style="border-color:#00E5FF">
+          <button type="button" class="bc-btn" data-expand-target="simba-expand" aria-expanded="false">
+            <div class="bc-row1">
+              <div class="bc-avatar" id="avatar-simba" style="border-color:#00E5FF">
+                <img class="avatar-img" id="avatar-simba-img" alt="SIMBA" src="/image/simba-video-trade-room.gif" data-variant="1" />
+              </div>
+              <div class="bc-identity">
+                <span class="bc-name" style="color:#00E5FF">SIMBA</span>
+                <span class="bc-role">Watchdog</span>
+              </div>
+            </div>
+            <div class="bc-row2">
+              <span id="simba-mode-tag" class="bc-pill" style="background:rgba(0,229,255,0.15);color:#00E5FF">OFF</span>
+              <span id="simba-status-pill" class="bc-pill" style="background:rgba(0,229,255,0.08);color:#8a8a9a">OFF</span>
+              <span id="simba-summary-tag" style="display:none"></span>
+            </div>
+            <div class="bc-row3">
+              <div class="bc-metric">
+                <span class="bc-metric-label">Conditions</span>
+                <span id="simba-conditions-text" class="bc-metric-val" style="color:#00E5FF">—</span>
+              </div>
+              <div class="bc-bar-track"><div id="simba-conditions-bar" class="bc-bar-fill" style="width:0%;background:#00E5FF"></div></div>
+            </div>
+          </button>
+          <div id="simba-expand" class="agent-expand">
+            <div id="simba-watch-conditions" style="max-height:80px;overflow-y:auto">No active conditions.</div>
+            <div id="simba-patrol-report" style="display:none"></div>
+          </div>
         </div>
 
-      <div class="col-right stagger-in stagger-6">
+        <!-- SAGE -->
+        <div class="bc-card" id="sage-card" style="border-color:#FFB300">
+          <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
+            <div class="bc-row1">
+              <div class="bc-avatar" id="avatar-sage" style="border-color:#FFB300">
+                <img class="avatar-img" id="avatar-sage-img" alt="SAGE" src="/image/sage-video-trade-room.gif" data-variant="1" />
+              </div>
+              <div class="bc-identity">
+                <span class="bc-name" style="color:#FFB300">SAGE</span>
+                <span class="bc-role">Auditor</span>
+              </div>
+            </div>
+            <div class="bc-row2">
+              <span id="sage-status" class="bc-pill" style="background:rgba(255,179,0,0.15);color:#FFB300">STANDBY</span>
+              <span id="sage-summary" class="bc-pill" style="background:rgba(255,179,0,0.08);color:#8a8a9a">STANDBY</span>
+            </div>
+            <div class="bc-row3">
+              <div class="bc-metric">
+                <span class="bc-metric-label">Last run</span>
+                <span id="sage-last-run" class="bc-metric-val" style="color:#FFB300">—</span>
+              </div>
+              <div class="bc-bar-track" style="opacity:0.2"><div class="bc-bar-fill" style="width:0%;background:#FFB300"></div></div>
+            </div>
+          </button>
+          <div id="sage-expand" class="agent-expand">
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Win rate</span>
+              <span id="sage-report-win-rate" class="bc-metric-val" style="color:#FFB300">—</span>
+            </div>
+            <div class="bc-metric" style="margin-bottom:3px">
+              <span class="bc-metric-label">Profit factor</span>
+              <span id="sage-report-profit-factor" class="bc-metric-val" style="color:#FFB300">—</span>
+            </div>
+            <div id="sage-today-pnl" style="font-size:10px;font-family:'JetBrains Mono',monospace;margin-bottom:3px"></div>
+            <div id="sage-weekly-summary" style="font-size:9px;font-family:'JetBrains Mono',monospace;margin-bottom:3px;color:#9ca3af"></div>
+            <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
+            <span id="sage-report-period" style="display:none"></span>
+            <span id="sage-report-trades" style="display:none"></span>
+          </div>
+        </div>
 
-        <!-- Session stats -->
+        <!-- Context panels from old right sidebar -->
         <div class="glass-panel-deep rounded-xl p-3">
           <div class="text-[9px] font-bold tracking-[0.14em] uppercase text-gray-500 mb-2">SESSION STATS</div>
           <div class="stat-row"><span class="stat-label">REX INSIGHTS</span><span id="stats-agreements" class="stat-val">—</span></div>
@@ -1710,39 +1723,13 @@
           <div class="stat-row"><span class="stat-label">CALLS / AGENT</span><span id="stats-calls" class="stat-val">—</span></div>
         </div>
 
-        <!-- Price block -->
-        <div class="ctx-block border-l-4 border-l-white/20">
-          <div class="ctx-label">XAU/USD</div>
-          <div id="ctx-price" class="font-mono text-2xl font-bold text-gray-100 tracking-tighter">—</div>
-          <div id="ctx-change" class="text-[10px] font-mono mt-1 opacity-60">—</div>
-        </div>
-
-        <!-- ═══ TIER 1: Always visible ═══ -->
-
-        <!-- Session + Regime + Countdown (always visible — at-a-glance) -->
-        <div class="ctx-block">
-          <div class="ctx-label">SESSION</div>
-          <div class="ctx-row"><span class="ctx-key">STATE</span><span id="ctx-session" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">P&amp;L</span><span id="ctx-pnl" class="ctx-val">—</span></div>
-          <div class="ctx-row"><span class="ctx-key">W / L / BE</span><span id="ctx-wlbe" class="ctx-val">—</span></div>
-        </div>
-
-        <div class="ctx-block">
-          <div class="ctx-label">MARKET REGIME</div>
-          <div class="ctx-row" style="flex-direction:column;align-items:flex-start;gap:4px">
-            <span id="ctx-regime-pill" class="bc-pill" style="font-size:11px;letter-spacing:0.5px;padding:2px 10px">—</span>
-            <span id="ctx-regime-detail" class="ctx-val" style="font-size:9px;color:var(--text-muted)">—</span>
-          </div>
-        </div>
-
         <div class="ctx-block">
           <div class="ctx-label">NEXT FLOKI CHECK</div>
           <div id="proactive-countdown" class="font-mono text-2xl font-bold text-emerald-400 tracking-tighter">—</div>
           <div id="proactive-countdown-label" class="text-[9px] text-gray-600 mt-1 uppercase tracking-widest font-bold">SCHEDULED</div>
         </div>
 
-        <!-- ═══ TIER 2: Collapsible, open by default ═══ -->
-
+        <!-- Active Monitoring -->
         <div class="ctx-tier" data-tier="t2-active">
           <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
             <span class="ctx-tier-label">ACTIVE MONITORING</span>
@@ -1768,39 +1755,61 @@
             </div>
           </div>
         </div>
+      </div><!-- /sidebar-ops -->
 
-        <!-- ═══ TIER 3: Collapsible, closed by default ═══ -->
+      <!-- ═══ FEED (center, row 2) ═══ -->
+      <div class="main-feed">
+        <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap" style="align-items:center">
+          <button class="filter-tab active" data-filter="all">ALL</button>
+          <button class="filter-tab" data-filter="decision">DECISIONS</button>
+          <button class="filter-tab" data-filter="conflict">CONFLICTS</button>
+          <button class="filter-tab" data-filter="analysis">ANALYSIS</button>
+          <button class="filter-tab" data-filter="news">NEWS</button>
+          <button class="filter-tab" data-filter="macro">MACRO</button>
+          <button class="filter-tab" data-filter="alert">ALERTS</button>
+          <button class="filter-tab" data-filter="journal" id="journal-tab" style="color:#c084fc;border:1px solid rgba(192,132,252,0.15)">JOURNAL</button>
+          <button id="compact-toggle" class="filter-tab" style="margin-left:auto;border:1px solid var(--border-subtle)" onclick="document.getElementById('feed').classList.toggle('feed-compact');this.classList.toggle('active')">⊟ COMPACT</button>
+        </div>
+        <div class="feed-scroll" id="feed"></div>
+      </div>
 
-        <div class="ctx-tier collapsed" data-tier="t3-deep">
-          <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
-            <span class="ctx-tier-label">DEEP DIVE</span>
-            <span class="ctx-tier-arrow">▾</span>
+      <!-- ═══ DEEP DIVE: Collapsible bottom ═══ -->
+      <div style="grid-column:1/4" class="ctx-tier collapsed" data-tier="t3-deep">
+        <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span class="ctx-tier-label">DEEP DIVE — MACRO &amp; PATTERNS</span>
+          <span class="ctx-tier-arrow">▾</span>
+        </div>
+        <div class="ctx-tier-body">
+          <div id="tr-macro-container"></div>
+          <div class="ctx-block" style="border:none">
+            <div class="ctx-label">CORRELATIONS</div>
+            <div class="ctx-row"><span class="ctx-key">Gold-DXY</span><span id="ctx-corr-dxy" class="ctx-val">—</span></div>
+            <div class="ctx-row"><span class="ctx-key">Gold-Yields</span><span id="ctx-corr-yields" class="ctx-val">—</span></div>
+            <div class="ctx-row"><span class="ctx-key">Gold-S&P</span><span id="ctx-corr-sp500" class="ctx-val">—</span></div>
           </div>
-          <div class="ctx-tier-body">
-            <div id="tr-macro-container"></div>
-            <div class="ctx-block" style="border:none">
-              <div class="ctx-label">CORRELATIONS</div>
-              <div class="ctx-row"><span class="ctx-key">Gold-DXY</span><span id="ctx-corr-dxy" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">Gold-Yields</span><span id="ctx-corr-yields" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">Gold-S&P</span><span id="ctx-corr-sp500" class="ctx-val">—</span></div>
-            </div>
-            <div class="ctx-block" style="border:none">
-              <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
-              <div id="ctx-investigation">—</div>
-            </div>
-            <div class="ctx-block" style="border:none">
-              <div class="ctx-label">TOP PATTERNS</div>
-              <div id="ctx-top-patterns">—</div>
-            </div>
-            <div class="ctx-block" style="border:none">
-              <div class="ctx-label">SESSION WR</div>
-              <div class="ctx-row"><span id="ctx-session-wr" class="ctx-val" style="font-size:10px">—</span></div>
-            </div>
+          <div class="ctx-block" style="border:none">
+            <div class="ctx-label">FLOKI'S LAST INVESTIGATION</div>
+            <div id="ctx-investigation">—</div>
+          </div>
+          <div class="ctx-block" style="border:none">
+            <div class="ctx-label">TOP PATTERNS</div>
+            <div id="ctx-top-patterns">—</div>
+          </div>
+          <div class="ctx-block" style="border:none">
+            <div class="ctx-label">SESSION WR</div>
+            <div class="ctx-row"><span id="ctx-session-wr" class="ctx-val" style="font-size:10px">—</span></div>
           </div>
         </div>
+      </div>
 
-      </div><!-- /col-right -->
-      </div><!-- /trade-room-bottom -->
+      <!-- Hidden: Room summary containers for JS that updates room-*-summary -->
+      <div class="agent-top-strip">
+        <span id="room-decision-summary" style="display:none"></span>
+        <span id="room-debate-summary" style="display:none"></span>
+        <span id="room-oversight-summary" style="display:none"></span>
+        <span id="room-data-summary" style="display:none"></span>
+        <span id="agreement-banner" class="agreement-banner" style="display:none">—</span>
+      </div><!-- /agent-top-strip (hidden, summary IDs only) -->
 
     </div><!-- /trade-room-grid -->
 
