@@ -228,7 +228,10 @@ def _load_daily_cost() -> Dict:
 
 def _save_daily_cost(cost_data: Dict) -> None:
     try:
-        COST_FILE.write_text(json.dumps(cost_data, indent=2), encoding="utf-8")
+        tmp_path = str(COST_FILE) + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(cost_data, f, indent=2)
+        os.replace(tmp_path, str(COST_FILE))
     except Exception:
         pass
 
