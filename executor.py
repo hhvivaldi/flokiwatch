@@ -293,6 +293,27 @@ class MT5Executor:
                                             break
                                 if real_ticket > 0:
                                     break
+                            # FLO-197: Last-resort phantom check via MT5 direct API
+                            if real_ticket == 0:
+                                try:
+                                    _final_pos = mt5.positions_get(symbol=self.symbol)
+                                    if _final_pos:
+                                        for p in _final_pos:
+                                            if p.magic == self.magic and p.ticket not in pre_tickets:
+                                                _dir_match = (
+                                                    (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                                    or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
+                                                )
+                                                if _dir_match:
+                                                    real_ticket = p.ticket
+                                                    log.warning(
+                                                        f"PHANTOM_POSITION | EA poll failed but MT5 has "
+                                                        f"ticket #{p.ticket} — recovering"
+                                                    )
+                                                    break
+                                except Exception as e_phantom:
+                                    log.warning(f"PHANTOM_POSITION | EA path detection failed: {e_phantom}")
+
                             if real_ticket == 0:
                                 log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — trade not confirmed")
                                 return OrderResult(
@@ -317,6 +338,15 @@ class MT5Executor:
             except Exception as e_ea:
                 log.error(f"EA_BRIDGE | Failed, falling through to MT5 direct: {e_ea}")
         
+        # FLO-197: Pre-snapshot for phantom position detection (MT5 direct path)
+        pre_tickets_direct = set()
+        try:
+            _pre_pos = mt5.positions_get(symbol=self.symbol)
+            if _pre_pos:
+                pre_tickets_direct = {p.ticket for p in _pre_pos if p.magic == self.magic}
+        except Exception:
+            pass
+
         # Configure order
         if direction.upper() == "BUY":
             order_type = mt5.ORDER_TYPE_BUY
@@ -363,7 +393,36 @@ class MT5Executor:
             error_msg = self._get_error_message(result.retcode)
             log.error(f"Order rejected: {result.retcode} - {error_msg}")
             alert_error("Order Rejected", f"Code: {result.retcode} - {error_msg}")
-            
+
+            # FLO-197: Phantom position detection — MT5 may have opened despite error
+            if result.retcode in (mt5.TRADE_RETCODE_TIMEOUT, 10004):  # TIMEOUT or REQUOTE
+                try:
+                    import time as _time
+                    _time.sleep(2)  # Brief wait for MT5 to settle
+                    _post_pos = mt5.positions_get(symbol=self.symbol)
+                    if _post_pos:
+                        for p in _post_pos:
+                            if p.magic == self.magic and p.ticket not in pre_tickets_direct:
+                                _dir_match = (
+                                    (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                    or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
+                                )
+                                if _dir_match:
+                                    log.warning(
+                                        f"PHANTOM_POSITION | execute_trade returned {result.retcode} "
+                                        f"but MT5 opened ticket #{p.ticket} — recovering"
+                                    )
+                                    return OrderResult(
+                                        success=True,
+                                        ticket=p.ticket,
+                                        error_code=None,
+                                        error_message=None,
+                                        price=p.price_open,
+                                        volume=p.volume,
+                                    )
+                except Exception as e_phantom:
+                    log.warning(f"PHANTOM_POSITION | Detection check failed: {e_phantom}")
+
             return OrderResult(
                 success=False,
                 ticket=None,
