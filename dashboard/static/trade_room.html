@@ -312,6 +312,69 @@
         pointer-events: none;
       }
 
+      /* FLO-215 Phase 4: Timeline rows */
+      .tl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        transition: background 0.15s ease;
+      }
+      .tl-row:hover {
+        background: rgba(255,255,255,0.02);
+      }
+      .tl-time {
+        font-size: 9px;
+        color: #4b5563;
+        min-width: 36px;
+        flex-shrink: 0;
+      }
+      .tl-badge {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        padding: 1px 6px;
+        border-radius: 3px;
+        border: 1px solid;
+        min-width: 50px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .tl-author {
+        font-size: 9px;
+        font-weight: 700;
+        min-width: 36px;
+        flex-shrink: 0;
+      }
+      .tl-summary {
+        color: #d1d5db;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tl-expand-btn {
+        color: #60a5fa;
+        cursor: pointer;
+        font-size: 10px;
+        padding: 0 4px;
+        flex-shrink: 0;
+        user-select: none;
+      }
+      .tl-expand-btn:hover { color: #93c5fd; }
+      .tl-expand {
+        font-size: 10px;
+        color: #9ca3af;
+        line-height: 1.5;
+        padding: 6px 8px 6px 104px; /* aligned under summary column */
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
       /* ── FLO-145 Proposal 4: Compact feed mode ── */
       .feed-compact .msg-row {
         gap: 6px;
@@ -2735,7 +2798,7 @@
           return out;
         }
 
-        function renderFeed() {
+        function renderFeedLegacy() {
           if (!feed) return;
           var list = buildConflictStrips(latestMessages || []);
           var html = '';
@@ -3392,6 +3455,159 @@
           } catch (e) {
             // silent
           }
+        }
+
+        /* FLO-215 Phase 4: Compact timeline renderer */
+        function renderTimeline() {
+          if (!feed) return;
+          var list = buildConflictStrips(latestMessages || []);
+          if (!list.length) {
+            feed.innerHTML = '<div style="font-size:10px;font-family:\'JetBrains Mono\',monospace;color:#4b5563;padding:12px">NO EVENTS</div>';
+            return;
+          }
+
+          var html = '';
+          for (var i = 0; i < list.length; i++) {
+            var m = list[i];
+            if (!shouldShowMessage(m)) continue;
+            if (m.__kind === 'conflict') continue; /* skip conflict strips in timeline */
+
+            var author = (m.author || '').toUpperCase();
+            var type = (m.type || m.event_type || '').toUpperCase();
+            var content = (m.content || '').toString();
+            var ts = fmtTime(m.timestamp);
+            var meta = m.metadata || {};
+
+            /* Skip hidden types */
+            if (author === 'FLOKI' && type === 'REX_CONSULT') continue;
+            if (author === 'FLOKI' && type === 'ANALYSIS') continue;
+            if (!author) continue;
+
+            /* Classify event → badge color + label + 1-line summary */
+            var badge = '', badgeBg = '', badgeColor = '', summary = '', expandContent = '';
+
+            if (author === 'FLOKI' && (type === 'FLOKI_DECISION' || type === 'DECISION')) {
+              var decMatch = content.match(/^(WAIT|OPEN_BUY|OPEN_SELL|CLOSE_TRADE|HOLD_TRADE|HOLD|ADJUST_TRADE)\s*\((\d+)%?\)/i);
+              var dec = decMatch ? decMatch[1].toUpperCase() : 'DECISION';
+              var conf = decMatch ? decMatch[2] + '%' : '';
+              var reason = decMatch ? content.slice(decMatch[0].length).replace(/^\.\s*/, '').trim() : content;
+              var kdCut = reason.indexOf('KEY DATA:'); if (kdCut >= 0) reason = reason.slice(0, kdCut).trim();
+              var kfCut = reason.indexOf('KEY FACTORS:'); if (kfCut >= 0) reason = reason.slice(0, kfCut).trim();
+
+              if (dec === 'OPEN_BUY') { badgeColor = '#4ade80'; badgeBg = 'rgba(74,222,128,0.15)'; }
+              else if (dec === 'OPEN_SELL') { badgeColor = '#f87171'; badgeBg = 'rgba(248,113,113,0.15)'; }
+              else if (dec.indexOf('HOLD') >= 0) { badgeColor = '#60a5fa'; badgeBg = 'rgba(96,165,250,0.12)'; }
+              else if (dec === 'CLOSE_TRADE') { badgeColor = '#c084fc'; badgeBg = 'rgba(192,132,252,0.15)'; }
+              else { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.12)'; }
+
+              badge = dec.replace('_', ' ');
+              var firstSentence = reason.split(/\.(?=\s)/)[0] || reason;
+              summary = '<span style="color:#AAFF00;font-weight:700;margin-right:4px">' + conf + '</span>' + esc(firstSentence.substring(0, 120));
+              expandContent = esc(reason).replace(/\n/g, '<br>');
+            }
+            else if (author === 'FLOKI' && type === 'DEBATE') {
+              badgeColor = '#AAFF00'; badgeBg = 'rgba(170,255,0,0.08)';
+              badge = 'DEBATE';
+              summary = esc(content.substring(0, 120));
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else if (author === 'REX') {
+              badgeColor = '#9C27B0'; badgeBg = 'rgba(156,39,176,0.12)';
+              badge = 'REX';
+              summary = esc(content.substring(0, 120));
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else if (author === 'ECHO') {
+              var cls = (meta.classification || '').toUpperCase();
+              var headline = meta.title || content;
+              var impact = (meta.gold_impact || '').toUpperCase();
+              if (cls === 'CRITICAL') { badgeColor = '#ef4444'; badgeBg = 'rgba(239,68,68,0.15)'; badge = 'CRITICAL'; }
+              else { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.12)'; badge = cls || 'NEWS'; }
+              var impTag = impact === 'BULLISH' ? ' <span style="color:#4ade80">BULL</span>' : (impact === 'BEARISH' ? ' <span style="color:#f87171">BEAR</span>' : '');
+              summary = esc(headline.substring(0, 100)) + impTag;
+              expandContent = esc(meta.summary || content).replace(/\n/g, '<br>');
+            }
+            else if (author === 'LUNA') {
+              var env = (meta.environment || '').toUpperCase();
+              if (env === 'DANGER') { badgeColor = '#ef4444'; badgeBg = 'rgba(239,68,68,0.15)'; }
+              else if (env === 'CAUTION') { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.12)'; }
+              else { badgeColor = '#E040FB'; badgeBg = 'rgba(224,64,251,0.1)'; }
+              badge = env || 'LUNA';
+              var bias = (meta.directional_bias || '').toUpperCase();
+              summary = esc((meta.summary || content).substring(0, 120));
+              if (bias && bias !== 'NEUTRAL') summary = '<span style="color:' + (bias === 'BULLISH' ? '#4ade80' : '#f87171') + '">' + bias + '</span> ' + summary;
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else if (author === 'SIMBA') {
+              badgeColor = '#00E5FF'; badgeBg = 'rgba(0,229,255,0.1)';
+              var isWake = content.indexOf('heads up') >= 0 || content.indexOf('punched') >= 0 || (meta.triggered && meta.triggered.length > 0);
+              badge = isWake ? 'WAKE' : 'PATROL';
+              if (isWake) { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.15)'; }
+              summary = esc(content.substring(0, 120));
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else if (author === 'SAGE') {
+              badgeColor = '#FFB300'; badgeBg = 'rgba(255,179,0,0.12)';
+              if (type === 'SAGE_ALERT') { badge = 'ALERT'; badgeColor = '#ef4444'; badgeBg = 'rgba(239,68,68,0.15)'; }
+              else if (type === 'SAGE_WEEKLY') { badge = 'WEEKLY'; }
+              else { badge = 'SAGE'; }
+              summary = esc(content.substring(0, 120));
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else if (m.__kind === 'journal') {
+              badgeColor = '#c084fc'; badgeBg = 'rgba(192,132,252,0.12)';
+              badge = 'JOURNAL';
+              summary = esc(content.substring(0, 120));
+              expandContent = esc(content).replace(/\n/g, '<br>');
+            }
+            else {
+              badgeColor = '#6b7280'; badgeBg = 'rgba(107,114,128,0.1)';
+              badge = author;
+              summary = esc(content.substring(0, 120));
+              expandContent = '';
+            }
+
+            /* Build the compact 1-line row */
+            var eid = 'tl-' + i;
+            var hasExpand = expandContent && expandContent.length > summary.length;
+
+            html += '<div class="tl-row" data-filter-type="' + _tlFilterType(author, type, m) + '">';
+            html += '<span class="tl-time">' + esc(ts) + '</span>';
+            html += '<span class="tl-badge" style="background:' + badgeBg + ';color:' + badgeColor + ';border-color:' + badgeColor + '">' + badge + '</span>';
+            html += '<span class="tl-author" style="color:' + badgeColor + '">' + author.substring(0, 5) + '</span>';
+            html += '<span class="tl-summary">' + summary + '</span>';
+            if (hasExpand) {
+              html += '<span class="tl-expand-btn" onclick="var e=document.getElementById(\'' + eid + '\');if(e.style.display===\'none\'){e.style.display=\'block\';this.textContent=\'\\u25BE\';}else{e.style.display=\'none\';this.textContent=\'\\u25B8\';}">&#x25B8;</span>';
+            }
+            html += '</div>';
+            if (hasExpand) {
+              html += '<div id="' + eid + '" class="tl-expand" style="display:none">' + expandContent + '</div>';
+            }
+          }
+
+          if (!html) {
+            feed.innerHTML = '<div style="font-size:10px;font-family:\'JetBrains Mono\',monospace;color:#4b5563;padding:12px">NO EVENTS MATCHING FILTER</div>';
+            return;
+          }
+          feed.innerHTML = html;
+        }
+
+        /* Map message to filter type for existing filter tabs */
+        function _tlFilterType(author, type, m) {
+          if (m.__kind === 'journal') return 'journal';
+          if (author === 'FLOKI' && (type === 'FLOKI_DECISION' || type === 'DECISION')) return 'decision';
+          if (author === 'FLOKI' && type === 'DEBATE') return 'conflict';
+          if (author === 'REX') return 'conflict';
+          if (author === 'ECHO') return 'news';
+          if (author === 'LUNA') return 'macro';
+          if (author === 'SIMBA' && (type.indexOf('WAKE') >= 0 || (m.content || '').indexOf('punched') >= 0)) return 'alert';
+          if (author === 'SAGE' && type === 'SAGE_ALERT') return 'alert';
+          return 'analysis';
+        }
+
+        /* FLO-215: renderFeed calls renderTimeline. Switch to renderFeedLegacy() for rollback. */
+        function renderFeed() {
+          renderTimeline();
         }
 
         function setFilter(f) {
