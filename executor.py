@@ -310,12 +310,25 @@ class MT5Executor:
                                                         f"PHANTOM_POSITION | EA poll failed but MT5 has "
                                                         f"ticket #{p.ticket} — recovering"
                                                     )
+                                                    # FLO-98: Alert Hermano about phantom recovery
+                                                    alert_error(
+                                                        "Phantom Position Recovered",
+                                                        f"EA poll failed but MT5 opened ticket #{p.ticket} ({direction}). Position recovered and being managed.",
+                                                        severity="warning",
+                                                    )
                                                     break
                                 except Exception as e_phantom:
                                     log.warning(f"PHANTOM_POSITION | EA path detection failed: {e_phantom}")
 
                             if real_ticket == 0:
                                 log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — trade not confirmed")
+                                # FLO-98: Critical alert — trade may be open but untracked
+                                alert_error(
+                                    "Trade Ticket Unresolved",
+                                    f"EA executed {direction} signal but ticket not resolved after 10s. "
+                                    f"Position may exist in MT5 untracked. Check immediately.",
+                                    severity="error",
+                                )
                                 return OrderResult(
                                     success=False,
                                     ticket=0,
@@ -411,6 +424,12 @@ class MT5Executor:
                                     log.warning(
                                         f"PHANTOM_POSITION | execute_trade returned {result.retcode} "
                                         f"but MT5 opened ticket #{p.ticket} — recovering"
+                                    )
+                                    # FLO-98: Alert Hermano about phantom recovery
+                                    alert_error(
+                                        "Phantom Position Recovered",
+                                        f"MT5 returned error {result.retcode} but opened ticket #{p.ticket} ({direction}). Position recovered.",
+                                        severity="warning",
                                     )
                                     return OrderResult(
                                         success=True,
