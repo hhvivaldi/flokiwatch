@@ -466,4 +466,9 @@ LUNA_SCAN_INTERVAL_SECONDS = int(os.environ.get("LUNA_SCAN_INTERVAL_SECONDS", "9
 LUNA_SCAN_INTERVAL_CLOSED = int(os.environ.get("LUNA_SCAN_INTERVAL_CLOSED", "1800"))         # 30 min when market closed
 LUNA_DAILY_COST_CAP = float(os.environ.get("LUNA_DAILY_COST_CAP", "1.00"))                   # Daily cost cap in USD
 
+# Rex Monitor (FLO-211)
+REX_MONITOR_ENABLED = os.environ.get("REX_MONITOR_ENABLED", "true").lower() in ("true", "1", "yes")
+REX_MONITOR_INTERVAL = int(os.environ.get("REX_MONITOR_INTERVAL", "1800"))                  # 30 min during market hours
+REX_MONITOR_INTERVAL_CLOSED = int(os.environ.get("REX_MONITOR_INTERVAL_CLOSED", "3600"))    # 60 min when market closed
+
 # ============================================================================

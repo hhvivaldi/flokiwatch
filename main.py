@@ -1254,6 +1254,40 @@ class TradingBot:
                 except Exception as e:
                     log.debug(f"LUNA | schedule check error (ignored): {e}")
 
+                # --- Rex Monitor (FLO-211) ---
+                try:
+                    _rex_mon_enabled = getattr(config, "REX_MONITOR_ENABLED", False)
+                    if _rex_mon_enabled:
+                        _rex_interval = getattr(config, "REX_MONITOR_INTERVAL", 1800)
+                        _rex_interval_closed = getattr(config, "REX_MONITOR_INTERVAL_CLOSED", 3600)
+                        _rex_now = time.time()
+                        _rex_last = getattr(self, "_rex_monitor_last_ts", 0) or 0
+                        _rex_use_interval = _rex_interval  # default: market open
+
+                        # Use closed interval if market is not open
+                        try:
+                            _mo, _, _ = is_market_open()
+                            if not _mo:
+                                _rex_use_interval = _rex_interval_closed
+                        except Exception:
+                            pass
+
+                        if (_rex_now - _rex_last) >= _rex_use_interval:
+                            self._rex_monitor_last_ts = _rex_now
+
+                            def _run_rex_monitor_safe() -> None:
+                                try:
+                                    from rex_monitor import run_rex_monitor
+                                    from agent_tools import AgentTools
+                                    _tools = AgentTools(executor=getattr(self, "executor", None))
+                                    run_rex_monitor(_tools)
+                                except Exception as e_rex:
+                                    log.warning(f"REX_MONITOR | scheduler error (ignored): {e_rex}")
+
+                            threading.Thread(target=_run_rex_monitor_safe, daemon=True).start()
+                except Exception as e:
+                    log.debug(f"REX_MONITOR | schedule check error (ignored): {e}")
+
                 # Check if market is open
                 market_open, market_reason, next_open = is_market_open()
                 
@@ -3518,6 +3552,25 @@ class TradingBot:
                             str(a.get("headline", ""))[:80] + f" ({a.get('sentiment', '?')})"
                             for a in (_alerts if isinstance(_alerts, list) else [])
                         )[:300]
+                except Exception:
+                    pass
+
+                # FLO-211: Inject Rex monitor findings into debate context
+                try:
+                    from rex_monitor import load_rex_monitor
+                    _rex_mon = load_rex_monitor()
+                    if _rex_mon:
+                        _ts = _rex_mon.get("timestamp")
+                        _age = None
+                        if _ts:
+                            from datetime import datetime, timezone
+                            _st = datetime.fromisoformat(_ts.replace("Z", "+00:00"))
+                            _age = round((datetime.now(timezone.utc) - _st).total_seconds() / 60, 1)
+                        _debate_data["rex_monitor"] = {
+                            "findings": _rex_mon.get("findings", []),
+                            "alert_level": _rex_mon.get("alert_level", "QUIET"),
+                            "age_minutes": _age,
+                        }
                 except Exception:
                     pass
 

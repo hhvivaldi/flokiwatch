@@ -772,6 +772,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_rex_monitor",
+                "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns alert_level (QUIET/NORMAL/ELEVATED/CRITICAL) and findings.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "write_trading_journal",
                 "description": "Write a persistent journal entry (reflection, lesson, frustration, idea, missing_data, market_observation). Accumulates over days — your product owner reads this.",
                 "input_schema": {

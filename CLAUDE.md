@@ -21,7 +21,7 @@ python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 | Agent | Model | File | Role |
 |-------|-------|------|------|
 | Floki | GPT-5.4 | `ai_agent.py` | Sole trading decisor. 30 tools. Self-schedules 5-30 min. |
-| Rex | GPT-4o | `rex_validator.py` | Analyst. 11 tools (6 standard + 5 unique). Also runs Bull/Bear debate (FLO-190). |
+| Rex | GPT-4o | `rex_validator.py` + `rex_monitor.py` | Analyst. 11 tools (6 standard + 5 unique). Bull/Bear debate (FLO-190). Proactive monitor every 30 min (FLO-211). |
 | Research Mgr | Gemini 3 Flash | `research_manager.py` | Picks winner between Rex Bull and Rex Bear. Produces verdict with triggers (FLO-194). |
 | Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. |
 | Sage | Gemini | `sage_auditor.py` | Daily auditor at 21:00 UTC. |
@@ -47,7 +47,7 @@ main.py (orchestrator)
   │   ├─ news_score_hybrid.py (40%) | momentum_detector.py
   │   └─ economic_calendar.py | regime_detector.py (7 regimes, FLO-139)
   ├─ ai_agent.py (Floki) → WAIT / OPEN / CLOSE / ADJUST
-  │   ├─ rex_validator.py (debates) | agent_tools.py (28 tools)
+  │   ├─ rex_validator.py (debates) | rex_monitor.py (30-min scan) | agent_tools.py (28 tools)
   ├─ executor.py → ea_bridge.py → FlokiBridge EA → MT5
   ├─ monitor.py → position management (BE, trailing, drawdown)
   ├─ state_writer.py → bot_state.json | db_writer.py → history.db
@@ -60,6 +60,7 @@ main.py (orchestrator)
 - **Rex defaults to DISAGREE on failure.** Truncation/parse error = no agreement.
 - **EA is pure executor.** `FLOKI_MANAGES_POSITION = True`. 9999-pip triggers never fire.
 - **Echo is pull-based.** Floki pulls alerts via tool, Echo does not push.
+- **Rex monitor (FLO-211):** Runs 4 tools every 30 min (divergence, correlation, regime, session). No LLM — deterministic classifier. Writes `data/rex_monitor.json`. Floki pulls via `get_rex_monitor`. Simba wakes Floki on CRITICAL (2h debounce). Monitor findings injected into Bull/Bear debate context.
 - **Score system:** 0-100. 50=neutral. >65=BUY. <35=SELL. 45-55=HOLD.
 - **Active thesis persistence:** `data/active_thesis.json` — carries between cycles.
 

@@ -543,6 +543,17 @@ def _build_debate_context(data: Dict[str, Any]) -> str:
             parts.append(f"Recent candles:\n{candles}")
     except Exception:
         pass
+    # FLO-211: Rex monitor findings (if fresh)
+    try:
+        rex_mon = data.get("rex_monitor")
+        if isinstance(rex_mon, dict) and rex_mon.get("findings"):
+            age = rex_mon.get("age_minutes", "?")
+            lines = [f"Rex monitor (scanned {age}m ago):"]
+            for f in rex_mon.get("findings", [])[:5]:
+                lines.append(f"  - [{f.get('type', '?')}] {f.get('detail', '')}")
+            parts.append("\n".join(lines))
+    except Exception:
+        pass
     return "\n\n".join(parts) if parts else "No data available."
 
 

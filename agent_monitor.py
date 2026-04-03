@@ -615,7 +615,44 @@ class AgentMonitor:
             "velocity_data": velocity_data,
         }
 
-        raw_wake = bool(expired or triggered_ids)
+        # FLO-211: Rex monitor CRITICAL check (2h debounce)
+        rex_critical_wake = False
+        try:
+            import json as _rj
+            _rex_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "rex_monitor.json")
+            if os.path.exists(_rex_path):
+                with open(_rex_path, "r", encoding="utf-8") as _rf:
+                    _rex = _rj.load(_rf)
+                if isinstance(_rex, dict) and _rex.get("alert_level") == "CRITICAL":
+                    # 2-hour debounce: only wake if last critical wake was >2h ago
+                    _last_cw = _rex.get("last_critical_wake_at")
+                    _debounce_ok = True
+                    if _last_cw:
+                        try:
+                            _lcw_dt = datetime.fromisoformat(str(_last_cw).replace("Z", "+00:00"))
+                            if _lcw_dt.tzinfo is None:
+                                _lcw_dt = _lcw_dt.replace(tzinfo=timezone.utc)
+                            _elapsed_h = (datetime.now(timezone.utc) - _lcw_dt).total_seconds() / 3600
+                            if _elapsed_h < 2.0:
+                                _debounce_ok = False
+                        except Exception:
+                            pass
+                    if _debounce_ok:
+                        rex_critical_wake = True
+                        log.info(f"SIMBA | Rex monitor CRITICAL ({_rex.get('finding_count', 0)} findings) — requesting Floki wake")
+                        # Update debounce timestamp
+                        try:
+                            _rex["last_critical_wake_at"] = datetime.now(timezone.utc).isoformat()
+                            _tmp = _rex_path + ".tmp"
+                            with open(_tmp, "w", encoding="utf-8") as _wf:
+                                _rj.dump(_rex, _wf, indent=2, ensure_ascii=False, default=str)
+                            os.replace(_tmp, _rex_path)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        raw_wake = bool(expired or triggered_ids or rex_critical_wake)
         decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
 
         any_orders_active = bool(conditions) or bool(watch_active)

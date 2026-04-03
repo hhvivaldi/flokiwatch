@@ -2544,6 +2544,51 @@ class AgentTools:
             elapsed = round((time.time() - start) * 1000, 1)
             return {"success": False, "reason": f"luna_brief_error: {e}", "latency_ms": elapsed}
 
+    def get_rex_monitor(self) -> Dict[str, Any]:
+        """Read latest Rex proactive monitoring scan (FLO-211)."""
+        start = time.time()
+        try:
+            from rex_monitor import load_rex_monitor
+            monitor = load_rex_monitor()
+            elapsed = round((time.time() - start) * 1000, 1)
+
+            if monitor is None:
+                self._log_tool("get_rex_monitor", start, "empty/stale")
+                return {"success": True, "monitor": None, "stale": True, "latency_ms": elapsed}
+
+            stale = False
+            age_minutes = None
+            ts = monitor.get("timestamp")
+            if ts:
+                try:
+                    from datetime import datetime, timezone
+                    scan_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    age_minutes = round((datetime.now(timezone.utc) - scan_time).total_seconds() / 60, 1)
+                    stale = age_minutes > 30
+                except Exception:
+                    pass
+
+            # Return summary (not full raw_data — Floki doesn't need it)
+            summary = {
+                "alert_level": monitor.get("alert_level", "QUIET"),
+                "finding_count": monitor.get("finding_count", 0),
+                "findings": monitor.get("findings", []),
+                "timestamp": ts,
+            }
+
+            self._log_tool("get_rex_monitor", start, f"alert={summary['alert_level']} findings={summary['finding_count']}")
+            return {
+                "success": True,
+                "monitor": summary,
+                "stale": stale,
+                "age_minutes": age_minutes,
+                "latency_ms": elapsed,
+            }
+        except Exception as e:
+            elapsed = round((time.time() - start) * 1000, 1)
+            self._log_tool("get_rex_monitor", start, f"error={e}")
+            return {"success": False, "reason": f"rex_monitor_error: {e}", "latency_ms": elapsed}
+
     def write_trading_journal(self, entry: str, category: str = "reflection") -> Dict[str, Any]:
         """Append an entry to Floki's persistent trading journal."""
         start = time.time()
