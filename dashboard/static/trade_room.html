@@ -1254,6 +1254,11 @@
         <span class="cc-label">P&L</span>
         <span id="cc-pnl" class="cc-pnl-val">—</span>
       </div>
+      <!-- FLO-215: Status bar intelligence pills -->
+      <div class="cc-block cc-divider" style="flex-direction:row;gap:6px;align-items:center">
+        <span id="sb-luna-env" class="bc-pill" style="font-size:9px;padding:2px 6px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25)">SAFE</span>
+        <span id="sb-rex-alert" class="bc-pill" style="font-size:9px;padding:2px 6px;background:rgba(107,114,128,0.1);color:#6b7280;border:1px solid rgba(148,163,184,0.2)">QUIET</span>
+      </div>
       <!-- Live badge -->
       <span id="data-badge" class="cc-live-badge">LIVE</span>
     </div>
@@ -1981,6 +1986,16 @@
           pill.style.color = c.fg;
           pill.style.background = c.bg;
           pill.style.borderColor = c.border;
+
+          /* FLO-215: Update status bar Rex pill */
+          window._sbRexAlert = level;
+          var sbRex = document.getElementById('sb-rex-alert');
+          if (sbRex) {
+            sbRex.textContent = level;
+            sbRex.style.color = c.fg;
+            sbRex.style.background = c.bg;
+            sbRex.style.borderColor = c.border;
+          }
         }
 
         function refreshWatchConditions() {
@@ -2243,6 +2258,16 @@
           var env = (b.environment || 'SAFE').toUpperCase();
           var envColor = env === 'DANGER' ? '#ef4444' : (env === 'CAUTION' ? '#f59e0b' : '#4ade80');
           var envBg = env === 'DANGER' ? 'rgba(239,68,68,0.2)' : (env === 'CAUTION' ? 'rgba(245,158,11,0.15)' : 'rgba(74,222,128,0.15)');
+
+          /* FLO-215: Update status bar Luna pill */
+          window._sbLunaEnv = env;
+          var sbLuna = document.getElementById('sb-luna-env');
+          if (sbLuna) {
+            sbLuna.textContent = env;
+            sbLuna.style.color = envColor;
+            sbLuna.style.background = envBg;
+            sbLuna.style.borderColor = envColor.replace(')', ',0.3)').replace('rgb', 'rgba');
+          }
 
           if (envPill) {
             envPill.textContent = env;
@@ -4464,6 +4489,41 @@
                   window._flokiCountdownRaw = nca2;
                   window._flokiCountdownTarget = new Date(nca2.endsWith('Z') ? nca2 : nca2 + 'Z').getTime();
                 }
+
+                // FLO-215: Status bar dynamic background color
+                try {
+                  var ccBar = document.querySelector('.command-center');
+                  if (ccBar) {
+                    var _pos = state.positions || [];
+                    var _hasPos = _pos.length > 0;
+                    var _pnl = Number((state.daily_stats || {}).pnl || 0);
+                    var _mktOpen = state.status !== 'MARKET_CLOSED' && state.status !== 'WEEKEND';
+
+                    /* Priority: gray (closed) > red (danger/loss) > blue (position+profit) > green (calm) */
+                    var _barColor;
+                    if (!_mktOpen) {
+                      _barColor = 'rgba(107,114,128,0.12)';  /* Gray: market closed */
+                    } else if (_hasPos && _pnl < 0) {
+                      _barColor = 'rgba(239,68,68,0.10)';    /* Red: position losing */
+                    } else if (window._sbLunaEnv === 'DANGER' || window._sbRexAlert === 'CRITICAL') {
+                      _barColor = 'rgba(245,158,11,0.10)';   /* Orange: market stress */
+                    } else if (_hasPos && _pnl >= 0) {
+                      _barColor = 'rgba(96,165,250,0.10)';   /* Blue: position in profit */
+                    } else {
+                      _barColor = 'rgba(16,185,129,0.06)';   /* Green: calm, no position */
+                    }
+                    ccBar.style.background = 'linear-gradient(180deg, ' + _barColor + ' 0%, rgba(8,8,8,0.98) 100%)';
+
+                    /* Border color matches bar state */
+                    var _borderColor;
+                    if (!_mktOpen) _borderColor = 'rgba(107,114,128,0.15)';
+                    else if (_hasPos && _pnl < 0) _borderColor = 'rgba(239,68,68,0.25)';
+                    else if (window._sbLunaEnv === 'DANGER' || window._sbRexAlert === 'CRITICAL') _borderColor = 'rgba(245,158,11,0.25)';
+                    else if (_hasPos && _pnl >= 0) _borderColor = 'rgba(96,165,250,0.20)';
+                    else _borderColor = 'rgba(16,185,129,0.12)';
+                    ccBar.style.borderBottomColor = _borderColor;
+                  }
+                } catch(e) {}
               } catch(e) {}
 
               // FLO-146 Bug 3: Watch conditions from state
