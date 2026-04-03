@@ -1,4 +1,36 @@
 /* ================================================================
+   FLO-209: PAGE-LOAD CHOREOGRAPHY
+   ================================================================ */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.stagger-in {
+  opacity: 0;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.stagger-1 { animation-delay: 0.06s; }
+.stagger-2 { animation-delay: 0.12s; }
+.stagger-3 { animation-delay: 0.18s; }
+.stagger-4 { animation-delay: 0.24s; }
+.stagger-5 { animation-delay: 0.30s; }
+.stagger-6 { animation-delay: 0.36s; }
+.stagger-7 { animation-delay: 0.42s; }
+.stagger-8 { animation-delay: 0.48s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-in { animation: none; opacity: 1; }
+}
+
+/* ================================================================
    GLASSMORPHISM & LAYERING
    ================================================================ */
 
@@ -333,8 +365,8 @@
 
 .section-separator {
   height: 1px;
-  background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.1) 70%, transparent 100%);
-  margin: 12px 0;
+  background: linear-gradient(to right, transparent 0%, rgba(16, 185, 129, 0.15) 20%, rgba(16, 185, 129, 0.25) 50%, rgba(16, 185, 129, 0.15) 80%, transparent 100%);
+  margin: 16px 0;
   border: none;
 }
 
@@ -370,15 +402,34 @@
   background: rgba(17, 24, 39, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(75, 85, 99, 0.55);
-  border-radius: 1rem;
+  border: 1px solid rgba(75, 85, 99, 0.4);
+  border-radius: 0.75rem;
   box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.account-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .account-card:hover {
-  border-color: rgba(107,114,128,0.7);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  border-color: rgba(16, 185, 129, 0.25);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(16, 185, 129, 0.04), inset 0 1px 0 rgba(255,255,255,0.06);
+  transform: translateY(-1px);
+}
+
+.account-card:hover::before {
+  opacity: 1;
 }
 
 /* ================================================================
