@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
 
     <link rel="stylesheet" href="/static/style.css" />
 
@@ -275,11 +275,17 @@
         border: 1px solid transparent;
       }
       .filter-tab:hover { color: #94a3b8; background: rgba(255,255,255,0.03); }
-      .filter-tab.active { 
-        color: #f8fafc; 
-        background: rgba(16, 185, 129, 0.1); 
+      .filter-tab.active {
+        color: #f8fafc;
+        background: rgba(16, 185, 129, 0.1);
         border: 1px solid rgba(16, 185, 129, 0.3);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+      }
+      #journal-tab.active {
+        color: #e9d5ff;
+        background: rgba(192, 132, 252, 0.12);
+        border-color: rgba(192, 132, 252, 0.35);
+        box-shadow: 0 4px 12px rgba(192, 132, 252, 0.1);
       }
 
       /* ── Conversation feed ──────────────────── */
@@ -521,8 +527,12 @@
         background: linear-gradient(168deg, rgba(20,20,32,0.8) 0%, rgba(14,14,24,0.9) 100%);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 8px;
-        padding: 8px 10px;
+        padding: 10px 12px;
         position: relative;
+        transition: border-color 0.2s ease;
+      }
+      .ctx-block:hover {
+        border-color: rgba(255, 255, 255, 0.08);
       }
       .ctx-block::before {
         content: '';
@@ -583,11 +593,12 @@
         display: flex;
         align-items: center;
         gap: 0;
-        padding: 8px 24px;
-        background: linear-gradient(180deg, rgba(18,18,18,0.8) 0%, rgba(8,8,8,0.95) 100%);
-        border-bottom: 1px solid var(--border-subtle);
+        padding: 6px 24px;
+        background: linear-gradient(180deg, rgba(14,14,14,0.95) 0%, rgba(8,8,8,0.98) 100%);
+        border-bottom: 1px solid rgba(16, 185, 129, 0.12);
         overflow-x: auto;
         white-space: nowrap;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.3);
       }
       .cc-block {
         display: flex;
@@ -759,17 +770,18 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 7px 12px;
+        padding: 8px 14px;
         cursor: pointer;
         user-select: none;
-        background: linear-gradient(90deg, rgba(22,22,36,0.95) 0%, rgba(16,16,28,0.9) 100%);
-        border: 1px solid rgba(255,255,255,0.04);
+        background: linear-gradient(90deg, rgba(18,18,30,0.95) 0%, rgba(12,12,22,0.9) 100%);
+        border: 1px solid rgba(255,255,255,0.05);
         border-radius: 6px;
-        transition: background 0.2s ease, border-color 0.2s ease;
+        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       }
       .room-header:hover {
-        background: linear-gradient(90deg, rgba(28,28,44,0.95) 0%, rgba(20,20,34,0.9) 100%);
-        border-color: rgba(255,255,255,0.08);
+        background: linear-gradient(90deg, rgba(24,24,40,0.95) 0%, rgba(18,18,32,0.9) 100%);
+        border-color: rgba(16, 185, 129, 0.15);
+        box-shadow: 0 1px 8px rgba(16, 185, 129, 0.04);
       }
       .room-section:not(.collapsed) .room-header {
         border-radius: 6px 6px 0 0;
@@ -817,8 +829,8 @@
         flex-wrap: wrap;
         gap: 8px;
         align-items: flex-start;
-        padding: 8px;
-        background: rgba(10,10,18,0.5);
+        padding: 10px;
+        background: rgba(8,8,16,0.6);
         border: 1px solid rgba(255,255,255,0.03);
         border-top: none;
         border-radius: 0 0 6px 6px;
@@ -1254,7 +1266,7 @@
       <div class="agent-top-strip">
 
         <!-- SALA 3: DECISION -->
-        <div class="room-section" id="room-decision">
+        <div class="room-section stagger-in stagger-1" id="room-decision">
           <div class="room-header" onclick="toggleRoom('room-decision')">
             <span class="room-label">&#x1F3AF; decision</span>
             <span class="room-summary" id="room-decision-summary"></span>
@@ -1297,7 +1309,7 @@
         </div>
 
         <!-- SALA 2: DEBATE TEAM -->
-        <div class="room-section collapsed" id="room-debate">
+        <div class="room-section collapsed stagger-in stagger-2" id="room-debate">
           <div class="room-header" onclick="toggleRoom('room-debate')">
             <span class="room-label">&#x2694;&#xFE0F; debate</span>
             <span class="room-summary" id="room-debate-summary"></span>
@@ -1430,7 +1442,7 @@
         </div>
 
         <!-- SALA 4: OVERSIGHT -->
-        <div class="room-section collapsed" id="room-oversight">
+        <div class="room-section collapsed stagger-in stagger-3" id="room-oversight">
           <div class="room-header" onclick="toggleRoom('room-oversight')">
             <span class="room-label">&#x1F6E1;&#xFE0F; oversight</span>
             <span class="room-summary" id="room-oversight-summary"></span>
@@ -1514,7 +1526,7 @@
         </div>
 
         <!-- SALA 1: DATA TEAM -->
-        <div class="room-section collapsed" id="room-data">
+        <div class="room-section collapsed stagger-in stagger-4" id="room-data">
           <div class="room-header" onclick="toggleRoom('room-data')">
             <span class="room-label">&#x1F4CA; data</span>
             <span class="room-summary" id="room-data-summary"></span>
@@ -1666,7 +1678,7 @@
       </div>
 
       <div class="trade-room-bottom">
-      <div class="col-center">
+      <div class="col-center stagger-in stagger-5">
           <div class="flex gap-1 mb-3 border-b border-gray-800/60 pb-1 flex-wrap" style="align-items:center">
             <button class="filter-tab active" data-filter="all">ALL</button>
             <button class="filter-tab" data-filter="decision">DECISIONS</button>
@@ -1675,13 +1687,13 @@
             <button class="filter-tab" data-filter="news">NEWS</button>
             <button class="filter-tab" data-filter="macro">MACRO</button>
             <button class="filter-tab" data-filter="alert">ALERTS</button>
-            <button class="filter-tab" data-filter="journal" style="color:#c084fc" id="journal-tab">&#x1F9E0; JOURNAL</button>
+            <button class="filter-tab" data-filter="journal" id="journal-tab" style="color:#c084fc;border:1px solid rgba(192,132,252,0.15)">JOURNAL</button>
             <button id="compact-toggle" class="filter-tab" style="margin-left:auto;border:1px solid var(--border-subtle)" onclick="document.getElementById('feed').classList.toggle('feed-compact');this.classList.toggle('active')">⊟ COMPACT</button>
           </div>
           <div class="feed-scroll" id="feed"></div>
         </div>
 
-      <div class="col-right">
+      <div class="col-right stagger-in stagger-6">
 
         <!-- Session stats -->
         <div class="glass-panel-deep rounded-xl p-3">
