@@ -810,14 +810,14 @@
       .trade-room-grid {
         display: grid;
         grid-template-columns: 240px 1fr 260px;
-        grid-template-rows: auto 1fr;
+        grid-template-rows: auto 1fr auto;
         gap: 10px;
         padding: 8px 16px 20px;
         min-height: calc(100vh - 140px);
         box-sizing: border-box;
       }
 
-      /* Sidebars */
+      /* Sidebars — span rows 1-2 (cards + feed), not row 3 (deep dive) */
       .sidebar-intel {
         grid-column: 1;
         grid-row: 1 / 3;
@@ -830,6 +830,7 @@
         overflow-y: auto;
         scrollbar-width: thin;
         scrollbar-color: rgba(90,106,126,0.3) transparent;
+        align-self: start;
       }
       .sidebar-ops {
         grid-column: 3;
@@ -843,6 +844,7 @@
         overflow-y: auto;
         scrollbar-width: thin;
         scrollbar-color: rgba(90,106,126,0.3) transparent;
+        align-self: start;
       }
 
       /* Main center area */
@@ -1896,7 +1898,7 @@
       </div>
 
       <!-- ═══ DEEP DIVE: Collapsible bottom ═══ -->
-      <div style="grid-column:1/4" class="ctx-tier collapsed" data-tier="t3-deep">
+      <div style="grid-column:1/4;grid-row:3" class="ctx-tier collapsed" data-tier="t3-deep">
         <div class="ctx-tier-header" onclick="this.parentElement.classList.toggle('collapsed')">
           <span class="ctx-tier-label">DEEP DIVE — MACRO &amp; PATTERNS</span>
           <span class="ctx-tier-arrow">▾</span>
@@ -4904,18 +4906,15 @@
                   }
                 } catch(e) {}
 
-                // FLO-215 Phase 3: Adaptive main area toggle
+                // FLO-215 Phase 3: Position bar — show above cards when position exists, hide when none
                 try {
                   var _posC = document.getElementById('main-has-position');
-                  var _noPosC = document.getElementById('main-no-position');
-                  if (_posC && _noPosC) {
+                  if (_posC) {
                     if (_pos.length > 0) {
                       _posC.style.display = '';
-                      _noPosC.style.display = 'none';
                       _renderPositionBar(_pos, state);
                     } else {
                       _posC.style.display = 'none';
-                      _noPosC.style.display = '';
                     }
                   }
                 } catch(e) {}
