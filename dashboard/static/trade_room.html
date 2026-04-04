@@ -817,19 +817,13 @@
         box-sizing: border-box;
       }
 
-      /* Sidebars — span rows 1-2 (cards + feed), not row 3 (deep dive) */
+      /* Sidebars — no sticky, scroll naturally with page */
       .sidebar-intel {
         grid-column: 1;
         grid-row: 1 / 3;
         display: flex;
         flex-direction: column;
         gap: 6px;
-        position: sticky;
-        top: 8px;
-        max-height: calc(100vh - 160px);
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(90,106,126,0.3) transparent;
         align-self: start;
       }
       .sidebar-ops {
@@ -838,12 +832,6 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        position: sticky;
-        top: 8px;
-        max-height: calc(100vh - 160px);
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(90,106,126,0.3) transparent;
         align-self: start;
       }
 
