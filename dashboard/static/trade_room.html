@@ -312,6 +312,221 @@
         pointer-events: none;
       }
 
+      /* FLO-216: Bloomberg-style Deep Dive */
+      .dd-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 10px;
+        padding: 8px 0;
+      }
+      .dd-panel {
+        background: linear-gradient(180deg, rgba(10,12,20,0.95) 0%, rgba(6,8,14,0.98) 100%);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .dd-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px;
+        background: rgba(255,255,255,0.02);
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+      }
+      .dd-panel-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        color: #5a6a7e;
+        text-transform: uppercase;
+      }
+      .dd-panel-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 2px;
+      }
+      .dd-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+      }
+      .dd-table th {
+        text-align: left;
+        font-size: 8px;
+        font-weight: 600;
+        color: #4b5563;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 4px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      .dd-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.02);
+        white-space: nowrap;
+      }
+      .dd-table tr:hover td {
+        background: rgba(255,255,255,0.015);
+      }
+      .dd-sym { color: #94a3b8; font-weight: 600; }
+      .dd-price { color: #e2e8f0; font-weight: 700; text-align: right; }
+      .dd-chg { text-align: right; font-weight: 700; font-size: 10px; }
+      /* FLO-216: Premium heat-strip range bars with glow needle */
+      .dd-range-bar {
+        position: relative;
+        width: 64px;
+        height: 6px;
+        display: inline-block;
+        vertical-align: middle;
+        /* Heat strip: cool blue → neutral → hot amber */
+        background: linear-gradient(90deg, #1e3a5f 0%, #2d3748 35%, #4a3728 65%, #7c2d12 100%);
+        border-radius: 3px;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), inset 0 -0.5px 0.5px rgba(255,255,255,0.04);
+        overflow: visible;
+      }
+      /* Glass overlay for depth */
+      .dd-range-bar::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 50%;
+        background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+        border-radius: 3px 3px 0 0;
+        pointer-events: none;
+      }
+      .dd-range-fill {
+        display: none; /* replaced by heat strip gradient on track itself */
+      }
+      .dd-range-marker {
+        position: absolute;
+        top: -3px;
+        width: 0;
+        height: 0;
+        /* Diamond needle */
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid #f0f4f8;
+        filter: drop-shadow(0 0 3px rgba(240,244,248,0.7)) drop-shadow(0 0 6px rgba(240,244,248,0.3));
+        border-radius: 0;
+        background: none;
+        transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      /* Glow spot under the needle */
+      .dd-range-marker::after {
+        content: '';
+        position: absolute;
+        top: 5px;
+        left: -5px;
+        width: 10px;
+        height: 6px;
+        background: radial-gradient(ellipse, rgba(240,244,248,0.25) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      /* FLO-216: Premium Au:Ag gauge */
+      .dd-gauge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: rgba(255,215,0,0.03);
+        border-top: 1px solid rgba(255,215,0,0.08);
+      }
+      .dd-gauge-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        color: #ffd700;
+        letter-spacing: 0.06em;
+      }
+      .dd-gauge-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 18px;
+        font-weight: 900;
+        color: #ffd700;
+        letter-spacing: -0.02em;
+      }
+      .dd-gauge-bar {
+        flex: 1;
+        height: 8px;
+        /* Gold heat strip: cool → warm gold → hot orange */
+        background: linear-gradient(90deg, #1a2332 0%, #3d2e0a 30%, #6b4f0a 60%, #8b3a0a 100%);
+        border-radius: 4px;
+        position: relative;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.5), inset 0 -0.5px 0.5px rgba(255,215,0,0.06);
+      }
+      /* Glass overlay */
+      .dd-gauge-bar::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 50%;
+        background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        border-radius: 4px 4px 0 0;
+        pointer-events: none;
+      }
+      .dd-gauge-fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        border-radius: 4px;
+        /* Translucent gold fill up to position */
+        background: linear-gradient(90deg, rgba(255,215,0,0.15), rgba(255,140,0,0.25));
+        transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      /* Needle on gauge */
+      .dd-gauge-needle {
+        position: absolute;
+        top: -4px;
+        width: 0; height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 6px solid #ffd700;
+        filter: drop-shadow(0 0 4px rgba(255,215,0,0.6)) drop-shadow(0 0 8px rgba(255,215,0,0.2));
+        transition: left 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .dd-gauge-needle::after {
+        content: '';
+        position: absolute;
+        top: 6px; left: -6px;
+        width: 12px; height: 8px;
+        background: radial-gradient(ellipse, rgba(255,215,0,0.2) 0%, transparent 70%);
+      }
+      /* Key metrics cards */
+      .dd-metric-card {
+        background: rgba(15,18,28,0.9);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 4px;
+        padding: 8px 10px;
+        text-align: center;
+      }
+      .dd-metric-label {
+        font-size: 8px;
+        font-weight: 700;
+        color: #4b5563;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 3px;
+      }
+      .dd-metric-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        font-weight: 900;
+        color: #e2e8f0;
+      }
+      .dd-metric-chg {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .dd-metric-range {
+        margin-top: 4px;
+      }
+
       /* FLO-215 Phase 4: Timeline rows */
       .tl-row {
         display: flex;
@@ -4604,70 +4819,132 @@
                 var macro = intel.macro || {};
                 var ctr = document.getElementById('tr-macro-container');
                 if (ctr) {
-                  function trMcRow(sym, d, label) {
-                    if (!d || d.bid == null) return '<div class="ctx-row"><span class="ctx-key">' + (label||sym) + '</span><span class="ctx-val">\u2014</span></div>';
-                    var c = d.change_pct;
-                    var chgColor = c > 0 ? '#4ade80' : (c < 0 ? '#f87171' : '#6b7280');
-                    var chgText = c != null ? (c > 0 ? '+' : '') + c.toFixed(2) + '%' : '';
-                    var posText = d.position_in_range != null ? ' ' + (d.position_in_range * 100).toFixed(0) + '%' : '';
-                    return '<div class="ctx-row"><span class="ctx-key">' + (label||sym) + '</span><span class="ctx-val">' + (typeof d.bid === 'number' ? d.bid.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits: d.bid < 10 ? 5 : 2}) : d.bid) + '</span><span style="color:' + chgColor + ';font-size:9px;margin-left:4px">' + chgText + '</span><span style="color:#67e8f9;font-size:8px;margin-left:3px;opacity:0.5">' + posText + '</span></div>';
+                  /* FLO-216: Bloomberg-style rendering helpers */
+                  function ddFmtPrice(v, decimals) {
+                    if (v == null) return '\u2014';
+                    var n = Number(v);
+                    var d = decimals != null ? decimals : (n < 10 ? 4 : 2);
+                    return n.toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
                   }
-                  function trMcSection(title, rows, extra) {
-                    return '<div class="ctx-block" style="margin-bottom:6px"><div class="ctx-label">' + title + '</div>' + rows + (extra||'') + '</div>';
+                  function ddChgHtml(c) {
+                    if (c == null) return '';
+                    var abs = Math.abs(c);
+                    /* Intensity: bigger move = more saturated */
+                    var alpha = Math.min(1, 0.5 + abs / 5);
+                    var color = c > 0 ? 'rgba(74,222,128,' + alpha + ')' : (c < 0 ? 'rgba(248,113,113,' + alpha + ')' : '#6b7280');
+                    var arrow = c > 0 ? '\u25B2' : (c < 0 ? '\u25BC' : '');
+                    return '<span style="color:' + color + ';font-weight:' + (abs > 1 ? '800' : '600') + '">' + arrow + (c > 0 ? '+' : '') + c.toFixed(2) + '%</span>';
                   }
-                  var html = '';
-                  // METALS
+                  function ddRangeBar(pos) {
+                    if (pos == null) return '';
+                    var pct = Math.max(0, Math.min(100, pos * 100));
+                    /* Needle color: warm at high, cool at low, neutral at mid */
+                    var needleColor = pct > 70 ? '#fbbf24' : (pct < 30 ? '#60a5fa' : '#f0f4f8');
+                    return '<div class="dd-range-bar">' +
+                      '<div class="dd-range-marker" style="left:calc(' + pct + '% - 4px);border-top-color:' + needleColor + '"></div>' +
+                    '</div>';
+                  }
+                  function ddTableRow(sym, d, label) {
+                    if (!d || d.bid == null) return '<tr><td class="dd-sym">' + (label || sym) + '</td><td class="dd-price">\u2014</td><td class="dd-chg"></td><td></td></tr>';
+                    return '<tr>' +
+                      '<td class="dd-sym">' + (label || sym) + '</td>' +
+                      '<td class="dd-price">' + ddFmtPrice(d.bid) + '</td>' +
+                      '<td class="dd-chg">' + ddChgHtml(d.change_pct) + '</td>' +
+                      '<td>' + ddRangeBar(d.position_in_range) + '</td>' +
+                    '</tr>';
+                  }
+                  function ddPanel(title, badgeHtml, tableHtml, footerHtml) {
+                    return '<div class="dd-panel">' +
+                      '<div class="dd-panel-header"><span class="dd-panel-title">' + title + '</span>' + (badgeHtml || '') + '</div>' +
+                      '<table class="dd-table"><thead><tr><th>SYM</th><th style="text-align:right">PRICE</th><th style="text-align:right">CHG</th><th>RANGE</th></tr></thead><tbody>' + tableHtml + '</tbody></table>' +
+                      (footerHtml || '') +
+                    '</div>';
+                  }
+
+                  var html = '<div class="dd-grid">';
+
+                  /* ── METALS with Au:Ag gauge ── */
                   var metals = mc.metals || {};
                   var gsr = metals.gold_silver_ratio;
-                  html += trMcSection('METALS',
-                    trMcRow('XAGUSD', metals.XAGUSD, 'Silver') + trMcRow('XPTUSD', metals.XPTUSD, 'Platinum') + trMcRow('XPDUSD', metals.XPDUSD, 'Palladium'),
-                    gsr ? '<div style="font-size:9px;color:#9ca3af;margin-top:3px;border-top:1px solid rgba(75,85,99,0.2);padding-top:3px">Au/Ag: <span style="color:#e5e7eb;font-weight:bold">' + gsr + '</span></div>' : ''
-                  );
-                  // FOREX
-                  var fx = mc.forex || {};
-                  var fxL = {EURUSD:'EUR/USD',USDJPY:'USD/JPY',USDCHF:'USD/CHF',AUDUSD:'AUD/USD',USDCNH:'USD/CNH',GBPUSD:'GBP/USD'};
-                  var fxRows = '';
-                  var fxKeys = ['EURUSD','USDJPY','USDCHF','AUDUSD','USDCNH','GBPUSD'];
-                  for (var fi=0;fi<fxKeys.length;fi++) fxRows += trMcRow(fxKeys[fi], fx[fxKeys[fi]], fxL[fxKeys[fi]]);
-                  var ds = fx.dollar_strength;
-                  var dsHtml = ds ? '<div style="font-size:9px;margin-top:3px;border-top:1px solid rgba(75,85,99,0.2);padding-top:3px">Dollar: <span style="font-weight:bold;color:' + (ds==='strong'?'#f87171':ds==='weak'?'#4ade80':'#fbbf24') + '">' + ds.toUpperCase() + '</span></div>' : '';
-                  html += trMcSection('FOREX', fxRows, dsHtml);
-                  // FUTURES
-                  var fut = mc.futures || {};
-                  var futL = {'DXY_M6':'DXY','VIX_J6':'VIX','UST10Y_M6':'10Y Bond'};
-                  html += trMcSection('FUTURES',
-                    trMcRow('DXY_M6', fut.DXY_M6, 'DXY') + trMcRow('VIX_J6', fut.VIX_J6, 'VIX') + trMcRow('UST10Y_M6', fut.UST10Y_M6, '10Y Bond')
-                  );
-                  // KEY METRICS (2x2)
-                  var sp = (mc.indices||{}).US500||{};
-                  var btc = (mc.crypto||{}).BTCUSD||{};
-                  var oil = (mc.energy||{}).XTIUSD||{};
-                  var yd = macro.yields_10y || macro.yields || {};
-                  function trGridBox(label, val, chg, prefix) {
-                    var v = val != null ? (prefix||'') + (typeof val==='number'?val.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):val) : '\u2014';
-                    var cc = chg!=null?(chg>0?'#4ade80':chg<0?'#f87171':'#6b7280'):'';
-                    var ct = chg!=null?(chg>0?'+':'')+Number(chg).toFixed(2)+'%':'';
-                    return '<div style="text-align:center;background:rgba(31,41,55,0.7);border:1px solid rgba(75,85,99,0.25);border-radius:6px;padding:6px"><div style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em">' + label + '</div><div style="font-size:12px;color:#e5e7eb;font-weight:bold;font-family:monospace;margin-top:2px">' + v + '</div><div style="font-size:9px;color:' + cc + ';margin-top:1px">' + ct + '</div></div>';
+                  var metalRows = ddTableRow('XAGUSD', metals.XAGUSD, 'Silver') +
+                                  ddTableRow('XPTUSD', metals.XPTUSD, 'Platinum') +
+                                  ddTableRow('XPDUSD', metals.XPDUSD, 'Palladium');
+                  var gsrHtml = '';
+                  if (gsr) {
+                    /* Au:Ag gauge: normal range ~75-90, extremes <70 or >95 */
+                    var gsrNum = Number(gsr);
+                    var gsrPct = Math.max(0, Math.min(100, ((gsrNum - 60) / 40) * 100));
+                    var gsrColor = gsrNum > 90 ? '#f87171' : (gsrNum < 75 ? '#4ade80' : '#ffd700');
+                    gsrHtml = '<div class="dd-gauge">' +
+                      '<span class="dd-gauge-label">Au:Ag</span>' +
+                      '<span class="dd-gauge-val" style="color:' + gsrColor + '">' + gsrNum.toFixed(1) + '</span>' +
+                      '<div class="dd-gauge-bar"><div class="dd-gauge-fill" style="width:' + gsrPct + '%"></div><div class="dd-gauge-needle" style="left:calc(' + gsrPct + '% - 5px)"></div></div>' +
+                      '<span style="font-size:8px;color:#4b5563;font-family:\'JetBrains Mono\',monospace">60 \u2500 100</span>' +
+                    '</div>';
                   }
-                  html += '<div class="ctx-block" style="margin-bottom:6px"><div class="ctx-label">KEY METRICS</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">' + trGridBox('S&P 500',sp.bid,sp.change_pct) + trGridBox('BTC',btc.bid,btc.change_pct,'$') + trGridBox('OIL WTI',oil.bid,oil.change_pct,'$') + trGridBox('10Y YIELD',yd.value,null) + '</div></div>';
-                  // YAHOO DATA
+                  html += ddPanel('Precious Metals', '', metalRows, gsrHtml);
+
+                  /* ── FOREX with dollar strength badge ── */
+                  var fx = mc.forex || {};
+                  var ds = fx.dollar_strength;
+                  var dsBadge = ds ? '<span class="dd-panel-badge" style="background:' + (ds === 'strong' ? 'rgba(248,113,113,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3)' : ds === 'weak' ? 'rgba(74,222,128,0.2);color:#4ade80;border:1px solid rgba(74,222,128,0.3)' : 'rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)') + '">' + (ds || '').toUpperCase() + '</span>' : '';
+                  var fxPairs = [['EURUSD','EUR/USD'],['USDJPY','USD/JPY'],['USDCHF','USD/CHF'],['AUDUSD','AUD/USD'],['USDCNH','USD/CNH'],['GBPUSD','GBP/USD']];
+                  var fxRows = '';
+                  for (var fi = 0; fi < fxPairs.length; fi++) fxRows += ddTableRow(fxPairs[fi][0], fx[fxPairs[fi][0]], fxPairs[fi][1]);
+                  html += ddPanel('Forex', dsBadge, fxRows, '');
+
+                  /* ── FUTURES ── */
+                  var fut = mc.futures || {};
+                  var futRows = ddTableRow('DXY_M6', fut.DXY_M6, 'DXY') +
+                                ddTableRow('VIX_J6', fut.VIX_J6, 'VIX') +
+                                ddTableRow('UST10Y_M6', fut.UST10Y_M6, '10Y Bond');
+                  html += ddPanel('Futures', '', futRows, '');
+
+                  /* ── KEY METRICS as cards ── */
+                  var sp = (mc.indices || {}).US500 || {};
+                  var btc = (mc.crypto || {}).BTCUSD || {};
+                  var oil = (mc.energy || {}).XTIUSD || {};
+                  var yd = macro.yields_10y || macro.yields || {};
+
+                  function ddMetricCard(label, val, chg, pos, prefix) {
+                    var v = val != null ? (prefix || '') + ddFmtPrice(val) : '\u2014';
+                    return '<div class="dd-metric-card">' +
+                      '<div class="dd-metric-label">' + label + '</div>' +
+                      '<div class="dd-metric-val">' + v + '</div>' +
+                      '<div class="dd-metric-chg">' + ddChgHtml(chg) + '</div>' +
+                      (pos != null ? '<div class="dd-metric-range">' + ddRangeBar(pos) + '</div>' : '') +
+                    '</div>';
+                  }
+
+                  html += '<div class="dd-panel"><div class="dd-panel-header"><span class="dd-panel-title">Key Markets</span></div>' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px">' +
+                      ddMetricCard('S&P 500', sp.bid, sp.change_pct, sp.position_in_range) +
+                      ddMetricCard('Bitcoin', btc.bid, btc.change_pct, btc.position_in_range, '$') +
+                      ddMetricCard('Oil WTI', oil.bid, oil.change_pct, oil.position_in_range, '$') +
+                      ddMetricCard('10Y Yield', yd.value, null, null) +
+                    '</div>';
+
+                  /* Yahoo data: GLD, flows, real yields */
                   var gld = macro.gld || {};
                   var gf = macro.gld_flows || {};
                   var ry = macro.real_yields || {};
-                  var yRows = '';
+                  var yahooHtml = '<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.04);font-size:10px;font-family:\'JetBrains Mono\',monospace;display:flex;flex-wrap:wrap;gap:10px">';
                   if (gld.value != null) {
                     var gv = Number(gld.value);
-                    var gFmt = gv >= 1e6 ? (gv/1e6).toFixed(1)+'M' : (gv >= 1e3 ? (gv/1e3).toFixed(0)+'K' : gv);
-                    yRows += '<div class="ctx-row"><span class="ctx-key">GLD Vol</span><span class="ctx-val">' + gFmt + '</span></div>';
+                    var gFmt = gv >= 1e6 ? (gv / 1e6).toFixed(1) + 'M' : (gv >= 1e3 ? (gv / 1e3).toFixed(0) + 'K' : gv);
+                    yahooHtml += '<span><span style="color:#4b5563">GLD Vol</span> <span style="color:#e2e8f0;font-weight:700">' + gFmt + '</span></span>';
                   }
                   if (gf.direction) {
-                    var gfC = gf.direction==='ACCUMULATION'?'#4ade80':(gf.direction==='DISTRIBUTION'?'#f87171':'#6b7280');
-                    var gfV = gf.volume_change_pct!=null?' '+(gf.volume_change_pct>0?'+':'')+Number(gf.volume_change_pct).toFixed(0)+'%':'';
-                    yRows += '<div class="ctx-row"><span class="ctx-key">GLD Flows</span><span class="ctx-val" style="color:'+gfC+'">'+gf.direction+gfV+'</span></div>';
+                    var gfC = gf.direction === 'ACCUMULATION' ? '#4ade80' : (gf.direction === 'DISTRIBUTION' ? '#f87171' : '#6b7280');
+                    var gfV = gf.volume_change_pct != null ? ' ' + (gf.volume_change_pct > 0 ? '+' : '') + Number(gf.volume_change_pct).toFixed(0) + '%' : '';
+                    yahooHtml += '<span><span style="color:#4b5563">GLD Flow</span> <span style="color:' + gfC + ';font-weight:700">' + gf.direction + gfV + '</span></span>';
                   }
-                  var ryV = (ry.proxy!=null)?ry.proxy:ry.value;
-                  if (ryV!=null) yRows += '<div class="ctx-row"><span class="ctx-key">Real Yields</span><span class="ctx-val">\u2248'+Number(ryV).toFixed(2)+'%</span></div>';
-                  if (yRows) html += trMcSection('YAHOO DATA', yRows);
+                  var ryV = (ry.proxy != null) ? ry.proxy : ry.value;
+                  if (ryV != null) yahooHtml += '<span><span style="color:#4b5563">Real Yield</span> <span style="color:#e2e8f0;font-weight:700">\u2248' + Number(ryV).toFixed(2) + '%</span></span>';
+                  yahooHtml += '</div>';
+                  html += yahooHtml + '</div>';
+
+                  html += '</div>'; /* close dd-grid */
                   ctr.innerHTML = html;
                 }
               } catch(e) {}
