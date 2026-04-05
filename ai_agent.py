@@ -17,6 +17,7 @@ from enum import Enum
 
 from logger import log
 from agent_prompts import get_system_prompt, get_prompt_hash, get_prompt_version
+import config
 
 logger = log
 

@@ -3083,7 +3083,6 @@ class TradingBot:
                     # Persist to session memory so AgentTools.read_session_memory can surface it
                     import json
                     import os
-                    from datetime import datetime
 
                     base_dir = os.path.dirname(os.path.abspath(__file__))
                     data_dir = os.path.join(base_dir, "data")
