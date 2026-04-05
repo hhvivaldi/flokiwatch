@@ -289,31 +289,42 @@ function renderMarketIndicatorsPanel(state) {
       let h = `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;color:#475569;font-weight:700;font-size:9px;letter-spacing:0.08em;margin-bottom:6px"><span></span>`;
       tfs.forEach((tf) => { h += `<span style="text-align:center">${tf}</span>`; });
       h += `</div>`;
+      // FLO-222: direction arrow helper
+      function dArr(dir) {
+        if (dir === "rising" || dir === "bullish_strengthening") return `<span style="color:#4ade80;font-size:8px">↑</span>`;
+        if (dir === "falling" || dir === "bearish_strengthening") return `<span style="color:#f87171;font-size:8px">↓</span>`;
+        if (dir === "bullish_weakening") return `<span style="color:#facc15;font-size:8px">↑</span>`;
+        if (dir === "bearish_weakening") return `<span style="color:#facc15;font-size:8px">↓</span>`;
+        return "";
+      }
       // RSI
       h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">RSI</span>`;
       tfs.forEach((tf) => {
-        const v = mtf[tf]?.rsi;
+        const td = mtf[tf] || {};
+        const v = td.rsi;
         const c = v == null ? "#475569" : v > 70 ? "#f87171" : v < 30 ? "#4ade80" : "#e2e8f0";
-        h += `<span style="text-align:center;color:${c};font-weight:700">${v != null ? v.toFixed(0) : "—"}</span>`;
+        h += `<span style="text-align:center;color:${c};font-weight:700">${v != null ? v.toFixed(0) : "—"}${dArr(td.rsi_direction)}</span>`;
       });
       h += `</div>`;
       // MACD
       h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">MACD</span>`;
       tfs.forEach((tf) => {
-        const d = mtf[tf]?.macd;
+        const td = mtf[tf] || {};
+        const d = td.macd;
         if (!d || d.histogram == null) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
         const c = d.histogram >= 0 ? "#4ade80" : "#f87171";
-        h += `<span style="text-align:center;color:${c};font-weight:700">${d.histogram >= 0 ? "▲" : "▼"}</span>`;
+        h += `<span style="text-align:center;color:${c};font-weight:700">${d.histogram >= 0 ? "▲" : "▼"}${dArr(td.macd_direction)}</span>`;
       });
       h += `</div>`;
       // ADX
       h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">ADX</span>`;
       tfs.forEach((tf) => {
-        const d = mtf[tf]?.adx;
+        const td = mtf[tf] || {};
+        const d = td.adx;
         if (!d || d.value == null) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
         const v = d.value;
         const c = v >= 30 ? "#e2e8f0" : v >= 20 ? "#94a3b8" : "#475569";
-        h += `<span style="text-align:center;color:${c};font-weight:700">${v.toFixed(0)}</span>`;
+        h += `<span style="text-align:center;color:${c};font-weight:700">${v.toFixed(0)}${dArr(td.adx_direction)}</span>`;
       });
       h += `</div>`;
       // EMA50

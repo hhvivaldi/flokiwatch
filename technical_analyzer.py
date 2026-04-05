@@ -100,7 +100,8 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_indicators_from_candles(candles: list) -> dict:
-    """FLO-221: Compute RSI, MACD, ADX, EMA50, EMA200, ATR from a candle list.
+    """FLO-221/222: Compute RSI, MACD, ADX, EMA50, EMA200, ATR from a candle list.
+    Includes direction and 4-bar trajectory for RSI, MACD, ADX.
     Used for multi-timeframe indicator calculation. Zero AI cost — pure math."""
     from momentum_detector import calculate_adx
 
@@ -109,7 +110,6 @@ def compute_indicators_from_candles(candles: list) -> dict:
 
     try:
         df = pd.DataFrame(candles)
-        # Normalize column names (MT5 cache uses lowercase already)
         for col in ["open", "high", "low", "close"]:
             if col not in df.columns:
                 return {}
@@ -119,15 +119,19 @@ def compute_indicators_from_candles(candles: list) -> dict:
         adx_data = calculate_adx(df)
         price = float(last["close"])
 
+        rsi_now = float(last.get("rsi_14", 50))
+        macd_hist_now = float(last.get("macd_hist", 0))
+        adx_now = float(adx_data.get("adx_value", 0))
+
         result = {
-            "rsi": round(float(last.get("rsi_14", 50)), 1),
+            "rsi": round(rsi_now, 1),
             "macd": {
                 "value": round(float(last.get("macd", 0)), 3),
                 "signal": round(float(last.get("macd_signal", 0)), 3),
-                "histogram": round(float(last.get("macd_hist", 0)), 3),
+                "histogram": round(macd_hist_now, 3),
             },
             "adx": {
-                "value": round(float(adx_data.get("adx_value", 0)), 1),
+                "value": round(adx_now, 1),
                 "plus_di": round(float(adx_data.get("plus_di", 0)), 1),
                 "minus_di": round(float(adx_data.get("minus_di", 0)), 1),
             },
@@ -136,6 +140,34 @@ def compute_indicators_from_candles(candles: list) -> dict:
             "atr": round(float(last.get("atr_14", 0)), 2),
             "price_vs_ema50": "above" if price > float(last.get("ema_50", 0)) else "below",
         }
+
+        # FLO-222: Direction and trajectory (compare current vs 4 candles ago)
+        if len(df) >= 19:  # 14 warmup + 5 for lookback
+            try:
+                prev = df.iloc[-5]
+                # RSI direction
+                rsi_4ago = float(prev.get("rsi_14", 50))
+                rsi_delta = round(rsi_now - rsi_4ago, 1)
+                result["rsi_direction"] = "rising" if rsi_delta > 3 else ("falling" if rsi_delta < -3 else "flat")
+                result["rsi_change_4bars"] = rsi_delta
+
+                # MACD direction (histogram trend)
+                macd_hist_4ago = float(prev.get("macd_hist", 0))
+                hist_rising = macd_hist_now > macd_hist_4ago
+                if macd_hist_now >= 0:
+                    result["macd_direction"] = "bullish_strengthening" if hist_rising else "bullish_weakening"
+                else:
+                    result["macd_direction"] = "bearish_weakening" if hist_rising else "bearish_strengthening"
+
+                # ADX direction (call calculate_adx on truncated df for 4-bar-ago value)
+                adx_prev = calculate_adx(df.iloc[:-4])
+                adx_4ago = float(adx_prev.get("adx_value", 0))
+                adx_delta = round(adx_now - adx_4ago, 1)
+                result["adx_direction"] = "rising" if adx_delta > 2 else ("falling" if adx_delta < -2 else "flat")
+                result["adx_change_4bars"] = adx_delta
+            except Exception:
+                pass
+
         return result
     except Exception:
         return {}

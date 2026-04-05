@@ -689,6 +689,11 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `multi_tf_indicators.{TF}.ema200` | float | EMA(200) price | — |
 | `multi_tf_indicators.{TF}.atr` | float | ATR(14) | — |
 | `multi_tf_indicators.{TF}.price_vs_ema50` | string (`above`/`below`) | Price vs EMA50 | Arrow: ▲ green (above) / ▼ red (below) |
+| `multi_tf_indicators.{TF}.rsi_direction` | string (`rising`/`falling`/`flat`) | RSI 4-bar trend | ↑↓ arrow next to RSI value |
+| `multi_tf_indicators.{TF}.rsi_change_4bars` | float | RSI delta vs 4 candles ago | — |
+| `multi_tf_indicators.{TF}.macd_direction` | string (`bullish_strengthening`/`bullish_weakening`/`bearish_strengthening`/`bearish_weakening`) | MACD histogram trend | ↑↓ arrow next to MACD arrow |
+| `multi_tf_indicators.{TF}.adx_direction` | string (`rising`/`falling`/`flat`) | ADX 4-bar trend | ↑↓ arrow next to ADX value |
+| `multi_tf_indicators.{TF}.adx_change_4bars` | float | ADX delta vs 4 candles ago | — |
 
 ### `ea_bridge` Object in `bot_state.json`
 

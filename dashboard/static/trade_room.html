@@ -4858,6 +4858,14 @@
                 var mtf = state.multi_tf_indicators || {};
                 var tfs = ['M15', 'H1', 'H4', 'D1'];
 
+                // FLO-222: direction arrow helper
+                function dirArrow(dir) {
+                  if (dir === 'rising' || dir === 'bullish_strengthening') return '<span style="color:#4ade80;font-size:8px">\u2191</span>';
+                  if (dir === 'falling' || dir === 'bearish_strengthening') return '<span style="color:#f87171;font-size:8px">\u2193</span>';
+                  if (dir === 'bullish_weakening') return '<span style="color:#facc15;font-size:8px">\u2191</span>';
+                  if (dir === 'bearish_weakening') return '<span style="color:#facc15;font-size:8px">\u2193</span>';
+                  return '';
+                }
                 function mtfRsiColor(v) {
                   if (v == null) return '#64748b';
                   if (v > 70) return '#f87171';
@@ -4865,19 +4873,23 @@
                   return '#e2e8f0';
                 }
                 function mtfMacdHtml(tf) {
-                  var d = (mtf[tf] || {}).macd;
-                  if (!d || d.histogram == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
-                  var h = Number(d.histogram);
+                  var d = mtf[tf] || {};
+                  var m = d.macd;
+                  if (!m || m.histogram == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  var h = Number(m.histogram);
                   var clr = h >= 0 ? '#4ade80' : '#f87171';
                   var arrow = h >= 0 ? '\u25B2' : '\u25BC';
-                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + arrow + '</span>';
+                  var dir = dirArrow(d.macd_direction);
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + arrow + dir + '</span>';
                 }
                 function mtfAdxHtml(tf) {
-                  var d = (mtf[tf] || {}).adx;
-                  if (!d || d.value == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
-                  var v = Number(d.value);
+                  var d = mtf[tf] || {};
+                  var a = d.adx;
+                  if (!a || a.value == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  var v = Number(a.value);
                   var clr = v >= 30 ? '#e2e8f0' : (v >= 20 ? '#94a3b8' : '#475569');
-                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + v.toFixed(0) + '</span>';
+                  var dir = dirArrow(d.adx_direction);
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + v.toFixed(0) + dir + '</span>';
                 }
                 function mtfEmaHtml(tf) {
                   var d = mtf[tf] || {};
@@ -4891,9 +4903,11 @@
                 if (rsiEl) {
                   var rh = '<span style="color:#546478;font-weight:600">RSI</span>';
                   for (var ti = 0; ti < tfs.length; ti++) {
-                    var rv = (mtf[tfs[ti]] || {}).rsi;
+                    var td = mtf[tfs[ti]] || {};
+                    var rv = td.rsi;
                     var rc = mtfRsiColor(rv);
-                    rh += '<span style="text-align:center;color:' + rc + ';font-weight:700">' + (rv != null ? Number(rv).toFixed(0) : '\u2014') + '</span>';
+                    var rd = dirArrow(td.rsi_direction);
+                    rh += '<span style="text-align:center;color:' + rc + ';font-weight:700">' + (rv != null ? Number(rv).toFixed(0) : '\u2014') + rd + '</span>';
                   }
                   rsiEl.innerHTML = rh;
                 }
