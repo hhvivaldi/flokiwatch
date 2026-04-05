@@ -15,12 +15,394 @@
     <link rel="stylesheet" href="/static/style.css" />
 
     <style>
-      html, body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
-      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      html, body {
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        background: #050510;
+        overflow-x: hidden;
+      }
+      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+      /* ── Topographic texture (inspired by ref 2) ── */
+      .topo-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.04;
+        background-image:
+          url("data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.015' numOctaves='4' seed='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
+        background-size: 600px 600px;
+      }
+
+      /* ── Timeline spine ── */
+      .rm-timeline {
+        position: relative;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* The glowing center line */
+      .rm-timeline::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        transform: translateX(-50%);
+        background: linear-gradient(
+          180deg,
+          rgba(74,222,128,0.6) 0%,
+          rgba(34,211,238,0.5) 25%,
+          rgba(250,204,21,0.5) 55%,
+          rgba(165,180,252,0.3) 85%,
+          rgba(99,102,241,0.1) 100%
+        );
+        box-shadow: 0 0 12px rgba(34,211,238,0.15);
+      }
+
+      /* ── Wave/flow SVG behind each section break ── */
+      .rm-wave-wrap {
+        position: relative;
+        width: 100%;
+        height: 80px;
+        margin: -10px 0;
+        z-index: 1;
+      }
+      .rm-wave-wrap svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* ── Section badge (centered on timeline) ── */
+      .rm-section-badge {
+        position: relative;
+        z-index: 5;
+        display: flex;
+        justify-content: center;
+        margin: 48px 0 32px;
+      }
+      .rm-section-badge:first-child {
+        margin-top: 0;
+      }
+      .rm-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 28px;
+        border-radius: 40px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid;
+        position: relative;
+      }
+      .rm-badge-completed {
+        background: rgba(74,222,128,0.08);
+        border-color: rgba(74,222,128,0.3);
+        color: #4ade80;
+        box-shadow: 0 0 20px rgba(74,222,128,0.1);
+      }
+      .rm-badge-progress {
+        background: rgba(34,211,238,0.08);
+        border-color: rgba(34,211,238,0.3);
+        color: #22d3ee;
+        box-shadow: 0 0 20px rgba(34,211,238,0.15);
+        animation: pulseGlow 3s ease-in-out infinite;
+      }
+      .rm-badge-next {
+        background: rgba(250,204,21,0.08);
+        border-color: rgba(250,204,21,0.3);
+        color: #facc15;
+        box-shadow: 0 0 20px rgba(250,204,21,0.08);
+      }
+      .rm-badge-future {
+        background: rgba(165,180,252,0.06);
+        border-color: rgba(99,102,241,0.25);
+        color: #a5b4fc;
+        box-shadow: 0 0 20px rgba(99,102,241,0.08);
+      }
+
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 20px rgba(34,211,238,0.15); }
+        50% { box-shadow: 0 0 35px rgba(34,211,238,0.3), 0 0 60px rgba(34,211,238,0.08); }
+      }
+
+      /* ── Zigzag card row ── */
+      .rm-row {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 20px;
+        z-index: 2;
+      }
+      .rm-row-left {
+        flex-direction: row;
+      }
+      .rm-row-right {
+        flex-direction: row-reverse;
+      }
+
+      /* Card takes one half */
+      .rm-card {
+        width: calc(50% - 28px);
+        padding: 16px 20px;
+        border-radius: 10px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid;
+        transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease;
+        position: relative;
+      }
+      .rm-card:hover {
+        transform: translateY(-2px);
+      }
+
+      /* Center dot on the timeline */
+      .rm-dot-wrap {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 16px;
+        height: 16px;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .rm-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 2px solid;
+        position: relative;
+      }
+
+      /* Connector arm from dot to card */
+      .rm-arm {
+        position: absolute;
+        top: 7px;
+        height: 1px;
+        width: calc(50% - 28px - 50% + 8px);
+      }
+      .rm-row-left .rm-arm {
+        left: calc(50% + 8px);
+        width: 20px;
+      }
+      .rm-row-right .rm-arm {
+        right: calc(50% + 8px);
+        width: 20px;
+      }
+
+      /* ── Phase-specific card colors ── */
+
+      /* COMPLETED: muted green, settled */
+      .rm-card-completed {
+        background: rgba(74,222,128,0.04);
+        border-color: rgba(74,222,128,0.15);
+      }
+      .rm-card-completed:hover {
+        box-shadow: 0 8px 24px rgba(74,222,128,0.08);
+      }
+      .rm-card-completed .rm-card-title {
+        color: rgba(74,222,128,0.7);
+      }
+      .rm-card-completed .rm-card-desc {
+        color: rgba(156,163,175,0.7);
+      }
+      .rm-dot-completed {
+        border-color: rgba(74,222,128,0.5);
+        background: rgba(74,222,128,0.3);
+      }
+      .rm-arm-completed {
+        background: rgba(74,222,128,0.2);
+      }
+
+      /* IN PROGRESS: cyan glow, active */
+      .rm-card-progress {
+        background: rgba(34,211,238,0.06);
+        border-color: rgba(34,211,238,0.25);
+        box-shadow: 0 0 15px rgba(34,211,238,0.06);
+      }
+      .rm-card-progress:hover {
+        box-shadow: 0 8px 30px rgba(34,211,238,0.12);
+      }
+      .rm-card-progress .rm-card-title {
+        color: #22d3ee;
+      }
+      .rm-card-progress .rm-card-desc {
+        color: #94a3b8;
+      }
+      .rm-dot-progress {
+        border-color: #22d3ee;
+        background: rgba(34,211,238,0.4);
+        box-shadow: 0 0 10px rgba(34,211,238,0.4);
+        animation: dotPulse 2.5s ease-in-out infinite;
+      }
+      .rm-arm-progress {
+        background: rgba(34,211,238,0.3);
+      }
+
+      @keyframes dotPulse {
+        0%, 100% { box-shadow: 0 0 8px rgba(34,211,238,0.3); }
+        50% { box-shadow: 0 0 16px rgba(34,211,238,0.6); }
+      }
+
+      /* NEXT UP: amber, warm */
+      .rm-card-next {
+        background: rgba(250,204,21,0.05);
+        border-color: rgba(250,204,21,0.2);
+      }
+      .rm-card-next:hover {
+        box-shadow: 0 8px 24px rgba(250,204,21,0.08);
+      }
+      .rm-card-next .rm-card-title {
+        color: #facc15;
+      }
+      .rm-card-next .rm-card-desc {
+        color: #94a3b8;
+      }
+      .rm-dot-next {
+        border-color: rgba(250,204,21,0.5);
+        background: rgba(250,204,21,0.3);
+      }
+      .rm-arm-next {
+        background: rgba(250,204,21,0.2);
+      }
+
+      /* FUTURE: dimmed indigo */
+      .rm-card-future {
+        background: rgba(99,102,241,0.04);
+        border-color: rgba(99,102,241,0.15);
+        opacity: 0.75;
+      }
+      .rm-card-future:hover {
+        opacity: 1;
+        box-shadow: 0 8px 24px rgba(99,102,241,0.08);
+      }
+      .rm-card-future .rm-card-title {
+        color: #a5b4fc;
+      }
+      .rm-card-future .rm-card-desc {
+        color: rgba(148,163,184,0.6);
+      }
+      .rm-dot-future {
+        border-color: rgba(99,102,241,0.4);
+        background: rgba(99,102,241,0.2);
+      }
+      .rm-arm-future {
+        background: rgba(99,102,241,0.15);
+      }
+
+      /* ── Card content ── */
+      .rm-card-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        line-height: 1.4;
+        margin-bottom: 4px;
+      }
+      .rm-card-desc {
+        font-size: 10px;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+      }
+      .rm-card-check {
+        color: rgba(74,222,128,0.5);
+        font-size: 12px;
+        margin-right: 6px;
+      }
+
+      /* ── Hero ── */
+      .rm-hero {
+        text-align: center;
+        padding: 48px 20px 32px;
+        position: relative;
+        z-index: 2;
+      }
+      .rm-hero-title {
+        font-family: 'Press Start 2P', cursive;
+        font-size: clamp(18px, 4vw, 28px);
+        letter-spacing: 0.12em;
+        background: linear-gradient(135deg, #4ade80, #22d3ee, #facc15, #a5b4fc);
+        background-size: 300% 300%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: gradientShift 8s ease infinite;
+      }
+      .rm-hero-sub {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-top: 12px;
+      }
+
+      @keyframes gradientShift {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      /* ── Fade-in animation ── */
+      .rm-fade {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
+      }
+      .rm-fade.rm-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ── Disclaimer ── */
+      .rm-disclaimer {
+        text-align: center;
+        padding: 48px 20px 32px;
+        position: relative;
+        z-index: 2;
+      }
+
+      /* ── Responsive: stack cards on mobile ── */
+      @media (max-width: 700px) {
+        .rm-timeline::before {
+          left: 20px;
+        }
+        .rm-row {
+          flex-direction: row !important;
+          padding-left: 40px;
+        }
+        .rm-card {
+          width: 100%;
+        }
+        .rm-dot-wrap {
+          left: 20px;
+        }
+        .rm-arm {
+          display: none;
+        }
+        .rm-section-badge {
+          justify-content: flex-start;
+          padding-left: 40px;
+        }
+      }
     </style>
   </head>
 
   <body class="bg-black text-white">
+
+    <!-- Topographic texture overlay -->
+    <div class="topo-bg"></div>
 
     <!-- Header -->
     <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
@@ -43,426 +425,441 @@
       </div>
     </div>
 
-    <!-- Main content -->
-    <main class="page-content max-w-4xl mx-auto px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-16">
+    <!-- Hero -->
+    <div class="rm-hero rm-fade">
+      <div class="rm-hero-title">Roadmap</div>
+      <div class="rm-hero-sub">Where we are &amp; where we're going</div>
+    </div>
 
-      <!-- Hero -->
-      <section class="flex flex-col items-center gap-4 sm:gap-6 mb-10 sm:mb-16">
-        <div class="flex items-center gap-4">
-          <img src="/image/flokiwatch.png" alt="FlokiWatch pixel art" class="about-pixel-img">
-          <div>
-            <h1 class="page-title-pixel">Roadmap</h1>
-            <div class="section-pixel-header text-gray-500 mt-2">WHERE WE ARE &amp; WHERE WE'RE GOING</div>
-          </div>
+    <!-- Main timeline -->
+    <div class="rm-timeline" style="padding-bottom:64px;">
+
+      <!-- ═══════════════ COMPLETED ═══════════════ -->
+      <div class="rm-section-badge rm-fade">
+        <div class="rm-badge rm-badge-completed">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          COMPLETED
         </div>
-      </section>
+      </div>
 
-      <!-- Section 1: Active Validation -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-active font-black tracking-[0.2em]">ACTIVE</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Active Validation</h2>
+      <!-- Wave separator: completed → progress (green to cyan) -->
+      <div class="rm-wave-wrap rm-fade">
+        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="waveGreen" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#4ade80" stop-opacity="0.25"/>
+              <stop offset="50%" stop-color="#22d3ee" stop-opacity="0.15"/>
+              <stop offset="100%" stop-color="#4ade80" stop-opacity="0.25"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,50 Q150,10 300,40 T600,35 T900,50" fill="none" stroke="url(#waveGreen)" stroke-width="2"/>
+          <path d="M0,55 Q200,20 400,50 T800,40 T900,55" fill="none" stroke="url(#waveGreen)" stroke-width="1.5" opacity="0.5"/>
+          <path d="M0,45 Q100,25 250,45 T500,30 T750,50 T900,40" fill="none" stroke="url(#waveGreen)" stroke-width="1" opacity="0.3"/>
+        </svg>
+      </div>
+
+      <!-- C1: 8-Agent Architecture -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>8-Agent Autonomous Architecture</div>
+          <div class="rm-card-desc">6 AI + 2 deterministic agents running 24/5. Fully autonomous trading office for XAU/USD.</div>
         </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-        <div class="space-y-4">
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-active"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Monitor corrected GPT Validator</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Verify that the prompt rewrite produces balanced CONFIRM / BOOST / REDUCE distribution instead of 100% REDUCE</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-active"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Monitor open trades</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Track DEMO trades for correct entry/exit logic, P&amp;L accuracy, trailing/breakeven triggers, and broker closure detection</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-active"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">FOMC Minutes — Feb 18 21:00 UTC</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">First high-impact event since calendar pillar integration — validate PRE_EVENT → DURING → POST_EVENT phase transitions</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Support &amp; Resistance zones</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Integrated as informational display only. Backtest showed confidence penalty/TP/SL adjustments all degraded performance. Zone detection active for dashboard visibility.</div>
-            </div>
-          </div>
+      <!-- C2: Floki -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Floki Agentic Trading</div>
+          <div class="rm-card-desc">GPT-5.4, 28 tools, self-scheduling 5-30 min cycles. Sole decision-maker.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Section: Recently Completed -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-completed font-black tracking-[0.2em]">COMPLETED</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Recently Completed</h2>
+      <!-- C3: Rex Debate -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Rex Bull/Bear Debate System</div>
+          <div class="rm-card-desc">FLO-190. Rex Bull argues BUY, Rex Bear argues SELL in parallel. Adversarial analysis before every Floki cycle.</div>
         </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-        <div class="space-y-4">
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Spread Monitoring</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Implemented. Checks spread before entry, delays if >5.0 pips, retries every 30s for up to 5 min.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-TF Trend Confirmation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Implemented. D1/H4 EMA50 trend check. +10 aligned, -10 conflict. Combined with Volume Gate.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Volume Gate</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Confidence penalty for low volume: -15 (<0.5x avg), -25 (<0.3x avg).</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">MACD Divergence Adjustment</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Reduced from ±25 to ±15 points. False signals in strong trends.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">S/R Zones on MT5 Chart</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Bridge pattern (Python writes JSON, MQL5 EA draws lines). 8 nearest zones, width by strength.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Trade History Dashboard (/history)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Full trade table, equity curve, monthly summary, backtest vs live comparison.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">GitHub Version Control</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Private repo at github.com/hhvivaldi/flokiwatch.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">FIELD_CONTRACT.md</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Data interface contract between bot and dashboard.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">News Feed Expansion (14 RSS feeds)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Expanded from 4 to 14 feeds covering geopolitics, crises, monetary policy, safe haven, sanctions.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">MT5 terminal pinning</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Fixed multi-terminal connection bug — bot now pins to the correct MT5 terminal via explicit path, preventing stale position data from wrong terminals.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Pending trade resolution</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Replaced N3 P&amp;L estimation with PENDING state. Trades show "Processing..." until MT5 deal history confirms real P&amp;L. Reconciliation resolves automatically.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">INTEL FEED fix</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Dual MT5 API call (long-range + today-only) defeats silent deal-dropping bug. Reconciliation rewritten as 3-pass architecture.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Standardize everything to English</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Logs, dashboard labels, Discord alerts, brain confirmations/alerts — all user-facing text unified to English.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">ML Retrain 3-year data (v3.1)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">v3.1 deployed. WF AUC stable, M5 SHAP healthy. +$302 P&amp;L vs v3 on same 18-month period, PF 2.25 vs 2.14.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Early Exit <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested via 6-month backtest (Aug 2025 → Feb 2026, 275 trades) — abandoned. 70% of exits would have recovered. Baseline PF 2.32 outperforms EE ON PF 1.77.</div>
-            </div>
-          </div>
+      <!-- C4: Oracle -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Research Manager / Oracle</div>
+          <div class="rm-card-desc">FLO-194. Gemini 3 Flash picks winner between Bull and Bear. Verdict with entry, SL, target.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Section: Optimization Roadmap (Feb 2026) -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-completed font-black tracking-[0.2em]">TESTED</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Optimization Roadmap</h2>
+      <!-- C5: Luna -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Luna Macro Analyst</div>
+          <div class="rm-card-desc">15-min cycles. MT5 + Yahoo Finance + FRED. Macro bias, risk score, correlation tracking.</div>
         </div>
-        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-[0.2em]">10 features rigorously tested via data analysis on 662 backtest trades (Aug 2024 &rarr; Feb 2026, 18 months). <strong class="text-gray-400">All ten confirmed the system is already well-optimized.</strong> Every filter tested removed more winners than losers.</p>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-        <div class="space-y-4">
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Session / Hour Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">662 trades analyzed. No hour below 50% WR with meaningful sample size. All sessions profitable (PF 1.12&ndash;3.15). No action needed.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Confidence-Based Position Sizing <span class="text-amber-400 text-[10px] font-black ml-1 uppercase">DEFERRED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Correlation r=0.70 confirmed (WR 67.6% &rarr; 77.6% by tier). But LOT_STEP 0.01 + MAX_LOT 0.02 = only 2 possible lot sizes. Dynamic sizing lost $129 vs fixed. Deferred until account &gt;$5,000.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Dynamic SL/TP by Session &amp; Volatility <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">MIN_SL clamping (45.6% of trades) caused by low-ATR markets, not SL miscalibration. ATR filter blocked 341 trades with 68.6% WR. TP contributes 48.6% of winner P&amp;L &mdash; essential.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Partial Close (50% at profit target) <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested 5 trigger levels (25%&ndash;75% of TP). Best result: +$18 at 75% (breakeven). Trailing stop already handles profit protection. Net effect zero.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Explicit Regime Detection <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">All regimes profitable: Trending 72% WR (PF 2.08), Ranging 70% WR (PF 2.49), Normal 74.7%. Central Brain scenarios already provide effective implicit detection.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-Asset Correlation Filter <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Conflict trades (BUY gold + DXY rising) have HIGHER WR (76.0%) than aligned (70.7%). Bot overrides macro headwinds with high-conviction calls. Filtering would remove $1,578&ndash;$2,174 profit.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Weight Optimization <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">96 five-pillar + 19 three-pillar combos tested via walk-forward (12M train / 6M test). Best combo improved test PF by only +0.04 (below +0.10 threshold). Current weights confirmed near-optimal. PF range: 1.70&ndash;2.13 (train), 2.13&ndash;2.55 (test) &mdash; narrow band confirms robustness.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Tech Direction Split <span class="text-red-400 text-[10px] font-black ml-1 uppercase">ABANDONED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Attempted to split Tech pillar into Direction (EMAs/MACD) and Risk (RSI/BB). Backtest: PF 2.24 &rarr; 1.71 (drop of 0.54), WR 72.7% &rarr; 67.0%. RSI/BB penalties are a FEATURE &mdash; they prevent bad entries, not direction signals.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Confidence Threshold Analysis <span class="text-green-400 text-[10px] font-black ml-1 uppercase">CONFIRMED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Tested 35%, 45%, 55%, 65% thresholds on 759 signals (662 executed + 97 blocked). 55% is optimal: lowering to 35% adds only $96 P&amp;L but drops PF 2.14 &rarr; 2.01. Blocked signals have PF 1.11 &mdash; correctly filtered.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item roadmap-item-completed">
-            <div class="roadmap-dot roadmap-dot-completed"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Scenario-Specific Thresholds <span class="text-red-400 text-[10px] font-black ml-1 uppercase">NOT NEEDED</span></div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Analyzed blocked signals by scenario. No high-value scenario suppressed: momentum_forte_confirmado avg 95.5% conf (never affected). Blocked signals mostly zona_sr_forte/padrao with marginal PF 1.11.</div>
-            </div>
-          </div>
+      <!-- C6: Echo -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Echo News Sentinel</div>
+          <div class="rm-card-desc">25 RSS feeds, 24/7 monitoring. Pull-based — Floki decides when to check news.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Section: Execution Quality -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-pending font-black tracking-[0.2em]">PLANNED</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Execution Quality</h2>
+      <!-- C7: Sage -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Sage Daily Auditor</div>
+          <div class="rm-card-desc">Gemini-powered. Runs at 21:00 UTC. Reviews all trades, patterns, and performance.</div>
         </div>
-        
-        <div class="space-y-4">
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">1. Candlestick Pattern Recognition</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Expand visual context features (morning/evening star, three soldiers, hammer at S/R). Needs backtest.</div>
-            </div>
-          </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">2. M5 Entry Timing</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Wait for favorable M5 pullback before entering. Needs backtest.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">3. Adaptive Trailing Stop</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Dynamic trailing distance based on momentum strength. Needs backtest.</div>
-            </div>
-          </div>
+      <!-- C8: Simba -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Simba Watchdog</div>
+          <div class="rm-card-desc">Zero AI cost. 30s polling. Wakes Floki on critical conditions. Pure Python deterministic.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Section 2: Short-Term Pending -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-pending font-black tracking-[0.2em]">PENDING</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Short-Term Pending</h2>
+      <!-- C9: Regime -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Market Regime Detection</div>
+          <div class="rm-card-desc">7 regimes: Volatile, Quiet, Breakout Imminent, Trending Bullish/Bearish, Ranging, Transitional.</div>
         </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-        <div class="space-y-4">
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Backtest pyramid instrumentation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Add counters for pyramid attempts, blocks, allows, and separate P&amp;L stats. Do not change the 0.3% threshold until data is collected.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">M5 Trigger (intra-candle early signal)</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Influence analysis, not just re-trigger H1. Deferred until real trade data validates current system.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-pending"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">ML weight floor monitoring</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Track losses where ML weight &le;10% due to stacked penalties. No code change yet — monitoring only.</div>
-            </div>
-          </div>
+      <!-- C10: Safety -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Safety System</div>
+          <div class="rm-card-desc">FLO-85 opposing position hard gate. Max 3 positions. 6% daily loss cap. Volatility guard. Market hours guard.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Section 3: Future Roadmap -->
-      <section class="about-card mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="roadmap-badge roadmap-badge-future font-black tracking-[0.2em]">FUTURE</span>
-          <h2 class="about-card-title mb-0 font-black tracking-[0.2em]">Future Roadmap</h2>
+      <!-- C11: Position Management -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Floki Position Management</div>
+          <div class="rm-card-desc">Breakeven, trailing stop, drawdown phases. Floki manages all positions directly — EA is pure executor.</div>
         </div>
-        <p class="text-[10px] text-gray-500 mb-5 font-black uppercase tracking-[0.2em]">After stable DEMO validation — 2-3 weeks</p>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-        <div class="space-y-4">
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Telegram news channels</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Additional headline source. Requires channel curation to filter signal from noise.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">TradingView News</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">No public API — evaluate feasibility via scraping, unofficial endpoints, or RSS.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">TradingView Minds / Ideas</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Low priority — high risk of opinion noise diluting sentiment score.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Multi-instrument expansion</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Extend to other pairs and commodities (XAG/USD, EUR/USD, etc.). Requires per-instrument config, model retraining, and indicator tuning.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Custom domain — floki.watch</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Split architecture: dedicated trading server vs public-facing dashboard.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Discord rebrand to FlokiWatch</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Rename server, channels, and bot identity to match dashboard branding.</div>
-            </div>
-          </div>
-
-          <div class="roadmap-item">
-            <div class="roadmap-dot roadmap-dot-future"></div>
-            <div>
-              <div class="text-sm text-gray-200 font-black tracking-[0.2em] uppercase">Twitter / X automation</div>
-              <div class="text-[10px] text-gray-500 mt-1 font-black tracking-[0.2em] uppercase">Phased rollout: manual posting first → semi-automated → fully automated.</div>
-            </div>
-          </div>
+      <!-- C12: Trade Room -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Trade Room Dashboard</div>
+          <div class="rm-card-desc">Bloomberg-style redesign. All 8 agents visible. Command center, position bar, deep dive panels.</div>
         </div>
-      </section>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-      <!-- Disclaimer -->
-      <section class="mt-16 pt-6 border-t border-gray-800">
-        <h3 class="text-[10px] text-gray-500 font-black tracking-[0.2em] mb-2 uppercase">NOTE</h3>
-        <p class="text-[10px] text-gray-600 leading-relaxed font-black tracking-[0.2em] uppercase">
-          This roadmap reflects the current plan and may change as the system evolves. Items are not commitments — they are directions we're exploring.
-        </p>
-      </section>
+      <!-- C13: EA Bridge -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>EA Bridge Execution</div>
+          <div class="rm-card-desc">JSON signals + tick-by-tick EA management. Python writes signal, MQL5 EA executes on MetaTrader 5.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
 
-    </main>
+      <!-- C14: Reflexion -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Reflexion Engine + Semantic Memory</div>
+          <div class="rm-card-desc">ChromaDB vector store. Post-trade reflexion with enriched embeddings. Semantic search across all past trades.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
+
+      <!-- C15: S/R -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>S/R Zones on MT5 Chart</div>
+          <div class="rm-card-desc">Bridge pattern: Python writes JSON, MQL5 EA draws zones. H1 intraday + H4 structural layers.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
+
+      <!-- C16: Rex Monitor -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Rex Monitor</div>
+          <div class="rm-card-desc">FLO-211. Zero-LLM background scanner. 4 tools every 30 min: divergence, correlation, regime history, session performance.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
+
+      <!-- C17: FLO-218 -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-completed">
+          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Watch Conditions Display</div>
+          <div class="rm-card-desc">FLO-218. Human-friendly format with colored arrows. No technical IDs — intuitive at a glance.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
+      </div>
+
+
+      <!-- ═══════════════ IN PROGRESS ═══════════════ -->
+
+      <!-- Wave separator: completed → in progress -->
+      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
+        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="waveCyan" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
+              <stop offset="40%" stop-color="#06b6d4" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.3"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,40 Q225,10 450,45 T900,35" fill="none" stroke="url(#waveCyan)" stroke-width="2.5"/>
+          <path d="M0,50 Q180,25 360,55 T720,40 T900,50" fill="none" stroke="url(#waveCyan)" stroke-width="1.5" opacity="0.4"/>
+          <path d="M0,35 Q300,55 600,30 T900,45" fill="none" stroke="url(#waveCyan)" stroke-width="1" opacity="0.25"/>
+        </svg>
+      </div>
+
+      <div class="rm-section-badge rm-fade">
+        <div class="rm-badge rm-badge-progress">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          IN PROGRESS
+        </div>
+      </div>
+
+      <!-- P1: Live Trades -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-progress">
+          <div class="rm-card-title">First Live Trades Monitoring</div>
+          <div class="rm-card-desc">Population B, 101 trades. Tracking entry/exit logic, P&L accuracy, trailing/BE triggers on demo account.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
+      </div>
+
+      <!-- P2: Reflexion -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-progress">
+          <div class="rm-card-title">Post-Trade Reflexion Confirmation</div>
+          <div class="rm-card-desc">Engine built. Pending first closed trade to verify end-to-end reflexion pipeline and ChromaDB storage.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
+      </div>
+
+      <!-- P3: Semantic -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-progress">
+          <div class="rm-card-title">Semantic Search Confirmation</div>
+          <div class="rm-card-desc">search_memory tool active. Awaiting real trades to validate embedding quality and retrieval relevance.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
+      </div>
+
+      <!-- P4: SL Guard -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-progress">
+          <div class="rm-card-title">SL-Widening Guard Confirmation</div>
+          <div class="rm-card-desc">FLO-141. Guard + rate limit (max 3/hour/ticket) implemented. Pending real trade validation.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
+      </div>
+
+      <!-- P5: Holiday -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-progress">
+          <div class="rm-card-title">Holiday Detection</div>
+          <div class="rm-card-desc">FLO-208. Market holidays dictionary in config. Validates against next major holiday to confirm correct behavior.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
+      </div>
+
+
+      <!-- ═══════════════ NEXT UP ═══════════════ -->
+
+      <!-- Wave separator: progress → next -->
+      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
+        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="waveAmber" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#facc15" stop-opacity="0.2"/>
+              <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.15"/>
+              <stop offset="100%" stop-color="#facc15" stop-opacity="0.2"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,45 Q200,15 400,50 T800,30 T900,45" fill="none" stroke="url(#waveAmber)" stroke-width="2"/>
+          <path d="M0,38 Q250,55 500,35 T900,50" fill="none" stroke="url(#waveAmber)" stroke-width="1.2" opacity="0.4"/>
+        </svg>
+      </div>
+
+      <div class="rm-section-badge rm-fade">
+        <div class="rm-badge rm-badge-next">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          NEXT UP
+        </div>
+      </div>
+
+      <!-- N1: Brain cleanup -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-next">
+          <div class="rm-card-title">Brain Cleanup</div>
+          <div class="rm-card-desc">FLO-154. Remove legacy decision layer fields (original_scores, raw_data, gpt_validation). Brain = data pipeline only.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
+      </div>
+
+      <!-- N2: Echo -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-next">
+          <div class="rm-card-title">Echo Contextual Investigation</div>
+          <div class="rm-card-desc">FLO-212. Echo deep-dives into high-impact news with follow-up queries. Context-aware alert enrichment.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
+      </div>
+
+      <!-- N3: Luna -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-next">
+          <div class="rm-card-title">Luna Adaptive Cadence</div>
+          <div class="rm-card-desc">FLO-213. Dynamic cycle intervals based on market volatility. Faster during events, slower during quiet periods.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
+      </div>
+
+      <!-- N4: Journal -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-next">
+          <div class="rm-card-title">Floki Journaling</div>
+          <div class="rm-card-desc">FLO-178. Structured trading journal. write_trading_journal tool exists — expanding to full session narratives.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
+      </div>
+
+
+      <!-- ═══════════════ FUTURE ═══════════════ -->
+
+      <!-- Wave separator: next → future -->
+      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
+        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="waveIndigo" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#a5b4fc" stop-opacity="0.15"/>
+              <stop offset="50%" stop-color="#6366f1" stop-opacity="0.1"/>
+              <stop offset="100%" stop-color="#a5b4fc" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,42 Q180,18 360,48 T720,32 T900,42" fill="none" stroke="url(#waveIndigo)" stroke-width="2"/>
+          <path d="M0,50 Q220,35 440,55 T880,40" fill="none" stroke="url(#waveIndigo)" stroke-width="1" opacity="0.35"/>
+        </svg>
+      </div>
+
+      <div class="rm-section-badge rm-fade">
+        <div class="rm-badge rm-badge-future">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          FUTURE
+        </div>
+      </div>
+
+      <!-- F1: Atlas -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Atlas — Technical Analyst Agent</div>
+          <div class="rm-card-desc">Phase 4. Dedicated chart analysis agent with pattern recognition and multi-timeframe structure mapping.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F2: Multi-pair -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Multi-Pair Expansion</div>
+          <div class="rm-card-desc">Extend to XAG/USD, EUR/USD, and other instruments. Per-pair config, model retraining, indicator tuning.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F3: Live -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Live Account Migration</div>
+          <div class="rm-card-desc">Transition from demo to real capital after validation metrics are met. Gradual sizing ramp.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F4: Position sizing -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Confidence-Based Position Sizing</div>
+          <div class="rm-card-desc">Deferred until account > $5,000. Correlation confirmed (WR 67.6% → 77.6% by tier). Lot constraints currently prevent benefit.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F5: Domain -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Domain floki.watch + Public Dashboard</div>
+          <div class="rm-card-desc">Split architecture: dedicated trading server vs public-facing dashboard. Custom domain deployment.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F6: Twitter -->
+      <div class="rm-row rm-row-right rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Twitter / X Automation</div>
+          <div class="rm-card-desc">Phased rollout: manual posting first, semi-automated, then fully automated trade commentary.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+      <!-- F7: Advanced ML -->
+      <div class="rm-row rm-row-left rm-fade">
+        <div class="rm-card rm-card-future">
+          <div class="rm-card-title">Advanced ML / Pattern Discovery</div>
+          <div class="rm-card-desc">Deep learning, market microstructure analysis. Future exploration beyond current ensemble approach.</div>
+        </div>
+        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
+      </div>
+
+    </div><!-- /rm-timeline -->
+
+    <!-- Disclaimer -->
+    <div class="rm-disclaimer rm-fade">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#475569;">
+        This roadmap reflects the current plan and may change as the system evolves.<br>
+        Items are directions we're exploring, not commitments.
+      </div>
+    </div>
+
+    <!-- Intersection Observer for scroll-reveal -->
+    <script>
+      (function() {
+        var els = document.querySelectorAll('.rm-fade');
+        if (!('IntersectionObserver' in window)) {
+          for (var i = 0; i < els.length; i++) els[i].classList.add('rm-visible');
+          return;
+        }
+        var obs = new IntersectionObserver(function(entries) {
+          for (var i = 0; i < entries.length; i++) {
+            if (entries[i].isIntersecting) {
+              entries[i].target.classList.add('rm-visible');
+              obs.unobserve(entries[i].target);
+            }
+          }
+        }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+        for (var i = 0; i < els.length; i++) obs.observe(els[i]);
+      })();
+    </script>
+
   </body>
 </html>

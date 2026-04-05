@@ -1758,7 +1758,9 @@
         <div class="bc-card" id="regime-card" style="border-color:var(--clr-ranging)">
           <button type="button" class="bc-btn" data-expand-target="regime-expand" aria-expanded="false">
             <div class="bc-row1">
-              <div class="bc-avatar" id="avatar-regime" style="border-color:var(--clr-ranging);background:rgba(99,102,241,0.08);font-size:18px;color:var(--clr-ranging)">◈</div>
+              <div class="bc-avatar" id="avatar-regime" style="border-color:var(--clr-ranging)">
+                <img class="avatar-img" id="avatar-regime-img" alt="MARKET" src="/image/market-RANGING.gif" />
+              </div>
               <div class="bc-identity">
                 <span class="bc-name" id="regime-card-name" style="color:var(--clr-ranging)">MARKET</span>
                 <span class="bc-role">Regime detector</span>
@@ -1877,8 +1879,8 @@
           <div class="bc-card" id="rex-bull-card" style="border-color:#4CAF50">
             <button type="button" class="bc-btn" data-expand-target="rex-bull-expand" aria-expanded="false">
               <div class="bc-row1">
-                <div class="bc-avatar" style="border-color:#4CAF50;background:rgba(76,175,80,0.1)">
-                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C8;</span>
+                <div class="bc-avatar" id="avatar-rex-bull" style="border-color:#4CAF50">
+                  <img class="avatar-img" alt="REX BULL" src="/image/rex-bull-video-trade-room.gif" />
                 </div>
                 <div class="bc-identity">
                   <span class="bc-name" style="color:#4CAF50">REX BULL</span>
@@ -1907,8 +1909,8 @@
           <div class="bc-card" id="rex-bear-card" style="border-color:#F44336">
             <button type="button" class="bc-btn" data-expand-target="rex-bear-expand" aria-expanded="false">
               <div class="bc-row1">
-                <div class="bc-avatar" style="border-color:#F44336;background:rgba(244,67,54,0.1)">
-                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x1F4C9;</span>
+                <div class="bc-avatar" id="avatar-rex-bear" style="border-color:#F44336">
+                  <img class="avatar-img" alt="REX BEAR" src="/image/rex-bear-video-trade-room.gif" />
                 </div>
                 <div class="bc-identity">
                   <span class="bc-name" style="color:#F44336">REX BEAR</span>
@@ -1937,12 +1939,12 @@
           <div class="bc-card" id="verdict-card" style="border-color:#FFD700">
             <button type="button" class="bc-btn" data-expand-target="verdict-expand" aria-expanded="false">
               <div class="bc-row1">
-                <div class="bc-avatar" style="border-color:#FFD700;background:rgba(255,215,0,0.1)">
-                  <span style="font-size:18px;line-height:36px;text-align:center;display:block">&#x2696;</span>
+                <div class="bc-avatar" id="avatar-oracle" style="border-color:#FFD700">
+                  <img class="avatar-img" alt="ORACLE" src="/image/oracle-video-trade-room.gif" />
                 </div>
                 <div class="bc-identity">
-                  <span class="bc-name" style="color:#FFD700">VERDICT</span>
-                  <span class="bc-role">RESEARCH MGR</span>
+                  <span class="bc-name" style="color:#FFD700">ORACLE</span>
+                  <span class="bc-role">RESEARCH MANAGER</span>
                 </div>
               </div>
               <div class="bc-row2">
@@ -2415,10 +2417,7 @@
               if (wc.length > 0) {
                 var wcHtml = '';
                 for (var wi = 0; wi < wc.length; wi++) {
-                  var c = wc[wi];
-                  var typ = (c.type || '').replace(/_/g, ' ');
-                  var lvl = c.level != null ? Number(c.level).toFixed(1) : '?';
-                  wcHtml += '<span style="margin-right:12px"><span style="color:#00E5FF">' + (c.id || 'c' + (wi + 1)) + '</span> ' + typ + ' <strong style="color:#e2e8f0">' + lvl + '</strong></span>';
+                  wcHtml += '<span style="margin-right:14px;font-weight:700">' + formatWatchConditionHuman(wc[wi]) + '</span>';
                 }
                 watchEl.innerHTML = wcHtml;
               } else {
@@ -3858,6 +3857,28 @@
           return '\u2022';
         }
 
+        // FLO-218: Human-friendly watch condition formatter (no technical IDs)
+        function formatWatchConditionHuman(c) {
+          var type = (c.type || '').toString();
+          var level = c.level != null ? Number(c.level).toFixed(1) : (c.value || c.threshold || '?');
+          if (type === 'price_above') return '<span style="color:#4ade80">\u2191 ' + level + '</span>';
+          if (type === 'price_below') return '<span style="color:#f87171">\u2193 ' + level + '</span>';
+          if (type === 'price_touch') return '<span style="color:#fbbf24">\u2194 ' + level + '</span>';
+          if (type === 'rsi_above') return '<span style="color:#60a5fa">RSI \u2191 ' + level + '</span>';
+          if (type === 'rsi_below') return '<span style="color:#60a5fa">RSI \u2193 ' + level + '</span>';
+          if (type === 'volume_above' || type === 'h1_volume_above') return '<span style="color:#a78bfa">VOL \u2191 ' + level + '</span>';
+          if (type === 'adx_above') return '<span style="color:#a78bfa">ADX \u2191 ' + level + '</span>';
+          if (type === 'pnl_threshold') {
+            var v = parseFloat(c.value);
+            var pClr = v < 0 ? '#f87171' : '#4ade80';
+            return '<span style="color:' + pClr + '">P&L ' + (v < 0 ? '\u2193' : '\u2191') + ' $' + Math.abs(v).toFixed(0) + '</span>';
+          }
+          if (type === 'scanner_pattern') return '<span style="color:#fbbf24">PATTERN: ' + esc(c.pattern || '?') + '</span>';
+          if (type === 'indicator_above') return '<span style="color:#60a5fa">' + esc(c.indicator || '?').toUpperCase() + ' \u2191 ' + (c.threshold || '?') + '</span>';
+          if (type === 'indicator_below') return '<span style="color:#60a5fa">' + esc(c.indicator || '?').toUpperCase() + ' \u2193 ' + (c.threshold || '?') + '</span>';
+          return '<span style="color:#94a3b8">' + esc(type.replace(/_/g, ' ')) + ' ' + level + '</span>';
+        }
+
         // FLO-66: velocity suffix for condition display
         var _simbaVelocityData = {};
         function _velSuffix(cid) {
@@ -4137,7 +4158,7 @@
             var c = conds[ci] || {};
             var ct = (c.type || '').toString().toLowerCase();
             var lv = (c.level != null && isFinite(Number(c.level))) ? Number(c.level) : null;
-            rawLines.push(esc((c.type || 'condition') + ': ' + (lv !== null ? lv.toFixed(1) : '—')));
+            rawLines.push(formatWatchConditionHuman(c));
             if (ct === 'price_below' && lv !== null) upper = lv;
             if (ct === 'price_above' && lv !== null) lower = lv;
           }
@@ -5059,8 +5080,23 @@
                   if (rcTrans) rcTrans.textContent = mr.transition || '—';
                   // Card border + avatar color
                   if (rcCard) rcCard.style.borderColor = clr;
-                  if (rcAvatar) { rcAvatar.style.borderColor = clr; rcAvatar.style.color = clr; }
+                  if (rcAvatar) rcAvatar.style.borderColor = clr;
                   if (rcName) rcName.style.color = clr;
+                  // FLO-217 Phase 2: Dynamic regime avatar GIF
+                  var regimeGifMap = {
+                    'TRENDING_BULLISH': '/image/market-bull.gif',
+                    'TRENDING_BEARISH': '/image/market-bear.gif',
+                    'RANGING': '/image/market-RANGING.gif',
+                    'VOLATILE': '/image/market-VOLATILE.gif',
+                    'BREAKOUT_IMMINENT': '/image/market-BREAKOUT_IMMINENT.gif',
+                    'TRANSITIONAL': '/image/market-TRANSITIONAL.gif',
+                    'QUIET': '/image/market-QUIET.gif'
+                  };
+                  var regimeImg = document.getElementById('avatar-regime-img');
+                  if (regimeImg) {
+                    var newSrc = regimeGifMap[r] || '/image/market-RANGING.gif';
+                    if (!regimeImg.src.endsWith(newSrc)) regimeImg.src = newSrc;
+                  }
                 }
               } catch(e) {}
 
@@ -5193,13 +5229,7 @@
                 if (wcEl && wcs && wcs.conditions && wcs.conditions.length) {
                   var html = '';
                   for (var wi = 0; wi < wcs.conditions.length; wi++) {
-                    var wc = wcs.conditions[wi];
-                    var typ = (wc.type || '').replace(/_/g, ' ');
-                    var lvl = wc.level != null ? Number(wc.level).toFixed(1) : '?';
-                    html += '<div style="font-size:9px;font-family:\'JetBrains Mono\',monospace;padding:2px 0;color:#94a3b8">';
-                    html += '<span style="color:var(--clr-simba)">' + (wc.id || 'c'+(wi+1)) + '</span> ';
-                    html += typ + ' <strong style="color:#e2e8f0">' + lvl + '</strong>';
-                    html += '</div>';
+                    html += '<div style="font-size:9px;font-family:\'JetBrains Mono\',monospace;padding:2px 0;font-weight:700">' + formatWatchConditionHuman(wcs.conditions[wi]) + '</div>';
                   }
                   wcEl.innerHTML = html;
                 } else if (wcEl) {
