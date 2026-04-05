@@ -1398,6 +1398,26 @@ class AgentTools:
             self._log_tool("get_fibonacci_levels", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_pivot_points(self) -> Dict[str, Any]:
+        """FLO-223: Return Classic + Fibonacci Pivot Points from previous D1 candle."""
+        start = time.time()
+        try:
+            dp = self._last_agent_data()
+            if not dp:
+                self._log_no_cache("get_pivot_points", start)
+                return self._no_cache()
+
+            pp = dp.get("pivot_points")
+            if not isinstance(pp, dict) or not pp:
+                self._log_no_cache("get_pivot_points", start)
+                return self._no_cache()
+
+            self._log_tool("get_pivot_points", start, f"PP={pp.get('classic', {}).get('PP', '?')}")
+            return pp
+        except Exception as e:
+            self._log_tool("get_pivot_points", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     # ---------------------------------------------------------------------
     # Context tools (cache-only)
     # ---------------------------------------------------------------------

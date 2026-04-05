@@ -560,6 +560,11 @@ class AIAgent:
                 "description": "Get cached Fibonacci levels and swing high/low",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            {
+                "name": "get_pivot_points",
+                "description": "Get daily Classic and Fibonacci Pivot Points (R3/R2/R1/PP/S1/S2/S3) from previous D1 candle",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
             # get_headlines: always available (get_macro removed FLO-156)
             *self._macro_tools_if_needed(),
             {

@@ -30,7 +30,7 @@ Your team:
 <tools>
 You have four categories of data:
 
-Technical \u2014 get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels
+Technical \u2014 get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_pivot_points
 Price structure, momentum, and key levels. get_indicators returns data for M15, H1, H4, D1 timeframes.
 
 Cross-market \u2014 get_market_context

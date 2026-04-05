@@ -2103,6 +2103,26 @@
                 </div>
               </div>
             </div>
+            <!-- FLO-223: Pivot Points -->
+            <div class="ctx-block" style="border:none">
+              <div class="ctx-label">PIVOT POINTS (D1)</div>
+              <div id="ctx-pivot-points" style="font-family:'JetBrains Mono',monospace;font-size:9px">
+                <div style="display:grid;grid-template-columns:28px 1fr 4px 28px 1fr;gap:2px 6px">
+                  <span style="color:#f87171;font-weight:700">R3</span><span id="ctx-pp-r3" style="color:#f87171;font-weight:600">—</span>
+                  <span></span>
+                  <span style="color:#f87171;font-weight:700">R2</span><span id="ctx-pp-r2" style="color:#f87171;font-weight:600">—</span>
+                  <span style="color:#fb923c;font-weight:700">R1</span><span id="ctx-pp-r1" style="color:#fb923c;font-weight:600">—</span>
+                  <span></span>
+                  <span style="color:#e2e8f0;font-weight:700">PP</span><span id="ctx-pp-pp" style="color:#e2e8f0;font-weight:800">—</span>
+                  <span style="color:#34d399;font-weight:700">S1</span><span id="ctx-pp-s1" style="color:#34d399;font-weight:600">—</span>
+                  <span></span>
+                  <span style="color:#34d399;font-weight:700">S2</span><span id="ctx-pp-s2" style="color:#34d399;font-weight:600">—</span>
+                  <span style="color:#4ade80;font-weight:700">S3</span><span id="ctx-pp-s3" style="color:#4ade80;font-weight:600">—</span>
+                  <span></span>
+                  <span></span><span></span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div><!-- /sidebar-ops -->
@@ -4931,6 +4951,22 @@
                   var eh = '<span style="color:#546478;font-weight:600">EMA50</span>';
                   for (var ti = 0; ti < tfs.length; ti++) eh += mtfEmaHtml(tfs[ti]);
                   emaEl.innerHTML = eh;
+                }
+              } catch(e) {}
+
+              // FLO-223: Pivot Points
+              try {
+                var pp = state.pivot_points;
+                if (pp && pp.classic) {
+                  var c = pp.classic;
+                  var ids = [['ctx-pp-r3','R3'],['ctx-pp-r2','R2'],['ctx-pp-r1','R1'],['ctx-pp-pp','PP'],['ctx-pp-s1','S1'],['ctx-pp-s2','S2'],['ctx-pp-s3','S3']];
+                  for (var pi = 0; pi < ids.length; pi++) {
+                    var el = document.getElementById(ids[pi][0]);
+                    if (el) {
+                      var v = c[ids[pi][1]];
+                      el.textContent = v != null ? Number(v).toFixed(2) : '\u2014';
+                    }
+                  }
                 }
               } catch(e) {}
 

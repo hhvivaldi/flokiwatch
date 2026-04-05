@@ -695,6 +695,16 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `multi_tf_indicators.{TF}.adx_direction` | string (`rising`/`falling`/`flat`) | ADX 4-bar trend | ↑↓ arrow next to ADX value |
 | `multi_tf_indicators.{TF}.adx_change_4bars` | float | ADX delta vs 4 candles ago | — |
 
+### `pivot_points` Object in `bot_state.json` (FLO-223)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `pivot_points` | object | `state_writer.py` via `main.py` | `index.html`, `trade_room.html` |
+| `pivot_points.classic.{R3,R2,R1,PP,S1,S2,S3}` | float | P=(H+L+C)/3, standard formulas | `#ctx-pp-*` (Trade Room), `#pivot-grid-dashboard` |
+| `pivot_points.fibonacci.{R3,R2,R1,PP,S1,S2,S3}` | float | P same, Fib ratios (0.382, 0.618) | — |
+| `pivot_points.source.date` | string (ISO) | Previous D1 candle timestamp | — |
+| `pivot_points.source.{high,low,close}` | float | Previous D1 candle OHLC | — |
+
 ### `ea_bridge` Object in `bot_state.json`
 
 | Field | Type | Writer | Reader (app.js) |

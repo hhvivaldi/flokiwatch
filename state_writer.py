@@ -254,6 +254,16 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-223: Pivot Points from agent data
+        try:
+            _agent_data2 = getattr(bot_instance, "_last_agent_data", None)
+            if isinstance(_agent_data2, dict):
+                _pp = _agent_data2.get("pivot_points")
+                if isinstance(_pp, dict) and _pp:
+                    state["pivot_points"] = _pp
+        except Exception:
+            pass
+
         # FLO-122: Inject market_context from MT5 (shared fetcher with 60s cache)
         try:
             from market_context_fetcher import fetch_market_context
