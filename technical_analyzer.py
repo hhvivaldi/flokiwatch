@@ -123,6 +123,19 @@ def compute_indicators_from_candles(candles: list) -> dict:
         macd_hist_now = float(last.get("macd_hist", 0))
         adx_now = float(adx_data.get("adx_value", 0))
 
+        ema9 = float(last.get("ema_9", 0))
+        ema21 = float(last.get("ema_21", 0))
+        ema50 = float(last.get("ema_50", 0))
+        ema200 = float(last.get("ema_200", 0))
+
+        # EMA alignment
+        if ema9 > ema21 > ema50 > ema200:
+            ema_alignment = "full_bullish"
+        elif ema9 < ema21 < ema50 < ema200:
+            ema_alignment = "full_bearish"
+        else:
+            ema_alignment = "mixed"
+
         result = {
             "rsi": round(rsi_now, 1),
             "macd": {
@@ -135,10 +148,17 @@ def compute_indicators_from_candles(candles: list) -> dict:
                 "plus_di": round(float(adx_data.get("plus_di", 0)), 1),
                 "minus_di": round(float(adx_data.get("minus_di", 0)), 1),
             },
-            "ema50": round(float(last.get("ema_50", 0)), 2),
-            "ema200": round(float(last.get("ema_200", 0)), 2),
+            "ema9": round(ema9, 2),
+            "ema21": round(ema21, 2),
+            "ema50": round(ema50, 2),
+            "ema200": round(ema200, 2),
             "atr": round(float(last.get("atr_14", 0)), 2),
-            "price_vs_ema50": "above" if price > float(last.get("ema_50", 0)) else "below",
+            "price_vs_ema9": "above" if price > ema9 else "below",
+            "price_vs_ema21": "above" if price > ema21 else "below",
+            "price_vs_ema50": "above" if price > ema50 else "below",
+            "price_vs_ema200": "above" if price > ema200 else "below",
+            "ema_alignment": ema_alignment,
+            "ema9_ema21_distance": round(ema9 - ema21, 2),
         }
 
         # FLO-222: Direction and trajectory (compare current vs 4 candles ago)
@@ -165,6 +185,34 @@ def compute_indicators_from_candles(candles: list) -> dict:
                 adx_delta = round(adx_now - adx_4ago, 1)
                 result["adx_direction"] = "rising" if adx_delta > 2 else ("falling" if adx_delta < -2 else "flat")
                 result["adx_change_4bars"] = adx_delta
+
+                # FLO-224: EMA crossover detection (compare [-1] vs [-5])
+                ema9_prev = float(prev.get("ema_9", 0))
+                ema21_prev = float(prev.get("ema_21", 0))
+                ema50_prev = float(prev.get("ema_50", 0))
+                ema200_prev = float(prev.get("ema_200", 0))
+
+                # EMA9 x EMA21 crossover
+                if ema9_prev <= ema21_prev and ema9 > ema21:
+                    result["ema9_cross_ema21"] = "golden_cross"
+                elif ema9_prev >= ema21_prev and ema9 < ema21:
+                    result["ema9_cross_ema21"] = "death_cross"
+                else:
+                    result["ema9_cross_ema21"] = "none"
+
+                # EMA50 x EMA200 crossover (classic golden/death cross)
+                if ema50_prev <= ema200_prev and ema50 > ema200:
+                    result["ema50_cross_ema200"] = "golden_cross"
+                elif ema50_prev >= ema200_prev and ema50 < ema200:
+                    result["ema50_cross_ema200"] = "death_cross"
+                else:
+                    result["ema50_cross_ema200"] = "none"
+
+                # EMA9/21 distance direction (widening/narrowing)
+                dist_now = ema9 - ema21
+                dist_prev = ema9_prev - ema21_prev
+                dist_delta = abs(dist_now) - abs(dist_prev)
+                result["ema9_ema21_direction"] = "widening" if dist_delta > 0.5 else ("narrowing" if dist_delta < -0.5 else "flat")
             except Exception:
                 pass
 

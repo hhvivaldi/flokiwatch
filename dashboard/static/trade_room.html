@@ -2098,7 +2098,7 @@
                   <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
                 </div>
                 <div id="ctx-mtf-ema" style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;padding:2px 0">
-                  <span style="color:#546478;font-weight:600">EMA50</span>
+                  <span style="color:#546478;font-weight:600">EMA</span>
                   <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
                 </div>
               </div>
@@ -4901,9 +4901,18 @@
                 }
                 function mtfEmaHtml(tf) {
                   var d = mtf[tf] || {};
-                  if (!d.price_vs_ema50) return '<span style="text-align:center;color:#64748b">\u2014</span>';
-                  var above = d.price_vs_ema50 === 'above';
-                  return '<span style="text-align:center;color:' + (above ? '#4ade80' : '#f87171') + ';font-weight:700">' + (above ? '\u25B2' : '\u25BC') + '</span>';
+                  if (!d.ema_alignment && !d.price_vs_ema50) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  // FLO-224: Show alignment + crossover
+                  var align = d.ema_alignment;
+                  var clr = align === 'full_bullish' ? '#4ade80' : (align === 'full_bearish' ? '#f87171' : '#94a3b8');
+                  var label = align === 'full_bullish' ? 'BULL' : (align === 'full_bearish' ? 'BEAR' : 'MIX');
+                  // Crossover flash
+                  var cross = '';
+                  if (d.ema9_cross_ema21 === 'golden_cross') cross = '<span style="color:#4ade80;font-size:7px">\u2728</span>';
+                  else if (d.ema9_cross_ema21 === 'death_cross') cross = '<span style="color:#f87171;font-size:7px">\u2620</span>';
+                  if (d.ema50_cross_ema200 === 'golden_cross') cross = '<span style="color:#facc15;font-size:7px">\u2B50</span>';
+                  else if (d.ema50_cross_ema200 === 'death_cross') cross = '<span style="color:#f87171;font-size:7px">\uD83D\uDC80</span>';
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700;font-size:8px">' + label + cross + '</span>';
                 }
 
                 // RSI row
@@ -4936,7 +4945,7 @@
                 // EMA row
                 var emaEl = document.getElementById('ctx-mtf-ema');
                 if (emaEl) {
-                  var eh = '<span style="color:#546478;font-weight:600">EMA50</span>';
+                  var eh = '<span style="color:#546478;font-weight:600">EMA</span>';
                   for (var ti = 0; ti < tfs.length; ti++) eh += mtfEmaHtml(tfs[ti]);
                   emaEl.innerHTML = eh;
                 }

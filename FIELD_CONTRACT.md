@@ -688,7 +688,17 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `multi_tf_indicators.{TF}.ema50` | float | EMA(50) price | — |
 | `multi_tf_indicators.{TF}.ema200` | float | EMA(200) price | — |
 | `multi_tf_indicators.{TF}.atr` | float | ATR(14) | — |
-| `multi_tf_indicators.{TF}.price_vs_ema50` | string (`above`/`below`) | Price vs EMA50 | Arrow: ▲ green (above) / ▼ red (below) |
+| `multi_tf_indicators.{TF}.ema9` | float | EMA(9) price | — |
+| `multi_tf_indicators.{TF}.ema21` | float | EMA(21) price | — |
+| `multi_tf_indicators.{TF}.price_vs_ema9` | string (`above`/`below`) | Price vs EMA9 | — |
+| `multi_tf_indicators.{TF}.price_vs_ema21` | string (`above`/`below`) | Price vs EMA21 | — |
+| `multi_tf_indicators.{TF}.price_vs_ema50` | string (`above`/`below`) | Price vs EMA50 | — |
+| `multi_tf_indicators.{TF}.price_vs_ema200` | string (`above`/`below`) | Price vs EMA200 | — |
+| `multi_tf_indicators.{TF}.ema_alignment` | string (`full_bullish`/`full_bearish`/`mixed`) | EMA9>21>50>200 order | BULL/BEAR/MIX in grid |
+| `multi_tf_indicators.{TF}.ema9_ema21_distance` | float | EMA9 - EMA21 (positive = above) | — |
+| `multi_tf_indicators.{TF}.ema9_ema21_direction` | string (`widening`/`narrowing`/`flat`) | Distance trend vs 4 bars ago | — |
+| `multi_tf_indicators.{TF}.ema9_cross_ema21` | string (`golden_cross`/`death_cross`/`none`) | EMA9 x EMA21 crossover in last 4 bars | Crossover icon in grid |
+| `multi_tf_indicators.{TF}.ema50_cross_ema200` | string (`golden_cross`/`death_cross`/`none`) | Classic golden/death cross in last 4 bars | Crossover icon in grid |
 | `multi_tf_indicators.{TF}.rsi_direction` | string (`rising`/`falling`/`flat`) | RSI 4-bar trend | ↑↓ arrow next to RSI value |
 | `multi_tf_indicators.{TF}.rsi_change_4bars` | float | RSI delta vs 4 candles ago | — |
 | `multi_tf_indicators.{TF}.macd_direction` | string (`bullish_strengthening`/`bullish_weakening`/`bearish_strengthening`/`bearish_weakening`) | MACD histogram trend | ↑↓ arrow next to MACD arrow |

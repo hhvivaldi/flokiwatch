@@ -327,13 +327,20 @@ function renderMarketIndicatorsPanel(state) {
         h += `<span style="text-align:center;color:${c};font-weight:700">${v.toFixed(0)}${dArr(td.adx_direction)}</span>`;
       });
       h += `</div>`;
-      // EMA50
-      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">EMA50</span>`;
+      // EMA alignment + crossover (FLO-224)
+      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">EMA</span>`;
       tfs.forEach((tf) => {
         const d = mtf[tf];
-        if (!d || !d.price_vs_ema50) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
-        const above = d.price_vs_ema50 === "above";
-        h += `<span style="text-align:center;color:${above ? "#4ade80" : "#f87171"};font-weight:700">${above ? "▲" : "▼"}</span>`;
+        if (!d || (!d.ema_alignment && !d.price_vs_ema50)) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
+        const align = d.ema_alignment;
+        const clr = align === "full_bullish" ? "#4ade80" : align === "full_bearish" ? "#f87171" : "#94a3b8";
+        const label = align === "full_bullish" ? "BULL" : align === "full_bearish" ? "BEAR" : "MIX";
+        let cross = "";
+        if (d.ema9_cross_ema21 === "golden_cross") cross = `<span style="color:#4ade80;font-size:7px">✨</span>`;
+        else if (d.ema9_cross_ema21 === "death_cross") cross = `<span style="color:#f87171;font-size:7px">☠</span>`;
+        if (d.ema50_cross_ema200 === "golden_cross") cross = `<span style="color:#facc15;font-size:7px">⭐</span>`;
+        else if (d.ema50_cross_ema200 === "death_cross") cross = `<span style="color:#f87171;font-size:7px">💀</span>`;
+        h += `<span style="text-align:center;color:${clr};font-weight:700;font-size:8px">${label}${cross}</span>`;
       });
       h += `</div>`;
       mtfEl.innerHTML = h;
