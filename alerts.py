@@ -76,10 +76,11 @@ def _utc_timestamp() -> str:
     return datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
 
-def _rate_limited(key: str) -> bool:
+def _rate_limited(key: str, cooldown_seconds: int = None) -> bool:
     now = datetime.utcnow()
+    limit = cooldown_seconds if cooldown_seconds is not None else ERROR_RATE_LIMIT_SECONDS
     last_sent = _error_last_sent.get(key)
-    if last_sent and (now - last_sent) < timedelta(seconds=ERROR_RATE_LIMIT_SECONDS):
+    if last_sent and (now - last_sent) < timedelta(seconds=limit):
         return True
     _error_last_sent[key] = now
     return False
@@ -713,8 +714,12 @@ def alert_error(error_type: str, message: str, impact: str = "", severity: str =
     """Alert: error/warning/critical."""
     sev = severity.lower()
 
-    # FLO-98: CRITICAL bypasses rate limiting entirely
-    if sev != "critical" and _rate_limited(f"{sev}:{error_type}"):
+    # FLO-98: CRITICAL uses 30-min cooldown to prevent @here spam if EA Bridge
+    # is persistently down. Non-critical uses standard 60s rate limit.
+    if sev == "critical":
+        if _rate_limited(f"critical:{error_type}", cooldown_seconds=1800):
+            return
+    elif _rate_limited(f"{sev}:{error_type}"):
         return
 
     if sev == "warning":
