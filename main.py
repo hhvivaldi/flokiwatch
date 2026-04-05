@@ -1840,7 +1840,7 @@ class TradingBot:
                             have_m15 = False
                         if not have_m15:
                             _m15_t0 = time.time()
-                            m15_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M15, 0, 50)
+                            m15_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M15, 0, 250)
                             m15_list = _rates_to_candles(m15_rates)
                             if m15_list:
                                 candles_cache["M15"] = m15_list
@@ -1851,7 +1851,7 @@ class TradingBot:
                         except Exception:
                             have_h4 = False
                         if not have_h4:
-                            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
+                            h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 250)
                             h4_list = _rates_to_candles(h4_rates)
                             if h4_list:
                                 candles_cache["H4"] = h4_list
@@ -1861,7 +1861,7 @@ class TradingBot:
                         except Exception:
                             have_d1 = False
                         if not have_d1:
-                            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
+                            d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 250)
                             d1_list = _rates_to_candles(d1_rates)
                             if d1_list:
                                 candles_cache["D1"] = d1_list
