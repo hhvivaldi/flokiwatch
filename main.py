@@ -4727,17 +4727,27 @@ class TradingBot:
         
         # Cache news_data for ML (used by get_ml_score elsewhere)
         set_news_data_for_ml(news_data)
-        
+
         # Detailed ML (uses news_data for DXY/VIX/Yields features)
-        try:
-            ml_data = get_ml_detailed(df, news_data)
-        except Exception as e:
-            log.warning(f"ML error: {e}")
+        # FLO-187: Skip ML prediction entirely when disabled
+        if config.ML_ENABLED:
+            try:
+                ml_data = get_ml_detailed(df, news_data)
+            except Exception as e:
+                log.warning(f"ML error: {e}")
+                ml_data = {
+                    "score": 50.0, "prediction": "neutral", "probability": 0.5,
+                    "max_confidence": 0.5, "pattern": "indefinido",
+                    "similar_patterns_count": None, "historical_success_rate": None,
+                    "error": str(e),
+                }
+        else:
+            log.info("ML | DISABLED via config — skipping prediction")
             ml_data = {
-                "score": 50.0, "prediction": "neutral", "probability": 0.5,
-                "max_confidence": 0.5, "pattern": "indefinido",
+                "score": 50.0, "prediction": "neutral", "probability": 0.0,
+                "max_confidence": 0.0, "pattern": "disabled",
                 "similar_patterns_count": None, "historical_success_rate": None,
-                "error": str(e),
+                "error": "ML_ENABLED=False",
             }
         ml_h1 = ml_data.get('score_h1', ml_data['score'])
         ml_h4 = ml_data.get('score_h4', ml_data['score'])

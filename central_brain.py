@@ -61,6 +61,24 @@ BASE_WEIGHTS = {
     "calendar": 0.10,
 }
 
+
+def _effective_weights(weights: dict) -> dict:
+    """FLO-187: When ML_ENABLED=False, zero out ML weight and redistribute
+    proportionally across the remaining 4 pillars."""
+    if config.ML_ENABLED:
+        return weights
+    ml_w = weights.get("ml", 0)
+    if ml_w <= 0:
+        return weights
+    remaining = {k: v for k, v in weights.items() if k != "ml"}
+    total = sum(remaining.values())
+    if total <= 0:
+        return weights
+    scale = 1.0 / total
+    result = {k: round(v * scale, 4) for k, v in remaining.items()}
+    result["ml"] = 0.0
+    return result
+
 _DEFAULT_BASE_WEIGHTS = BASE_WEIGHTS.copy()
 
 
@@ -759,13 +777,18 @@ def _adjust_weights(scenario: str, ml_confidence: float,
 def _calculate_final_score(adjusted_scores: Dict[str, float], weights: Dict[str, float]) -> float:
     """
     Calculate final score using adjusted scores and dynamic weights.
+    FLO-187: When ML disabled, weights are redistributed via _effective_weights.
     """
+    w = _effective_weights(weights)
+    if not config.ML_ENABLED:
+        log.info("ML | DISABLED via config \u2014 weight redistributed")
+
     score = 0.0
     for component in ["technical", "ml", "momentum", "news", "calendar"]:
         s = adjusted_scores.get(component, 50.0)
-        w = weights.get(component, 0.20)
-        score += s * w
-    
+        cw = w.get(component, 0.20)
+        score += s * cw
+
     return round(max(0, min(100, score)), 2)
 
 

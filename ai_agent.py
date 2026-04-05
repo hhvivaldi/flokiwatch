@@ -567,11 +567,12 @@ class AIAgent:
                 "description": "Get cached economic calendar phase + next event",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-            {
+            # FLO-187: Only register ML tool when ML is enabled
+            *([] if not config.ML_ENABLED else [{
                 "name": "get_ml_prediction",
                 "description": "Get cached ML prediction snapshot",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
+            }]),
             {
                 "name": "get_market_context",
                 "description": "Get markets correlated with gold — metals (silver, platinum, palladium + gold/silver ratio), forex (dollar strength, safe havens), indices (S&P 500), energy (oil), crypto (BTC), and futures (DXY, VIX, 10Y Bond). Each instrument includes bid, change %, and position in today's range.",

@@ -236,6 +236,7 @@ def write_state(bot_instance: Any) -> None:
             "positions": positions,
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
             "ea_bridge": _get_ea_bridge_status(),
+            "ml_enabled": bool(getattr(config, "ML_ENABLED", False)),  # FLO-187
             "agent_memory": None,
         }
 

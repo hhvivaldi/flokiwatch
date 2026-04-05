@@ -44,6 +44,11 @@ SELL_THRESHOLD = 35  # Score 30-35 = SELL (< 35 and >= 30)
 STRONG_SELL_THRESHOLD = 30  # Score < 30 = STRONG_SELL
 
 # ============================================================================
+# ML ENSEMBLE — FLO-187: master switch (disable without deleting code)
+# ============================================================================
+ML_ENABLED = os.environ.get("ML_ENABLED", "false").lower() in ("true", "1", "yes")
+
+# ============================================================================
 # CONFLUENCE WEIGHTS
 # ============================================================================
 WEIGHT_TECHNICAL = 0.45  # 45% - Technical Analysis
