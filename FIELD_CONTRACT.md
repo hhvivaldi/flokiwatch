@@ -676,6 +676,20 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `market_regime.transition` | string | `state_writer.py` | `#regime-card-transition` (Trade Room) |
 | `market_regime.src` | string (`fast` \| `ADX`) | `state_writer.py` | `#ctx-regime-detail` + `#cc-regime-detail` (Trade Room) |
 
+### `multi_tf_indicators` Object in `bot_state.json` (FLO-221)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `multi_tf_indicators` | object | `state_writer.py` via `technical_analyzer.py` | `index.html` (`#mtf-grid-dashboard`), `trade_room.html` (`#ctx-mtf-*`) |
+| `multi_tf_indicators.{M15,H1,H4,D1}` | object | `compute_indicators_from_candles()` | Dashboard + Trade Room multi-TF grid |
+| `multi_tf_indicators.{TF}.rsi` | float (0-100) | RSI(14) calculation | Color-coded: <30 green, 30-70 white, >70 red |
+| `multi_tf_indicators.{TF}.macd` | object `{value, signal, histogram}` | MACD(12,26,9) | Arrow: ▲ green (bullish) / ▼ red (bearish) |
+| `multi_tf_indicators.{TF}.adx` | object `{value, plus_di, minus_di}` | ADX(14) | Brightness: <20 dim, 20-30 normal, >30 bright |
+| `multi_tf_indicators.{TF}.ema50` | float | EMA(50) price | — |
+| `multi_tf_indicators.{TF}.ema200` | float | EMA(200) price | — |
+| `multi_tf_indicators.{TF}.atr` | float | ATR(14) | — |
+| `multi_tf_indicators.{TF}.price_vs_ema50` | string (`above`/`below`) | Price vs EMA50 | Arrow: ▲ green (above) / ▼ red (below) |
+
 ### `ea_bridge` Object in `bot_state.json`
 
 | Field | Type | Writer | Reader (app.js) |

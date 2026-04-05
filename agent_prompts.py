@@ -31,7 +31,7 @@ Your team:
 You have four categories of data:
 
 Technical \u2014 get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels
-Price structure, momentum, and key levels.
+Price structure, momentum, and key levels. get_indicators returns data for M15, H1, H4, D1. Always check higher timeframes (H4, D1) for trend context and lower timeframe (M15) for entry timing before deciding.
 
 Cross-market \u2014 get_market_context
 Markets correlated with gold: silver, platinum, palladium (gold/silver ratio), forex pairs (dollar strength, safe havens), DXY, VIX, oil, S&P 500, BTC \u2014 all with change % and position in today's range.

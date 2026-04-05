@@ -276,6 +276,58 @@ function renderMarketIndicatorsPanel(state) {
   );
 
   grid.innerHTML = rows.join("");
+
+  // FLO-221: Multi-TF compact grid
+  const mtfEl = el("mtf-grid-dashboard");
+  if (mtfEl) {
+    const mtf = state?.multi_tf_indicators || {};
+    const tfs = ["M15", "H1", "H4", "D1"];
+    const has = tfs.some((tf) => mtf[tf]);
+    if (!has) {
+      mtfEl.innerHTML = "";
+    } else {
+      let h = `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;color:#475569;font-weight:700;font-size:9px;letter-spacing:0.08em;margin-bottom:6px"><span></span>`;
+      tfs.forEach((tf) => { h += `<span style="text-align:center">${tf}</span>`; });
+      h += `</div>`;
+      // RSI
+      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">RSI</span>`;
+      tfs.forEach((tf) => {
+        const v = mtf[tf]?.rsi;
+        const c = v == null ? "#475569" : v > 70 ? "#f87171" : v < 30 ? "#4ade80" : "#e2e8f0";
+        h += `<span style="text-align:center;color:${c};font-weight:700">${v != null ? v.toFixed(0) : "—"}</span>`;
+      });
+      h += `</div>`;
+      // MACD
+      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">MACD</span>`;
+      tfs.forEach((tf) => {
+        const d = mtf[tf]?.macd;
+        if (!d || d.histogram == null) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
+        const c = d.histogram >= 0 ? "#4ade80" : "#f87171";
+        h += `<span style="text-align:center;color:${c};font-weight:700">${d.histogram >= 0 ? "▲" : "▼"}</span>`;
+      });
+      h += `</div>`;
+      // ADX
+      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">ADX</span>`;
+      tfs.forEach((tf) => {
+        const d = mtf[tf]?.adx;
+        if (!d || d.value == null) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
+        const v = d.value;
+        const c = v >= 30 ? "#e2e8f0" : v >= 20 ? "#94a3b8" : "#475569";
+        h += `<span style="text-align:center;color:${c};font-weight:700">${v.toFixed(0)}</span>`;
+      });
+      h += `</div>`;
+      // EMA50
+      h += `<div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:0;padding:3px 0"><span style="color:#546478;font-weight:600">EMA50</span>`;
+      tfs.forEach((tf) => {
+        const d = mtf[tf];
+        if (!d || !d.price_vs_ema50) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
+        const above = d.price_vs_ema50 === "above";
+        h += `<span style="text-align:center;color:${above ? "#4ade80" : "#f87171"};font-weight:700">${above ? "▲" : "▼"}</span>`;
+      });
+      h += `</div>`;
+      mtfEl.innerHTML = h;
+    }
+  }
 }
 
 function toggleProactiveReasoning() {

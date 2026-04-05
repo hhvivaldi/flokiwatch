@@ -99,6 +99,48 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def compute_indicators_from_candles(candles: list) -> dict:
+    """FLO-221: Compute RSI, MACD, ADX, EMA50, EMA200, ATR from a candle list.
+    Used for multi-timeframe indicator calculation. Zero AI cost — pure math."""
+    from momentum_detector import calculate_adx
+
+    if not candles or len(candles) < 14:
+        return {}
+
+    try:
+        df = pd.DataFrame(candles)
+        # Normalize column names (MT5 cache uses lowercase already)
+        for col in ["open", "high", "low", "close"]:
+            if col not in df.columns:
+                return {}
+        df = calculate_indicators(df)
+        last = df.iloc[-1]
+
+        adx_data = calculate_adx(df)
+        price = float(last["close"])
+
+        result = {
+            "rsi": round(float(last.get("rsi_14", 50)), 1),
+            "macd": {
+                "value": round(float(last.get("macd", 0)), 3),
+                "signal": round(float(last.get("macd_signal", 0)), 3),
+                "histogram": round(float(last.get("macd_hist", 0)), 3),
+            },
+            "adx": {
+                "value": round(float(adx_data.get("adx_value", 0)), 1),
+                "plus_di": round(float(adx_data.get("plus_di", 0)), 1),
+                "minus_di": round(float(adx_data.get("minus_di", 0)), 1),
+            },
+            "ema50": round(float(last.get("ema_50", 0)), 2),
+            "ema200": round(float(last.get("ema_200", 0)), 2),
+            "atr": round(float(last.get("atr_14", 0)), 2),
+            "price_vs_ema50": "above" if price > float(last.get("ema_50", 0)) else "below",
+        }
+        return result
+    except Exception:
+        return {}
+
+
 def _detect_approach_direction(df: pd.DataFrame, lookback: int = 3) -> Optional[str]:
     """
     Detect if price approached from above (bearish) or below (bullish) in last N candles.

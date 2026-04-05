@@ -1826,6 +1826,19 @@ class TradingBot:
                             if m5_list:
                                 candles_cache["M5"] = m5_list
 
+                        # FLO-221: Fetch M15 candles for multi-TF indicators
+                        try:
+                            have_m15 = isinstance(candles_cache.get("M15"), list) and bool(candles_cache.get("M15"))
+                        except Exception:
+                            have_m15 = False
+                        if not have_m15:
+                            _m15_t0 = time.time()
+                            m15_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M15, 0, 50)
+                            m15_list = _rates_to_candles(m15_rates)
+                            if m15_list:
+                                candles_cache["M15"] = m15_list
+                            log.debug(f"MT5_FETCH | M15 candles: {len(m15_list) if m15_list else 0} bars in {(time.time() - _m15_t0)*1000:.0f}ms")
+
                         try:
                             have_h4 = isinstance(candles_cache.get("H4"), list) and bool(candles_cache.get("H4"))
                         except Exception:
@@ -1862,6 +1875,22 @@ class TradingBot:
                                 dp["candles"] = candles_cache
                             except Exception:
                                 pass
+
+                    # FLO-221: Compute multi-TF indicators from cached candles
+                    try:
+                        from technical_analyzer import compute_indicators_from_candles
+                        _mtf_t0 = time.time()
+                        multi_tf = {}
+                        _all_candles = dp.get("candles") or {}
+                        for _tf in ["M15", "H1", "H4", "D1"]:
+                            _tf_candles = _all_candles.get(_tf)
+                            if isinstance(_tf_candles, list) and len(_tf_candles) >= 14:
+                                multi_tf[_tf] = compute_indicators_from_candles(_tf_candles)
+                        dp["multi_tf_indicators"] = multi_tf
+                        log.debug(f"MULTI_TF_INDICATORS | {list(multi_tf.keys())} computed in {(time.time() - _mtf_t0)*1000:.0f}ms")
+                    except Exception as e_mtf:
+                        log.warning(f"MULTI_TF_INDICATORS | Error: {e_mtf}")
+                        dp["multi_tf_indicators"] = {}
 
                     # Snapshot candles separately for proactive Agent calls (avoid MT5 calls/reference issues)
                     try:

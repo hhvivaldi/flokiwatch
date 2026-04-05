@@ -2074,14 +2074,34 @@
               <div class="ctx-label">WATCH CONDITIONS</div>
               <div id="ctx-watch-conditions">No active watch conditions</div>
             </div>
+            <!-- FLO-221: Multi-TF Indicators -->
             <div class="ctx-block" style="border:none">
-              <div class="ctx-label">MARKET INDICATORS</div>
-              <div class="ctx-row"><span class="ctx-key">RSI</span><span id="ctx-rsi" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">MACD</span><span id="ctx-macd" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">ATR</span><span id="ctx-atr" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">ADX</span><span id="ctx-adx" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">EMA50</span><span id="ctx-ema50" class="ctx-val">—</span></div>
-              <div class="ctx-row"><span class="ctx-key">Bollinger</span><span id="ctx-bb" class="ctx-val">—</span></div>
+              <div class="ctx-label">MULTI-TF INDICATORS</div>
+              <div id="ctx-mtf-grid" style="font-family:'JetBrains Mono',monospace;font-size:9px">
+                <div style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;margin-bottom:4px">
+                  <span style="color:#334155"></span>
+                  <span style="color:#546478;text-align:center;font-weight:700;font-size:8px;letter-spacing:0.08em">M15</span>
+                  <span style="color:#546478;text-align:center;font-weight:700;font-size:8px;letter-spacing:0.08em">H1</span>
+                  <span style="color:#546478;text-align:center;font-weight:700;font-size:8px;letter-spacing:0.08em">H4</span>
+                  <span style="color:#546478;text-align:center;font-weight:700;font-size:8px;letter-spacing:0.08em">D1</span>
+                </div>
+                <div id="ctx-mtf-rsi" style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;padding:2px 0">
+                  <span style="color:#546478;font-weight:600">RSI</span>
+                  <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
+                </div>
+                <div id="ctx-mtf-macd" style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;padding:2px 0">
+                  <span style="color:#546478;font-weight:600">MACD</span>
+                  <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
+                </div>
+                <div id="ctx-mtf-adx" style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;padding:2px 0">
+                  <span style="color:#546478;font-weight:600">ADX</span>
+                  <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
+                </div>
+                <div id="ctx-mtf-ema" style="display:grid;grid-template-columns:52px repeat(4,1fr);gap:0;padding:2px 0">
+                  <span style="color:#546478;font-weight:600">EMA50</span>
+                  <span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span><span style="text-align:center;color:#64748b">—</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4831,6 +4851,73 @@
                   }
                 }
                 setIndicator('ctx-bb', bbText);
+              } catch(e) {}
+
+              // FLO-221: Multi-TF indicator grid
+              try {
+                var mtf = state.multi_tf_indicators || {};
+                var tfs = ['M15', 'H1', 'H4', 'D1'];
+
+                function mtfRsiColor(v) {
+                  if (v == null) return '#64748b';
+                  if (v > 70) return '#f87171';
+                  if (v < 30) return '#4ade80';
+                  return '#e2e8f0';
+                }
+                function mtfMacdHtml(tf) {
+                  var d = (mtf[tf] || {}).macd;
+                  if (!d || d.histogram == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  var h = Number(d.histogram);
+                  var clr = h >= 0 ? '#4ade80' : '#f87171';
+                  var arrow = h >= 0 ? '\u25B2' : '\u25BC';
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + arrow + '</span>';
+                }
+                function mtfAdxHtml(tf) {
+                  var d = (mtf[tf] || {}).adx;
+                  if (!d || d.value == null) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  var v = Number(d.value);
+                  var clr = v >= 30 ? '#e2e8f0' : (v >= 20 ? '#94a3b8' : '#475569');
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + v.toFixed(0) + '</span>';
+                }
+                function mtfEmaHtml(tf) {
+                  var d = mtf[tf] || {};
+                  if (!d.price_vs_ema50) return '<span style="text-align:center;color:#64748b">\u2014</span>';
+                  var above = d.price_vs_ema50 === 'above';
+                  return '<span style="text-align:center;color:' + (above ? '#4ade80' : '#f87171') + ';font-weight:700">' + (above ? '\u25B2' : '\u25BC') + '</span>';
+                }
+
+                // RSI row
+                var rsiEl = document.getElementById('ctx-mtf-rsi');
+                if (rsiEl) {
+                  var rh = '<span style="color:#546478;font-weight:600">RSI</span>';
+                  for (var ti = 0; ti < tfs.length; ti++) {
+                    var rv = (mtf[tfs[ti]] || {}).rsi;
+                    var rc = mtfRsiColor(rv);
+                    rh += '<span style="text-align:center;color:' + rc + ';font-weight:700">' + (rv != null ? Number(rv).toFixed(0) : '\u2014') + '</span>';
+                  }
+                  rsiEl.innerHTML = rh;
+                }
+                // MACD row
+                var macdEl = document.getElementById('ctx-mtf-macd');
+                if (macdEl) {
+                  var mh = '<span style="color:#546478;font-weight:600">MACD</span>';
+                  for (var ti = 0; ti < tfs.length; ti++) mh += mtfMacdHtml(tfs[ti]);
+                  macdEl.innerHTML = mh;
+                }
+                // ADX row
+                var adxEl = document.getElementById('ctx-mtf-adx');
+                if (adxEl) {
+                  var ah = '<span style="color:#546478;font-weight:600">ADX</span>';
+                  for (var ti = 0; ti < tfs.length; ti++) ah += mtfAdxHtml(tfs[ti]);
+                  adxEl.innerHTML = ah;
+                }
+                // EMA row
+                var emaEl = document.getElementById('ctx-mtf-ema');
+                if (emaEl) {
+                  var eh = '<span style="color:#546478;font-weight:600">EMA50</span>';
+                  for (var ti = 0; ti < tfs.length; ti++) eh += mtfEmaHtml(tfs[ti]);
+                  emaEl.innerHTML = eh;
+                }
               } catch(e) {}
 
               // FLO-122: 5-section macro panel from market_context + macro

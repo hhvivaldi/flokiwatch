@@ -1281,6 +1281,16 @@ class AgentTools:
             except Exception:
                 pass
 
+            # FLO-221: Append multi-TF indicators (M15, H1, H4, D1)
+            try:
+                mtf = dp.get("multi_tf_indicators")
+                if isinstance(mtf, dict) and mtf:
+                    for tf_key in ["M15", "H1", "H4", "D1"]:
+                        if tf_key in mtf:
+                            out[tf_key] = mtf[tf_key]
+            except Exception:
+                pass
+
             self._log_tool("get_indicators", start)
             return out
         except Exception as e:

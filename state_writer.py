@@ -237,11 +237,22 @@ def write_state(bot_instance: Any) -> None:
             "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
             "ea_bridge": _get_ea_bridge_status(),
             "ml_enabled": bool(getattr(config, "ML_ENABLED", False)),  # FLO-187
+            "multi_tf_indicators": {},  # FLO-221: populated below from agent data
             "agent_memory": None,
         }
 
         # Force null even if older state formats injected data elsewhere
         state["agent_memory"] = None
+
+        # FLO-221: Multi-TF indicators from agent data
+        try:
+            _agent_data = getattr(bot_instance, "_last_agent_data", None)
+            if isinstance(_agent_data, dict):
+                _mtf = _agent_data.get("multi_tf_indicators")
+                if isinstance(_mtf, dict) and _mtf:
+                    state["multi_tf_indicators"] = _mtf
+        except Exception:
+            pass
 
         # FLO-122: Inject market_context from MT5 (shared fetcher with 60s cache)
         try:
