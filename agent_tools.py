@@ -1135,6 +1135,48 @@ class AgentTools:
                 return self._no_cache()
 
             candles = candles[-c:]
+
+            # FLO-225: Enrich candles with indicator values per bar
+            # Gives Floki indicator history — RSI divergences, BB squeezes, MACD patterns
+            try:
+                import pandas as pd
+                import math
+                from technical_analyzer import calculate_indicators
+
+                def _rn(v, d):
+                    """Round or None for NaN/missing values."""
+                    if v is None:
+                        return None
+                    try:
+                        f = float(v)
+                        if math.isnan(f):
+                            return None
+                        return round(f, d)
+                    except Exception:
+                        return None
+
+                _edf = pd.DataFrame(candles)
+                if len(_edf) >= 14 and {"open", "high", "low", "close"}.issubset(_edf.columns):
+                    _edf = calculate_indicators(_edf)
+                    for _ei in range(len(candles)):
+                        _er = _edf.iloc[_ei]
+                        candles[_ei]["rsi"] = _rn(_er.get("rsi_14"), 1)
+                        candles[_ei]["macd"] = _rn(_er.get("macd"), 2)
+                        candles[_ei]["macd_signal"] = _rn(_er.get("macd_signal"), 2)
+                        candles[_ei]["macd_hist"] = _rn(_er.get("macd_hist"), 2)
+                        _bbu = _rn(_er.get("bb_upper"), 2)
+                        _bbl = _rn(_er.get("bb_lower"), 2)
+                        candles[_ei]["bb_upper"] = _bbu
+                        candles[_ei]["bb_lower"] = _bbl
+                        candles[_ei]["bb_mid"] = _rn(_er.get("bb_middle"), 2)
+                        candles[_ei]["bb_width"] = round(_bbu - _bbl, 2) if _bbu is not None and _bbl is not None else None
+                        candles[_ei]["ema9"] = _rn(_er.get("ema_9"), 2)
+                        candles[_ei]["ema21"] = _rn(_er.get("ema_21"), 2)
+                        candles[_ei]["ema50"] = _rn(_er.get("ema_50"), 2)
+                        candles[_ei]["ema200"] = _rn(_er.get("ema_200"), 2)
+            except Exception:
+                pass  # Enrichment failure is non-fatal — return plain candles
+
             self._log_tool("get_candles", start, f"{tf} x {len(candles)}")
             return {"timeframe": tf, "candles": candles}
         except Exception as e:
