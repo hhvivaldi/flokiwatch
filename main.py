@@ -1286,7 +1286,14 @@ class TradingBot:
                                 try:
                                     from rex_monitor import run_rex_monitor
                                     from agent_tools import AgentTools
-                                    _tools = AgentTools(executor=getattr(self, "executor", None))
+                                    import safety_checks as _sc
+                                    import risk_manager as _rm
+                                    _tools = AgentTools(
+                                        self,
+                                        executor=getattr(self, "executor", None),
+                                        safety_checks_module=_sc,
+                                        risk_manager_module=_rm,
+                                    )
                                     run_rex_monitor(_tools)
                                 except Exception as e_rex:
                                     log.warning(f"REX_MONITOR | scheduler error (ignored): {e_rex}")
@@ -3662,7 +3669,6 @@ class TradingBot:
                         _ts = _rex_mon.get("timestamp")
                         _age = None
                         if _ts:
-                            from datetime import datetime, timezone
                             _st = datetime.fromisoformat(_ts.replace("Z", "+00:00"))
                             _age = round((datetime.now(timezone.utc) - _st).total_seconds() / 60, 1)
                         _debate_data["rex_monitor"] = {
