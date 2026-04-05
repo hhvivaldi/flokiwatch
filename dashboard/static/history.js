@@ -194,11 +194,6 @@ class HistoryApp {
                 ctx2.moveTo(chart.chartArea.left, yPos);
                 ctx2.lineTo(chart.chartArea.right, yPos);
                 ctx2.stroke();
-                // Label
-                ctx2.fillStyle = 'rgba(148, 163, 184, 0.5)';
-                ctx2.font = '700 8px JetBrains Mono';
-                ctx2.textAlign = 'right';
-                ctx2.fillText('$1,000', chart.chartArea.left - 4, yPos + 3);
                 ctx2.restore();
             }
         };
