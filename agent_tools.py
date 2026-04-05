@@ -937,6 +937,37 @@ class AgentTools:
             if not cleaned:
                 return {"success": False, "reason": "no valid conditions"}
 
+            # FLO-204: Preserve fired_ids for conditions with same ID AND same value.
+            # If Floki re-sets the same conditions after being woken, already-fired
+            # conditions stay fired. If Floki changes a value (e.g., price_below from
+            # 4654 to 4622), the condition is treated as new and will trigger.
+            preserved_fired = []
+            try:
+                wc_path = self._wake_conditions_path()
+                if os.path.exists(wc_path):
+                    with open(wc_path, "r", encoding="utf-8") as f:
+                        old_wc = json.loads(f.read())
+                    old_fired = set(str(x) for x in (old_wc.get("fired_ids") or []) if x)
+                    if old_fired:
+                        # Build lookup: id → signature (type + level/threshold/pattern)
+                        old_conds = {str(c.get("id")): c for c in (old_wc.get("conditions") or []) if isinstance(c, dict)}
+                        for nc in cleaned:
+                            nid = str(nc.get("id"))
+                            if nid not in old_fired:
+                                continue
+                            oc = old_conds.get(nid)
+                            if not oc:
+                                continue
+                            # Same ID — check if value also matches
+                            same = (nc.get("type") == oc.get("type")
+                                    and nc.get("level") == oc.get("level")
+                                    and nc.get("threshold") == oc.get("threshold")
+                                    and nc.get("pattern") == oc.get("pattern"))
+                            if same:
+                                preserved_fired.append(nid)
+            except Exception:
+                preserved_fired = []
+
             now_iso = datetime.utcnow().isoformat()
             payload = {
                 "updated_at": now_iso,
@@ -944,6 +975,8 @@ class AgentTools:
                 "max_sleep_minutes": msm,
                 "conditions": cleaned,
             }
+            if preserved_fired:
+                payload["fired_ids"] = preserved_fired
 
             ok = self._write_json_atomic(self._wake_conditions_path(), payload)
             if not ok:

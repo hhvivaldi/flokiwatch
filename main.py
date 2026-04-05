@@ -442,6 +442,7 @@ class TradingBot:
                     ticket=pos_id, close_price=deal['close_price'],
                     profit=deal['profit'], close_reason=deal['reason'],
                     close_time=deal['close_time'].isoformat(),
+                    breakeven_activated=False,  # FLO-220: reconciliation — data not available from MT5
                 )
             
             # ================================================================
@@ -501,6 +502,7 @@ class TradingBot:
                         ticket=pos_id, close_price=deal['close_price'],
                         profit=deal['profit'], close_reason=deal['reason'],
                         close_time=deal['close_time'].isoformat(),
+                        breakeven_activated=False,  # FLO-220: backfill — data not available
                     )
                     all_sqlite_tickets.add(pos_id)
                     backfill_count += 1
@@ -548,6 +550,7 @@ class TradingBot:
                         ticket=pos_id, close_price=deal['close_price'],
                         profit=deal['profit'], close_reason=deal['reason'],
                         close_time=deal['close_time'].isoformat(),
+                        breakeven_activated=False,  # FLO-220: historical backfill — data not available
                     )
                     all_sqlite_tickets.add(pos_id)
                     backfill_count += 1
@@ -583,6 +586,7 @@ class TradingBot:
                                 ticket=ticket, close_price=deal['close_price'],
                                 profit=deal['profit'], close_reason=deal['reason'],
                                 close_time=deal['close_time'].isoformat(),
+                                breakeven_activated=False,  # FLO-220: stale trade fix — data not available
                             )
                             # Update closed_trades_today if this trade is there as pending
                             for t in self.closed_trades_today:
@@ -637,6 +641,7 @@ class TradingBot:
                                                     ticket=ticket, close_price=direct_deal['close_price'],
                                                     profit=direct_deal['profit'], close_reason=direct_deal['reason'],
                                                     close_time=direct_deal['close_time'].isoformat(),
+                                                    breakeven_activated=False,  # FLO-220: direct deal lookup — data not available
                                                 )
                                                 for t in self.closed_trades_today:
                                                     if t.get('ticket') == ticket and t.get('pending'):
@@ -754,6 +759,7 @@ class TradingBot:
                                         profit=t.get("profit"),
                                         close_reason=t.get("reason"),
                                         close_time=t.get("close_time"),
+                                        breakeven_activated=False,  # FLO-220: pending resolution — data not available
                                     )
                                 except Exception:
                                     pass
@@ -830,6 +836,7 @@ class TradingBot:
                         profit=trade.get('profit'),
                         close_reason=trade.get('reason'),
                         close_time=trade.get('close_time').isoformat() if hasattr(trade.get('close_time', ''), 'isoformat') else str(trade.get('close_time', '')),
+                        breakeven_activated=False,  # FLO-220: periodic deal lookup — data not available
                     )
                     
                     # Discord notification
@@ -2660,6 +2667,13 @@ class TradingBot:
                 pass
             return {"success": False, "ticket": t, "reason": msg}
 
+        # FLO-220: Try to get BE state from monitor if available
+        _be_state = False
+        try:
+            if hasattr(self, '_position_monitor') and self._position_monitor:
+                _be_state = self._position_monitor.breakeven_activated_tickets.get(t, False)
+        except Exception:
+            _be_state = False
         try:
             record_trade_close(
                 ticket=t,
@@ -2667,7 +2681,7 @@ class TradingBot:
                 profit=None,
                 close_reason=f"{reason_str} (pending)",
                 close_time=datetime.utcnow().isoformat(),
-                breakeven_activated=None,
+                breakeven_activated=_be_state,
             )
         except Exception:
             pass

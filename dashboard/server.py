@@ -167,10 +167,27 @@ def _safe_json_loads(value: Any, default: Any) -> Any:
 
 
 def _as_clean_text(v: Any, max_len: int = 2000) -> str:
+    """FLO-207: Convert value to human-readable text. Extracts summary from dicts
+    instead of dumping raw JSON."""
     try:
         if v is None:
             return ""
-        if isinstance(v, (dict, list)):
+        if isinstance(v, dict):
+            # Try to extract a readable string from common keys
+            for key in ("summary", "content", "message", "text", "description"):
+                val = v.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()[:max_len] if max_len else val.strip()
+            # Fallback: join string values
+            parts = [str(val) for val in v.values() if isinstance(val, (str, int, float)) and str(val).strip()]
+            if parts:
+                return " | ".join(parts)[:max_len] if max_len else " | ".join(parts)
+            return json.dumps(v, ensure_ascii=False)
+        if isinstance(v, list):
+            # Join list items as readable text
+            parts = [str(item).strip() for item in v if str(item).strip()]
+            if parts:
+                return "; ".join(parts)[:max_len] if max_len else "; ".join(parts)
             return json.dumps(v, ensure_ascii=False)
         s = str(v)
         if max_len and len(s) > max_len:

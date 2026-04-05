@@ -710,16 +710,25 @@ def alert_m5_reversal_block(direction: str, move_pct: float, description: str):
 
 
 def alert_error(error_type: str, message: str, impact: str = "", severity: str = "error"):
-    """Alert: Critical error"""
-    if _rate_limited(f"{severity}:{error_type}"):
+    """Alert: error/warning/critical."""
+    sev = severity.lower()
+
+    # FLO-98: CRITICAL bypasses rate limiting entirely
+    if sev != "critical" and _rate_limited(f"{sev}:{error_type}"):
         return
 
-    if severity.lower() == "warning":
+    if sev == "warning":
         emoji = "⚠️"
         color = 0xf1c40f
+        label = "WARNING"
+    elif sev == "critical":
+        emoji = "🔴"
+        color = 0xff0000
+        label = "CRITICAL"
     else:
         emoji = "🚨"
         color = 0xff0000
+        label = "ERROR"
 
     fields = [
         {"name": "Type", "value": error_type, "inline": True},
@@ -729,10 +738,13 @@ def alert_error(error_type: str, message: str, impact: str = "", severity: str =
         fields.append({"name": "Impact", "value": impact, "inline": False})
     fields.append({"name": "Timestamp", "value": _utc_timestamp(), "inline": False})
 
+    # FLO-98: CRITICAL alerts include @here mention to ping the channel
+    mention = "@here " if sev == "critical" else ""
+
     discord_router.send_embed(
         CHANNEL_ERRORS,
-        title=f"{emoji} {'ERROR' if severity.lower() != 'warning' else 'WARNING'}",
-        description="Alert from trading bot.",
+        title=f"{emoji} {label}",
+        description=f"{mention}Alert from trading bot.",
         color=color,
         fields=fields,
     )

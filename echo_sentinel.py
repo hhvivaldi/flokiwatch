@@ -454,22 +454,47 @@ def store_alert(headline: ClassifiedHeadline) -> None:
             f"({cluster['headline_count']} headlines, {len(sources)} sources)"
         )
     else:
-        # Create new cluster entry
-        alerts.append({
-            "timestamp": datetime.utcnow().isoformat(),
-            "first_seen": datetime.utcnow().isoformat(),
-            "latest": datetime.utcnow().isoformat(),
-            "title": headline.title,
-            "representative_headline": headline.title,
-            "headline_count": 1,
-            "sources": [headline.source] if headline.source else [],
-            "source": headline.source,
-            "classification": headline.classification,
-            "relevance_score": headline.relevance_score,
-            "gold_impact": headline.gold_impact,
-            "summary": headline.summary,
-            "read": False,
-        })
+        # FLO-47: Title-level dedup — skip if first 80 chars match an existing alert
+        # within last 24h. Catches near-identical headlines that clustering missed.
+        new_title_key = headline.title.lower().strip()[:80]
+        cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+        is_dup = False
+        for a in alerts:
+            a_ts = a.get("latest") or a.get("timestamp") or ""
+            if a_ts < cutoff:
+                continue
+            existing_title = (a.get("representative_headline") or a.get("title") or "").lower().strip()[:80]
+            if existing_title == new_title_key:
+                is_dup = True
+                # Merge into existing as a cluster update
+                a["headline_count"] = a.get("headline_count", 1) + 1
+                a["latest"] = datetime.utcnow().isoformat()
+                if headline.source:
+                    sources = a.get("sources", [])
+                    if headline.source not in sources:
+                        sources.append(headline.source)
+                    a["sources"] = sources[-10:]
+                a["read"] = False
+                log.info(f"[ECHO] FLO-47 title dedup: '{new_title_key[:50]}...' merged into existing alert")
+                break
+
+        if not is_dup:
+            # Create new cluster entry
+            alerts.append({
+                "timestamp": datetime.utcnow().isoformat(),
+                "first_seen": datetime.utcnow().isoformat(),
+                "latest": datetime.utcnow().isoformat(),
+                "title": headline.title,
+                "representative_headline": headline.title,
+                "headline_count": 1,
+                "sources": [headline.source] if headline.source else [],
+                "source": headline.source,
+                "classification": headline.classification,
+                "relevance_score": headline.relevance_score,
+                "gold_impact": headline.gold_impact,
+                "summary": headline.summary,
+                "read": False,
+            })
 
     # Keep last 200 alerts max
     if len(alerts) > 200:

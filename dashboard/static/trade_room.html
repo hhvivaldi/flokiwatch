@@ -3531,7 +3531,7 @@
                 '</div>';
                 structuredContent = s1a + s2a + s3a;
               }
-              else if (isSage && m.metadata && m.metadata.trade_count_analyzed != null) {
+              else if (isSage && m.metadata && (m.metadata.trade_count_analyzed != null || m.metadata.trades != null)) {
                 // Daily report (from SAGE_REPORT or generic sage event with report data)
                 var sr = m.metadata;
                 var insights = sr.insights || [];
@@ -3540,7 +3540,7 @@
                   '<span style="color:#FFB300;font-size:10px;font-weight:900;letter-spacing:0.1em">SAGE</span>' +
                   '<span style="background:rgba(255,179,0,0.15);color:#FFB300;border:1px solid rgba(255,179,0,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">DAILY REPORT</span>' +
                 '</div>';
-                var s2r = '<div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px">' + (sr.trade_count_analyzed || 0) + ' trades analyzed</div>';
+                var s2r = '<div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px">' + (sr.trade_count_analyzed || sr.trades || 0) + ' trades analyzed</div>';
                 // Show top 3 insights
                 var insHtml = '';
                 if (insights.length > 0) {

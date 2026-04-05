@@ -322,12 +322,12 @@ class MT5Executor:
 
                             if real_ticket == 0:
                                 log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — trade not confirmed")
-                                # FLO-98: Critical alert — trade may be open but untracked
+                                # FLO-98: CRITICAL alert — trade may be open but untracked
                                 alert_error(
                                     "Trade Ticket Unresolved",
                                     f"EA executed {direction} signal but ticket not resolved after 10s. "
-                                    f"Position may exist in MT5 untracked. Check immediately.",
-                                    severity="error",
+                                    f"Position may exist in MT5 untracked. CHECK IMMEDIATELY.",
+                                    severity="critical",
                                 )
                                 return OrderResult(
                                     success=False,
@@ -339,6 +339,32 @@ class MT5Executor:
                                 )
                         except Exception as e_poll:
                             log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
+                            # FLO-197: Re-run phantom check after exception — position
+                            # may have been opened despite the polling error.
+                            if real_ticket == 0:
+                                try:
+                                    _rescue_pos = mt5.positions_get(symbol=self.symbol)
+                                    if _rescue_pos:
+                                        for p in _rescue_pos:
+                                            if p.magic == self.magic and p.ticket not in pre_tickets:
+                                                _dir_ok = (
+                                                    (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                                    or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
+                                                )
+                                                if _dir_ok:
+                                                    real_ticket = p.ticket
+                                                    log.warning(
+                                                        f"PHANTOM_POSITION | Post-exception rescue found "
+                                                        f"ticket #{p.ticket} — recovering"
+                                                    )
+                                                    alert_error(
+                                                        "Phantom Position Recovered (post-exception)",
+                                                        f"Polling failed with {e_poll}, but MT5 has ticket #{p.ticket} ({direction}). Recovered.",
+                                                        severity="warning",
+                                                    )
+                                                    break
+                                except Exception as e_rescue:
+                                    log.warning(f"PHANTOM_POSITION | Post-exception rescue failed: {e_rescue}")
 
                         return OrderResult(
                             success=real_ticket > 0,
