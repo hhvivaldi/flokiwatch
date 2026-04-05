@@ -4888,7 +4888,7 @@
                   var clr = h >= 0 ? '#4ade80' : '#f87171';
                   var arrow = h >= 0 ? '\u25B2' : '\u25BC';
                   var dir = dirArrow(d.macd_direction);
-                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + arrow + dir + '</span>';
+                  return '<span style="text-align:center;color:' + clr + ';font-weight:700">' + h.toFixed(1) + dir + '</span>';
                 }
                 function mtfAdxHtml(tf) {
                   var d = mtf[tf] || {};

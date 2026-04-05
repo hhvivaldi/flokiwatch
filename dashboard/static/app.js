@@ -313,7 +313,7 @@ function renderMarketIndicatorsPanel(state) {
         const d = td.macd;
         if (!d || d.histogram == null) { h += `<span style="text-align:center;color:#475569">—</span>`; return; }
         const c = d.histogram >= 0 ? "#4ade80" : "#f87171";
-        h += `<span style="text-align:center;color:${c};font-weight:700">${d.histogram >= 0 ? "▲" : "▼"}${dArr(td.macd_direction)}</span>`;
+        h += `<span style="text-align:center;color:${c};font-weight:700">${d.histogram.toFixed(1)}${dArr(td.macd_direction)}</span>`;
       });
       h += `</div>`;
       // ADX
