@@ -2103,24 +2103,12 @@
                 </div>
               </div>
             </div>
-            <!-- FLO-223: Pivot Points -->
+            <!-- FLO-223: 3-Layer Pivot Points -->
             <div class="ctx-block" style="border:none">
-              <div class="ctx-label">PIVOT POINTS (D1)</div>
+              <div class="ctx-label">PIVOT POINTS</div>
               <div id="ctx-pivot-points" style="font-family:'JetBrains Mono',monospace;font-size:9px">
-                <div style="display:grid;grid-template-columns:28px 1fr 4px 28px 1fr;gap:2px 6px">
-                  <span style="color:#f87171;font-weight:700">R3</span><span id="ctx-pp-r3" style="color:#f87171;font-weight:600">—</span>
-                  <span></span>
-                  <span style="color:#f87171;font-weight:700">R2</span><span id="ctx-pp-r2" style="color:#f87171;font-weight:600">—</span>
-                  <span style="color:#fb923c;font-weight:700">R1</span><span id="ctx-pp-r1" style="color:#fb923c;font-weight:600">—</span>
-                  <span></span>
-                  <span style="color:#e2e8f0;font-weight:700">PP</span><span id="ctx-pp-pp" style="color:#e2e8f0;font-weight:800">—</span>
-                  <span style="color:#34d399;font-weight:700">S1</span><span id="ctx-pp-s1" style="color:#34d399;font-weight:600">—</span>
-                  <span></span>
-                  <span style="color:#34d399;font-weight:700">S2</span><span id="ctx-pp-s2" style="color:#34d399;font-weight:600">—</span>
-                  <span style="color:#4ade80;font-weight:700">S3</span><span id="ctx-pp-s3" style="color:#4ade80;font-weight:600">—</span>
-                  <span></span>
-                  <span></span><span></span>
-                </div>
+                <!-- Rendered by JS: daily/weekly/monthly layers -->
+                <span style="color:#475569">Waiting for data</span>
               </div>
             </div>
           </div>
@@ -4954,19 +4942,37 @@
                 }
               } catch(e) {}
 
-              // FLO-223: Pivot Points
+              // FLO-223: 3-Layer Pivot Points (daily/weekly/monthly)
               try {
-                var pp = state.pivot_points;
-                if (pp && pp.classic) {
-                  var c = pp.classic;
-                  var ids = [['ctx-pp-r3','R3'],['ctx-pp-r2','R2'],['ctx-pp-r1','R1'],['ctx-pp-pp','PP'],['ctx-pp-s1','S1'],['ctx-pp-s2','S2'],['ctx-pp-s3','S3']];
-                  for (var pi = 0; pi < ids.length; pi++) {
-                    var el = document.getElementById(ids[pi][0]);
-                    if (el) {
-                      var v = c[ids[pi][1]];
-                      el.textContent = v != null ? Number(v).toFixed(2) : '\u2014';
+                var ppContainer = document.getElementById('ctx-pivot-points');
+                var ppData = state.pivot_points || {};
+                if (ppContainer) {
+                  var layers = [
+                    {key: 'daily', label: 'DAILY', color: '#22d3ee'},
+                    {key: 'weekly', label: 'WEEKLY', color: '#a78bfa'},
+                    {key: 'monthly', label: 'MONTHLY', color: '#facc15'}
+                  ];
+                  var lvlColors = {R3:'#f87171',R2:'#f87171',R1:'#fb923c',PP:'#e2e8f0',S1:'#34d399',S2:'#34d399',S3:'#4ade80'};
+                  var lvlOrder = ['R3','R2','R1','PP','S1','S2','S3'];
+                  var ppHtml = '';
+                  var hasAny = false;
+                  for (var li = 0; li < layers.length; li++) {
+                    var layer = ppData[layers[li].key];
+                    if (!layer || !layer.classic) continue;
+                    hasAny = true;
+                    var cl = layer.classic;
+                    ppHtml += '<div style="margin-bottom:6px">';
+                    ppHtml += '<div style="color:' + layers[li].color + ';font-weight:800;font-size:8px;letter-spacing:0.1em;margin-bottom:3px">' + layers[li].label + '</div>';
+                    ppHtml += '<div style="display:flex;flex-wrap:wrap;gap:2px 8px">';
+                    for (var lvi = 0; lvi < lvlOrder.length; lvi++) {
+                      var lk = lvlOrder[lvi];
+                      var lv = cl[lk];
+                      var lc = lvlColors[lk];
+                      ppHtml += '<span><span style="color:#546478;font-weight:600">' + lk + '</span> <span style="color:' + lc + ';font-weight:700">' + (lv != null ? Number(lv).toFixed(1) : '\u2014') + '</span></span>';
                     }
+                    ppHtml += '</div></div>';
                   }
+                  ppContainer.innerHTML = hasAny ? ppHtml : '<span style="color:#475569">No pivot data</span>';
                 }
               } catch(e) {}
 

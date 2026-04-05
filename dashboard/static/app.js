@@ -340,33 +340,33 @@ function renderMarketIndicatorsPanel(state) {
     }
   }
 
-  // FLO-223: Pivot Points
+  // FLO-223: 3-Layer Pivot Points
   const ppEl = el("pivot-grid-dashboard");
   if (ppEl) {
-    const pp = state?.pivot_points?.classic;
-    if (!pp || !pp.PP) {
-      ppEl.innerHTML = "";
-    } else {
-      const levels = [
-        { k: "R3", c: "#f87171" }, { k: "R2", c: "#f87171" }, { k: "R1", c: "#fb923c" },
-        { k: "PP", c: "#e2e8f0" },
-        { k: "S1", c: "#34d399" }, { k: "S2", c: "#34d399" }, { k: "S3", c: "#4ade80" },
-      ];
-      let ph = `<div style="font-weight:700;color:#475569;font-size:9px;letter-spacing:0.08em;margin-bottom:6px">PIVOT POINTS (D1)</div>`;
-      ph += `<div style="display:grid;grid-template-columns:30px 1fr 8px 30px 1fr;gap:2px 6px">`;
-      for (let i = 0; i < levels.length; i += 2) {
-        const l1 = levels[i];
-        const l2 = levels[i + 1];
-        ph += `<span style="color:${l1.c};font-weight:700">${l1.k}</span><span style="color:${l1.c};font-weight:600">${pp[l1.k] != null ? Number(pp[l1.k]).toFixed(2) : "—"}</span><span></span>`;
-        if (l2) {
-          ph += `<span style="color:${l2.c};font-weight:700">${l2.k}</span><span style="color:${l2.c};font-weight:600">${pp[l2.k] != null ? Number(pp[l2.k]).toFixed(2) : "—"}</span>`;
-        } else {
-          ph += `<span></span><span></span>`;
-        }
+    const ppData = state?.pivot_points || {};
+    const layers = [
+      { key: "daily", label: "DAILY", color: "#22d3ee" },
+      { key: "weekly", label: "WEEKLY", color: "#a78bfa" },
+      { key: "monthly", label: "MONTHLY", color: "#facc15" },
+    ];
+    const lvlOrder = ["R3", "R2", "R1", "PP", "S1", "S2", "S3"];
+    const lvlColors = { R3: "#f87171", R2: "#f87171", R1: "#fb923c", PP: "#e2e8f0", S1: "#34d399", S2: "#34d399", S3: "#4ade80" };
+    let ph = "";
+    let hasAny = false;
+    for (const ly of layers) {
+      const cl = ppData[ly.key]?.classic;
+      if (!cl || !cl.PP) continue;
+      hasAny = true;
+      ph += `<div style="margin-bottom:8px">`;
+      ph += `<div style="font-weight:800;color:${ly.color};font-size:9px;letter-spacing:0.1em;margin-bottom:4px">${ly.label} PIVOTS</div>`;
+      ph += `<div style="display:flex;flex-wrap:wrap;gap:2px 10px;font-size:10px">`;
+      for (const lk of lvlOrder) {
+        const lv = cl[lk];
+        ph += `<span><span style="color:#546478;font-weight:600">${lk}</span> <span style="color:${lvlColors[lk]};font-weight:700">${lv != null ? Number(lv).toFixed(1) : "—"}</span></span>`;
       }
-      ph += `</div>`;
-      ppEl.innerHTML = ph;
+      ph += `</div></div>`;
     }
+    ppEl.innerHTML = hasAny ? `<div style="font-weight:700;color:#475569;font-size:9px;letter-spacing:0.08em;margin-bottom:6px">PIVOT POINTS</div>${ph}` : "";
   }
 }
 

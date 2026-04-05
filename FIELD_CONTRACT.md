@@ -697,13 +697,16 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 
 ### `pivot_points` Object in `bot_state.json` (FLO-223)
 
+3-layer structure: daily (D1), weekly (W1), monthly (MN1).
+
 | Field | Type | Writer | Reader |
 |-------|------|--------|--------|
 | `pivot_points` | object | `state_writer.py` via `main.py` | `index.html`, `trade_room.html` |
-| `pivot_points.classic.{R3,R2,R1,PP,S1,S2,S3}` | float | P=(H+L+C)/3, standard formulas | `#ctx-pp-*` (Trade Room), `#pivot-grid-dashboard` |
-| `pivot_points.fibonacci.{R3,R2,R1,PP,S1,S2,S3}` | float | P same, Fib ratios (0.382, 0.618) | — |
-| `pivot_points.source.date` | string (ISO) | Previous D1 candle timestamp | — |
-| `pivot_points.source.{high,low,close}` | float | Previous D1 candle OHLC | — |
+| `pivot_points.{daily,weekly,monthly}` | object | Computed from prev candle H/L/C | Dashboard + Trade Room |
+| `pivot_points.{layer}.classic.{R3,R2,R1,PP,S1,S2,S3}` | float | Classic pivot formulas | `#ctx-pivot-points`, `#pivot-grid-dashboard` |
+| `pivot_points.{layer}.fibonacci.{R3,R2,R1,PP,S1,S2,S3}` | float | Fibonacci pivot formulas (0.382, 0.618) | — |
+| `pivot_points.{layer}.source.date` | string (ISO) | Previous candle timestamp | — |
+| `pivot_points.{layer}.source.{high,low,close}` | float | Previous candle OHLC | — |
 
 ### `ea_bridge` Object in `bot_state.json`
 

@@ -1892,41 +1892,59 @@ class TradingBot:
                         log.warning(f"MULTI_TF_INDICATORS | Error: {e_mtf}")
                         dp["multi_tf_indicators"] = {}
 
-                    # FLO-223: Pivot Points from previous completed D1 candle
+                    # FLO-223: 3-layer Pivot Points (Daily + Weekly + Monthly)
                     try:
-                        _d1_candles = (dp.get("candles") or {}).get("D1")
-                        if isinstance(_d1_candles, list) and len(_d1_candles) >= 2:
-                            _prev_d1 = _d1_candles[-2]  # Previous COMPLETED D1 candle
-                            _H = float(_prev_d1["high"])
-                            _L = float(_prev_d1["low"])
-                            _C = float(_prev_d1["close"])
-                            _P = (_H + _L + _C) / 3.0
-                            _rng = _H - _L
-                            dp["pivot_points"] = {
+                        def _compute_pivots(candle):
+                            H, L, C = float(candle["high"]), float(candle["low"]), float(candle["close"])
+                            P = (H + L + C) / 3.0
+                            rng = H - L
+                            return {
                                 "classic": {
-                                    "R3": round(_H + 2 * (_P - _L), 2),
-                                    "R2": round(_P + _rng, 2),
-                                    "R1": round(2 * _P - _L, 2),
-                                    "PP": round(_P, 2),
-                                    "S1": round(2 * _P - _H, 2),
-                                    "S2": round(_P - _rng, 2),
-                                    "S3": round(_L - 2 * (_H - _P), 2),
+                                    "R3": round(H + 2 * (P - L), 2), "R2": round(P + rng, 2),
+                                    "R1": round(2 * P - L, 2), "PP": round(P, 2),
+                                    "S1": round(2 * P - H, 2), "S2": round(P - rng, 2),
+                                    "S3": round(L - 2 * (H - P), 2),
                                 },
                                 "fibonacci": {
-                                    "R3": round(_P + _rng, 2),
-                                    "R2": round(_P + 0.618 * _rng, 2),
-                                    "R1": round(_P + 0.382 * _rng, 2),
-                                    "PP": round(_P, 2),
-                                    "S1": round(_P - 0.382 * _rng, 2),
-                                    "S2": round(_P - 0.618 * _rng, 2),
-                                    "S3": round(_P - _rng, 2),
+                                    "R3": round(P + rng, 2), "R2": round(P + 0.618 * rng, 2),
+                                    "R1": round(P + 0.382 * rng, 2), "PP": round(P, 2),
+                                    "S1": round(P - 0.382 * rng, 2), "S2": round(P - 0.618 * rng, 2),
+                                    "S3": round(P - rng, 2),
                                 },
-                                "source": {
-                                    "date": _prev_d1.get("time"),
-                                    "high": _H, "low": _L, "close": _C,
-                                },
+                                "source": {"date": candle.get("time"), "high": H, "low": L, "close": C},
                             }
-                            log.debug(f"PIVOT_POINTS | PP={_P:.2f} R1={2*_P-_L:.2f} S1={2*_P-_H:.2f} from D1 {_prev_d1.get('time', '?')}")
+
+                        _all_candles = dp.get("candles") or {}
+                        _pivots = {}
+
+                        # Daily from D1[-2]
+                        _d1c = _all_candles.get("D1")
+                        if isinstance(_d1c, list) and len(_d1c) >= 2:
+                            _pivots["daily"] = _compute_pivots(_d1c[-2])
+
+                        # Weekly from W1[-2]
+                        try:
+                            w1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_W1, 0, 3)
+                            w1_list = _rates_to_candles(w1_rates)
+                            if isinstance(w1_list, list) and len(w1_list) >= 2:
+                                _pivots["weekly"] = _compute_pivots(w1_list[-2])
+                        except Exception:
+                            pass
+
+                        # Monthly from MN1[-2]
+                        try:
+                            mn1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_MN1, 0, 3)
+                            mn1_list = _rates_to_candles(mn1_rates)
+                            if isinstance(mn1_list, list) and len(mn1_list) >= 2:
+                                _pivots["monthly"] = _compute_pivots(mn1_list[-2])
+                        except Exception:
+                            pass
+
+                        if _pivots:
+                            dp["pivot_points"] = _pivots
+                            _layers = list(_pivots.keys())
+                            _dpp = _pivots.get("daily", {}).get("classic", {}).get("PP", "?")
+                            log.debug(f"PIVOT_POINTS | layers={_layers} daily_PP={_dpp}")
                     except Exception as e_pp:
                         log.debug(f"PIVOT_POINTS | Error: {e_pp}")
 
