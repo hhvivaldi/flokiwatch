@@ -14,14 +14,61 @@
     <link rel="stylesheet" href="/static/style.css" />
 
     <style>
-      html, body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
-      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      html, body {
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        background: #050510;
+      }
+      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+      /* Account stat cards */
+      .ds-stat {
+        position: relative;
+        padding: 14px 16px;
+        border-radius: 10px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        overflow: hidden;
+        transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
+      }
+      .ds-stat:hover { transform: translateY(-1px); }
+      .ds-stat::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        border-radius: 3px 0 0 3px;
+      }
+      .ds-stat-green::before { background: #4ade80; }
+      .ds-stat-cyan::before { background: #22d3ee; }
+      .ds-stat-amber::before { background: #facc15; }
+      .ds-stat-dynamic::before { background: #64748b; }
+
+      /* Panel styling */
+      .ds-panel {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        padding: 18px 20px;
+      }
+      .ds-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #475569;
+      }
     </style>
   </head>
 
   <body class="bg-black text-white">
     <div id="vol-banner" class="hidden"></div>
 
+    <!-- Header -->
     <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
       <div class="flex flex-wrap items-center justify-between text-xs gap-2">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -29,39 +76,32 @@
             <span class="status-key">LAST UPDATE:</span>
             <span id="last-update" class="font-mono text-gray-200 text-xs">—</span>
           </div>
-
           <div class="flex items-center gap-2">
             <span class="status-key">DATA:</span>
             <span id="last-data-age" class="font-mono text-gray-300 text-xs">—</span>
           </div>
-
           <div class="flex items-center gap-2">
             <span id="status-dot" class="status-dot-offline"></span>
             <span class="status-key">STATUS:</span>
             <span id="status-label" class="text-red-400 font-mono text-xs">OFFLINE</span>
           </div>
-
           <div class="flex items-center gap-2">
             <span class="status-key">MODE:</span>
             <span id="mode" class="text-blue-300 font-mono text-xs">—</span>
           </div>
-
           <div class="hidden sm:flex items-center gap-2">
             <span class="status-key">MARKET:</span>
             <span id="market" class="text-gray-400 font-mono text-xs">—</span>
           </div>
-
           <div class="hidden md:flex items-center gap-2">
             <span class="status-key">EA:</span>
             <span id="ea-bridge-status" class="text-gray-500 font-mono text-xs">—</span>
           </div>
-
           <div class="hidden md:flex items-center gap-2">
             <span class="status-key">SPREAD:</span>
             <span id="ea-spread" class="font-mono text-gray-400 text-xs">—</span>
           </div>
         </div>
-
         <div class="flex items-center gap-4">
           <nav class="flex gap-1 sm:gap-4 md:gap-6 items-center flex-nowrap overflow-x-auto" style="-webkit-overflow-scrolling:touch;scrollbar-width:none;">
             <a href="/" class="site-nav-link active">DASHBOARD</a>
@@ -76,214 +116,185 @@
       </div>
     </div>
 
-    <main id="app" class="page-content relative container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Main -->
+    <main id="app" class="page-content relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div id="stale-overlay" class="hidden"></div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 stale-dim">
-        <section class="lg:col-span-2">
-          <section id="proactive-section" class="stale-dim hidden stagger-in stagger-1">
-            <div class="glass-panel border-emerald-700/50 rounded-2xl p-5 sm:p-6 shadow-lg">
-              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div class="flex items-center gap-3 shrink-0">
-                  <div class="section-pixel-header text-emerald-400">PROACTIVE ANALYSIS</div>
-                  <span class="text-xxs font-bold tracking-tighter-caps text-gray-500 px-2 py-0.5 glass-panel-deep rounded">M30 SNAPSHOT</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono font-medium text-gray-500">
-                  <span>M30 CLOSE: <span id="proactive-h1-close" class="text-gray-300 font-bold">—</span></span>
-                  <span>NEXT IN: <span id="proactive-countdown" class="text-gray-300 font-bold">—</span></span>
-                  <span>LATENCY: <span id="proactive-latency" class="text-gray-300 font-bold">—</span>ms</span>
-                  <span>TOKENS: <span id="proactive-tokens" class="text-gray-300 font-bold">—</span></span>
-                </div>
-              </div>
 
-              <!-- ROW 1: Decision (left) + Indicators (right) -->
-              <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                <div class="lg:col-span-1">
-                  <div class="glass-panel-deep rounded-xl p-5 sm:p-6 border border-white/5 h-full">
-                    <div class="text-xxs text-gray-500 font-bold tracking-widest-caps mb-3">AGENT DECISION</div>
-                    <div id="proactive-decision" class="text-4xl sm:text-5xl font-bold tracking-tighter">—</div>
-                    <div class="mt-4 flex items-center gap-3">
-                      <span class="text-xs text-gray-500 font-medium">CONFIDENCE:</span>
-                      <span id="proactive-confidence" class="text-sm font-mono font-bold text-gray-100">—%</span>
-                    </div>
-                    <div class="confidence-bar-track">
-                      <div id="proactive-confidence-bar" class="confidence-bar-fill conf-mid" style="width: 0%"></div>
-                    </div>
-                    <div id="proactive-entry-conditions" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                      —
-                    </div>
-                    <div id="proactive-hold-block" class="hidden mt-3 pt-3 border-t border-gray-700/30">
-                      <div id="proactive-hold-summary" class="text-xs text-gray-300 font-mono font-semibold">—</div>
-                      <div id="proactive-hold-pnl" class="text-xs font-mono mt-1">—</div>
-                    </div>
-                  </div>
-                </div>
+      <!-- ═══ ROW 1: HERO — Floki Video + Decision ═══ -->
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5 stale-dim stagger-in stagger-1">
+        <!-- Video (SOUL of the dashboard) -->
+        <div class="lg:col-span-2 flex justify-center items-center">
+          <video autoplay loop muted playsinline class="floki-decorative">
+            <source src="/image/flokivideowatch.mp4" type="video/mp4">
+          </video>
+        </div>
 
-                <div class="lg:col-span-2 flex flex-col gap-4">
-                  <!-- SENTIMENT: 5 segments — one per state -->
-                  <div class="glass-panel-deep rounded-xl p-3 sm:p-4">
-                    <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0 w-20">SENTIMENT</div>
-                      <div class="flex-1">
-                        <div id="sentiment-bar" class="vu-meter">
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                        </div>
-                        <div id="sentiment-indicator" class="hidden"></div>
-                      </div>
-                      <div id="sentiment-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0 w-20 text-right">—</div>
-                    </div>
-                  </div>
-
-                  <!-- LIFECYCLE: 6 segments — one per step -->
-                  <div class="glass-panel-deep rounded-xl p-3 sm:p-4">
-                    <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase shrink-0 w-20">LIFECYCLE</div>
-                      <div class="flex-1">
-                        <div id="lifecycle-bar" class="vu-meter">
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                          <div class="vu-segment"></div>
-                        </div>
-                        <div id="lifecycle-indicator" class="hidden"></div>
-                      </div>
-                      <div id="lifecycle-label" class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 shrink-0 w-20 text-right">—</div>
-                    </div>
-                    <!-- Step labels -->
-                    <div class="flex justify-between mt-1.5 px-1 text-[9px] font-mono text-gray-600">
-                      <span>WATCH</span><span>PREP</span><span>ENTRY</span><span>MANAGE</span><span>CLOSE</span><span>RESULT</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- ROW 2: Reasoning — full width -->
-              <div class="mt-5 glass-panel-deep rounded-xl p-4 sm:p-5">
-                <div class="flex items-center justify-between gap-2 mb-3">
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase">REASONING</div>
-                  <button id="proactive-reasoning-toggle" type="button" class="text-[10px] uppercase tracking-widest font-semibold text-gray-500 hover:text-gray-300 transition-colors">Expand</button>
-                </div>
-                <p id="proactive-reasoning" class="text-sm text-gray-300 leading-relaxed line-clamp-4">—</p>
-
-                <div id="proactive-close-reason-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CLOSE REASON</div>
-                  <div id="proactive-close-reason" class="text-gray-200">—</div>
-                </div>
-
-                <div id="proactive-adjust-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">ADJUSTMENT</div>
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div>
-                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW SL</div>
-                      <div id="proactive-adjust-sl" class="text-gray-200">—</div>
-                    </div>
-                    <div>
-                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">NEW TP</div>
-                      <div id="proactive-adjust-tp" class="text-gray-200">—</div>
-                    </div>
-                    <div class="sm:col-span-3">
-                      <div class="text-[10px] text-gray-500 uppercase tracking-wider">REASON</div>
-                      <div id="proactive-adjust-reason" class="text-gray-200">—</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="proactive-tp-block" class="hidden mt-3 px-3 py-2 rounded-lg border border-gray-700/40 bg-black/20 text-xs font-mono text-gray-300">
-                  <div id="proactive-tp-entry" class="text-gray-200">—</div>
-                  <div class="mt-1 text-gray-400">
-                    <span id="proactive-tp-sl">—</span>
-                    <span class="mx-1">|</span>
-                    <span id="proactive-tp-tp">—</span>
-                    <span class="mx-1">|</span>
-                    <span id="proactive-tp-rr">—</span>
-                  </div>
-                </div>
-
-                <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">KEY FACTORS</div>
-                    <ul id="proactive-factors" class="text-xs text-gray-400 space-y-1.5">
-                      <li class="text-gray-600">—</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">CONCERNS</div>
-                    <ul id="proactive-concerns" class="text-xs text-gray-400 space-y-1.5">
-                      <li class="text-gray-600">—</li>
-                    </ul>
-                  </div>
-                </div>
+        <!-- Proactive Decision Panel -->
+        <section id="proactive-section" class="lg:col-span-3 stale-dim hidden">
+          <div class="ds-panel" style="border-color:rgba(16,185,129,0.2)">
+            <!-- Header meta -->
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div class="section-pixel-header text-emerald-400">PROACTIVE ANALYSIS</div>
+              <div class="flex flex-wrap items-center gap-x-5 gap-y-1" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">
+                <span>M30: <span id="proactive-h1-close" style="color:#94a3b8;font-weight:700">—</span></span>
+                <span>NEXT: <span id="proactive-countdown" style="color:#94a3b8;font-weight:700">—</span></span>
+                <span>LAT: <span id="proactive-latency" style="color:#94a3b8;font-weight:700">—</span>ms</span>
+                <span>TOK: <span id="proactive-tokens" style="color:#94a3b8;font-weight:700">—</span></span>
               </div>
             </div>
-          </section>
 
-          <hr class="section-separator" />
-          <div class="mt-2 glass-panel-deep rounded-xl p-4 sm:p-5 stagger-in stagger-5">
-            <div style="display:none">
-              <div id="goldcon" class="relative glass-panel border-gray-700/50 rounded-2xl p-6 shadow-xl overflow-hidden transition-all duration-500">
-                <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                
-                <div class="relative z-10 flex flex-col gap-5">
-                  <div class="flex flex-wrap items-start gap-4">
-                    <div class="flex-1 min-w-0">
-                      <div class="text-xs font-semibold text-gray-400 tracking-[0.2em] uppercase mb-1">FLOKI SIGNAL</div>
-                      <div class="mt-2 transition-colors duration-300" id="goldcon-decision">HOLD</div>
-                      <div id="goldcon-blocked" class="hidden text-xs text-amber-400 mt-2 font-medium"></div>
-                    </div>
-                    <div class="flex items-center gap-4 text-sm bg-black/20 rounded-lg p-3 border border-white/5 backdrop-blur-sm flex-shrink-0">
-                      <div class="flex flex-col">
-                        <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Score</span>
-                        <span id="goldcon-score" class="font-mono text-lg font-semibold text-gray-100">—</span>
+            <!-- Decision + Meters -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- Decision box -->
+              <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px">
+                <div class="ds-label" style="margin-bottom:8px">AGENT DECISION</div>
+                <div id="proactive-decision" style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:900;letter-spacing:-0.02em;line-height:1">—</div>
+                <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+                  <span class="ds-label">CONFIDENCE:</span>
+                  <span id="proactive-confidence" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;color:#e2e8f0">—%</span>
+                </div>
+                <div class="confidence-bar-track" style="margin-top:6px">
+                  <div id="proactive-confidence-bar" class="confidence-bar-fill conf-mid" style="width:0%"></div>
+                </div>
+                <div id="proactive-entry-conditions" class="hidden" style="margin-top:10px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2);font-family:'JetBrains Mono',monospace;font-size:10px;color:#94a3b8">—</div>
+                <div id="proactive-hold-block" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+                  <div id="proactive-hold-summary" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#94a3b8;font-weight:600">—</div>
+                  <div id="proactive-hold-pnl" style="font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:4px">—</div>
+                </div>
+              </div>
+
+              <!-- Meters -->
+              <div class="md:col-span-2 flex flex-col gap-3">
+                <!-- Sentiment -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:10px 14px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ds-label" style="width:64px;flex-shrink:0">SENTIMENT</span>
+                    <div style="flex:1">
+                      <div id="sentiment-bar" class="vu-meter">
+                        <div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div>
                       </div>
-                      <div class="w-px h-8 bg-gray-700/50"></div>
-                      <div class="flex flex-col">
-                        <span class="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Confidence</span>
-                        <span id="goldcon-conf" class="font-mono text-lg font-semibold text-gray-100">—</span>
+                      <div id="sentiment-indicator" class="hidden"></div>
+                    </div>
+                    <span id="sentiment-label" class="ds-label" style="width:80px;text-align:right;color:#94a3b8">—</span>
+                  </div>
+                </div>
+                <!-- Lifecycle -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:10px 14px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ds-label" style="width:64px;flex-shrink:0">LIFECYCLE</span>
+                    <div style="flex:1">
+                      <div id="lifecycle-bar" class="vu-meter">
+                        <div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div><div class="vu-segment"></div>
+                      </div>
+                      <div id="lifecycle-indicator" class="hidden"></div>
+                      <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:7px;color:#334155">
+                        <span>WATCH</span><span>PREP</span><span>ENTRY</span><span>MANAGE</span><span>CLOSE</span><span>RESULT</span>
                       </div>
                     </div>
+                    <span id="lifecycle-label" class="ds-label" style="width:80px;text-align:right;color:#94a3b8">—</span>
                   </div>
-
-                  <div class="w-full">
-                    <div id="signal-segments" class="flex gap-1 w-full items-end" style="height:48px">
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                      <div class="flex-1 rounded bg-gray-800 transition-all duration-700" style="height:48px"></div>
-                    </div>
-                    <div class="flex justify-between mt-2 text-[10px] font-mono font-medium text-gray-500 px-0.5">
-                      <span>SELL (0)</span>
-                      <span>HOLD (50)</span>
-                      <span>BUY (100)</span>
-                    </div>
+                </div>
+                <!-- Reasoning (compact) -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:10px 14px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <span class="ds-label">REASONING</span>
+                    <button id="proactive-reasoning-toggle" type="button" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:#64748b;background:none;border:none;cursor:pointer">Expand</button>
                   </div>
-
-                  <div class="text-sm text-gray-400 flex items-start gap-2 bg-gray-800/30 rounded-lg p-3 border border-gray-700/30">
-                    <svg class="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <span class="text-xs text-gray-500 uppercase tracking-wider block mb-0.5">Scenario</span>
-                      <span id="goldcon-scenario" class="text-gray-200 font-medium leading-tight">—</span>
-                    </div>
-                  </div>
+                  <p id="proactive-reasoning" style="font-size:11px;color:#94a3b8;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">—</p>
                 </div>
               </div>
             </div>
 
-            <div class="section-pixel-header text-gray-500 mb-3">RECENT TRIGGERS</div>
+            <!-- Conditional blocks -->
+            <div id="proactive-close-reason-block" class="hidden" style="margin-top:12px;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2)">
+              <div class="ds-label" style="margin-bottom:4px">CLOSE REASON</div>
+              <div id="proactive-close-reason" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#e2e8f0">—</div>
+            </div>
+            <div id="proactive-adjust-block" class="hidden" style="margin-top:12px;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2)">
+              <div class="ds-label" style="margin-bottom:4px">ADJUSTMENT</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;font-family:'JetBrains Mono',monospace;font-size:10px">
+                <div><span style="color:#475569">NEW SL</span><div id="proactive-adjust-sl" style="color:#e2e8f0;font-weight:600">—</div></div>
+                <div><span style="color:#475569">NEW TP</span><div id="proactive-adjust-tp" style="color:#e2e8f0;font-weight:600">—</div></div>
+                <div><span style="color:#475569">REASON</span><div id="proactive-adjust-reason" style="color:#e2e8f0;font-weight:600">—</div></div>
+              </div>
+            </div>
+            <div id="proactive-tp-block" class="hidden" style="margin-top:12px;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2);font-family:'JetBrains Mono',monospace;font-size:10px;color:#94a3b8">
+              <div id="proactive-tp-entry" style="color:#e2e8f0;font-weight:600">—</div>
+              <div style="margin-top:4px"><span id="proactive-tp-sl">—</span> <span style="color:#334155">|</span> <span id="proactive-tp-tp">—</span> <span style="color:#334155">|</span> <span id="proactive-tp-rr">—</span></div>
+            </div>
+
+            <!-- Factors / Concerns -->
+            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <div class="ds-label" style="margin-bottom:6px">KEY FACTORS</div>
+                <ul id="proactive-factors" style="font-size:10px;color:#64748b;list-style:none;padding:0;margin:0"><li style="color:#334155">—</li></ul>
+              </div>
+              <div>
+                <div class="ds-label" style="margin-bottom:6px">CONCERNS</div>
+                <ul id="proactive-concerns" style="font-size:10px;color:#64748b;list-style:none;padding:0;margin:0"><li style="color:#334155">—</li></ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ═══ ROW 2: ACCOUNT CARDS ═══ -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 stagger-in stagger-2">
+        <div class="ds-stat ds-stat-green">
+          <div class="ds-label" style="margin-bottom:4px">BALANCE</div>
+          <div id="balance" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:#e2e8f0;letter-spacing:-0.01em">—</div>
+        </div>
+        <div class="ds-stat ds-stat-cyan">
+          <div class="ds-label" style="margin-bottom:4px">EQUITY</div>
+          <div id="equity" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:#e2e8f0;letter-spacing:-0.01em">—</div>
+        </div>
+        <div class="ds-stat ds-stat-dynamic">
+          <div class="ds-label" style="margin-bottom:4px">P&amp;L DAY</div>
+          <div id="pnl" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:#e2e8f0;letter-spacing:-0.01em">—</div>
+        </div>
+        <div class="ds-stat ds-stat-amber">
+          <div class="ds-label" style="margin-bottom:4px">PRICE</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <div id="price" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:#e2e8f0;letter-spacing:-0.01em">—</div>
+            <span id="price-label" class="ds-label"></span>
+          </div>
+          <div class="ds-label" style="margin-top:2px">XAU/USD</div>
+        </div>
+      </div>
+
+      <!-- ═══ ROW 3: TWO-COLUMN — Signals+Triggers (left) | Indicators+Pivots (right) ═══ -->
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mt-5">
+
+        <!-- LEFT: Signals + Triggers + Decisions -->
+        <div class="lg:col-span-3 flex flex-col gap-4">
+          <!-- GoldCon (hidden data container — app.js writes to these IDs) -->
+          <div style="display:none">
+            <div id="goldcon">
+              <div id="goldcon-decision">HOLD</div>
+              <div id="goldcon-blocked" class="hidden"></div>
+              <div id="goldcon-score">—</div>
+              <div id="goldcon-conf">—</div>
+              <div id="signal-segments" class="flex gap-1 w-full items-end" style="height:48px">
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+                <div class="flex-1 rounded bg-gray-800" style="height:48px"></div>
+              </div>
+              <div id="goldcon-scenario">—</div>
+            </div>
+          </div>
+
+          <!-- Recent Triggers -->
+          <div class="ds-panel stagger-in stagger-3">
+            <div class="section-pixel-header text-gray-500" style="margin-bottom:10px">RECENT TRIGGERS</div>
             <div id="fast-triggers-chips" class="trigger-log">
               <div class="trigger-log-entry">
                 <span class="trigger-log-action text-gray-600">—</span>
@@ -292,283 +303,205 @@
             </div>
           </div>
 
-          <hr class="section-separator" />
-          <div class="mt-2 glass-panel-deep rounded-xl p-4 sm:p-5 stagger-in stagger-6">
-            <div class="flex items-center justify-between gap-4">
-              <div class="section-pixel-header text-gray-500">MARKET INDICATORS</div>
-              <button id="brain-toggle" type="button" class="text-[10px] uppercase tracking-widest font-semibold text-gray-500 hover:text-gray-300 transition-colors">Show Market Indicators</button>
-            </div>
-            <div id="brain-reference-panel" class="hidden mt-4">
-              <div id="market-indicators-panel" class="glass-panel border-gray-700/50 rounded-2xl p-5 shadow-lg">
-                <div class="text-xs font-bold tracking-widest-caps text-gray-200 mb-4">MARKET INDICATORS</div>
-                <div id="market-indicators-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-                <!-- FLO-221: Multi-TF Compact Grid -->
-                <div id="mtf-grid-dashboard" style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10px"></div>
-                <!-- FLO-223: Pivot Points -->
-                <div id="pivot-grid-dashboard" style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10px"></div>
-              </div>
-            </div>
-
-          </div>
-
-          <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <div class="account-card p-4 sm:p-5 stagger-in stagger-1">
-              <div class="text-xxs font-bold tracking-widest-caps text-gray-500 mb-2">BALANCE</div>
-              <div id="balance" class="text-2xl sm:text-3xl font-extrabold font-mono text-gray-100 tracking-tight">—</div>
-            </div>
-            <div class="account-card p-4 sm:p-5 stagger-in stagger-2">
-              <div class="text-xxs font-bold tracking-widest-caps text-gray-500 mb-2">EQUITY</div>
-              <div id="equity" class="text-2xl sm:text-3xl font-extrabold font-mono text-gray-100 tracking-tight">—</div>
-            </div>
-            <div class="account-card p-4 sm:p-5 stagger-in stagger-3">
-              <div class="text-xxs font-bold tracking-widest-caps text-gray-500 mb-2">P&amp;L DAY</div>
-              <div id="pnl" class="text-2xl sm:text-3xl font-extrabold font-mono text-gray-100 tracking-tight">—</div>
-            </div>
-            <div class="account-card p-4 sm:p-5 stagger-in stagger-4">
-              <div class="text-xxs font-bold tracking-widest-caps text-gray-500 mb-2">PRICE</div>
-              <div class="flex items-baseline gap-2">
-                <div id="price" class="text-2xl sm:text-3xl font-extrabold font-mono text-gray-100 tracking-tight">—</div>
-                <span id="price-label" class="text-xxs text-gray-500 font-bold tracking-widest-caps"></span>
-              </div>
-              <div class="text-xxs text-gray-500 font-bold mt-1 tracking-widest-caps">XAU/USD</div>
+          <!-- Recent Decisions -->
+          <div class="ds-panel stagger-in stagger-4">
+            <div class="section-pixel-header text-gray-500" style="margin-bottom:10px">RECENT DECISIONS</div>
+            <div id="recent-decisions" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
+              <span style="color:#334155;font-weight:600">NO DECISIONS YET</span>
             </div>
           </div>
 
-          <div class="mt-5 glass-panel-deep rounded-xl p-4 sm:p-5 stagger-in stagger-7">
-            <div class="section-pixel-header text-gray-500">RECENT DECISIONS</div>
-            <div id="recent-decisions" class="mt-3 flex flex-wrap gap-2 text-xs">
-              <span class="text-gray-600 font-medium">NO DECISIONS YET</span>
-            </div>
-          </div>
-        </section>
-
-        <aside class="lg:col-span-1">
-          <div class="glass-panel border-gray-700/40 rounded-2xl p-4 sm:p-5 shadow-md stagger-in stagger-2">
-            <div class="flex items-center justify-between mb-3">
+          <!-- Positions -->
+          <div class="ds-panel stagger-in stagger-5">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
               <div class="section-pixel-header text-gray-200">OPEN POSITIONS</div>
-              <div class="text-xs font-medium text-gray-500">COUNT: <span id="positions-count" class="font-mono text-gray-300">0</span></div>
+              <span class="ds-label">COUNT: <span id="positions-count" style="color:#94a3b8">0</span></span>
             </div>
-            <div id="positions" class="mt-3 space-y-3"></div>
+            <div id="positions" style="display:flex;flex-direction:column;gap:8px"></div>
           </div>
 
-          <div class="mt-4 bg-gray-900/30 backdrop-blur-sm border border-gray-700/40 rounded-2xl p-4 sm:p-5 shadow-md stagger-in stagger-4">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <!-- Trades Today -->
+          <div class="ds-panel stagger-in stagger-6">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
               <div class="section-pixel-header text-gray-200">TRADES TODAY</div>
-              <div class="text-xs font-mono font-medium text-gray-400 flex flex-wrap gap-2">
-                <span>W:<span id="trades-w" class="text-gray-200 ml-1">0</span></span>
-                <span>L:<span id="trades-l" class="text-gray-200 ml-1">0</span></span>
-                <span>BE:<span id="trades-be" class="text-gray-200 ml-1">0</span></span>
-                <span>WR:<span id="trades-wr" class="text-gray-200 ml-1">0%</span></span>
-                <span class="ml-auto sm:ml-0">P&L:<span id="trades-pnl" class="text-gray-200 ml-1">$0.00</span></span>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#64748b;display:flex;flex-wrap:wrap;gap:8px">
+                <span>W:<span id="trades-w" style="color:#e2e8f0;margin-left:3px">0</span></span>
+                <span>L:<span id="trades-l" style="color:#e2e8f0;margin-left:3px">0</span></span>
+                <span>BE:<span id="trades-be" style="color:#e2e8f0;margin-left:3px">0</span></span>
+                <span>WR:<span id="trades-wr" style="color:#e2e8f0;margin-left:3px">0%</span></span>
+                <span>P&amp;L:<span id="trades-pnl" style="color:#e2e8f0;margin-left:3px">$0.00</span></span>
               </div>
             </div>
-            <div id="trades" class="mt-3"></div>
+            <div id="trades"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Multi-TF + Pivots + Indicators (ALWAYS VISIBLE) -->
+        <div class="lg:col-span-2 flex flex-col gap-4">
+          <!-- Market Indicators + Multi-TF + Pivots -->
+          <!-- FLO-222: Multi-TF Indicators (PRIMARY) -->
+          <div class="ds-panel stagger-in stagger-3">
+            <div class="section-pixel-header text-gray-500" style="margin-bottom:12px">MULTI-TF INDICATORS</div>
+            <button id="brain-toggle" type="button" style="display:none">Show Market Indicators</button>
+            <div id="brain-reference-panel">
+              <div id="market-indicators-panel">
+                <!-- Multi-TF grid is the PRIMARY display -->
+                <div id="mtf-grid-dashboard" style="font-family:'JetBrains Mono',monospace;font-size:10px"></div>
+                <!-- Old sparkline rows (secondary, below) -->
+                <div id="market-indicators-grid" style="display:grid;grid-template-columns:1fr;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04)"></div>
+              </div>
+            </div>
           </div>
 
-          <!-- Floki decorative -->
-          <div class="mt-4 hidden md:flex justify-center">
-            <video autoplay loop muted playsinline class="floki-decorative">
-              <source src="/image/flokivideowatch.mp4" type="video/mp4">
-            </video>
+          <!-- FLO-223: Pivot Points -->
+          <div class="ds-panel stagger-in stagger-4">
+            <div id="pivot-grid-dashboard" style="font-family:'JetBrains Mono',monospace;font-size:10px"></div>
           </div>
-        </aside>
+        </div>
       </div>
 
-      <!-- INTEL FEED -->
-      <section id="intel-feed-section" class="mt-6 stale-dim stagger-in stagger-8">
-        <div class="glass-panel border-gray-700/50 rounded-2xl p-5 shadow-lg">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2">
+      <!-- ═══ ROW 4: INTEL FEED (full width) ═══ -->
+      <section id="intel-feed-section" class="mt-5 stale-dim stagger-in stagger-7">
+        <div class="ds-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:8px">
               <div class="section-pixel-header text-amber-400">INTEL FEED</div>
-              <span class="text-[10px] uppercase font-semibold tracking-widest text-gray-500">NEWS / MACRO</span>
+              <span class="ds-label">NEWS / MACRO</span>
             </div>
-            <div class="flex items-center gap-3 text-xs font-mono font-medium text-gray-500 intel-feed-content hidden">
-              <span id="intel-method" class="px-1.5 py-0.5 border border-gray-600/50 rounded text-gray-400 bg-gray-800/50"></span>
+            <div class="intel-feed-content hidden" style="display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">
+              <span id="intel-method" style="padding:2px 6px;border:1px solid rgba(100,116,139,0.3);border-radius:4px;background:rgba(0,0,0,0.2)"></span>
               <span id="intel-cache-age"></span>
             </div>
           </div>
 
           <!-- Empty state -->
-          <div class="intel-feed-empty text-center py-6">
-            <div class="text-gray-600 text-sm">&#9678;</div>
-            <div class="text-xs text-gray-500 mt-1">AWAITING FIRST ANALYSIS</div>
-            <div class="text-xs text-gray-600 mt-0.5">Intel data will appear after the first analysis cycle</div>
+          <div class="intel-feed-empty" style="text-align:center;padding:24px 0">
+            <div style="color:#334155;font-size:12px">&#9678;</div>
+            <div style="font-size:10px;color:#475569;margin-top:4px">AWAITING FIRST ANALYSIS</div>
           </div>
 
-          <!-- Content (hidden until data arrives) -->
+          <!-- Content -->
           <div class="intel-feed-content hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <!-- Headlines (left 2/3) -->
-              <div class="lg:col-span-2">
-                <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-3">HEADLINES</div>
-                <div id="intel-headlines" class="space-y-2"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <!-- Headlines -->
+              <div>
+                <div class="ds-label" style="margin-bottom:8px">HEADLINES</div>
+                <div id="intel-headlines" style="display:flex;flex-direction:column;gap:6px"></div>
               </div>
-
-              <!-- Macro + Calendar (right 1/3) -->
-              <div class="lg:col-span-1 space-y-4">
+              <!-- Macro + Calendar -->
+              <div style="display:flex;flex-direction:column;gap:14px">
                 <div>
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">MACRO INDICATORS</div>
-                  <div id="intel-macro" class="space-y-3"></div>
+                  <div class="ds-label" style="margin-bottom:6px">MACRO INDICATORS</div>
+                  <div id="intel-macro" style="display:flex;flex-direction:column;gap:8px"></div>
                 </div>
-
                 <div>
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2 flex items-center justify-between">
+                  <div class="ds-label" style="margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
                     <span>CALENDAR</span>
-                    <span id="calendar-market-watch" class="text-[10px] text-gray-600 font-mono font-bold tracking-normal">Market Watch: —</span>
+                    <span id="calendar-market-watch" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#334155;font-weight:700;letter-spacing:normal">Market Watch: —</span>
                   </div>
-                  <div id="intel-calendar" class="text-xs text-gray-400"></div>
+                  <div id="intel-calendar" style="font-size:11px;color:#64748b"></div>
                 </div>
               </div>
             </div>
 
             <!-- S/R Zones -->
-            <div id="intel-sr" class="hidden mt-3 pt-3 border-t border-gray-800/50">
-              <div class="text-[10px] font-semibold tracking-widest uppercase text-gray-400 mb-2">S/R ZONES</div>
-              <div id="intel-sr-legend" class="hidden text-[10px] text-gray-500 mb-3 flex flex-wrap gap-x-4 gap-y-1">
-                <span><span class="px-1 py-0.5 rounded font-bold bg-amber-700 text-amber-200">D1</span> <span class="px-1 py-0.5 rounded font-bold bg-blue-800 text-blue-300">H4</span> <span class="px-1 py-0.5 rounded font-bold bg-gray-700 text-gray-400">H1</span> timeframe</span>
-                <span><span class="px-1 py-0.5 rounded font-bold bg-purple-800 text-purple-300">MTF</span> multi-TF confluence</span>
-                <span><span class="px-1 py-0.5 rounded font-bold bg-yellow-800 text-yellow-300">FLIP</span> acted as both S&amp;R</span>
-                <span><span class="px-1 py-0.5 rounded font-bold bg-green-900 text-green-400">SUP</span> / <span class="px-1 py-0.5 rounded font-bold bg-red-900 text-red-400">RES</span> one-sided</span>
+            <div id="intel-sr" class="hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04)">
+              <div class="ds-label" style="margin-bottom:6px">S/R ZONES</div>
+              <div id="intel-sr-legend" class="hidden" style="font-size:9px;color:#475569;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px">
+                <span><span style="padding:1px 4px;border-radius:3px;font-weight:700;background:rgba(180,83,9,0.3);color:#fbbf24">D1</span> <span style="padding:1px 4px;border-radius:3px;font-weight:700;background:rgba(30,64,175,0.3);color:#93c5fd">H4</span> <span style="padding:1px 4px;border-radius:3px;font-weight:700;background:rgba(55,65,81,0.5);color:#9ca3af">H1</span></span>
+                <span><span style="padding:1px 4px;border-radius:3px;font-weight:700;background:rgba(88,28,135,0.3);color:#c084fc">MTF</span> confluence</span>
+                <span><span style="padding:1px 4px;border-radius:3px;font-weight:700;background:rgba(133,77,14,0.3);color:#fde68a">FLIP</span> both S&amp;R</span>
               </div>
-              <div id="intel-sr-zones" class="flex flex-col md:flex-row gap-3 text-xs font-mono"></div>
+              <div id="intel-sr-zones" style="display:flex;flex-direction:column;gap:8px;font-family:'JetBrains Mono',monospace;font-size:10px"></div>
             </div>
 
-            <!-- MTF Trend + Volume Gate — merged compact bar -->
-            <div id="intel-mtf-volume" class="mt-3 pt-3 border-t border-gray-800/50">
-              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono">
-                <!-- MTF label -->
-                <span class="text-[10px] font-semibold tracking-widest uppercase text-gray-500 shrink-0">MTF</span>
-                <span class="text-gray-500 shrink-0">D1:<span id="mtf-d1" class="ml-1 text-gray-400">—</span></span>
-                <span class="text-gray-500 shrink-0">H4:<span id="mtf-h4" class="ml-1 text-gray-400">—</span></span>
-                <span class="text-gray-500 shrink-0">Align:<span id="mtf-alignment" class="ml-1 text-gray-400">—</span></span>
-                <span class="text-gray-500 shrink-0">Adj:<span id="mtf-adj" class="ml-1 text-gray-400">0</span></span>
-                <!-- divider -->
-                <span class="text-gray-700 shrink-0 select-none">|</span>
-                <!-- Volume label -->
-                <span class="text-[10px] font-semibold tracking-widest uppercase text-gray-500 shrink-0">VOL</span>
-                <span class="text-gray-500 shrink-0">Ratio:<span id="vol-ratio" class="ml-1 text-gray-400">—</span></span>
-                <span class="text-gray-500 shrink-0">Status:<span id="vol-status" class="ml-1 text-gray-400">—</span></span>
-                <span class="text-gray-500 shrink-0">Adj:<span id="vol-adj" class="ml-1 text-gray-400">0</span></span>
+            <!-- MTF Trend + Volume -->
+            <div id="intel-mtf-volume" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04)">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px">
+                <span class="ds-label" style="flex-shrink:0">MTF</span>
+                <span style="color:#475569">D1:<span id="mtf-d1" style="margin-left:3px;color:#94a3b8">—</span></span>
+                <span style="color:#475569">H4:<span id="mtf-h4" style="margin-left:3px;color:#94a3b8">—</span></span>
+                <span style="color:#475569">Align:<span id="mtf-alignment" style="margin-left:3px;color:#94a3b8">—</span></span>
+                <span style="color:#475569">Adj:<span id="mtf-adj" style="margin-left:3px;color:#94a3b8">0</span></span>
+                <span style="color:#1e293b">|</span>
+                <span class="ds-label" style="flex-shrink:0">VOL</span>
+                <span style="color:#475569">Ratio:<span id="vol-ratio" style="margin-left:3px;color:#94a3b8">—</span></span>
+                <span style="color:#475569">Status:<span id="vol-status" style="margin-left:3px;color:#94a3b8">—</span></span>
+                <span style="color:#475569">Adj:<span id="vol-adj" style="margin-left:3px;color:#94a3b8">0</span></span>
               </div>
             </div>
 
-            <!-- Candlestick Patterns -->
-            <div id="intel-patterns" class="hidden mt-6 pt-5 border-t border-gray-800/50"></div>
+            <!-- Patterns -->
+            <div id="intel-patterns" class="hidden" style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.04)"></div>
 
-            <!-- GPT Validator + Confirmations/Alerts -->
-            <div id="intel-bottom" class="mt-6 pt-5 border-t border-gray-800/50 w-full overflow-hidden">
-              <div class="flex flex-col gap-3">
-                <div id="intel-gpt" class="hidden w-full break-words whitespace-normal"></div>
-                <div id="intel-tags" class="flex flex-wrap gap-2 w-full"></div>
+            <!-- GPT + Tags -->
+            <div id="intel-bottom" style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.04);width:100%;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div id="intel-gpt" class="hidden" style="width:100%;word-break:break-word;white-space:normal"></div>
+                <div id="intel-tags" style="display:flex;flex-wrap:wrap;gap:6px;width:100%"></div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- AI AGENT CARD (Shadow Mode) -->
-      <section id="agent-card" class="mt-6 stale-dim hidden">
-        <div class="glass-panel border-purple-700/50 rounded-2xl p-5 shadow-lg">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2">
+      <!-- ═══ AI AGENT CARD (Shadow Mode) — hidden by default ═══ -->
+      <section id="agent-card" class="mt-5 stale-dim hidden">
+        <div class="ds-panel" style="border-color:rgba(147,51,234,0.2)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:8px">
               <div class="section-pixel-header text-purple-400">AI AGENT</div>
-              <span id="agent-mode-badge" class="text-[10px] uppercase font-semibold tracking-widest text-gray-500 px-2 py-0.5 bg-gray-800 rounded">SHADOW</span>
+              <span id="agent-mode-badge" class="ds-label" style="padding:2px 8px;background:rgba(0,0,0,0.3);border-radius:4px;color:#94a3b8">SHADOW</span>
             </div>
-            <div class="flex items-center gap-3 text-xs font-mono font-medium text-gray-500">
-              <span>Latency: <span id="agent-latency" class="text-gray-300">—</span>ms</span>
-            </div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">Latency: <span id="agent-latency" style="color:#94a3b8">—</span>ms</span>
           </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <!-- Decision + Agreement -->
-            <div class="lg:col-span-1">
-              <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30">
-                <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">AGENT DECISION</div>
-                <div id="agent-decision" class="text-2xl font-bold text-gray-100">—</div>
-                <div class="mt-2 flex items-center gap-2">
-                  <span class="text-xs text-gray-500">Confidence:</span>
-                  <span id="agent-confidence" class="text-sm font-mono font-semibold text-gray-200">—%</span>
-                </div>
-                <div class="mt-3 pt-3 border-t border-gray-700/30">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-500">Agreement:</span>
-                    <span id="agent-agreement" class="text-sm font-semibold">—</span>
-                  </div>
-                  <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs text-gray-500">Executed:</span>
-                    <span id="agent-executed" class="text-xs font-mono text-gray-400">—</span>
-                  </div>
-                </div>
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px">
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div class="ds-label" style="margin-bottom:6px">AGENT DECISION</div>
+              <div id="agent-decision" style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:900;color:#e2e8f0">—</div>
+              <div style="margin-top:8px;display:flex;align-items:center;gap:6px"><span class="ds-label">Confidence:</span><span id="agent-confidence" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#e2e8f0">—%</span></div>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+                <div style="display:flex;align-items:center;gap:6px"><span class="ds-label">Agreement:</span><span id="agent-agreement" style="font-size:12px;font-weight:700">—</span></div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span class="ds-label">Executed:</span><span id="agent-executed" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#64748b">—</span></div>
               </div>
             </div>
-
-            <!-- Reasoning -->
-            <div class="lg:col-span-2">
-              <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30 h-full">
-                <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">REASONING</div>
-                <p id="agent-reasoning" class="text-sm text-gray-300 leading-relaxed">—</p>
-                
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">KEY FACTORS</div>
-                    <ul id="agent-factors" class="text-xs text-gray-400 space-y-1">
-                      <li class="text-gray-600">—</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-1">CONCERNS</div>
-                    <ul id="agent-concerns" class="text-xs text-gray-400 space-y-1">
-                      <li class="text-gray-600">—</li>
-                    </ul>
-                  </div>
-                </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div class="ds-label" style="margin-bottom:6px">REASONING</div>
+              <p id="agent-reasoning" style="font-size:11px;color:#94a3b8;line-height:1.5">—</p>
+              <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div><div class="ds-label" style="margin-bottom:4px">KEY FACTORS</div><ul id="agent-factors" style="font-size:10px;color:#64748b;list-style:none;padding:0;margin:0"><li style="color:#334155">—</li></ul></div>
+                <div><div class="ds-label" style="margin-bottom:4px">CONCERNS</div><ul id="agent-concerns" style="font-size:10px;color:#64748b;list-style:none;padding:0;margin:0"><li style="color:#334155">—</li></ul></div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- AI AGENT MEMORY (v1.3) -->
-      <section id="agent-memory-section" class="mt-6 stale-dim hidden">
-        <div class="bg-gray-900/40 backdrop-blur-md border border-cyan-700/50 rounded-2xl p-5 shadow-lg">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2">
+      <!-- ═══ AI AGENT MEMORY — hidden by default ═══ -->
+      <section id="agent-memory-section" class="mt-5 stale-dim hidden">
+        <div class="ds-panel" style="border-color:rgba(34,211,238,0.2)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:8px">
               <div class="section-pixel-header text-cyan-400">AGENT MEMORY</div>
-              <span id="agent-memory-status" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">ACTIVE</span>
+              <span id="agent-memory-status" style="padding:2px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.25)">ACTIVE</span>
             </div>
-            <div class="flex items-center gap-3 text-xs font-mono font-medium text-gray-500">
-              <span>Last REJECT: <span id="agent-memory-timestamp" class="text-gray-300">—</span></span>
-            </div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">Last REJECT: <span id="agent-memory-timestamp" style="color:#94a3b8">—</span></span>
           </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <!-- Market View -->
-            <div class="lg:col-span-1">
-              <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30">
-                <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase mb-2">AGENT'S VIEW</div>
-                <div id="agent-memory-view-direction" class="text-lg font-bold text-gray-100">—</div>
-                <div class="mt-2 text-xs text-gray-500">
-                  Brain wanted: <span id="agent-memory-brain-signal" class="text-gray-300 font-mono">—</span>
-                </div>
-                <div class="mt-3 pt-3 border-t border-gray-700/30">
-                  <p id="agent-memory-view-description" class="text-xs text-gray-400 leading-relaxed italic">—</p>
-                </div>
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px">
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div class="ds-label" style="margin-bottom:6px">AGENT'S VIEW</div>
+              <div id="agent-memory-view-direction" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:900;color:#e2e8f0">—</div>
+              <div style="margin-top:6px;font-size:10px;color:#475569">Brain wanted: <span id="agent-memory-brain-signal" style="font-family:'JetBrains Mono',monospace;color:#94a3b8">—</span></div>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+                <p id="agent-memory-view-description" style="font-size:10px;color:#64748b;line-height:1.5;font-style:italic">—</p>
               </div>
             </div>
-
-            <!-- Conditions -->
-            <div class="lg:col-span-2">
-              <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700/30 h-full">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="text-[10px] text-gray-500 font-semibold tracking-widest uppercase">CONDITIONS TO APPROVE</div>
-                  <div class="text-[10px] text-gray-500 font-mono">
-                    Expires: <span id="agent-memory-expiry" class="text-gray-400">—</span>
-                  </div>
-                </div>
-                <ul id="agent-memory-conditions" class="text-sm text-gray-300 space-y-2">
-                  <li class="text-gray-500">No active memory</li>
-                </ul>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div class="ds-label">CONDITIONS TO APPROVE</div>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#475569">Expires: <span id="agent-memory-expiry" style="color:#64748b">—</span></span>
               </div>
+              <ul id="agent-memory-conditions" style="font-size:12px;color:#94a3b8;list-style:none;padding:0;margin:0"><li style="color:#475569">No active memory</li></ul>
             </div>
           </div>
         </div>
