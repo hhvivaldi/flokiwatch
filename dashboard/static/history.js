@@ -8,7 +8,8 @@ class HistoryApp {
         this.currentSort = { column: 'close_time', direction: 'desc' };
         this.chart = null;
         this.modalOpen = false;
-        
+        this.expandedTicket = null;
+
         // Static backtest reference (v3.1 18-month Aug 2024 - Feb 2026)
         this.backtestRef = {
             trades: 654,
@@ -16,7 +17,7 @@ class HistoryApp {
             profitFactor: 2.25,
             maxDrawdown: 196.83
         };
-        
+
         // Poll every 60s
         this.pollingInterval = 60000;
         this.pollTimer = null;
@@ -29,193 +30,178 @@ class HistoryApp {
     }
 
     bindModalHandlers() {
-        const modal = document.getElementById('trade-report-modal');
+        var modal = document.getElementById('trade-report-modal');
         if (!modal) return;
-        const closeBtn = document.getElementById('trade-report-close');
-        if (closeBtn) closeBtn.addEventListener('click', () => this.closeTradeReport());
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) this.closeTradeReport();
+        var closeBtn = document.getElementById('trade-report-close');
+        var self = this;
+        if (closeBtn) closeBtn.addEventListener('click', function() { self.closeTradeReport(); });
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) self.closeTradeReport();
         });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.modalOpen) this.closeTradeReport();
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && self.modalOpen) self.closeTradeReport();
         });
     }
 
     async fetchData() {
         try {
             document.getElementById('loading-indicator').classList.remove('hidden');
-            const response = await fetch('/api/history-data');
-            
+            var response = await fetch('/api/history-data');
             if (!response.ok) throw new Error('Network response was not ok');
-            
-            const result = await response.json();
+            var result = await response.json();
             if (result.error) throw new Error(result.error);
-            
+
             this.data = result;
-            
-            // Reapply sort if not the default
+
             if (this.currentSort.column !== 'close_time' || this.currentSort.direction !== 'desc') {
                 this.sortData();
             } else {
-                // Ensure default sort is descending by close_time
-                this.data.trades.sort((a, b) => new Date(b.close_time) - new Date(a.close_time));
+                this.data.trades.sort(function(a, b) { return new Date(b.close_time) - new Date(a.close_time); });
             }
-            
+
             this.render();
-            document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
             document.getElementById('loading-indicator').classList.add('hidden');
         } catch (error) {
             console.error('Error fetching history data:', error);
-            document.getElementById('last-updated').textContent = `Error fetching data: ${error.message}`;
+            document.getElementById('last-updated').textContent = 'Error: ' + error.message;
             document.getElementById('loading-indicator').classList.add('hidden');
         }
     }
 
     startPolling() {
         if (this.pollTimer) clearInterval(this.pollTimer);
-        this.pollTimer = setInterval(() => this.fetchData(), this.pollingInterval);
+        var self = this;
+        this.pollTimer = setInterval(function() { self.fetchData(); }, this.pollingInterval);
     }
 
     render() {
         if (!this.data) return;
-        
         this.renderGlobalStats();
-        this.renderMonthlyTable();
-        this.renderComparisonTable();
         this.renderChart();
+        this.renderComparisonBars();
+        this.renderMonthlyTable();
         this.renderTradesTable();
     }
 
+    // ── Stat Cards ──
     renderGlobalStats() {
-        const stats = this.data.global_stats;
-        const grid = document.getElementById('global-stats-grid');
-        
-        // BE activation rate display
-        const beCount = stats.be_activation_count || 0;
-        const beRate = stats.be_activation_rate || 0;
-        const beDisplay = beCount > 0 ? `${beCount} (${beRate}%)` : '—';
+        var stats = this.data.global_stats;
+        var grid = document.getElementById('global-stats-grid');
 
-        const cards = [
-            { label: 'Total Trades', value: stats.total_trades, icon: '📊' },
-            { label: 'Win Rate', value: `${stats.win_rate}%`, icon: '🎯', color: stats.win_rate >= 50 ? 'text-green-400' : 'text-red-400' },
-            { label: 'Profit Factor', value: stats.profit_factor, icon: '⚖️', color: stats.profit_factor >= 1.5 ? 'text-green-400' : 'text-amber-400' },
-            { label: 'Total P&L', value: `$${stats.total_profit.toFixed(2)}`, icon: '💰', color: stats.total_profit >= 0 ? 'text-green-400' : 'text-red-400' },
-            { label: 'BE Activation', value: beDisplay, icon: '🛡️', color: beRate >= 50 ? 'text-green-400' : 'text-amber-400' },
-            { label: 'Best Trade', value: `$${stats.best_trade_profit.toFixed(2)}`, icon: '🏆', color: 'text-green-400' },
-            { label: 'Worst Trade', value: `$${stats.worst_trade_profit.toFixed(2)}`, icon: '💔', color: 'text-red-400' },
-            { label: 'Max Drawdown', value: `$${stats.max_drawdown.toFixed(2)}`, icon: '📉', color: 'text-red-400' },
+        var beCount = stats.be_activation_count || 0;
+        var beRate = stats.be_activation_rate || 0;
+        var beDisplay = beCount > 0 ? beCount + ' (' + beRate + '%)' : '\u2014';
+
+        var cards = [
+            { label: 'Total Trades', value: stats.total_trades, accent: 'cyan', color: '#22d3ee' },
+            { label: 'Win Rate', value: stats.win_rate + '%', accent: stats.win_rate >= 50 ? 'green' : 'red', color: stats.win_rate >= 50 ? '#4ade80' : '#f87171' },
+            { label: 'Profit Factor', value: stats.profit_factor, accent: stats.profit_factor >= 1.5 ? 'green' : 'amber', color: stats.profit_factor >= 1.5 ? '#4ade80' : '#facc15' },
+            { label: 'Total P&L', value: '$' + stats.total_profit.toFixed(2), accent: stats.total_profit >= 0 ? 'green' : 'red', color: stats.total_profit >= 0 ? '#4ade80' : '#f87171' },
+            { label: 'BE Activation', value: beDisplay, accent: 'amber', color: '#facc15' },
+            { label: 'Best Trade', value: '+$' + stats.best_trade_profit.toFixed(2), accent: 'green', color: '#4ade80' },
+            { label: 'Worst Trade', value: '$' + stats.worst_trade_profit.toFixed(2), accent: 'red', color: '#f87171' },
+            { label: 'Max Drawdown', value: '$' + stats.max_drawdown.toFixed(2), accent: 'red', color: '#f87171' },
         ];
-        
-        grid.innerHTML = cards.map(c => `
-            <div class="glass-panel rounded-2xl p-4 flex flex-col justify-center items-center text-center">
-                <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 mb-2 flex items-center gap-1.5">
-                    <span class="text-sm">${c.icon}</span> ${c.label}
-                </div>
-                <div class="text-xl sm:text-2xl font-black font-mono tracking-[0.2em] ${c.color || 'text-gray-100'} uppercase">${c.value}</div>
-            </div>
-        `).join('');
-    }
 
-    renderMonthlyTable() {
-        const tbody = document.getElementById('monthly-table-body');
-        
-        if (!this.data.monthly_stats || this.data.monthly_stats.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">No monthly data available</td></tr>`;
-            return;
-        }
-        
-        tbody.innerHTML = this.data.monthly_stats.map(ms => {
-            const pnlColor = ms.profit >= 0 ? 'text-green-400' : 'text-red-400';
-            return `
-            <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-300 font-black uppercase tracking-[0.2em]">${ms.month}</td>
-                <td class="p-3 text-right text-gray-400 font-black tracking-[0.2em]">${ms.trades}</td>
-                <td class="p-3 text-right font-black tracking-[0.2em]">
-                    <span class="text-green-400">${ms.wins}</span> / 
-                    <span class="text-red-400">${ms.losses}</span> / 
-                    <span class="text-gray-500">${ms.breakevens}</span>
-                </td>
-                <td class="p-3 text-right text-gray-300 font-black tracking-[0.2em]">${ms.win_rate.toFixed(1)}%</td>
-                <td class="p-3 text-right font-black tracking-[0.2em] ${pnlColor}">$${ms.profit.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-300 font-black tracking-[0.2em]">${ms.profit_factor.toFixed(2)}</td>
-                <td class="p-3 text-right text-red-400 font-black tracking-[0.2em]">$${ms.max_drawdown.toFixed(2)}</td>
-            </tr>
-            `;
+        grid.innerHTML = cards.map(function(c) {
+            return '<div class="hst-stat hst-stat-' + c.accent + '">' +
+                '<div class="hst-stat-label">' + c.label + '</div>' +
+                '<div class="hst-stat-value" style="color:' + c.color + '">' + c.value + '</div>' +
+            '</div>';
         }).join('');
     }
 
-    renderComparisonTable() {
-        const live = this.data.live_stats || this.data.global_stats;
-        const bt = this.backtestRef;
-        const tbody = document.getElementById('comparison-table-body');
-        
-        const diffColor = (val, inverted = false) => {
-            if (val === 0) return 'text-gray-500';
-            const isGood = inverted ? val < 0 : val > 0;
-            return isGood ? 'text-green-400' : 'text-red-400';
-        };
-        
-        const diffSign = (val) => val > 0 ? '+' : '';
-
-        const rows = [
-            { label: 'Trades', bt: bt.trades, live: live.total_trades, diff: live.total_trades - bt.trades, format: v => v },
-            { label: 'Win Rate (%)', bt: bt.winRate, live: live.win_rate, diff: live.win_rate - bt.winRate, format: v => v.toFixed(1) },
-            { label: 'Profit Factor', bt: bt.profitFactor, live: live.profit_factor, diff: live.profit_factor - bt.profitFactor, format: v => v.toFixed(2) },
-            { label: 'Max Drawdown ($)', bt: bt.maxDrawdown, live: live.max_drawdown, diff: live.max_drawdown - bt.maxDrawdown, format: v => v.toFixed(2), inverted: true }
-        ];
-
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td class="py-2 text-gray-400 font-black uppercase tracking-[0.2em]">${r.label}</td>
-                <td class="py-2 text-right text-gray-500 font-black tracking-[0.2em]">${r.format(r.bt)}</td>
-                <td class="py-2 text-right text-gray-200 font-black tracking-[0.2em]">${r.format(r.live)}</td>
-                <!--<td class="py-2 text-right ${diffColor(r.diff, r.inverted)} text-xs">${diffSign(r.diff)}${r.format(r.diff)}</td>-->
-            </tr>
-        `).join('');
-    }
-
+    // ── Equity Curve (full width, gradient fill, colored markers) ──
     renderChart() {
-        const ctx = document.getElementById('equityChart').getContext('2d');
-        const curve = this.data.equity_curve || [];
-        
-        // Start at INITIAL_BALANCE ($1000) — server sends balance values
-        const dataPoints = [{x: 'Start', y: 1000}];
-        curve.forEach((point, index) => {
-            // Shorten the time label for X axis
-            const date = new Date(point.time);
-            const label = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+        var ctx = document.getElementById('equityChart').getContext('2d');
+        var curve = this.data.equity_curve || [];
+        var trades = this.data.trades || [];
+
+        var dataPoints = [{x: 'Start', y: 1000}];
+        curve.forEach(function(point) {
+            var date = new Date(point.time);
+            var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()];
+            var label = mo + ' ' + date.getDate() + ' \u00B7 ' + date.getHours() + ':' + date.getMinutes().toString().padStart(2, '0');
             dataPoints.push({x: label, y: point.equity});
         });
 
-        const labels = dataPoints.map(p => p.x);
-        const data = dataPoints.map(p => p.y);
+        var labels = dataPoints.map(function(p) { return p.x; });
+        var data = dataPoints.map(function(p) { return p.y; });
+
+        // Point colors: green for equity increase, red for decrease
+        var pointColors = data.map(function(val, i) {
+            if (i === 0) return 'transparent';
+            return val >= data[i-1] ? 'rgba(74,222,128,0.9)' : 'rgba(248,113,113,0.9)';
+        });
+        var pointRadii = data.map(function(val, i) {
+            if (i === 0) return 0;
+            return 3;
+        });
+
+        // Summary text
+        var summaryEl = document.getElementById('equity-summary');
+        if (summaryEl && data.length > 1) {
+            var finalEq = data[data.length - 1];
+            var change = finalEq - 1000;
+            var sign = change >= 0 ? '+' : '';
+            var clr = change >= 0 ? '#4ade80' : '#f87171';
+            summaryEl.innerHTML = '<span style="color:#64748b">Balance:</span> <span style="color:' + clr + '">$' + finalEq.toFixed(2) + ' (' + sign + '$' + change.toFixed(2) + ')</span>';
+        }
 
         if (this.chart) {
             this.chart.data.labels = labels;
             this.chart.data.datasets[0].data = data;
-            
-            // Update color based on final equity
-            const finalEq = data[data.length - 1] || 0;
-            const color = finalEq >= 0 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
-            const bgGradient = ctx.createLinearGradient(0, 0, 0, 400);
-            bgGradient.addColorStop(0, finalEq >= 0 ? 'rgba(74, 222, 128, 0.2)' : 'rgba(248, 113, 113, 0.2)');
-            bgGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            
-            this.chart.data.datasets[0].borderColor = color;
-            this.chart.data.datasets[0].backgroundColor = bgGradient;
-            
-            this.chart.update('none'); // Update without animation for polling
+            this.chart.data.datasets[0].pointBackgroundColor = pointColors;
+            this.chart.data.datasets[0].pointRadius = pointRadii;
+
+            var finalEq2 = data[data.length - 1] || 0;
+            var color2 = finalEq2 >= 1000 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
+            var bgGrad2 = ctx.createLinearGradient(0, 0, 0, 320);
+            bgGrad2.addColorStop(0, 'rgba(74, 222, 128, 0.18)');
+            bgGrad2.addColorStop(0.45, 'rgba(74, 222, 128, 0.04)');
+            bgGrad2.addColorStop(0.55, 'rgba(248, 113, 113, 0.04)');
+            bgGrad2.addColorStop(1, 'rgba(248, 113, 113, 0.12)');
+            this.chart.data.datasets[0].borderColor = color2;
+            this.chart.data.datasets[0].backgroundColor = bgGrad2;
+            this.chart.update('none');
             return;
         }
 
-        // Determine initial colors
-        const finalEq = data[data.length - 1] || 0;
-        const color = finalEq >= 0 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, 400);
-        bgGradient.addColorStop(0, finalEq >= 0 ? 'rgba(74, 222, 128, 0.2)' : 'rgba(248, 113, 113, 0.2)');
-        bgGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        var finalEq = data[data.length - 1] || 0;
+        var color = finalEq >= 1000 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
+        // Dual-tone gradient: green above $1000, red below
+        var bgGradient = ctx.createLinearGradient(0, 0, 0, 320);
+        bgGradient.addColorStop(0, 'rgba(74, 222, 128, 0.18)');
+        bgGradient.addColorStop(0.45, 'rgba(74, 222, 128, 0.04)');
+        bgGradient.addColorStop(0.55, 'rgba(248, 113, 113, 0.04)');
+        bgGradient.addColorStop(1, 'rgba(248, 113, 113, 0.12)');
+
+        // Custom plugin: $1,000 baseline dashed reference line
+        var baselinePlugin = {
+            id: 'baselineLine',
+            afterDraw: function(chart) {
+                var yScale = chart.scales.y;
+                if (!yScale) return;
+                var yPos = yScale.getPixelForValue(1000);
+                if (yPos < chart.chartArea.top || yPos > chart.chartArea.bottom) return;
+                var ctx2 = chart.ctx;
+                ctx2.save();
+                ctx2.beginPath();
+                ctx2.setLineDash([6, 4]);
+                ctx2.strokeStyle = 'rgba(148, 163, 184, 0.3)';
+                ctx2.lineWidth = 1;
+                ctx2.moveTo(chart.chartArea.left, yPos);
+                ctx2.lineTo(chart.chartArea.right, yPos);
+                ctx2.stroke();
+                // Label
+                ctx2.fillStyle = 'rgba(148, 163, 184, 0.5)';
+                ctx2.font = '700 8px JetBrains Mono';
+                ctx2.textAlign = 'right';
+                ctx2.fillText('$1,000', chart.chartArea.left - 4, yPos + 3);
+                ctx2.restore();
+            }
+        };
 
         this.chart = new Chart(ctx, {
             type: 'line',
@@ -227,10 +213,12 @@ class HistoryApp {
                     borderColor: color,
                     backgroundColor: bgGradient,
                     borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
+                    pointRadius: pointRadii,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: pointColors,
+                    pointBorderWidth: 0,
                     fill: true,
-                    tension: 0.1
+                    tension: 0.2
                 }]
             },
             options: {
@@ -241,80 +229,322 @@ class HistoryApp {
                     tooltip: {
                         mode: 'index',
                         intersect: false,
-                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                        titleColor: '#9ca3af',
-                        bodyColor: '#e5e7eb',
-                        borderColor: '#374151',
+                        backgroundColor: 'rgba(8, 8, 20, 0.95)',
+                        titleColor: '#94a3b8',
+                        titleFont: { family: 'JetBrains Mono', size: 10, weight: 700 },
+                        bodyColor: '#e2e8f0',
+                        bodyFont: { family: 'JetBrains Mono', size: 11, weight: 600 },
+                        borderColor: 'rgba(255,255,255,0.1)',
                         borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
                         callbacks: {
                             label: function(context) {
-                                let val = context.parsed.y;
-                                return ` Balance: $${val.toFixed(2)}`;
+                                var val = context.parsed.y;
+                                var change = val - 1000;
+                                var sign = change >= 0 ? '+' : '';
+                                return ' $' + val.toFixed(2) + '  (' + sign + '$' + change.toFixed(2) + ')';
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        grid: { color: '#1f2937', drawBorder: false },
-                        ticks: { color: '#6b7280', maxTicksLimit: 8 }
+                        grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
+                        ticks: { color: '#475569', maxTicksLimit: 10, font: { family: 'JetBrains Mono', size: 9 } }
                     },
                     y: {
-                        grid: { color: '#1f2937', drawBorder: false },
+                        grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
                         min: 750,
                         ticks: {
-                            color: '#6b7280',
+                            color: '#475569',
+                            font: { family: 'JetBrains Mono', size: 9 },
                             callback: function(value) { return '$' + value; }
                         }
                     }
                 },
-                interaction: {
-                    mode: 'nearest',
-                    axis: 'x',
-                    intersect: false
-                }
-            }
+                interaction: { mode: 'nearest', axis: 'x', intersect: false }
+            },
+            plugins: [baselinePlugin]
         });
     }
 
+    // ── Live vs Backtest Comparison Bars ──
+    renderComparisonBars() {
+        var live = this.data.live_stats || this.data.global_stats;
+        var bt = this.backtestRef;
+        var container = document.getElementById('comparison-bars');
+
+        var metrics = [
+            { label: 'Trades', bt: bt.trades, live: live.total_trades, fmt: function(v) { return Math.round(v); }, unit: '' },
+            { label: 'Win Rate', bt: bt.winRate, live: live.win_rate, fmt: function(v) { return v.toFixed(1); }, unit: '%' },
+            { label: 'Profit Factor', bt: bt.profitFactor, live: live.profit_factor, fmt: function(v) { return v.toFixed(2); }, unit: '' },
+            { label: 'Max Drawdown', bt: bt.maxDrawdown, live: live.max_drawdown, fmt: function(v) { return '$' + v.toFixed(0); }, unit: '', inverted: true }
+        ];
+
+        container.innerHTML = metrics.map(function(m) {
+            var diff = m.live - m.bt;
+            var isGood = m.inverted ? diff <= 0 : diff >= 0;
+            var clr = isGood ? '#4ade80' : '#f87171';
+            var diffStr = (diff >= 0 ? '+' : '') + m.fmt(diff) + m.unit;
+            var maxVal = Math.max(m.bt, m.live) || 1;
+            var btPct = Math.min((m.bt / maxVal) * 100, 100);
+            var livePct = Math.min((m.live / maxVal) * 100, 100);
+
+            return '<div style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px">' +
+                '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">' +
+                    '<span style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">' + m.label + '</span>' +
+                    '<span style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:800;color:' + clr + '">' + diffStr + '</span>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+                    '<span style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:#475569">BT: ' + m.fmt(m.bt) + m.unit + '</span>' +
+                    '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;font-weight:800;color:#e2e8f0">Live: ' + m.fmt(m.live) + m.unit + '</span>' +
+                '</div>' +
+                '<div class="hst-cmp-bar-track">' +
+                    '<div class="hst-cmp-bar-fill" style="width:' + btPct + '%;background:rgba(100,116,139,0.3)"></div>' +
+                '</div>' +
+                '<div class="hst-cmp-bar-track" style="margin-top:3px">' +
+                    '<div class="hst-cmp-bar-fill" style="width:' + livePct + '%;background:' + clr + '"></div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    // ── Monthly Summary ──
+    renderMonthlyTable() {
+        var tbody = document.getElementById('monthly-table-body');
+
+        if (!this.data.monthly_stats || this.data.monthly_stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="padding:16px;text-align:center;color:#475569;font-family:\'JetBrains Mono\',monospace;font-size:10px">No monthly data</td></tr>';
+            return;
+        }
+
+        // Find max abs P&L for bar scaling
+        var maxPnl = 1;
+        this.data.monthly_stats.forEach(function(ms) { maxPnl = Math.max(maxPnl, Math.abs(ms.profit)); });
+
+        tbody.innerHTML = this.data.monthly_stats.map(function(ms) {
+            var pnlColor = ms.profit >= 0 ? '#4ade80' : '#f87171';
+            var rowBg = ms.profit >= 0 ? 'rgba(74,222,128,0.02)' : 'rgba(248,113,113,0.02)';
+            var wrColor = ms.win_rate >= 60 ? '#4ade80' : ms.win_rate >= 45 ? '#facc15' : '#f87171';
+            var pfColor = ms.profit_factor >= 1.5 ? '#4ade80' : ms.profit_factor >= 1.0 ? '#facc15' : '#f87171';
+            var barWidth = Math.round((Math.abs(ms.profit) / maxPnl) * 60);
+
+            // Format month name
+            var parts = ms.month.split('-');
+            var moNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var moLabel = moNames[parseInt(parts[1])] + ' ' + parts[0];
+
+            return '<tr class="hst-monthly-row" style="font-family:\'JetBrains Mono\',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04);background:' + rowBg + '">' +
+                '<td style="padding:10px 12px;font-weight:700;color:#e2e8f0;letter-spacing:0.05em">' + moLabel + '</td>' +
+                '<td style="padding:10px 12px;text-align:center;color:#94a3b8;font-weight:600">' + ms.trades + '</td>' +
+                '<td style="padding:10px 12px;text-align:center;font-weight:600">' +
+                    '<span style="color:#4ade80">' + ms.wins + '</span>' +
+                    '<span style="color:#334155"> / </span>' +
+                    '<span style="color:#f87171">' + ms.losses + '</span>' +
+                    '<span style="color:#334155"> / </span>' +
+                    '<span style="color:#475569">' + ms.breakevens + '</span>' +
+                '</td>' +
+                '<td style="padding:10px 12px;text-align:center;font-weight:700;color:' + wrColor + '">' + ms.win_rate.toFixed(1) + '%</td>' +
+                '<td style="padding:10px 12px;text-align:right;font-weight:800;color:' + pnlColor + '">' +
+                    (ms.profit >= 0 ? '+' : '') + '$' + ms.profit.toFixed(2) +
+                    '<span class="hst-pnl-bar" style="width:' + barWidth + 'px;background:' + pnlColor + '"></span>' +
+                '</td>' +
+                '<td style="padding:10px 12px;text-align:center;font-weight:700;color:' + pfColor + '">' + ms.profit_factor.toFixed(2) + '</td>' +
+                '<td style="padding:10px 12px;text-align:right;font-weight:600;color:#f87171">$' + ms.max_drawdown.toFixed(2) + '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    // ── Trade Table (compact columns, expandable rows) ──
+    renderTradesTable() {
+        var tbody = document.getElementById('trades-table-body');
+        var trades = this.data.trades || [];
+        var self = this;
+
+        var totalPages = Math.max(1, Math.ceil(trades.length / this.pageSize));
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        if (this.currentPage < 1) this.currentPage = 1;
+
+        document.getElementById('current-page').textContent = this.currentPage;
+        document.getElementById('total-pages').textContent = totalPages;
+        document.getElementById('btn-prev').disabled = this.currentPage === 1;
+        document.getElementById('btn-next').disabled = this.currentPage === totalPages;
+
+        var startIdx = (this.currentPage - 1) * this.pageSize;
+        var pageTrades = trades.slice(startIdx, startIdx + this.pageSize);
+
+        if (pageTrades.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="padding:16px;text-align:center;color:#475569;font-family:\'JetBrains Mono\',monospace;font-size:10px">No trades recorded yet</td></tr>';
+            return;
+        }
+
+        var html = '';
+        pageTrades.forEach(function(t) {
+            var dirColor = t.direction === 'BUY' ? '#4ade80' : '#f87171';
+            var dirBg = t.direction === 'BUY' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)';
+            var dirBorder = t.direction === 'BUY' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)';
+
+            var pnl = parseFloat(t.profit) || 0;
+            var pnlColor = pnl > 0.5 ? '#4ade80' : (pnl < -0.5 ? '#f87171' : '#64748b');
+            var pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+            var pipsStr = t.pips ? (t.pips >= 0 ? '+' : '') + t.pips.toFixed(1) + 'p' : '';
+
+            // Compact date: "Apr 2 · 4:59 PM"
+            var dateStr = '--';
+            if (t.open_time) {
+                var d = new Date(t.open_time);
+                var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+                var hr = d.getHours();
+                var ampm = hr >= 12 ? 'PM' : 'AM';
+                hr = hr % 12 || 12;
+                dateStr = mo + ' ' + d.getDate() + ' \u00B7 ' + hr + ':' + d.getMinutes().toString().padStart(2,'0') + ' ' + ampm;
+            }
+
+            // Price: "4663 → 4660"
+            var priceStr = (t.open_price ? t.open_price.toFixed(2) : '--') + ' \u2192 ' + (t.close_price ? t.close_price.toFixed(2) : '--');
+
+            // Confidence
+            var confStr = t.confidence ? t.confidence.toFixed(0) + '%' : '--';
+            var confColor = t.confidence >= 70 ? '#22d3ee' : (t.confidence >= 40 ? '#94a3b8' : '#64748b');
+
+            // Scenario
+            var scenario = self.scenarioLabel(t);
+
+            // Close reason badge
+            var resultBadge = self.renderResultBadge(t);
+
+            // Ticket for expand
+            var ticket = t.ticket || 0;
+            var isExpanded = self.expandedTicket === ticket;
+
+            html += '<tr class="hst-trade-row" style="font-family:\'JetBrains Mono\',monospace;font-size:10px;border-bottom:1px solid rgba(255,255,255,0.04)" onclick="historyApp.toggleExpand(' + ticket + ')">' +
+                '<td style="padding:10px 12px;color:#94a3b8;font-weight:600;white-space:nowrap">' + dateStr + '</td>' +
+                '<td style="padding:10px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:' + dirColor + ';background:' + dirBg + ';border:1px solid ' + dirBorder + '">' + t.direction + '</span></td>' +
+                '<td style="padding:10px 12px;color:#cbd5e1;font-weight:600;white-space:nowrap">' + priceStr + '</td>' +
+                '<td style="padding:10px 12px;text-align:right;font-weight:800;color:' + pnlColor + ';white-space:nowrap">' + pnlStr + ' <span style="color:#475569;font-weight:600;font-size:9px">' + pipsStr + '</span></td>' +
+                '<td style="padding:10px 12px;text-align:right;color:' + confColor + ';font-weight:700">' + confStr + '</td>' +
+                '<td style="padding:10px 12px;color:#64748b;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + scenario + '</td>' +
+                '<td style="padding:10px 12px;white-space:nowrap">' + resultBadge + '</td>' +
+            '</tr>';
+
+            // Expandable detail row
+            var dur = t.duration_minutes ? (t.duration_minutes < 60 ? t.duration_minutes + 'm' : Math.floor(t.duration_minutes/60) + 'h ' + (t.duration_minutes%60) + 'm') : '--';
+            var reportBtn = ticket ? '<button style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;padding:4px 12px;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.2);border-radius:6px;color:#22d3ee;cursor:pointer" onclick="event.stopPropagation();historyApp.openTradeReport(' + ticket + ')">View Report</button>' : '';
+
+            html += '<tr class="hst-trade-expand' + (isExpanded ? ' open' : '') + '" id="expand-' + ticket + '">' +
+                '<td colspan="7" style="padding:12px 16px">' +
+                    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;font-family:\'JetBrains Mono\',monospace;font-size:10px">' +
+                        '<div><span style="color:#475569;font-weight:700">Entry</span><div style="color:#e2e8f0;font-weight:600;margin-top:2px">' + (t.open_price ? t.open_price.toFixed(2) : '--') + '</div></div>' +
+                        '<div><span style="color:#475569;font-weight:700">Exit</span><div style="color:#e2e8f0;font-weight:600;margin-top:2px">' + (t.close_price ? t.close_price.toFixed(2) : '--') + '</div></div>' +
+                        '<div><span style="color:#475569;font-weight:700">SL</span><div style="color:#f87171;font-weight:600;margin-top:2px">' + (t.sl ? t.sl.toFixed(2) : '--') + '</div></div>' +
+                        '<div><span style="color:#475569;font-weight:700">TP</span><div style="color:#4ade80;font-weight:600;margin-top:2px">' + (t.tp ? t.tp.toFixed(2) : '--') + '</div></div>' +
+                        '<div><span style="color:#475569;font-weight:700">Duration</span><div style="color:#94a3b8;font-weight:600;margin-top:2px">' + dur + '</div></div>' +
+                        '<div><span style="color:#475569;font-weight:700">BE</span><div style="font-weight:600;margin-top:2px">' + self.renderBeBadge(t.breakeven_activated) + '</div></div>' +
+                    '</div>' +
+                    (t.scenario_description ? '<div style="margin-top:10px;font-family:\'JetBrains Mono\',monospace;font-size:9px;color:#64748b;line-height:1.5">' + self.escapeHtml(t.scenario_description) + '</div>' : '') +
+                    (reportBtn ? '<div style="margin-top:10px">' + reportBtn + '</div>' : '') +
+                '</td>' +
+            '</tr>';
+        });
+
+        tbody.innerHTML = html;
+
+        // Render pagination numbers
+        this.renderPaginationNumbers(totalPages);
+    }
+
+    renderPaginationNumbers(totalPages) {
+        var container = document.getElementById('pagination-numbers');
+        if (!container) return;
+        var html = '';
+        var self = this;
+        for (var i = 1; i <= totalPages; i++) {
+            var isActive = i === this.currentPage;
+            html += '<button onclick="historyApp.goToPage(' + i + ')" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid ' + (isActive ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.06)') + ';background:' + (isActive ? 'rgba(74,222,128,0.1)' : 'transparent') + ';color:' + (isActive ? '#4ade80' : '#64748b') + ';cursor:pointer;font-size:10px;font-weight:700">' + i + '</button>';
+        }
+        container.innerHTML = html;
+    }
+
+    toggleExpand(ticket) {
+        var el = document.getElementById('expand-' + ticket);
+        if (!el) return;
+        if (this.expandedTicket === ticket) {
+            el.classList.remove('open');
+            this.expandedTicket = null;
+        } else {
+            // Close previous
+            if (this.expandedTicket) {
+                var prev = document.getElementById('expand-' + this.expandedTicket);
+                if (prev) prev.classList.remove('open');
+            }
+            el.classList.add('open');
+            this.expandedTicket = ticket;
+        }
+    }
+
+    goToPage(page) {
+        this.currentPage = page;
+        this.renderTradesTable();
+    }
+
+    renderResultBadge(t) {
+        var pnl = parseFloat(t.profit) || 0;
+        var cr = (t.close_reason || '').toLowerCase();
+
+        if (cr.includes('stop loss') || cr.includes('sl hit')) {
+            if (pnl > 0) {
+                return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#60a5fa;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2)">TRAILING</span>';
+            } else if (pnl > -1.0) {
+                return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#94a3b8;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.15)">BREAKEVEN</span>';
+            } else {
+                return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#f87171;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2)">SL</span>';
+            }
+        } else if (cr.includes('take profit') || cr.includes('tp hit')) {
+            return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2)">TP</span>';
+        }
+
+        // Fallback: show full close reason
+        var label = t.close_reason || 'Unknown';
+        if (label.length > 20) label = label.substring(0, 18) + '..';
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;color:#64748b;background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.15)">' + this.escapeHtml(label) + '</span>';
+    }
+
+    escapeHtml(s) {
+        var str = (s === null || s === undefined) ? '' : String(s);
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // ── Sorting ──
     sortTrades(column) {
         if (this.currentSort.column === column) {
-            // Toggle direction
             this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
         } else {
-            // New column, default to desc
             this.currentSort.column = column;
             this.currentSort.direction = 'desc';
         }
-        
         this.sortData();
         this.currentPage = 1;
         this.renderTradesTable();
     }
-    
+
     sortData() {
         if (!this.data || !this.data.trades) return;
-        
-        const { column, direction } = this.currentSort;
-        const dirMult = direction === 'asc' ? 1 : -1;
-        
-        this.data.trades.sort((a, b) => {
-            let valA = a[column];
-            let valB = b[column];
-            
-            // Handle nulls
+        var column = this.currentSort.column;
+        var dirMult = this.currentSort.direction === 'asc' ? 1 : -1;
+
+        this.data.trades.sort(function(a, b) {
+            var valA = a[column];
+            var valB = b[column];
             if (valA === null) valA = '';
             if (valB === null) valB = '';
-            
-            // Type specific sorting
+
             if (typeof valA === 'string' && typeof valB === 'string') {
-                // Dates
                 if (column.includes('time')) {
                     return (new Date(valA) - new Date(valB)) * dirMult;
                 }
                 return valA.localeCompare(valB) * dirMult;
             } else {
-                // Numbers
                 return (valA - valB) * dirMult;
             }
         });
@@ -322,237 +552,122 @@ class HistoryApp {
 
     formatDate(isoString) {
         if (!isoString) return '--';
-        const d = new Date(isoString);
+        var d = new Date(isoString);
         return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
     }
 
     renderBeBadge(beActivated) {
         if (beActivated === true) {
-            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black text-green-400 bg-green-400/10 border border-green-400/20 uppercase tracking-[0.2em]">✓</span>`;
+            return '<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2)">\u2713</span>';
         } else if (beActivated === false) {
-            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black text-gray-500 bg-gray-500/10 border border-gray-500/20 uppercase tracking-[0.2em]">—</span>`;
+            return '<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;color:#64748b;background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.1)">\u2014</span>';
         } else {
-            return `<span class="text-[10px] text-gray-600 font-black uppercase tracking-[0.2em]">?</span>`;
+            return '<span style="font-size:9px;color:#334155;font-weight:700">?</span>';
         }
     }
 
     scenarioLabel(trade) {
-        const key = trade?.scenario;
-        const map = {
-            'momentum_forte_confirmado': 'Strong confirmed momentum',
-            'rsi_extremo_com_momentum': 'Extreme RSI with momentum',
+        var key = trade ? trade.scenario : null;
+        var map = {
+            'momentum_forte_confirmado': 'Strong momentum',
+            'rsi_extremo_com_momentum': 'RSI extreme + momentum',
             'divergencia_tecnica': 'Technical divergence',
             'breakout_confirmado': 'Confirmed breakout',
-            'lateralizacao': 'Sideways / ranging',
+            'lateralizacao': 'Ranging',
             'sinais_conflitantes': 'Conflicting signals',
-            'ml_vs_tech_conflito': 'Tech vs ML conflict (BUY threshold 58)',
+            'ml_vs_tech_conflito': 'ML vs Tech conflict',
             'alinhamento_perfeito': 'Perfect alignment',
-            'janela_pos_evento': 'Post-event window with momentum',
-            'volatilidade_extrema': 'Extreme volatility (BLOCK)',
+            'janela_pos_evento': 'Post-event window',
+            'volatilidade_extrema': 'Extreme volatility',
             'zona_sr_forte': 'Near strong S/R zone',
             'confluence': 'Confluence',
-            'padrao': 'Default scenario',
+            'padrao': 'Default',
         };
-
         if (key && map[key]) return map[key];
         if (key) return String(key).replace(/_/g, ' ');
         return '--';
     }
 
+    // ── Modal (unchanged) ──
     openTradeReport(ticket) {
         if (!ticket) return;
-
-        const modal = document.getElementById('trade-report-modal');
-        const body = document.getElementById('trade-report-body');
-        const meta = document.getElementById('trade-report-meta');
+        var modal = document.getElementById('trade-report-modal');
+        var body = document.getElementById('trade-report-body');
+        var meta = document.getElementById('trade-report-meta');
         if (!modal || !body) return;
-
         this.modalOpen = true;
         modal.classList.remove('hidden');
-
-        if (meta) meta.textContent = `Ticket #${ticket} — Loading...`;
-        body.innerHTML = `
-            <div class="text-xs text-gray-500 font-mono">Fetching report from server...</div>
-        `;
-
+        if (meta) meta.textContent = 'Ticket #' + ticket + ' \u2014 Loading...';
+        body.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:#64748b">Fetching report...</div>';
         this.fetchTradeReport(ticket);
     }
 
     closeTradeReport() {
-        const modal = document.getElementById('trade-report-modal');
+        var modal = document.getElementById('trade-report-modal');
         if (!modal) return;
         this.modalOpen = false;
         modal.classList.add('hidden');
     }
 
     async fetchTradeReport(ticket) {
-        const body = document.getElementById('trade-report-body');
-        const meta = document.getElementById('trade-report-meta');
+        var body = document.getElementById('trade-report-body');
+        var meta = document.getElementById('trade-report-meta');
         if (!body) return;
+        var self = this;
 
         try {
-            const response = await fetch(`/api/trade-report?ticket=${encodeURIComponent(ticket)}`);
-            let result = null;
-            try {
-                result = await response.json();
-            } catch (_) {
-                result = null;
-            }
+            var response = await fetch('/api/trade-report?ticket=' + encodeURIComponent(ticket));
+            var result = null;
+            try { result = await response.json(); } catch (_) { result = null; }
 
             if (!response.ok || !result || result.ok !== true) {
-                const err = (result && (result.error || result.detail || result.message))
-                    ? (result.error || result.detail || result.message)
-                    : `http_${response.status}`;
-                if (meta) meta.textContent = `Ticket #${ticket}`;
-                body.innerHTML = `<div class="text-xs text-red-400 font-mono">Report unavailable: ${String(err)}</div>`;
+                var err = (result && (result.error || result.detail || result.message)) ? (result.error || result.detail || result.message) : 'http_' + response.status;
+                if (meta) meta.textContent = 'Ticket #' + ticket;
+                body.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:#f87171">Report unavailable: ' + String(err) + '</div>';
                 return;
             }
 
-            const createdAt = result.created_at ? new Date(result.created_at).toLocaleString() : '--';
-            const cached = result.cached === true;
-            const model = result.model || '';
-            const report = result.report || {};
-
-            const escapeHtml = (s) => {
-                const str = (s === null || s === undefined) ? '' : String(s);
-                return str
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;');
-            };
+            var createdAt = result.created_at ? new Date(result.created_at).toLocaleString() : '--';
+            var cached = result.cached === true;
+            var model = result.model || '';
+            var report = result.report || {};
 
             if (meta) {
-                meta.textContent = `Ticket #${ticket} — ${cached ? 'CACHED' : 'NEW'} — ${createdAt}${model ? ' — ' + model : ''}`;
+                meta.textContent = 'Ticket #' + ticket + ' \u2014 ' + (cached ? 'CACHED' : 'NEW') + ' \u2014 ' + createdAt + (model ? ' \u2014 ' + model : '');
             }
 
-            const list = (arr) => {
-                if (!arr || arr.length === 0) return '<div class="text-xs text-gray-600 font-black uppercase tracking-[0.2em]">—</div>';
-                return `<ul class="mt-1 space-y-1">${arr.map(x => `<li class="text-xs text-gray-300 font-black uppercase tracking-[0.2em] leading-snug">- ${escapeHtml(x)}</li>`).join('')}</ul>`;
+            var list = function(arr) {
+                if (!arr || arr.length === 0) return '<div style="font-size:10px;color:#334155">\u2014</div>';
+                return '<ul style="margin-top:4px;list-style:none;padding:0">' + arr.map(function(x) {
+                    return '<li style="font-size:11px;color:#cbd5e1;font-weight:600;line-height:1.6;padding:2px 0">\u2022 ' + self.escapeHtml(x) + '</li>';
+                }).join('') + '</ul>';
             };
 
-            body.innerHTML = `
-                <div class="space-y-4">
-                    <div>
-                        <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Summary</div>
-                        <div class="text-sm text-gray-200 mt-1 font-black uppercase tracking-[0.2em] leading-relaxed">${escapeHtml(report.summary || '—')}</div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">What went well</div>
-                            ${list(report.what_went_well)}
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">What went wrong</div>
-                            ${list(report.what_went_wrong)}
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Key risks observed</div>
-                            ${list(report.key_risks_observed)}
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">Suggested improvements</div>
-                            ${list(report.suggested_improvements)}
-                        </div>
-                    </div>
-
-                    <div class="text-xs text-gray-500 font-mono font-black uppercase tracking-[0.2em]">Confidence in assessment: <span class="text-gray-200">${String(report.confidence_in_assessment || 'medium').toUpperCase()}</span></div>
-                </div>
-            `;
+            body.innerHTML = '<div style="display:flex;flex-direction:column;gap:16px">' +
+                '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">Summary</div>' +
+                '<div style="font-size:13px;color:#e2e8f0;margin-top:6px;line-height:1.6;font-weight:600">' + self.escapeHtml(report.summary || '\u2014') + '</div></div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+                    '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">What went well</div>' + list(report.what_went_well) + '</div>' +
+                    '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">What went wrong</div>' + list(report.what_went_wrong) + '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+                    '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">Key risks</div>' + list(report.key_risks_observed) + '</div>' +
+                    '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">Improvements</div>' + list(report.suggested_improvements) + '</div>' +
+                '</div>' +
+                '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:#475569">Confidence: <span style="color:#94a3b8;font-weight:700">' + String(report.confidence_in_assessment || 'medium').toUpperCase() + '</span></div>' +
+            '</div>';
         } catch (e) {
-            if (meta) meta.textContent = `Ticket #${ticket}`;
-            body.innerHTML = `<div class="text-xs text-red-400 font-mono">Report unavailable: ${String(e)}</div>`;
+            if (meta) meta.textContent = 'Ticket #' + ticket;
+            body.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:#f87171">Report unavailable: ' + String(e) + '</div>';
         }
     }
 
-    renderTradesTable() {
-        const tbody = document.getElementById('trades-table-body');
-        const trades = this.data.trades || [];
-        
-        const totalPages = Math.max(1, Math.ceil(trades.length / this.pageSize));
-        
-        // Bound current page
-        if (this.currentPage > totalPages) this.currentPage = totalPages;
-        if (this.currentPage < 1) this.currentPage = 1;
-        
-        document.getElementById('current-page').textContent = this.currentPage;
-        document.getElementById('total-pages').textContent = totalPages;
-        
-        document.getElementById('btn-prev').disabled = this.currentPage === 1;
-        document.getElementById('btn-next').disabled = this.currentPage === totalPages;
-        
-        // Slice for current page
-        const startIdx = (this.currentPage - 1) * this.pageSize;
-        const pageTrades = trades.slice(startIdx, startIdx + this.pageSize);
-        
-        if (pageTrades.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-gray-500">No trades recorded yet</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = pageTrades.map(t => {
-            const dirClass = t.direction === 'BUY' ? 'text-green-400 bg-green-400/10 border border-green-400/20' : 'text-red-400 bg-red-400/10 border border-red-400/20';
-            
-            const pnl = parseFloat(t.profit) || 0;
-            let pnlClass = 'text-gray-500';
-            if (pnl > 0.5) pnlClass = 'text-green-400';
-            if (pnl < -0.5) pnlClass = 'text-red-400';
-            
-            // Format Close Reason
-            let reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-gray-400 bg-gray-800 tracking-[0.2em]">${t.close_reason || 'Unknown'}</span>`;
-            const cr = (t.close_reason || '').toLowerCase();
-            
-            if (cr.includes('stop loss') || cr.includes('sl hit')) {
-                if (pnl > 0) {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-blue-400 bg-blue-400/10 border border-blue-400/20 tracking-[0.2em]">Trailing</span>`;
-                } else if (pnl > -1.0) {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-gray-400 bg-gray-400/10 border border-gray-400/20 tracking-[0.2em]">Breakeven</span>`;
-                } else {
-                     reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-red-400 bg-red-400/10 border border-red-400/20 tracking-[0.2em]">SL</span>`;
-                }
-            } else if (cr.includes('take profit') || cr.includes('tp hit')) {
-                reasonBadge = `<span class="px-2 py-0.5 rounded text-[10px] uppercase font-black text-green-400 bg-green-400/10 border border-green-400/20 tracking-[0.2em]">TP</span>`;
-            }
-
-            const reportBtn = t.ticket ? `<button class="ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-black text-cyan-300 bg-cyan-300/10 border border-cyan-300/20 hover:bg-cyan-300/15 transition-colors tracking-[0.2em]" onclick="historyApp.openTradeReport(${t.ticket})">Report</button>` : '';
-
-            return `
-            <tr class="hover:bg-gray-800/30 transition-colors">
-                <td class="p-3 text-gray-400 text-xs font-black tracking-[0.2em] uppercase">
-                    <div>${this.formatDate(t.open_time)}</div>
-                </td>
-                <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-black ${dirClass} tracking-[0.2em] uppercase">${t.direction}</span></td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-[0.2em] uppercase">${t.open_price ? t.open_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right text-gray-300 font-mono text-xs font-black tracking-[0.2em] uppercase">${t.close_price ? t.close_price.toFixed(2) : '--'}</td>
-                <td class="p-3 text-right font-black tracking-[0.2em] uppercase ${pnlClass}">$${pnl.toFixed(2)}</td>
-                <td class="p-3 text-right text-gray-400 font-black tracking-[0.2em] uppercase">${t.pips ? t.pips.toFixed(1) : '--'}</td>
-                <td class="p-3 text-center uppercase font-black tracking-[0.2em]">${this.renderBeBadge(t.breakeven_activated)}</td>
-                <td class="p-3 text-right text-cyan-400 font-black tracking-[0.2em] uppercase">${t.confidence ? t.confidence.toFixed(1) + '%' : '--'}</td>
-                <td class="p-3 text-gray-400 text-xs font-black tracking-[0.2em] uppercase">${this.scenarioLabel(t)}</td>
-                <td class="p-3">${reasonBadge}${reportBtn}</td>
-            </tr>
-            `;
-        }).join('');
-    }
-
-    nextPage() {
-        this.currentPage++;
-        this.renderTradesTable();
-    }
-
-    prevPage() {
-        this.currentPage--;
-        this.renderTradesTable();
-    }
+    nextPage() { this.currentPage++; this.renderTradesTable(); }
+    prevPage() { this.currentPage--; this.renderTradesTable(); }
 }
 
 // Init
-const historyApp = new HistoryApp();
-document.addEventListener('DOMContentLoaded', () => {
+var historyApp = new HistoryApp();
+document.addEventListener('DOMContentLoaded', function() {
     historyApp.init();
 });

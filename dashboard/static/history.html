@@ -5,31 +5,141 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>History - FlokiWatch</title>
     <link rel="icon" type="image/png" href="/image/flokiwatch.png">
-    
+
     <!-- Tailwind CSS (via CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
-    
+
     <!-- Custom Style overrides -->
     <link rel="stylesheet" href="/static/style.css">
 
     <style>
-      /* FLO-209: History page enhancements */
-      #trades-table-body tr {
+      html, body {
+        background: #050510;
+        overflow-x: hidden;
+      }
+
+      /* ── Stat cards ── */
+      .hst-stat {
+        position: relative;
+        padding: 16px 18px;
+        border-radius: 12px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        overflow: hidden;
+        transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s ease;
+      }
+      .hst-stat:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      }
+      .hst-stat::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        border-radius: 3px 0 0 3px;
+      }
+      .hst-stat-green::before { background: #4ade80; }
+      .hst-stat-red::before { background: #f87171; }
+      .hst-stat-cyan::before { background: #22d3ee; }
+      .hst-stat-amber::before { background: #facc15; }
+      .hst-stat-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 6px;
+      }
+      .hst-stat-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1.1;
+      }
+
+      /* ── Chart panel ── */
+      .hst-chart-panel {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 20px 24px;
+      }
+
+      /* ── Comparison bars ── */
+      .hst-cmp-bar-track {
+        height: 6px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 6px;
+      }
+      .hst-cmp-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s cubic-bezier(0.16,1,0.3,1);
+      }
+
+      /* ── Monthly table ── */
+      .hst-monthly-row {
+        transition: background 0.15s ease;
+      }
+      .hst-monthly-row:hover {
+        background: rgba(255,255,255,0.03);
+      }
+      .hst-pnl-bar {
+        display: inline-block;
+        height: 4px;
+        border-radius: 2px;
+        vertical-align: middle;
+        margin-left: 8px;
+      }
+
+      /* ── Trade table ── */
+      .hst-trade-row {
         transition: background 0.15s ease;
         cursor: pointer;
       }
-      #trades-table-body tr:hover {
-        background: rgba(16, 185, 129, 0.04);
+      .hst-trade-row:hover {
+        background: rgba(16,185,129,0.04);
       }
-      #monthly-table-body tr {
-        transition: background 0.15s ease;
+      .hst-trade-expand {
+        display: none;
+        background: rgba(255,255,255,0.02);
+        border-top: 1px solid rgba(255,255,255,0.04);
       }
-      #monthly-table-body tr:hover {
-        background: rgba(255, 255, 255, 0.03);
+      .hst-trade-expand.open {
+        display: table-row;
       }
+
+      /* ── Section panels ── */
+      .hst-panel {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 20px 24px;
+      }
+
+      /* ── Pagination ── */
+      .pagination-active {
+        color: #4ade80 !important;
+        border-color: rgba(16, 185, 129, 0.4) !important;
+        background: rgba(16, 185, 129, 0.1) !important;
+      }
+
       /* Modal entrance */
       #trade-report-modal > div > div {
         animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -38,14 +148,23 @@
         from { opacity: 0; transform: scale(0.96) translateY(10px); }
         to   { opacity: 1; transform: scale(1) translateY(0); }
       }
-      /* Pagination active page */
-      .pagination-active {
-        color: #4ade80 !important;
-        border-color: rgba(16, 185, 129, 0.4) !important;
-        background: rgba(16, 185, 129, 0.1) !important;
+
+      /* ── WR circular indicator ── */
+      .hst-wr-ring {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        font-weight: 800;
+        font-family: 'JetBrains Mono', monospace;
+        position: relative;
+        flex-shrink: 0;
       }
     </style>
-    
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -96,11 +215,12 @@
 
     <!-- Main content -->
     <main class="page-content max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-8">
-      
+
+      <!-- Title bar -->
       <div class="mb-8 flex flex-wrap items-center justify-between gap-3 stagger-in stagger-1">
         <div>
           <h1 class="page-title-pixel">Trade History</h1>
-          <div class="section-pixel-header text-gray-500 mt-2">LIVE DATA FROM SQLITE DB</div>
+          <div class="section-pixel-header text-gray-500 mt-2">PERFORMANCE &amp; ANALYTICS</div>
         </div>
         <div class="flex items-center gap-2 text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase">
             <span id="last-updated">Last updated: --</span>
@@ -109,62 +229,49 @@
       </div>
 
       <!-- Global Stats Grid -->
-      <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 stagger-in stagger-2" id="global-stats-grid">
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 stagger-in stagger-2" id="global-stats-grid">
         <!-- Rendered by JS -->
       </section>
 
-      <!-- Charts & Backtest Comparison -->
-      <section class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8 stagger-in stagger-3">
-        
-        <!-- Equity Curve -->
-        <div class="lg:col-span-2 glass-panel rounded-2xl p-5 sm:p-6 h-[350px] flex flex-col">
-          <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-4">Equity Curve</h2>
-          <div class="relative flex-grow w-full h-full">
-            <canvas id="equityChart"></canvas>
-          </div>
+      <!-- Equity Curve (full width) -->
+      <section class="hst-chart-panel mb-6 stagger-in stagger-3">
+        <div class="flex items-center justify-between mb-3">
+          <h2 style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#94a3b8">Equity Curve</h2>
+          <div id="equity-summary" style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:#64748b"></div>
         </div>
+        <div class="relative w-full" style="height:320px">
+          <canvas id="equityChart"></canvas>
+        </div>
+      </section>
 
-        <!-- Backtest Comparison -->
-        <div class="glass-panel rounded-2xl p-5 sm:p-6">
-          <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-2">Live vs Backtest</h2>
-          <p class="text-[10px] text-gray-500 font-black tracking-[0.2em] mb-4 uppercase">Ref: v3.1 (Aug 2024 - Feb 2026)</p>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead>
-                <tr class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 border-b border-gray-800/50">
-                  <th class="pb-2">Metric</th>
-                  <th class="pb-2 text-right">Backtest</th>
-                  <th class="pb-2 text-right">
-                    <div>Live</div>
-                    <div class="text-[9px] font-black text-gray-600 tracking-[0.2em] uppercase">Trades #8-22</div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="comparison-table-body" class="divide-y divide-gray-800/30 font-mono text-xs">
-                <!-- Rendered by JS -->
-              </tbody>
-            </table>
-          </div>
+      <!-- Live vs Backtest Comparison (horizontal bars) -->
+      <section class="hst-panel mb-6 stagger-in stagger-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#94a3b8">Live vs Backtest</h2>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569">Ref: v3.1 (Aug 2024 - Feb 2026)</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="comparison-bars">
+          <!-- Rendered by JS -->
         </div>
       </section>
 
       <!-- Monthly Summary -->
-      <section class="glass-panel rounded-2xl p-5 sm:p-6 mb-8 stagger-in stagger-4">
-        <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200 mb-4">Monthly Summary</h2>
-        <div class="overflow-x-auto rounded-xl border border-gray-800/50">
-          <table class="w-full text-sm text-left">
+      <section class="hst-panel mb-6 stagger-in stagger-5">
+        <h2 style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px">Monthly Summary</h2>
+        <div class="overflow-x-auto rounded-lg" style="border:1px solid rgba(255,255,255,0.06)">
+          <table class="w-full text-left" style="min-width:600px">
             <thead>
-              <tr class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 border-b border-gray-800/50 bg-gray-900/50">
+              <tr style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#475569;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">
                 <th class="p-3">Month</th>
-                <th class="p-3 text-right">Trades</th>
-                <th class="p-3 text-right">W/L/BE</th>
-                <th class="p-3 text-right">Win Rate</th>
-                <th class="p-3 text-right">P&L</th>
-                <th class="p-3 text-right">PF</th>
+                <th class="p-3 text-center">Trades</th>
+                <th class="p-3 text-center">W / L / BE</th>
+                <th class="p-3 text-center">Win Rate</th>
+                <th class="p-3 text-right">P&amp;L</th>
+                <th class="p-3 text-center">PF</th>
                 <th class="p-3 text-right">Max DD</th>
               </tr>
             </thead>
-            <tbody id="monthly-table-body" class="divide-y divide-gray-800/30 font-mono text-xs text-gray-300">
+            <tbody id="monthly-table-body">
               <!-- Rendered by JS -->
             </tbody>
           </table>
@@ -172,49 +279,46 @@
       </section>
 
       <!-- Trade History Table -->
-      <section class="glass-panel rounded-2xl p-5 sm:p-6 stagger-in stagger-5">
+      <section class="hst-panel stagger-in stagger-6">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-black tracking-[0.2em] uppercase text-gray-200">Trade History</h2>
-            <div class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500">
-                Page <span id="current-page" class="text-gray-300">1</span> of <span id="total-pages" class="text-gray-300">1</span>
+            <h2 style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#94a3b8">Trade History</h2>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569">
+                Page <span id="current-page" style="color:#94a3b8">1</span> of <span id="total-pages" style="color:#94a3b8">1</span>
             </div>
         </div>
-        
-        <div class="overflow-x-auto min-h-[400px] rounded-xl border border-gray-800/50">
-          <table class="w-full text-sm text-left whitespace-nowrap">
+
+        <div class="overflow-x-auto rounded-lg" style="border:1px solid rgba(255,255,255,0.06);min-height:300px">
+          <table class="w-full text-left" style="min-width:820px">
             <thead>
-              <tr class="text-[10px] font-black tracking-[0.2em] uppercase text-gray-500 border-b border-gray-800/50 bg-gray-900/50">
-                <th class="p-3 cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('open_time')">Date/Time ↕</th>
-                <th class="p-3 cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('direction')">Dir ↕</th>
-                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('open_price')">Entry ↕</th>
-                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('close_price')">Exit ↕</th>
-                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('profit')">P&L $ ↕</th>
-                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('pips')">Pips ↕</th>
-                <th class="p-3 text-center">BE</th>
-                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('confidence')">Conf % ↕</th>
+              <tr style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#475569;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">
+                <th class="p-3 cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('open_time')">Date &#x21C5;</th>
+                <th class="p-3 cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('direction')">Dir &#x21C5;</th>
+                <th class="p-3 cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('open_price')">Price &#x21C5;</th>
+                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('profit')">P&amp;L &#x21C5;</th>
+                <th class="p-3 text-right cursor-pointer hover:text-cyan-400 transition-colors" onclick="historyApp.sortTrades('confidence')">Conf &#x21C5;</th>
                 <th class="p-3">Scenario</th>
-                <th class="p-3">Close Reason</th>
+                <th class="p-3">Result</th>
               </tr>
             </thead>
-            <tbody id="trades-table-body" class="divide-y divide-gray-800/30 text-[11px] font-mono font-black text-gray-300 uppercase">
+            <tbody id="trades-table-body">
               <!-- Rendered by JS -->
             </tbody>
           </table>
         </div>
-        
+
         <!-- Pagination Controls -->
-        <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-800/50">
-            <button id="btn-prev" class="px-4 py-1.5 bg-gray-800/50 border border-gray-700/50 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-[0.2em]" onclick="historyApp.prevPage()">Previous</button>
-            <div class="flex gap-1 font-mono text-[10px] font-black uppercase tracking-[0.2em]" id="pagination-numbers">
+        <div class="flex items-center justify-between mt-5 pt-4" style="border-top:1px solid rgba(255,255,255,0.06)">
+            <button id="btn-prev" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:6px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#94a3b8;cursor:pointer;transition:all 0.15s" onclick="historyApp.prevPage()" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">Prev</button>
+            <div class="flex gap-1" id="pagination-numbers" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.1em">
                 <!-- Rendered by JS -->
             </div>
-            <button id="btn-next" class="px-4 py-1.5 bg-gray-800/50 border border-gray-700/50 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-[0.2em]" onclick="historyApp.nextPage()">Next</button>
+            <button id="btn-next" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:6px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#94a3b8;cursor:pointer;transition:all 0.15s" onclick="historyApp.nextPage()" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">Next</button>
         </div>
       </section>
 
     </main>
 
-    <!-- Trade Report Modal -->
+    <!-- Trade Report Modal (unchanged) -->
     <div id="trade-report-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm">
       <div class="min-h-full flex items-center justify-center px-4 py-10">
         <div class="w-full max-w-3xl bg-gray-900/80 border border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden">
