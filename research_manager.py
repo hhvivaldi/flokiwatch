@@ -178,7 +178,8 @@ def run_research_manager(
 
     try:
         from google import genai
-        client = genai.Client(api_key=api_key)
+        from google.genai import types as _gtypes
+        client = genai.Client(api_key=api_key, http_options={"timeout": 15_000})
 
         resp = client.models.generate_content(
             model=model,
