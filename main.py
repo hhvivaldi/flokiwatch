@@ -1746,52 +1746,7 @@ class TradingBot:
                     existing_candles = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
                     candles_cache = existing_candles.copy() if isinstance(existing_candles, dict) else {}
 
-                    # H1 from df (already present in memory)
-                    if not isinstance(candles_cache.get("H1"), list) or not candles_cache.get("H1"):
-                        try:
-                            h1_list = []
-                            cols = set(getattr(df, "columns", []))
-                            for i in range(max(0, len(df) - 50), len(df)):
-                                row = df.iloc[i]
-                                t = None
-                                if "time" in cols:
-                                    try:
-                                        t = row.get("time")
-                                        t = t.isoformat() if hasattr(t, "isoformat") else str(t)
-                                    except Exception:
-                                        t = None
-                                elif "datetime" in cols:
-                                    try:
-                                        t = row.get("datetime")
-                                        t = t.isoformat() if hasattr(t, "isoformat") else str(t)
-                                    except Exception:
-                                        t = str(row.get("datetime", ""))
-
-                                vol = 0.0
-                                try:
-                                    if "tick_volume" in cols:
-                                        vol = float(row.get("tick_volume") or 0.0)
-                                    elif "volume" in cols:
-                                        vol = float(row.get("volume") or 0.0)
-                                except Exception:
-                                    vol = 0.0
-
-                                h1_list.append(
-                                    {
-                                        "time": t,
-                                        "open": float(row["open"]),
-                                        "high": float(row["high"]),
-                                        "low": float(row["low"]),
-                                        "close": float(row["close"]),
-                                        "volume": vol,
-                                    }
-                                )
-                            if h1_list:
-                                candles_cache["H1"] = h1_list
-                        except Exception:
-                            pass
-
-                    # M5/H4/D1 from MT5 (backfill individual TFs)
+                    # M5/H1/H4/D1 from MT5 (backfill individual TFs)
                     try:
                         import MetaTrader5 as mt5
 
@@ -1845,6 +1800,16 @@ class TradingBot:
                             if m15_list:
                                 candles_cache["M15"] = m15_list
                             log.debug(f"MT5_FETCH | M15 candles: {len(m15_list) if m15_list else 0} bars in {(time.time() - _m15_t0)*1000:.0f}ms")
+
+                        try:
+                            have_h1 = isinstance(candles_cache.get("H1"), list) and bool(candles_cache.get("H1"))
+                        except Exception:
+                            have_h1 = False
+                        if not have_h1:
+                            h1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, 250)
+                            h1_list = _rates_to_candles(h1_rates)
+                            if h1_list:
+                                candles_cache["H1"] = h1_list
 
                         try:
                             have_h4 = isinstance(candles_cache.get("H4"), list) and bool(candles_cache.get("H4"))

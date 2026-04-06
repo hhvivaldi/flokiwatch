@@ -60,13 +60,19 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
     df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
 
-    # RSI
+    # RSI (Wilder's smoothing — matches MT5/TradingView)
     delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss.replace(0, np.nan)
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta.where(delta < 0, 0.0))
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    # Apply Wilder's exponential smoothing after initial SMA seed
+    for i in range(15, len(df)):
+        avg_gain.iloc[i] = (avg_gain.iloc[i - 1] * 13 + gain.iloc[i]) / 14
+        avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * 13 + loss.iloc[i]) / 14
+    rs = avg_gain / avg_loss.replace(0, np.nan)
     df['rsi_14'] = 100 - (100 / (1 + rs))
-    df['rsi_14'] = df['rsi_14'].fillna(100.0)
+    df['rsi_14'] = df['rsi_14'].fillna(50.0)
     
     # MACD
     ema_12 = df['close'].ewm(span=12, adjust=False).mean()
