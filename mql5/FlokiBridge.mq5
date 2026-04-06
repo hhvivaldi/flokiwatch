@@ -93,6 +93,26 @@ int g_closedCount = 0;
 // Last error
 string g_lastError = "";
 
+// ── FLO-231: Price Alert Monitoring ──
+string   PriceAlertFile        = "price_alerts.json";
+string   PriceAlertTriggerFile = "price_alert_triggered.json";
+datetime g_lastAlertFileCheck  = 0;
+int      g_alertCheckInterval  = 5;  // re-read file every 5 seconds
+string   ALERT_LINE_PREFIX     = "FLOKI_ALERT_";
+
+struct PriceAlert {
+   string   id;
+   string   alertType;  // "price_above" or "price_below"
+   double   level;
+   bool     triggered;
+   datetime touchTime;
+   double   touchPrice;
+};
+
+PriceAlert g_alerts[];
+int        g_alertCount = 0;
+int        g_lastAlertVersion = -1;
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
 //+------------------------------------------------------------------+
@@ -146,6 +166,7 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
+   RemoveAlertLines();
    if(EnableLogging)
       Print("FlokiBridge stopped. Reason: ", reason);
 }
@@ -202,7 +223,10 @@ void OnTick()
 {
    // Check for new signal (only if file changed)
    CheckSignalFile();
-   
+
+   // FLO-231: Tick-level price alert monitoring
+   CheckPriceAlerts();
+
    // Manage open positions (breakeven, trailing, drawdown)
    ManagePositions();
    
@@ -1007,5 +1031,206 @@ string GetRetcodeDescription(uint retcode)
       case TRADE_RETCODE_PRICE_OFF: return "Price off";
       default: return "Unknown (" + IntegerToString(retcode) + ")";
    }
+}
+
+//+------------------------------------------------------------------+
+//| FLO-231: Price Alert — tick-level monitoring                      |
+//+------------------------------------------------------------------+
+void CheckPriceAlerts()
+{
+   // Re-read alert file every N seconds (not every tick)
+   if(TimeCurrent() - g_lastAlertFileCheck >= g_alertCheckInterval)
+   {
+      g_lastAlertFileCheck = TimeCurrent();
+      ReadPriceAlerts();
+   }
+
+   if(g_alertCount == 0) return;
+
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+   for(int i = 0; i < g_alertCount; i++)
+   {
+      if(g_alerts[i].triggered) continue;
+
+      bool touched = false;
+      if(g_alerts[i].alertType == "price_above" && bid >= g_alerts[i].level)
+         touched = true;
+      else if(g_alerts[i].alertType == "price_below" && bid <= g_alerts[i].level)
+         touched = true;
+
+      if(touched)
+      {
+         g_alerts[i].triggered  = true;
+         g_alerts[i].touchTime  = TimeCurrent();
+         g_alerts[i].touchPrice = bid;
+
+         WritePriceAlertTrigger(g_alerts[i], bid);
+
+         if(EnableLogging)
+            Print("FLOKI_ALERT | ", g_alerts[i].id, " | level=",
+                  DoubleToString(g_alerts[i].level, 2), " touched at bid=",
+                  DoubleToString(bid, 2));
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Read price_alerts.json and update alert array + chart lines       |
+//+------------------------------------------------------------------+
+void ReadPriceAlerts()
+{
+   if(!FileIsExist(PriceAlertFile))
+   {
+      if(g_alertCount > 0)
+      {
+         RemoveAlertLines();
+         g_alertCount = 0;
+         ArrayResize(g_alerts, 0);
+      }
+      return;
+   }
+
+   int handle = FileOpen(PriceAlertFile, FILE_READ | FILE_TXT | FILE_ANSI);
+   if(handle == INVALID_HANDLE) return;
+
+   string content = "";
+   while(!FileIsEnding(handle))
+      content += FileReadString(handle);
+   FileClose(handle);
+
+   if(StringLen(content) < 5) return;
+
+   // Check version to avoid redundant redraws
+   double ver = GetJsonDouble(content, "version");
+   string tsStr = GetJsonString(content, "timestamp");
+
+   // Parse alerts array — count occurrences of "id" to determine array size
+   int count = 0;
+   int searchPos = 0;
+   while(true)
+   {
+      int found = StringFind(content, "\"id\"", searchPos);
+      if(found < 0) break;
+      count++;
+      searchPos = found + 4;
+   }
+
+   if(count == 0)
+   {
+      if(g_alertCount > 0)
+      {
+         RemoveAlertLines();
+         g_alertCount = 0;
+         ArrayResize(g_alerts, 0);
+      }
+      return;
+   }
+
+   // Parse each alert object
+   ArrayResize(g_alerts, count);
+   g_alertCount = count;
+
+   searchPos = 0;
+   for(int i = 0; i < count; i++)
+   {
+      // Find the i-th alert block (starting from each "id" occurrence)
+      int idPos = StringFind(content, "\"id\"", searchPos);
+      if(idPos < 0) break;
+
+      // Extract a substring around this alert (~200 chars should cover one object)
+      int blockStart = idPos - 10;
+      if(blockStart < 0) blockStart = 0;
+      int blockEnd = blockStart + 200;
+      if(blockEnd > StringLen(content)) blockEnd = StringLen(content);
+      string block = StringSubstr(content, blockStart, blockEnd - blockStart);
+
+      g_alerts[i].id        = GetJsonString(block, "id");
+      g_alerts[i].alertType = GetJsonString(block, "type");
+      g_alerts[i].level     = GetJsonDouble(block, "level");
+      g_alerts[i].triggered = false;
+      g_alerts[i].touchTime = 0;
+      g_alerts[i].touchPrice = 0;
+
+      searchPos = idPos + 4;
+   }
+
+   DrawAlertLines();
+}
+
+//+------------------------------------------------------------------+
+//| Draw hot-pink dashed lines at alert levels                        |
+//+------------------------------------------------------------------+
+void DrawAlertLines()
+{
+   RemoveAlertLines();
+
+   for(int i = 0; i < g_alertCount; i++)
+   {
+      string name  = ALERT_LINE_PREFIX + g_alerts[i].id;
+      double level = g_alerts[i].level;
+      string arrow = (g_alerts[i].alertType == "price_above") ? "\x2191 " : "\x2193 ";
+      string label = arrow + DoubleToString(level, 1);
+
+      // Horizontal line
+      ObjectCreate(0, name, OBJ_HLINE, 0, 0, level);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, clrHotPink);
+      ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, name, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, name, OBJPROP_BACK, false);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+      ObjectSetString(0, name, OBJPROP_TEXT, label);
+      ObjectSetString(0, name, OBJPROP_TOOLTIP, label);
+
+      // Right-aligned text label
+      string lblName = ALERT_LINE_PREFIX + "LBL_" + g_alerts[i].id;
+      ObjectCreate(0, lblName, OBJ_TEXT, 0, TimeCurrent(), level);
+      ObjectSetString(0, lblName, OBJPROP_TEXT, label);
+      ObjectSetInteger(0, lblName, OBJPROP_COLOR, clrHotPink);
+      ObjectSetInteger(0, lblName, OBJPROP_FONTSIZE, 8);
+      ObjectSetString(0, lblName, OBJPROP_FONT, "Arial Bold");
+      ObjectSetInteger(0, lblName, OBJPROP_ANCHOR, ANCHOR_RIGHT);
+   }
+   ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+//| Remove all FLOKI_ALERT_ objects from chart                        |
+//+------------------------------------------------------------------+
+void RemoveAlertLines()
+{
+   int total = ObjectsTotal(0);
+   for(int i = total - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i);
+      if(StringFind(name, ALERT_LINE_PREFIX) == 0)
+         ObjectDelete(0, name);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Write trigger JSON when a price level is touched                  |
+//+------------------------------------------------------------------+
+void WritePriceAlertTrigger(PriceAlert &alert, double currentBid)
+{
+   int handle = FileOpen(PriceAlertTriggerFile, FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if(handle == INVALID_HANDLE) return;
+
+   string direction = (alert.alertType == "price_above") ? "touched_above" : "touched_below";
+
+   string json = "{";
+   json += "\"version\":1,";
+   json += "\"timestamp\":\"" + TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS) + "\",";
+   json += "\"alert_id\":\"" + alert.id + "\",";
+   json += "\"level\":" + DoubleToString(alert.level, 2) + ",";
+   json += "\"touch_price\":" + DoubleToString(alert.touchPrice, 2) + ",";
+   json += "\"touch_time\":\"" + TimeToString(alert.touchTime, TIME_DATE | TIME_SECONDS) + "\",";
+   json += "\"current_price\":" + DoubleToString(currentBid, 2) + ",";
+   json += "\"bounce_pips\":0.0,";
+   json += "\"direction\":\"" + direction + "\"";
+   json += "}";
+
+   FileWriteString(handle, json);
+   FileClose(handle);
 }
 //+------------------------------------------------------------------+

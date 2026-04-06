@@ -190,9 +190,30 @@ class AgentMonitor:
             if os.path.exists(path):
                 os.remove(path)
             os.rename(tmp, path)
-            return True
         except Exception:
             return False
+
+        # FLO-231: Write price levels to EA for tick-level monitoring + chart lines
+        try:
+            import config
+            alerts = []
+            for c in (payload.get("conditions") or []):
+                if c.get("type") in ("price_above", "price_below") and c.get("level") is not None:
+                    alerts.append({"id": str(c["id"]), "type": c["type"], "level": float(c["level"])})
+            alert_payload = {
+                "version": 1,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "alerts": alerts,
+            }
+            _pa_path = config.PRICE_ALERTS_JSON_PATH
+            _pa_tmp = _pa_path + ".tmp"
+            with open(_pa_tmp, "w", encoding="utf-8") as f:
+                json.dump(alert_payload, f, ensure_ascii=False, indent=2)
+            os.replace(_pa_tmp, _pa_path)
+        except Exception:
+            pass
+
+        return True
 
     def _safe_float(self, x: Any) -> Optional[float]:
         try:
@@ -586,6 +607,30 @@ class AgentMonitor:
                 triggered_ids = []
                 checked_count = 0
                 met_count = 0
+
+        # FLO-231: Check EA tick-level price alert triggers
+        _ea_trigger_context = None
+        try:
+            import config as _cfg231
+            _trig_path = _cfg231.PRICE_ALERT_TRIGGERED_JSON_PATH
+            if os.path.exists(_trig_path):
+                with open(_trig_path, "r", encoding="utf-8") as _tf:
+                    _ea_trig = json.load(_tf)
+                os.remove(_trig_path)
+                if isinstance(_ea_trig, dict) and _ea_trig.get("alert_id"):
+                    _aid = str(_ea_trig["alert_id"])
+                    log.info(
+                        f"SIMBA_EA_ALERT | {_aid} | level={_ea_trig.get('level')} "
+                        f"touched at {_ea_trig.get('touch_time')} | "
+                        f"price={_ea_trig.get('touch_price')} | dir={_ea_trig.get('direction')}"
+                    )
+                    _ea_trigger_context = _ea_trig
+                    # Inject into triggered_ids if not already there
+                    if _aid not in set(triggered_ids):
+                        triggered_ids.append(_aid)
+                        met_count += 1
+        except Exception:
+            pass
 
         # FLO-66: Collect velocity data from evaluated conditions
         velocity_data = {}

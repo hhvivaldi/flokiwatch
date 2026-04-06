@@ -410,6 +410,8 @@ USE_EA_BRIDGE = True                      # True = EA handles breakeven/trailing
 EA_STALE_THRESHOLD_SECONDS = 120          # If ea_status.json older than this, fall back to direct API (120s tolerates recompile gaps)
 BRAIN_SIGNAL_JSON_PATH = os.environ.get("BRAIN_SIGNAL_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\brain_signal.json")
 EA_STATUS_JSON_PATH = os.environ.get("EA_STATUS_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\ea_status.json")
+PRICE_ALERTS_JSON_PATH = os.environ.get("PRICE_ALERTS_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\price_alerts.json")
+PRICE_ALERT_TRIGGERED_JSON_PATH = os.environ.get("PRICE_ALERT_TRIGGERED_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\price_alert_triggered.json")
 
 # ============================================================================
 # AI AGENT (Claude-based decision maker)
