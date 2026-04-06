@@ -1851,6 +1851,13 @@
             <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
             <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
             <div id="luna-sage-insights" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+            <div id="luna-deep-research" class="hidden" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(224,64,251,0.15)">
+              <div style="font-size:8px;font-weight:800;letter-spacing:0.1em;color:#E040FB;margin-bottom:4px">DEEP RESEARCH</div>
+              <div id="luna-deep-consensus" style="font-size:10px;font-weight:700;margin-bottom:3px"></div>
+              <div id="luna-deep-insight" style="font-size:9px;color:#9ca3af;margin-bottom:3px"></div>
+              <div id="luna-deep-sources" style="font-size:8px;color:#64748b"></div>
+              <div id="luna-deep-time" style="font-size:8px;color:#475569;margin-top:2px"></div>
+            </div>
           </div>
         </div>
 
@@ -3073,6 +3080,27 @@
               sageEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Sage Insights (14d)</div><div>' + siRows.join(' | ') + '</div>';
             }
           }
+
+          // FLO-236: Deep Research panel
+          try {
+            var drPanel = document.getElementById('luna-deep-research');
+            var dr = data && data.deep_research;
+            if (drPanel && dr && dr.analyst_consensus) {
+              drPanel.classList.remove('hidden');
+              var cColors = {BULLISH: '#4ade80', NEUTRAL_TO_BULLISH: '#86efac', NEUTRAL: '#94a3b8', NEUTRAL_TO_BEARISH: '#fca5a5', BEARISH: '#f87171'};
+              var cc = dr.analyst_consensus || 'NEUTRAL';
+              document.getElementById('luna-deep-consensus').innerHTML = '<span style="color:' + (cColors[cc] || '#94a3b8') + ';font-weight:800">' + cc + '</span>';
+              document.getElementById('luna-deep-insight').textContent = dr.key_insight || '';
+              var srcArr = dr.sources || [];
+              document.getElementById('luna-deep-sources').textContent = srcArr.length ? 'Sources: ' + srcArr.join(', ') : '';
+              var drTs = dr.timestamp || '';
+              if (drTs) {
+                try { var drAge = Math.round((Date.now() - new Date(drTs).getTime()) / 60000); document.getElementById('luna-deep-time').textContent = drAge + 'm ago'; } catch(e) {}
+              }
+            } else if (drPanel) {
+              drPanel.classList.add('hidden');
+            }
+          } catch(e) {}
 
           // Populate right panel correlation values (FLO-75)
           if (b.correlations) {

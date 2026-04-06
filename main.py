@@ -1067,6 +1067,13 @@ class TradingBot:
         
         self._launch_dashboard_server()
 
+        # FLO-236: Deep Search — run immediately on start (non-blocking)
+        try:
+            from deep_search import run_deep_search
+            threading.Thread(target=run_deep_search, daemon=True).start()
+        except Exception:
+            pass
+
         self.running = True
         log.success("Bot started successfully!")
         
@@ -1260,6 +1267,17 @@ class TradingBot:
                                 threading.Thread(target=_run_luna_safe, daemon=True).start()
                 except Exception as e:
                     log.debug(f"LUNA | schedule check error (ignored): {e}")
+
+                # --- Deep Search refresh (FLO-236) ---
+                try:
+                    _ds_now = time.time()
+                    _ds_last = getattr(self, "_deep_search_last_ts", 0) or 0
+                    if (_ds_now - _ds_last) >= 7200:
+                        self._deep_search_last_ts = _ds_now
+                        from deep_search import run_deep_search
+                        threading.Thread(target=run_deep_search, daemon=True).start()
+                except Exception:
+                    pass
 
                 # --- Rex Monitor (FLO-211) ---
                 try:

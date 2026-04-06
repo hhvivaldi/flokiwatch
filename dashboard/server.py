@@ -1039,9 +1039,23 @@ def luna_brief_api():
             except Exception:
                 pass
 
-        return JSONResponse({"brief": brief, "stale": stale})
+        # FLO-236: Include deep research if available
+        deep = None
+        try:
+            dr_file = data_dir / "deep_research_cache.json"
+            if dr_file.exists():
+                dr = json.loads(dr_file.read_text(encoding="utf-8"))
+                if isinstance(dr, dict) and dr.get("timestamp"):
+                    dr_time = datetime.fromisoformat(dr["timestamp"].replace("Z", "+00:00"))
+                    dr_age_h = (datetime.now(tz=dr_time.tzinfo) - dr_time).total_seconds() / 3600
+                    if dr_age_h < 3:
+                        deep = dr
+        except Exception:
+            pass
+
+        return JSONResponse({"brief": brief, "stale": stale, "deep_research": deep})
     except Exception:
-        return JSONResponse({"brief": None, "stale": True})
+        return JSONResponse({"brief": None, "stale": True, "deep_research": None})
 
 
 @app.get("/api/rex-monitor")

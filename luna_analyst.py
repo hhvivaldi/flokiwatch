@@ -671,6 +671,34 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
             lines.append(f"- {ev.get('event', '?')} at {ev.get('time', '?')} [{ev.get('impact', '?')}]")
         lines.append("</calendar>")
 
+    # FLO-236: Deep Research insights from Google Search
+    try:
+        from deep_search import load_deep_research
+        dr = load_deep_research()
+        if dr:
+            lines.append("\n<analyst_research>")
+            lines.append(f"Analyst consensus: {dr.get('analyst_consensus', 'unknown')}")
+            _ki = dr.get("key_insight", "")
+            if _ki:
+                lines.append(f"Key insight: {_ki}")
+            _tgt = dr.get("price_targets", {})
+            if _tgt:
+                _sup = ", ".join(str(s) for s in (_tgt.get("support") or []))
+                _res = ", ".join(str(r) for r in (_tgt.get("resistance") or []))
+                if _sup:
+                    lines.append(f"Analyst support levels: {_sup}")
+                if _res:
+                    lines.append(f"Analyst resistance levels: {_res}")
+            _risks = dr.get("risks_this_week", [])
+            if _risks:
+                lines.append(f"Risks this week: {'; '.join(str(r) for r in _risks[:5])}")
+            _src = dr.get("sources", [])
+            if _src:
+                lines.append(f"Sources: {', '.join(str(s) for s in _src[:5])}")
+            lines.append("</analyst_research>")
+    except Exception:
+        pass
+
     return "\n".join(lines)
 
 
