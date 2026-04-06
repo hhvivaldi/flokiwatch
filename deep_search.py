@@ -41,28 +41,50 @@ _SYSTEM_INSTRUCTION = (
 def _build_search_query() -> str:
     """Build a dynamic search query based on current market state."""
     today = datetime.now(timezone.utc).strftime("%B %d %Y")
-    base = f"XAU/USD gold price analysis today {today}"
 
     try:
         bs_path = DATA_DIR / "bot_state.json"
         if bs_path.exists():
             bs = json.loads(bs_path.read_text(encoding="utf-8"))
             change = bs.get("price_daily_change_pct")
-            regime = bs.get("market_regime", {}).get("regime", "")
+            regime = str(bs.get("market_regime", {}).get("regime", "")).upper()
 
-            if change is not None and change < -0.5:
-                base += " why is gold falling"
-            elif change is not None and change > 0.5:
-                base += " gold rally drivers"
+            # Core query based on price direction
+            if change is not None and change < -0.15:
+                base = f"why is gold XAU/USD falling today {today}"
+            elif change is not None and change > 0.15:
+                base = f"what is driving gold XAU/USD rally today {today}"
+            else:
+                base = f"gold XAU/USD outlook today key levels support resistance {today}"
 
-            if "RANGING" in str(regime).upper():
-                base += " consolidation outlook"
-            elif "BEARISH" in str(regime).upper():
-                base += " bearish pressure"
+            # Context modifiers
+            try:
+                luna_path = DATA_DIR / "luna_brief.json"
+                if luna_path.exists():
+                    lb = json.loads(luna_path.read_text(encoding="utf-8"))
+                    luna_bias = str(lb.get("directional_bias", "")).upper()
+                    if luna_bias == "BULLISH" and change is not None and change < 0:
+                        base += " despite bullish macro"
+            except Exception:
+                pass
+
+            if "RANGING" in regime:
+                base += " range consolidation"
+            elif "VOLATILE" in regime or "EXTREME" in regime:
+                base += " high volatility"
+
+            try:
+                vix_val = bs.get("market_context", {}).get("futures", {}).get("VIX_J6", {}).get("bid")
+                if vix_val is not None and float(vix_val) > 25:
+                    base += " elevated market fear"
+            except Exception:
+                pass
+
+            return base
     except Exception:
         pass
 
-    return base
+    return f"gold XAU/USD outlook today key levels support resistance {today}"
 
 
 def _check_cache_fresh() -> bool:
@@ -144,7 +166,7 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
                 system_instruction=_SYSTEM_INSTRUCTION,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
                 max_output_tokens=1024,
-                temperature=0.3,
+                temperature=0.7,
             ),
         )
 
