@@ -1598,11 +1598,13 @@ def run_luna_analysis() -> LunaAnalysisResult:
         try:
             _hc = []
             for _ea in echo_alerts[:10]:
-                if isinstance(_ea, dict) and _ea.get("headline"):
-                    _hc.append({
-                        "title": str(_ea["headline"])[:120],
-                        "severity": _ea.get("classification", _ea.get("severity", "ROUTINE")),
-                    })
+                if isinstance(_ea, dict):
+                    _title = _ea.get("title") or _ea.get("headline") or _ea.get("representative_headline") or ""
+                    if _title:
+                        _hc.append({
+                            "title": str(_title)[:120],
+                            "severity": _ea.get("classification", _ea.get("severity", "ROUTINE")),
+                        })
             result.headlines_consumed = _hc
         except Exception:
             pass
