@@ -193,10 +193,16 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
 
         # Extract grounding metadata if available
         grounding_sources = []
+        web_search_queries = []
         try:
             for candidate in (response.candidates or []):
                 gm = getattr(candidate, "grounding_metadata", None)
                 if gm:
+                    # Web search queries used by Gemini
+                    wsq = getattr(gm, "web_search_queries", None)
+                    if wsq:
+                        web_search_queries = list(wsq)
+                    # Grounding chunks (article URLs — may not be available in all API versions)
                     for chunk in (getattr(gm, "grounding_chunks", None) or []):
                         web = getattr(chunk, "web", None)
                         if web:
@@ -219,6 +225,7 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
             "model": DEEP_SEARCH_MODEL,
             "latency_ms": latency_ms,
             "grounding_sources": grounding_sources[:10],
+            "web_search_queries": web_search_queries[:5],
         }
 
         # Atomic write
