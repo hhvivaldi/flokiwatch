@@ -1851,6 +1851,10 @@
             <div id="luna-trend-section" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
             <div id="luna-correlations" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
             <div id="luna-sage-insights" style="margin-top:6px;font-size:9px;font-family:'JetBrains Mono',monospace;color:#9ca3af"></div>
+            <div id="luna-headlines" class="hidden" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(224,64,251,0.15)">
+              <div style="font-size:8px;font-weight:800;letter-spacing:0.1em;color:#E040FB;margin-bottom:4px">HEADLINES RECEIVED</div>
+              <div id="luna-headlines-list" style="font-size:9px;display:flex;flex-direction:column;gap:2px"></div>
+            </div>
             <div id="luna-deep-research" class="hidden" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(224,64,251,0.15)">
               <div style="font-size:8px;font-weight:800;letter-spacing:0.1em;color:#E040FB;margin-bottom:4px">DEEP RESEARCH</div>
               <div id="luna-deep-consensus" style="font-size:10px;font-weight:700;margin-bottom:3px"></div>
@@ -3080,6 +3084,26 @@
               sageEl.innerHTML = '<div style="color:#6b7280;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Sage Insights (14d)</div><div>' + siRows.join(' | ') + '</div>';
             }
           }
+
+          // FLO-238: Headlines Luna consumed
+          try {
+            var hlPanel = document.getElementById('luna-headlines');
+            var hlList = document.getElementById('luna-headlines-list');
+            var hc = b.headlines_consumed;
+            if (hlPanel && hlList && Array.isArray(hc) && hc.length > 0) {
+              hlPanel.classList.remove('hidden');
+              var hlHtml = '';
+              var sevColors = {CRITICAL: '#f87171', IMPORTANT: '#fb923c', ROUTINE: '#6b7280'};
+              for (var hi = 0; hi < hc.length && hi < 10; hi++) {
+                var sev = hc[hi].severity || 'ROUTINE';
+                var sc = sevColors[sev] || '#6b7280';
+                hlHtml += '<div style="color:#9ca3af">\u2022 <span style="color:' + sc + ';font-weight:600">' + (hc[hi].title || '') + '</span> \u2014 <span style="color:' + sc + ';font-size:8px">' + sev + '</span></div>';
+              }
+              hlList.innerHTML = hlHtml;
+            } else if (hlPanel) {
+              hlPanel.classList.add('hidden');
+            }
+          } catch(e) {}
 
           // FLO-236: Deep Research panel
           try {

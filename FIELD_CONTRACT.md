@@ -432,6 +432,13 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `sage-card`, `sage-status`, `sage-summary`, `sage-last-run`, `sage-report-period`, `sage-report-trades`, `sage-report-win-rate`, `sage-report-profit-factor`, `sage-report-recommendations`
 `echo-card`, `echo-status-pill`, `echo-alert-pill`, `echo-last-scan`, `echo-scan-count`, `echo-critical-count`, `echo-important-count`
 `luna-card`, `atlas-card`
+`luna-headlines` (FLO-238): Headlines consumed panel. `luna-headlines-list` renders echo alerts Luna read.
+`luna-deep-research` (FLO-236): Deep Search panel. `luna-deep-consensus`, `luna-deep-insight`, `luna-deep-sources`, `luna-deep-time`.
+
+### Luna Brief API (`/api/luna-brief`)
+Response includes:
+- `brief.headlines_consumed` (FLO-238): Array of `{title, severity}` — Echo alerts Luna consumed on her last cycle. Severity: CRITICAL/IMPORTANT/ROUTINE.
+- `deep_research` (FLO-236): Deep Search cache if fresh (<3h). Contains `analyst_consensus`, `key_insight`, `price_targets`, `risks_this_week`, `sources`.
 
 ### AI Agent Memory (v1.3)
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`

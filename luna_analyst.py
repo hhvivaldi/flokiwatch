@@ -209,6 +209,7 @@ class LunaAnalysisResult:
     correlations: Dict[str, Any] = field(default_factory=dict)
     source: str = "mimo"      # "mimo" or "local_fallback"
     error: Optional[str] = None
+    headlines_consumed: List[Dict[str, str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -1592,6 +1593,19 @@ def run_luna_analysis() -> LunaAnalysisResult:
 
         # 4. Save macro history snapshot (one per day)
         _save_macro_snapshot(macro)
+
+        # FLO-238: Attach headlines Luna consumed (for Trade Room transparency)
+        try:
+            _hc = []
+            for _ea in echo_alerts[:10]:
+                if isinstance(_ea, dict) and _ea.get("headline"):
+                    _hc.append({
+                        "title": str(_ea["headline"])[:120],
+                        "severity": _ea.get("classification", _ea.get("severity", "ROUTINE")),
+                    })
+            result.headlines_consumed = _hc
+        except Exception:
+            pass
 
         # 5. Save to luna_brief.json
         _save_brief(result)
