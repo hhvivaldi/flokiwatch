@@ -519,6 +519,26 @@ def _build_debate_context(data: Dict[str, Any]) -> str:
                 parts.append(f"Indicators: {', '.join(ind_parts)}")
     except Exception:
         pass
+    # FLO-232: Multi-TF indicators (M15/H1/H4/D1)
+    try:
+        mtf = data.get("multi_tf", {})
+        if mtf:
+            mtf_lines = []
+            for tf in ("M15", "H1", "H4", "D1"):
+                tfd = mtf.get(tf, {})
+                if not tfd:
+                    continue
+                mtf_lines.append(
+                    f"{tf}: RSI={tfd.get('rsi')} ({tfd.get('rsi_direction', '?')}), "
+                    f"MACD {tfd.get('macd_direction', '?')}, ADX={tfd.get('adx')}, "
+                    f"EMA align: {tfd.get('ema_alignment', '?')}, "
+                    f"price {tfd.get('price_vs_ema50', '?')} EMA50, "
+                    f"{tfd.get('price_vs_ema200', '?')} EMA200"
+                )
+            if mtf_lines:
+                parts.append("Multi-timeframe:\n" + "\n".join(mtf_lines))
+    except Exception:
+        pass
     try:
         ms = data.get("market_structure")
         if ms:

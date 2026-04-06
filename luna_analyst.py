@@ -534,6 +534,23 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
 
     lines.append("</macro_data>")
 
+    # FLO-232: Price regime context so Luna can weigh macro vs price action
+    try:
+        import os as _os_lr
+        _bs_path_lr = _os_lr.path.join(_os_lr.path.dirname(_os_lr.path.abspath(__file__)), "data", "bot_state.json")
+        if _os_lr.path.exists(_bs_path_lr):
+            with open(_bs_path_lr, "r", encoding="utf-8") as _bsf_lr:
+                _bs_lr = json.load(_bsf_lr)
+            _regime_lr = _bs_lr.get("market_regime", {})
+            _regime_name = _regime_lr.get("regime", "unknown")
+            _regime_conf = _regime_lr.get("confidence", "")
+            _regime_dur = _regime_lr.get("duration", "")
+            lines.append(f"\n<price_regime>")
+            lines.append(f"XAU/USD price regime: {_regime_name} (confidence: {_regime_conf}, duration: {_regime_dur})")
+            lines.append(f"</price_regime>")
+    except Exception:
+        pass
+
     # FLO-123: Cross-market data from MT5
     metals = macro.get("metals", {})
     forex_pairs = macro.get("forex", {})

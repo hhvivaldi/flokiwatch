@@ -3605,6 +3605,23 @@ class TradingBot:
                     with open(_bs_debate, "r", encoding="utf-8") as _bsf:
                         _bs_d2 = json.load(_bsf)
                     _debate_data["indicators"] = _bs_d2.get("last_analysis", {}).get("indicators", {})
+                    # FLO-232: Inject multi-TF data so Rex Bear has D1/H4 bearish evidence
+                    _mtf_d = _bs_d2.get("multi_tf_indicators", {})
+                    _mtf_debate = {}
+                    for _tf in ("M15", "H1", "H4", "D1"):
+                        _tfd = _mtf_d.get(_tf, {})
+                        if _tfd:
+                            _mtf_debate[_tf] = {
+                                "rsi": _tfd.get("rsi"),
+                                "rsi_direction": _tfd.get("rsi_direction"),
+                                "macd_direction": _tfd.get("macd_direction"),
+                                "adx": _tfd.get("adx", {}).get("value"),
+                                "ema_alignment": _tfd.get("ema_alignment"),
+                                "price_vs_ema50": _tfd.get("price_vs_ema50"),
+                                "price_vs_ema200": _tfd.get("price_vs_ema200"),
+                            }
+                    if _mtf_debate:
+                        _debate_data["multi_tf"] = _mtf_debate
                 except Exception:
                     pass
                 try:
