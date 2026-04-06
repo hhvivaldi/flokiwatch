@@ -551,10 +551,27 @@ def _build_debate_context(data: Dict[str, Any]) -> str:
             parts.append(f"Luna: environment={luna.get('environment')}, bias={luna.get('directional_bias')}, risk={luna.get('risk_level')}")
     except Exception:
         pass
+    # FLO-237: Luna's interpreted news analysis (replaces raw headline count)
     try:
-        echo = data.get("echo_summary")
-        if echo:
-            parts.append(f"Echo alerts: {echo}")
+        nc = data.get("news_context", {})
+        if nc:
+            _nc_text = (
+                f"News analysis (Luna): {nc.get('luna_environment', '?')} environment, "
+                f"bias {nc.get('luna_bias', '?')}, risk {nc.get('luna_risk', '?')}/10"
+            )
+            _pats = nc.get("patterns")
+            if _pats:
+                _nc_text += f", patterns: {', '.join(str(p) for p in _pats)}"
+            parts.append(_nc_text)
+    except Exception:
+        pass
+    try:
+        ar = data.get("analyst_research", {})
+        if ar and ar.get("consensus"):
+            _ar_text = f"Analyst research: {ar['consensus']}"
+            if ar.get("key_insight"):
+                _ar_text += f" — {ar['key_insight']}"
+            parts.append(_ar_text)
     except Exception:
         pass
     try:

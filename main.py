@@ -3649,14 +3649,29 @@ class TradingBot:
                         _debate_data["luna"] = _lb
                 except Exception:
                     pass
+                # FLO-237: Replace raw Echo headlines with Luna's interpreted analysis
+                # (prevents Rex Bull from inflating headline count)
                 try:
-                    from echo_sentinel import get_recent_alerts
-                    _alerts = get_recent_alerts(3)
-                    if _alerts:
-                        _debate_data["echo_summary"] = "; ".join(
-                            str(a.get("headline", ""))[:80] + f" ({a.get('sentiment', '?')})"
-                            for a in (_alerts if isinstance(_alerts, list) else [])
-                        )[:300]
+                    _lb_debate = _debate_data.get("luna", {})
+                    if isinstance(_lb_debate, dict) and _lb_debate.get("environment"):
+                        _debate_data["news_context"] = {
+                            "luna_environment": _lb_debate.get("environment"),
+                            "luna_bias": _lb_debate.get("directional_bias"),
+                            "luna_risk": _lb_debate.get("risk_level"),
+                            "patterns": _lb_debate.get("patterns_detected", []),
+                            "key_message": _lb_debate.get("key_message", ""),
+                        }
+                except Exception:
+                    pass
+                try:
+                    from deep_search import load_deep_research
+                    _dr_debate = load_deep_research()
+                    if _dr_debate:
+                        _debate_data["analyst_research"] = {
+                            "consensus": _dr_debate.get("analyst_consensus"),
+                            "key_insight": _dr_debate.get("key_insight"),
+                            "risks": _dr_debate.get("risks_this_week", []),
+                        }
                 except Exception:
                     pass
 
