@@ -1547,11 +1547,156 @@
         .feed-scroll { max-height: 600px; }
       }
 
-      /* ── Responsive fallback (mobile 639px) ─── */
+      /* ── FLO-227: Mobile responsive (768px) ──── */
+      @media (max-width: 768px) {
+        /* Prevent horizontal scroll */
+        html, body {
+          overflow-x: hidden;
+          max-width: 100vw;
+        }
+
+        /* Grid: single column with reorder — Decision first */
+        .trade-room-grid {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto;
+          padding: 8px 10px 20px;
+          gap: 10px;
+          min-height: auto;
+          max-width: 100vw;
+          overflow-x: hidden;
+        }
+        .main-center {
+          grid-column: 1;
+          grid-row: auto;
+          order: 1;
+        }
+        .main-feed {
+          grid-column: 1;
+          grid-row: auto;
+          order: 2;
+        }
+        .sidebar-intel {
+          grid-column: 1;
+          grid-row: auto;
+          order: 3;
+        }
+        .sidebar-ops {
+          grid-column: 1;
+          grid-row: auto;
+          order: 4;
+        }
+        /* Deep Dive — override inline grid-column:1/4;grid-row:3 */
+        .ctx-tier[data-tier="t3-deep"] {
+          grid-column: 1 !important;
+          grid-row: auto !important;
+          order: 5;
+        }
+
+        /* Status bar: wrap to 2 lines */
+        .command-center {
+          flex-wrap: wrap;
+          white-space: normal;
+          padding: 6px 12px;
+          gap: 4px 8px;
+        }
+        .cc-block {
+          padding: 4px 8px;
+        }
+        .cc-divider {
+          display: none;
+        }
+        .cc-price-val {
+          font-size: 20px;
+        }
+
+        /* Agent cards: full width stacked */
+        .main-cards-row {
+          flex-direction: column;
+        }
+        .bc-card {
+          flex: none;
+          width: 100%;
+          height: auto;
+          min-height: 110px;
+        }
+        .bc-btn {
+          height: auto;
+          min-height: 90px;
+        }
+
+        /* Chat feed tabs: horizontal scroll */
+        .main-feed > .flex {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          padding-bottom: 4px;
+        }
+        .main-feed > .flex::-webkit-scrollbar {
+          display: none;
+        }
+        .filter-tab {
+          flex-shrink: 0;
+          min-height: 44px;
+          font-size: 12px;
+          padding: 8px 14px;
+        }
+
+        /* Feed height */
+        .feed-scroll {
+          max-height: 500px;
+        }
+
+        /* Multi-TF grid: shrink label column, override inline grid-template-columns */
+        #ctx-mtf-grid div[style*="grid-template-columns"] {
+          grid-template-columns: 44px repeat(4, 1fr) !important;
+        }
+        #ctx-mtf-grid {
+          font-size: 10px !important;
+        }
+
+        /* Minimum font sizes */
+        .bc-metric-label,
+        .bc-role,
+        .stat-label,
+        .ctx-label,
+        .ctx-key,
+        .ctx-val,
+        .cc-label,
+        .sidebar-label,
+        .msg-badge {
+          font-size: 12px;
+        }
+        .msg-bubble {
+          max-width: 95%;
+          font-size: 12px;
+        }
+
+        /* Tap targets: 44px minimum */
+        .bc-btn,
+        .filter-tab,
+        .ctx-tier-header {
+          min-height: 44px;
+        }
+
+        /* Position row wraps */
+        .position-row {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        /* Avatars slightly smaller */
+        .msg-avatar {
+          width: 36px;
+          height: 36px;
+        }
+      }
+
+      /* ── Responsive fallback (small mobile 639px) ─── */
       @media (max-width: 639px) {
         .trade-room-grid {
-          padding: 10px 12px;
-          gap: 10px;
+          padding: 10px 8px;
+          gap: 8px;
         }
         .page-header-strip {
           padding: 8px 12px;
@@ -1562,16 +1707,18 @@
           overflow-y: visible;
         }
         .msg-bubble {
-          max-width: 95%;
-          font-size: 11.5px;
+          font-size: 12px;
         }
         .msg-avatar {
-          width: 36px;
-          height: 36px;
+          width: 32px;
+          height: 32px;
         }
         .filter-tab {
-          padding: 5px 10px;
-          font-size: 8.5px;
+          padding: 6px 12px;
+          font-size: 12px;
+        }
+        .cc-price-val {
+          font-size: 18px;
         }
       }
     </style>
@@ -5495,10 +5642,69 @@
           });
         }
 
+        // ── WebSocket: live state push ──────────────────
+        var _trWs = null;
+        var _trWsRetries = 0;
+        var _trWsState = null;
+
+        function _trWsSetStatus(s) {
+          var d = document.getElementById('ws-status-dot');
+          if (!d) return;
+          d.className = 'ws-dot ws-' + s;
+          d.title = s === 'connected' ? 'Live (WebSocket)' : s === 'polling' ? 'Polling (fallback)' : 'Reconnecting\u2026';
+        }
+
+        function trWsConnect() {
+          var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          var url = proto + '//' + location.host + '/ws';
+          try { _trWs = new WebSocket(url); } catch(e) { _trWsSetStatus('polling'); return; }
+
+          _trWs.onopen = function() {
+            _trWsRetries = 0;
+            _trWsSetStatus('connected');
+          };
+          _trWs.onmessage = function(ev) {
+            try {
+              _trWsState = JSON.parse(ev.data);
+              updatePanels(latestMessages, _trWsState);
+            } catch(e) {}
+          };
+          _trWs.onclose = function() {
+            _trWs = null;
+            _trWsRetries++;
+            if (_trWsRetries > 3) {
+              _trWsSetStatus('polling');
+            } else {
+              _trWsSetStatus('disconnected');
+              var delay = Math.min(5000 * Math.pow(2, _trWsRetries - 1), 30000);
+              setTimeout(trWsConnect, delay);
+            }
+          };
+          _trWs.onerror = function() {};
+        }
+
+        // Inject status dot into command center
+        (function() {
+          var dot = document.createElement('span');
+          dot.id = 'ws-status-dot';
+          dot.className = 'ws-dot ws-disconnected';
+          dot.title = 'Connecting\u2026';
+          var cc = document.querySelector('.command-center') || document.body;
+          cc.appendChild(dot);
+          var sty = document.createElement('style');
+          sty.textContent = '.ws-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-left:8px;vertical-align:middle;flex-shrink:0}.ws-connected{background:#4ade80;box-shadow:0 0 4px #4ade80}.ws-disconnected{background:#f87171}.ws-polling{background:#facc15}';
+          document.head.appendChild(sty);
+        })();
+
         function loadOnce() {
+          // When WebSocket is connected, skip /api/state fetch — use cached WS state
+          var stateFetch = (_trWs && _trWs.readyState === 1 && _trWsState)
+            ? Promise.resolve(_trWsState)
+            : fetchJson('/api/state');
+
           return Promise.all([
             fetchJson('/api/trade-room?limit=50'),
-            fetchJson('/api/state'),
+            stateFetch,
             refreshTopPatterns(),
             refreshSage(),
             refreshEcho(),
@@ -5554,6 +5760,7 @@
         bindAgentExpandersOnce();
         setFilter(hashFilter);
 
+        trWsConnect();
         loadOnce();
         setInterval(loadOnce, POLL_MS);
 

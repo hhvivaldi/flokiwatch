@@ -9,7 +9,8 @@ from typing import Any, Dict, List
 
 from datetime import timedelta
 
-from fastapi import FastAPI
+import asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -60,6 +61,32 @@ app = FastAPI(title="XAUUSD Bot Dashboard", version="0.1")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/image", StaticFiles(directory=str(APP_DIR / "image")), name="image")
+
+
+# ── WebSocket connection manager ──────────────────────
+class _WSManager:
+    def __init__(self):
+        self.active: list = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+
+    async def broadcast(self, data: dict):
+        dead = []
+        for ws in self.active:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+_ws_manager = _WSManager()
 
 
 def _file_age_seconds(path: Path) -> float:
@@ -734,34 +761,80 @@ def health():
     return JSONResponse({"ok": age <= OFFLINE_AFTER_SECONDS, "file_age_seconds": round(age, 2), "state_file": str(STATE_FILE)})
 
 
-@app.get("/api/state")
-def state():
+def _read_state() -> Dict[str, Any]:
+    """Read bot_state.json and enrich with _meta. Used by REST and WebSocket."""
     if not STATE_FILE.exists():
-        return JSONResponse(_offline_state("missing_state_file", file_age_seconds=10**9))
-
+        return _offline_state("missing_state_file", file_age_seconds=10**9)
     age = _file_age_seconds(STATE_FILE)
-
     try:
         payload = json.loads(STATE_FILE.read_text(encoding="utf-8"))
     except Exception:
-        return JSONResponse(_offline_state("invalid_json", file_age_seconds=age))
+        return _offline_state("invalid_json", file_age_seconds=age)
+    return _enrich_state(payload, age)
 
-    # Always include file age meta for UI (LAST DATA)
+
+def _read_state_from_bytes(content: bytes) -> Dict[str, Any]:
+    """Same as _read_state but from already-read bytes (avoids double file read)."""
+    age = _file_age_seconds(STATE_FILE)
+    try:
+        payload = json.loads(content.decode("utf-8"))
+    except Exception:
+        return _offline_state("invalid_json", file_age_seconds=age)
+    return _enrich_state(payload, age)
+
+
+def _enrich_state(payload: dict, age: float) -> dict:
     payload.setdefault("_meta", {})
     payload["_meta"].update({"file_age_seconds": round(age, 2)})
-
     expected_interval = payload.get("_expected_update_interval_seconds") or 60
-    offline_threshold = expected_interval + 60
-
-    if age > offline_threshold:
+    if age > expected_interval + 60:
         payload.setdefault("bot", {})
         payload["bot"]["status"] = "OFFLINE"
         payload["bot"]["running"] = False
-        payload["_meta"].update({"reason": "stale_state_file"})
+        payload["_meta"]["reason"] = "stale_state_file"
     else:
         payload["_meta"].setdefault("reason", "ok")
+    return payload
 
-    return JSONResponse(payload)
+
+@app.get("/api/state")
+def state():
+    return JSONResponse(_read_state())
+
+
+# ── WebSocket: push state changes to connected clients ──
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await _ws_manager.connect(ws)
+    try:
+        await ws.send_json(_read_state())
+        while True:
+            await ws.receive_text()
+    except (WebSocketDisconnect, Exception):
+        _ws_manager.disconnect(ws)
+
+
+async def _watch_state_file():
+    """Background task: detect bot_state.json changes via MD5, broadcast to WebSocket clients."""
+    last_hash = ""
+    while True:
+        await asyncio.sleep(2)
+        try:
+            if not STATE_FILE.exists() or not _ws_manager.active:
+                continue
+            content = STATE_FILE.read_bytes()
+            h = hashlib.md5(content).hexdigest()
+            if h == last_hash:
+                continue
+            last_hash = h
+            await _ws_manager.broadcast(_read_state_from_bytes(content))
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def _start_file_watcher():
+    asyncio.create_task(_watch_state_file())
 
 
 @app.get("/api/trade-room")

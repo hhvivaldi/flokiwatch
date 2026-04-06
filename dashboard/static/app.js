@@ -2258,7 +2258,81 @@ async function poll() {
   }
 }
 
-setInterval(poll, 3000);
+// ── WebSocket: live state push ──────────────────────
+let _ws = null;
+let _wsRetries = 0;
+let _wsPollInterval = null;
+
+function _wsSetStatus(s) {
+  const d = document.getElementById("ws-status-dot");
+  if (!d) return;
+  d.className = "ws-dot ws-" + s;
+  d.title = s === "connected" ? "Live (WebSocket)" : s === "polling" ? "Polling (fallback)" : "Reconnecting\u2026";
+}
+
+function _wsRenderMsg(data) {
+  const status = data.bot?.status || "OFFLINE";
+  const metaAge = data._meta?.file_age_seconds;
+  const shouldRender =
+    (data.timestamp && data.timestamp !== lastTimestamp) ||
+    status !== lastBotStatus ||
+    metaAge !== lastMetaAgeSeconds;
+  lastTimestamp = data.timestamp || lastTimestamp;
+  lastBotStatus = status;
+  lastMetaAgeSeconds = metaAge;
+  if (shouldRender) render(data);
+}
+
+function wsConnect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const url = proto + "//" + location.host + "/ws";
+  try { _ws = new WebSocket(url); } catch (e) { _wsFallback(); return; }
+
+  _ws.onopen = function () {
+    _wsRetries = 0;
+    if (_wsPollInterval) { clearInterval(_wsPollInterval); _wsPollInterval = null; }
+    _wsSetStatus("connected");
+  };
+  _ws.onmessage = function (ev) {
+    try { _wsRenderMsg(JSON.parse(ev.data)); } catch (e) {}
+  };
+  _ws.onclose = function () {
+    _ws = null;
+    _wsRetries++;
+    if (_wsRetries > 3) {
+      _wsFallback();
+    } else {
+      _wsSetStatus("disconnected");
+      var delay = Math.min(5000 * Math.pow(2, _wsRetries - 1), 30000);
+      setTimeout(wsConnect, delay);
+    }
+  };
+  _ws.onerror = function () {};
+}
+
+function _wsFallback() {
+  _wsSetStatus("polling");
+  if (!_wsPollInterval) _wsPollInterval = setInterval(poll, 3000);
+}
+
+// Inject status dot
+(function () {
+  var dot = document.createElement("span");
+  dot.id = "ws-status-dot";
+  dot.className = "ws-dot ws-disconnected";
+  dot.title = "Connecting\u2026";
+  var hdr = document.querySelector(".site-header nav") || document.querySelector(".site-header") || document.body;
+  hdr.appendChild(dot);
+
+  var sty = document.createElement("style");
+  sty.textContent = ".ws-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-left:8px;vertical-align:middle;flex-shrink:0}" +
+    ".ws-connected{background:#4ade80;box-shadow:0 0 4px #4ade80}" +
+    ".ws-disconnected{background:#f87171}" +
+    ".ws-polling{background:#facc15}";
+  document.head.appendChild(sty);
+})();
+
+wsConnect();
 setInterval(pollDecisions, 10000);
 poll();
 pollDecisions();
