@@ -325,6 +325,8 @@ class AgentMonitor:
                 pass
 
         in_cooldown = False
+        in_cooldown_window = False
+        cooldown_trigger_ids = set()
         cooldown_minutes = 30  # FLO-204: per-condition FIRED flag now prevents wake loops
         mins_remaining = None
         next_eligible_iso = None
@@ -348,12 +350,13 @@ class AgentMonitor:
                 now_utc = datetime.now(timezone.utc)
                 elapsed = (now_utc - lw).total_seconds() / 60.0
                 if elapsed < float(cooldown_minutes):
-                    in_cooldown = True
+                    in_cooldown_window = True
+                    cooldown_trigger_ids = set(str(x) for x in (cw.get("last_wake_trigger_ids") or []))
                     mins_remaining = int(max(0, round(float(cooldown_minutes) - elapsed)))
                     next_eligible = lw + timedelta(minutes=int(cooldown_minutes))
                     next_eligible_iso = next_eligible.isoformat()
         except Exception:
-            in_cooldown = False
+            in_cooldown_window = False
 
         if price_mid is None:
             try:
@@ -653,6 +656,22 @@ class AgentMonitor:
             pass
 
         raw_wake = bool(expired or triggered_ids or rex_critical_wake)
+
+        # FLO-229: Per-condition cooldown — only block conditions that were
+        # the trigger reason for the previous wake. Unseen conditions bypass.
+        in_cooldown = False
+        if raw_wake and in_cooldown_window:
+            if triggered_ids:
+                unseen = set(triggered_ids) - cooldown_trigger_ids
+                if unseen:
+                    log.info(f"SIMBA | cooldown bypassed — new condition(s) {unseen} not in last wake {cooldown_trigger_ids}")
+                else:
+                    in_cooldown = True
+            elif rex_critical_wake:
+                pass  # rex critical always bypasses cooldown
+            else:
+                in_cooldown = True  # expired re-trigger during cooldown
+
         decision = "WAKE" if (raw_wake and not in_cooldown) else "SLEEP"
 
         any_orders_active = bool(conditions) or bool(watch_active)
@@ -963,6 +982,14 @@ class AgentMonitor:
             wake_conditions["last_wake_at"] = datetime.utcnow().isoformat()
             if conditions_fingerprint:
                 wake_conditions["cooldown_fingerprint"] = conditions_fingerprint
+
+            # FLO-229: Record which conditions triggered this wake for per-condition cooldown
+            if triggered_ids:
+                wake_conditions["last_wake_trigger_ids"] = [str(x) for x in triggered_ids]
+            elif expired:
+                wake_conditions["last_wake_trigger_ids"] = ["__expired__"]
+            elif rex_critical_wake:
+                wake_conditions["last_wake_trigger_ids"] = ["__rex_critical__"]
 
             try:
                 wake_conditions["cooldown_minutes"] = int(wake_conditions.get("cooldown_minutes") or 30)
