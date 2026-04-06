@@ -3760,36 +3760,31 @@ class TradingBot:
                     except Exception as _vm_err:
                         log.debug(f"RESEARCH_MANAGER | import/call error (ignored): {_vm_err}")
 
-                    if _verdict_result and _verdict_result.get("status") == "OK":
-                        # Inject <verdict> block (replaces <debate>)
-                        _v = _verdict_result
-                        _verdict_text = (
-                            f"RESEARCH MANAGER VERDICT: {_v['winner']} WINS. Conviction {_v['conviction']}/10.\n"
-                            f"{_v['reasoning']}\n"
-                            f"Recommendation: {_v['recommendation']}"
-                        )
-                        if _v.get("entry") is not None:
-                            _verdict_text += f"\nEntry: ${_v['entry']}, SL: ${_v.get('sl', '?')}, Target: ${_v.get('target', '?')}"
-                        if _v.get("trigger_buy"):
-                            _verdict_text += f"\nBUY trigger: {_v['trigger_buy']}"
-                        if _v.get("trigger_sell"):
-                            _verdict_text += f"\nSELL trigger: {_v['trigger_sell']}"
-                        trigger_context += f"\n<verdict>\n{_verdict_text}\n</verdict>\n"
-                    else:
-                        # Fallback: inject <debate> block (FLO-190 behavior)
-                        _bull_text = (
-                            f"REX BULL (argues gold goes UP \u2014 conviction {_bull.get('conviction', '?')}/10): "
-                            f"\"{_bull.get('case', '')}\""
-                        )
-                        if _bull.get("entry") is not None:
-                            _bull_text += f" Entry ${_bull['entry']}, SL ${_bull.get('sl', '?')}, target ${_bull.get('target', '?')}."
-                        _bear_text = (
-                            f"REX BEAR (argues gold goes DOWN \u2014 conviction {_bear.get('conviction', '?')}/10): "
-                            f"\"{_bear.get('case', '')}\""
-                        )
-                        if _bear.get("entry") is not None:
-                            _bear_text += f" Entry ${_bear['entry']}, SL ${_bear.get('sl', '?')}, target ${_bear.get('target', '?')}."
-                        trigger_context += f"\n<debate>\n{_bull_text}\n\n{_bear_text}\n</debate>\n"
+                    # FLO-239: Save verdict to file for get_oracle_verdict tool
+                    # (removed from trigger_context to prevent confirmation bias — FLO-179 principle)
+                    try:
+                        _v = _verdict_result if (_verdict_result and _verdict_result.get("status") == "OK") else None
+                        _verdict_save = {
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "winner": _v["winner"] if _v else None,
+                            "recommendation": _v["recommendation"] if _v else None,
+                            "conviction": _v["conviction"] if _v else None,
+                            "reasoning": _v["reasoning"] if _v else "Research Manager unavailable",
+                            "entry": _v.get("entry") if _v else None,
+                            "sl": _v.get("sl") if _v else None,
+                            "target": _v.get("target") if _v else None,
+                            "trigger_buy": _v.get("trigger_buy") if _v else None,
+                            "trigger_sell": _v.get("trigger_sell") if _v else None,
+                            "rex_bull": _bull,
+                            "rex_bear": _bear,
+                        }
+                        _vp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "oracle_verdict.json")
+                        _vt = _vp + ".tmp"
+                        with open(_vt, "w", encoding="utf-8") as _vf:
+                            json.dump(_verdict_save, _vf, ensure_ascii=False, indent=2)
+                        os.replace(_vt, _vp)
+                    except Exception:
+                        pass
              except Exception as _deb_err:
                 log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")
 

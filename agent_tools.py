@@ -2694,6 +2694,37 @@ class AgentTools:
             self._log_tool("get_rex_monitor", start, f"error={e}")
             return {"success": False, "reason": f"rex_monitor_error: {e}", "latency_ms": elapsed}
 
+    def get_oracle_verdict(self) -> Dict[str, Any]:
+        """FLO-239: Return the latest Research Manager verdict from the Rex Bull vs Bear debate."""
+        start = time.time()
+        try:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "oracle_verdict.json")
+            if not os.path.exists(path):
+                self._log_tool("get_oracle_verdict", start, "no verdict available")
+                return {"available": False, "reason": "no verdict yet"}
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            try:
+                from luna_analyst import load_luna_brief
+                lb = load_luna_brief()
+                if lb:
+                    data["luna_bias"] = lb.get("directional_bias")
+                    data["luna_environment"] = lb.get("environment")
+            except Exception:
+                pass
+            try:
+                from deep_search import load_deep_research
+                dr = load_deep_research()
+                if dr:
+                    data["analyst_consensus"] = dr.get("analyst_consensus")
+            except Exception:
+                pass
+            self._log_tool("get_oracle_verdict", start, f"winner={data.get('winner')} conv={data.get('conviction')}")
+            return data
+        except Exception as e:
+            self._log_tool("get_oracle_verdict", start, f"error={e}")
+            return {"available": False, "reason": str(e)}
+
     def write_trading_journal(self, entry: str, category: str = "reflection") -> Dict[str, Any]:
         """Append an entry to Floki's persistent trading journal."""
         start = time.time()
