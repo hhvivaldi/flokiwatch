@@ -3714,23 +3714,27 @@ class TradingBot:
                         except Exception:
                             pass
 
-                        # Gather Echo sentiment (count BULLISH vs BEARISH from recent agent_events)
+                        # FLO-237: Replace raw headline count with Luna's interpreted analysis
                         _rm_echo = None
                         try:
-                            from db_writer import _get_connection as _get_conn_echo
-                            _ec = _get_conn_echo()
+                            if _rm_luna and isinstance(_rm_luna, dict):
+                                _rm_echo = {
+                                    "luna_environment": _rm_luna.get("environment"),
+                                    "luna_bias": _rm_luna.get("directional_bias"),
+                                    "luna_risk": _rm_luna.get("risk_level"),
+                                    "patterns": _rm_luna.get("patterns_detected", []),
+                                }
+                            # Add Deep Research if available
                             try:
-                                _echo_rows = _ec.execute(
-                                    "SELECT content FROM agent_events WHERE author='ECHO' AND timestamp >= datetime('now', '-4 hours') ORDER BY timestamp DESC LIMIT 20"
-                                ).fetchall()
-                            finally:
-                                _ec.close()
-                            _bull_n = sum(1 for r in _echo_rows if "BULLISH" in str(r[0]).upper())
-                            _bear_n = sum(1 for r in _echo_rows if "BEARISH" in str(r[0]).upper())
-                            _key_hl = ""
-                            if _echo_rows:
-                                _key_hl = str(_echo_rows[0][0])[:120]
-                            _rm_echo = {"bullish_count": _bull_n, "bearish_count": _bear_n, "key_headline": _key_hl}
+                                from deep_search import load_deep_research
+                                _dr_rm = load_deep_research()
+                                if _dr_rm:
+                                    if _rm_echo is None:
+                                        _rm_echo = {}
+                                    _rm_echo["analyst_consensus"] = _dr_rm.get("analyst_consensus")
+                                    _rm_echo["analyst_insight"] = _dr_rm.get("key_insight", "")[:200]
+                            except Exception:
+                                pass
                         except Exception:
                             pass
 

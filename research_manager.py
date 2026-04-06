@@ -20,15 +20,15 @@ _SYSTEM_PROMPT = (
     "1. Rex Bull \u2014 argues gold will go UP (BUY)\n"
     "2. Rex Bear \u2014 argues gold will go DOWN (SELL)\n"
     "3. Luna \u2014 macro environment assessment (SAFE/CAUTION/DANGER + directional bias)\n"
-    "4. Echo \u2014 news sentiment summary (BULLISH vs BEARISH headline count)\n"
+    "4. News Context \u2014 Luna's interpreted news analysis + analyst research consensus\n"
     "5. Sage \u2014 recent trading performance (win rates by direction)\n\n"
     "Your job: Read ALL reports. Form your OWN opinion. Do NOT just pick the best "
     "argument between Bull and Bear. Consider the FULL picture:\n"
     "- If momentum says SELL but macro says BULLISH, that is a DIVERGENCE \u2014 "
     "flag it in reasoning and lower conviction\n"
     "- If performance data says SELL has poor win rate, be cautious about recommending SELL\n"
-    "- If most news headlines are BULLISH, that context matters even if short-term "
-    "momentum is bearish\n\n"
+    "- If Luna says news_price_divergence, that means headlines and price disagree \u2014 "
+    "lower conviction\n\n"
     "You MUST choose a direction: ENTER_BUY or ENTER_SELL. There is no NO_TRADE option. "
     "Use conviction (1-10) to express certainty. Low conviction (1-4) = weak signal. "
     "High conviction (7-10) = strong signal.\n"
@@ -139,15 +139,24 @@ def _build_user_message(
         )
         parts.append(luna_text)
 
-    # REPORT 4: Echo News Summary
+    # REPORT 4: News Context (Luna interpretation + analyst research)
     if echo_summary and isinstance(echo_summary, dict):
-        bullish_n = echo_summary.get("bullish_count", 0)
-        bearish_n = echo_summary.get("bearish_count", 0)
-        headline = echo_summary.get("key_headline", "")
-        echo_text = f"REPORT 4 \u2014 Echo News Summary:\nBULLISH headlines: {bullish_n} | BEARISH headlines: {bearish_n}"
-        if headline:
-            echo_text += f"\nKey headline: {headline}"
-        parts.append(echo_text)
+        nc_text = "REPORT 4 \u2014 News Context:"
+        _le = echo_summary.get("luna_environment")
+        _lb = echo_summary.get("luna_bias")
+        _lr = echo_summary.get("luna_risk")
+        if _le:
+            nc_text += f"\nLuna analysis: {_le} environment, bias {_lb}, risk {_lr}/10"
+        _pats = echo_summary.get("patterns")
+        if _pats and isinstance(_pats, list) and _pats:
+            nc_text += f"\nPatterns detected: {', '.join(str(p) for p in _pats)}"
+        _ac = echo_summary.get("analyst_consensus")
+        if _ac:
+            nc_text += f"\nAnalyst research consensus: {_ac}"
+        _ai = echo_summary.get("analyst_insight")
+        if _ai:
+            nc_text += f"\nKey insight: {_ai}"
+        parts.append(nc_text)
 
     # REPORT 5: Sage Performance
     if sage_note and isinstance(sage_note, str) and sage_note.strip():
