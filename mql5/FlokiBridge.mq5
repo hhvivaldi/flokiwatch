@@ -1058,6 +1058,8 @@ void CheckPriceAlerts()
          touched = true;
       else if(g_alerts[i].alertType == "price_below" && bid <= g_alerts[i].level)
          touched = true;
+      else if(g_alerts[i].alertType == "price_touch" && MathAbs(bid - g_alerts[i].level) <= 1.0)
+         touched = true;
 
       if(touched)
       {

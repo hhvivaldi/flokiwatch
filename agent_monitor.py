@@ -198,7 +198,7 @@ class AgentMonitor:
             import config
             alerts = []
             for c in (payload.get("conditions") or []):
-                if c.get("type") in ("price_above", "price_below") and c.get("level") is not None:
+                if c.get("type") in ("price_above", "price_below", "price_touch") and c.get("level") is not None:
                     alerts.append({"id": str(c["id"]), "type": c["type"], "level": float(c["level"])})
             alert_payload = {
                 "version": 1,
