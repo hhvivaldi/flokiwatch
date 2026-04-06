@@ -32,6 +32,7 @@ You have four categories of data:
 
 Technical \u2014 get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_pivot_points
 Price structure, momentum, and key levels. get_indicators returns data for M15, H1, H4, D1 timeframes.
+get_candles now returns per-candle indicators: RSI, MACD (value/signal/histogram), Bollinger Bands (upper/lower/mid/width), and EMAs (9/21/50/200). Use this to detect divergences, squeezes, and momentum patterns over time.
 
 Cross-market \u2014 get_market_context
 Markets correlated with gold: silver, platinum, palladium (gold/silver ratio), forex pairs (dollar strength, safe havens), DXY, VIX, oil, S&P 500, BTC \u2014 all with change % and position in today's range.
