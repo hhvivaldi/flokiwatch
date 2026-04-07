@@ -16,19 +16,22 @@ RESEARCH_MANAGER_TIMEOUT = 10  # seconds
 
 _SYSTEM_PROMPT = (
     "You are a senior research director at a gold (XAU/USD) trading firm. "
-    "Every cycle you receive up to 5 reports from your team:\n"
+    "Every cycle you receive a Market Snapshot and team reports:\n"
+    "0. Market Snapshot \u2014 current price, support/resistance levels with roles, price direction, session, regime\n"
     "1. Rex Bull \u2014 argues gold will go UP (BUY)\n"
     "2. Rex Bear \u2014 argues gold will go DOWN (SELL)\n"
     "3. Luna \u2014 macro environment assessment (SAFE/CAUTION/DANGER + directional bias)\n"
     "4. News Context \u2014 Luna's interpreted news analysis + analyst research consensus\n"
     "5. Sage \u2014 recent trading performance (win rates by direction)\n\n"
-    "Your job: Read ALL reports. Form your OWN opinion. Do NOT just pick the best "
-    "argument between Bull and Bear. Consider the FULL picture:\n"
-    "- If momentum says SELL but macro says BULLISH, that is a DIVERGENCE \u2014 "
-    "flag it in reasoning and lower conviction\n"
-    "- If performance data says SELL has poor win rate, be cautious about recommending SELL\n"
-    "- If Luna says news_price_divergence, that means headlines and price disagree \u2014 "
-    "lower conviction\n\n"
+    "Your job: Read ALL reports. Form your OWN opinion.\n"
+    "Use BOTH price location AND momentum to decide:\n"
+    "- SUPPORT zones are BELOW current price. RESISTANCE zones are ABOVE.\n"
+    "- Price near support + momentum UP = BUY (bounce likely).\n"
+    "- Price near support + momentum DOWN = CAUTION (support may break).\n"
+    "- Price near resistance + momentum DOWN = SELL (rejection likely).\n"
+    "- Price near resistance + momentum UP = CAUTION (breakout possible).\n"
+    "- Price in the middle = use momentum direction as primary signal.\n"
+    "- If Luna says news_price_divergence, lower conviction.\n\n"
     "You MUST choose a direction: ENTER_BUY or ENTER_SELL. There is no NO_TRADE option. "
     "Use conviction (1-10) to express certainty. Low conviction (1-4) = weak signal. "
     "High conviction (7-10) = strong signal.\n"
@@ -103,9 +106,37 @@ def _build_user_message(
     luna_brief: Optional[Dict[str, Any]] = None,
     echo_summary: Optional[Dict[str, Any]] = None,
     sage_note: Optional[str] = None,
+    market_snapshot: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Build user prompt from all 5 reports."""
+    """Build user prompt from market snapshot + 5 reports."""
     parts = []
+
+    # REPORT 0: Market Snapshot (FLO-244)
+    if market_snapshot and isinstance(market_snapshot, dict):
+        ms = "REPORT 0 \u2014 Market Snapshot:"
+        if market_snapshot.get("price"):
+            ms += f"\nCurrent price: ${market_snapshot['price']}"
+        sups = market_snapshot.get("support_zones", [])
+        if sups:
+            ms += "\nSUPPORT (below price):"
+            for s in sups[:3]:
+                _phase = f" ({s['flip_phase']})" if s.get("flip_phase") else ""
+                ms += f"\n  {s['price']} \u2014 {s.get('detail', '')}{_phase} \u2014 {s.get('dist', '?')} pips below"
+        ress = market_snapshot.get("resistance_zones", [])
+        if ress:
+            ms += "\nRESISTANCE (above price):"
+            for r in ress[:3]:
+                _phase = f" ({r['flip_phase']})" if r.get("flip_phase") else ""
+                ms += f"\n  {r['price']} \u2014 {r.get('detail', '')}{_phase} \u2014 {r.get('dist', '?')} pips above"
+        if market_snapshot.get("location_note"):
+            ms += f"\n{market_snapshot['location_note']}"
+        if market_snapshot.get("direction"):
+            ms += f"\nPrice direction (2h): {market_snapshot['direction']}"
+        if market_snapshot.get("session"):
+            ms += f"\nSession: {market_snapshot['session']}"
+        if market_snapshot.get("regime"):
+            ms += f"\nRegime: {market_snapshot['regime']} | ADX: {market_snapshot.get('adx', '?')}"
+        parts.append(ms)
 
     # REPORT 1: Rex Bull
     bull_conv = bull.get("conviction", "?")
@@ -171,6 +202,7 @@ def run_research_manager(
     luna_brief: Optional[Dict[str, Any]] = None,
     echo_summary: Optional[Dict[str, Any]] = None,
     sage_note: Optional[str] = None,
+    market_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     FLO-203: Research Manager v2 — reads 5 reports and forms verdict.
@@ -183,7 +215,7 @@ def run_research_manager(
         return None
 
     model = _get_model()
-    user_msg = _build_user_message(bull, bear, luna_brief, echo_summary, sage_note)
+    user_msg = _build_user_message(bull, bear, luna_brief, echo_summary, sage_note, market_snapshot)
 
     try:
         from google import genai

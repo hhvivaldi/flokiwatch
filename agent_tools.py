@@ -1412,6 +1412,31 @@ class AgentTools:
             except Exception:
                 pass
 
+            # FLO-244: Label each zone's current ROLE based on price position
+            # FLIP zones get phase info (support→resistance or vice versa)
+            try:
+                _cp_role = self._safe_float((dp.get("current_price") or {}).get("mid")) or self._safe_float((dp.get("current_price") or {}).get("bid"))
+                if _cp_role:
+                    for z in zones:
+                        _zp = float(z.get("price") or z.get("midpoint", 0) or 0)
+                        _zt = str(z.get("zone_type", "")).upper()
+                        _dist = round(abs(_cp_role - _zp), 1)
+                        if _zp < _cp_role:
+                            z["role"] = "SUPPORT"
+                            z["distance_pips"] = _dist
+                            if _zt == "FLIP":
+                                z["flip_phase"] = "resistance \u2192 support"
+                        elif _zp > _cp_role:
+                            z["role"] = "RESISTANCE"
+                            z["distance_pips"] = _dist
+                            if _zt == "FLIP":
+                                z["flip_phase"] = "support \u2192 resistance"
+                        else:
+                            z["role"] = "AT_PRICE"
+                            z["distance_pips"] = 0.0
+            except Exception:
+                pass
+
             self._log_tool("get_sr_zones", start, f"zones={len(zones)} (raw={raw_count})")
             return {"zones": zones}
         except Exception as e:

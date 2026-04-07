@@ -3800,7 +3800,73 @@ class TradingBot:
                         except Exception:
                             pass
 
-                        _verdict_result = run_research_manager(_bull, _bear, _rm_luna, _rm_echo, _rm_sage)
+                        # FLO-244: Build market snapshot for RM
+                        _rm_snapshot = None
+                        try:
+                            _bs_rm_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                            with open(_bs_rm_path, "r", encoding="utf-8") as _bsf_rm:
+                                _bs_rm = json.load(_bsf_rm)
+                            _rm_price = float(_bs_rm.get("last_known_price") or 0)
+                            if _rm_price > 0:
+                                _rm_regime = _bs_rm.get("market_regime", {}).get("regime", "")
+                                _rm_change = _bs_rm.get("price_daily_change_pct")
+                                _rm_adx = _bs_rm.get("last_analysis", {}).get("indicators", {}).get("adx_14")
+                                _rm_dir = "DOWN" if (_rm_change or 0) < -0.1 else ("UP" if (_rm_change or 0) > 0.1 else "FLAT")
+
+                                from agent_data_builder import get_session_name
+                                _rm_session = get_session_name(datetime.utcnow().hour)
+
+                                # Get S/R zones with roles
+                                _rm_sups = []
+                                _rm_ress = []
+                                try:
+                                    _sr_rm_path = config.SR_ZONES_JSON_PATH
+                                    with open(_sr_rm_path, "r", encoding="utf-8") as _srf_rm:
+                                        _sr_rm = json.load(_srf_rm)
+                                    _sr_zones = _sr_rm if isinstance(_sr_rm, list) else _sr_rm.get("zones", [])
+                                    for _z in _sr_zones:
+                                        _zp = float(_z.get("price", 0))
+                                        if not _zp:
+                                            continue
+                                        _zt = _z.get("zone_type", "")
+                                        _zd = f"{_zt} {_z.get('timeframe', '')} {_z.get('touches', '')}t"
+                                        if _zp < _rm_price:
+                                            _entry = {"price": _zp, "detail": _zd, "dist": round(_rm_price - _zp, 1)}
+                                            if str(_zt).upper() == "FLIP":
+                                                _entry["flip_phase"] = "resistance \u2192 support"
+                                            _rm_sups.append(_entry)
+                                        elif _zp > _rm_price:
+                                            _entry = {"price": _zp, "detail": _zd, "dist": round(_zp - _rm_price, 1)}
+                                            if str(_zt).upper() == "FLIP":
+                                                _entry["flip_phase"] = "support \u2192 resistance"
+                                            _rm_ress.append(_entry)
+                                    _rm_sups.sort(key=lambda x: x["dist"])
+                                    _rm_ress.sort(key=lambda x: x["dist"])
+                                except Exception:
+                                    pass
+
+                                _loc_note = ""
+                                if _rm_sups and _rm_sups[0]["dist"] < 10:
+                                    _loc_note = f"Price is NEAR SUPPORT ({_rm_sups[0]['dist']:.0f} pips above) \u2014 selling is risky."
+                                elif _rm_ress and _rm_ress[0]["dist"] < 10:
+                                    _loc_note = f"Price is NEAR RESISTANCE ({_rm_ress[0]['dist']:.0f} pips below) \u2014 buying is risky."
+                                else:
+                                    _loc_note = "Price is in the middle of support and resistance \u2014 no clear location edge."
+
+                                _rm_snapshot = {
+                                    "price": _rm_price,
+                                    "support_zones": _rm_sups[:3],
+                                    "resistance_zones": _rm_ress[:3],
+                                    "location_note": _loc_note,
+                                    "direction": _rm_dir,
+                                    "session": _rm_session,
+                                    "regime": _rm_regime,
+                                    "adx": _rm_adx,
+                                }
+                        except Exception:
+                            pass
+
+                        _verdict_result = run_research_manager(_bull, _bear, _rm_luna, _rm_echo, _rm_sage, market_snapshot=_rm_snapshot)
                     except Exception as _vm_err:
                         log.debug(f"RESEARCH_MANAGER | import/call error (ignored): {_vm_err}")
 
