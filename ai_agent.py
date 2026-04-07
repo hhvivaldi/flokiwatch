@@ -97,10 +97,48 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
         if not isinstance(payload.get("notes"), list):
             payload["notes"] = []
 
-        payload["notes"].append({"time": now.strftime("%H:%M"), "note": notes_s})
+        # FLO-241: Dedup — same logic as agent_tools.write_session_memory
+        _skip_append = False
+        try:
+            import re as _re_sm
+            _SYN = {"middle": "center", "box": "range", "reclaim": "push",
+                    "under": "below", "wake": "reassess", "business": "trade",
+                    "unchanged": "same", "framework": "thesis", "lean": "consider",
+                    "actionable": "tradeable", "acceptance": "confirmation",
+                    "continuation": "extension", "opens": "targets",
+                    "stay": "remain", "flat": "idle", "decisive": "clear",
+                    "engage": "enter", "respect": "watch", "especially": "particularly"}
+            _STOP = {"a", "an", "the", "is", "in", "on", "of", "to", "for",
+                     "and", "or", "but", "not", "this", "that", "with", "from",
+                     "at", "by", "do", "if", "it", "my", "no", "so", "be", "i"}
+            def _sm_norm(s):
+                s = s.lower().strip()
+                s = _re_sm.sub(r'\d{4,}\.?\d*', 'PRICE', s)
+                s = _re_sm.sub(r'[.,;:!?()"\'\-/]', ' ', s)
+                s = _re_sm.sub(r'\s+', ' ', s)
+                words = [_SYN.get(w, w) for w in s.split() if w not in _STOP and len(w) > 1]
+                return ' '.join(words)
+            _new_norm = _sm_norm(notes_s)[:120]
+            _new_words = set(_new_norm.split())
+            for _existing_n in (payload.get("notes") or []):
+                _ex_text = _existing_n.get("note", _existing_n.get("text", "")) if isinstance(_existing_n, dict) else str(_existing_n)
+                if isinstance(_existing_n, dict) and str(_existing_n.get("source") or "").lower() == "sage":
+                    continue
+                _ex_norm = _sm_norm(_ex_text)[:120]
+                _ex_words = set(_ex_norm.split())
+                if _new_words and _ex_words:
+                    _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
+                    if _overlap >= 0.55:
+                        _skip_append = True
+                        logger.debug(f"SESSION_MEMORY | DEDUP_SKIP | overlap={_overlap:.2f}")
+                        break
+        except Exception:
+            pass
 
-        # Keep max 20 notes, protect Sage notes from truncation.
-        # Strategy: keep all notes where source == 'sage', truncate only non-sage notes to last 19.
+        if not _skip_append:
+            payload["notes"].append({"time": now.strftime("%H:%M"), "note": notes_s})
+
+        # Keep max 8 notes, protect Sage notes from truncation.
         try:
             all_notes = payload.get("notes") or []
             sage_notes = []
@@ -110,11 +148,11 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
                     sage_notes.append(n)
                 else:
                     normal_notes.append(n)
-            normal_notes = normal_notes[-19:]
+            normal_notes = normal_notes[-7:]
             payload["notes"] = normal_notes + sage_notes
-            payload["notes"] = payload["notes"][-20:]
+            payload["notes"] = payload["notes"][-8:]
         except Exception:
-            payload["notes"] = payload["notes"][-20:]
+            payload["notes"] = payload["notes"][-8:]
         payload["last_updated"] = now.isoformat(timespec="seconds")
 
         try:

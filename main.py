@@ -6092,14 +6092,25 @@ class TradingBot:
 
             zones_out = []
             for z in above + below:
+                # Compute display role: FLIP zones become SUPPORT/RESISTANCE based on price position
+                zt = z.zone_type
+                flip_phase = ""
+                if zt == "FLIP":
+                    if z.midpoint <= cp:
+                        zt = "SUPPORT"
+                        flip_phase = "R_TO_S"  # was resistance, now acting as support
+                    else:
+                        zt = "RESISTANCE"
+                        flip_phase = "S_TO_R"  # was support, now acting as resistance
                 zones_out.append({
                     "price": round(z.midpoint, 2),
-                    "zone_type": z.zone_type,
+                    "zone_type": zt,
                     "touches": z.touches,
                     "timeframe": z.timeframe,
                     "confluence": z.confluence if z.confluence else [],
                     "strength": z.strength,
                     "position": "above" if z.midpoint > cp else "below",
+                    "flip_phase": flip_phase,
                 })
 
             payload = {
