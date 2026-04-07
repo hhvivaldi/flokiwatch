@@ -24,13 +24,11 @@ _SYSTEM_PROMPT = (
     "4. News Context \u2014 Luna's interpreted news analysis + analyst research consensus\n"
     "5. Sage \u2014 recent trading performance (win rates by direction)\n\n"
     "Your job: Read ALL reports. Form your OWN opinion.\n"
-    "Use BOTH price location AND momentum to decide:\n"
-    "- SUPPORT zones are BELOW current price. RESISTANCE zones are ABOVE.\n"
-    "- Price near support + momentum UP = BUY (bounce likely).\n"
-    "- Price near support + momentum DOWN = CAUTION (support may break).\n"
-    "- Price near resistance + momentum DOWN = SELL (rejection likely).\n"
-    "- Price near resistance + momentum UP = CAUTION (breakout possible).\n"
-    "- Price in the middle = use momentum direction as primary signal.\n"
+    "The LEVEL ANALYSIS in Report 0 is critical:\n"
+    "- SUPPORT TEST = price FALLING toward a level = level is a floor, bounce likely = favor BUY.\n"
+    "- RESISTANCE TEST = price RISING toward a level = level is a ceiling, rejection likely = favor SELL.\n"
+    "- CONSOLIDATING = price flat near a level = no directional edge from location.\n"
+    "- When no level is nearby, use momentum as primary signal.\n"
     "- If Luna says news_price_divergence, lower conviction.\n\n"
     "You MUST choose a direction: ENTER_BUY or ENTER_SELL. There is no NO_TRADE option. "
     "Use conviction (1-10) to express certainty. Low conviction (1-4) = weak signal. "
@@ -129,7 +127,7 @@ def _build_user_message(
                 _phase = f" ({r['flip_phase']})" if r.get("flip_phase") else ""
                 ms += f"\n  {r['price']} \u2014 {r.get('detail', '')}{_phase} \u2014 {r.get('dist', '?')} pips above"
         if market_snapshot.get("location_note"):
-            ms += f"\n{market_snapshot['location_note']}"
+            ms += f"\nLEVEL ANALYSIS: {market_snapshot['location_note']}"
         if market_snapshot.get("direction"):
             ms += f"\nPrice direction (2h): {market_snapshot['direction']}"
         if market_snapshot.get("session"):
@@ -228,7 +226,7 @@ def run_research_manager(
             config={
                 "system_instruction": _SYSTEM_PROMPT,
                 "response_mime_type": "application/json",
-                "max_output_tokens": 2000,
+                "max_output_tokens": 8192,
             },
         )
 
