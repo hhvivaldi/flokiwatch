@@ -1391,6 +1391,15 @@ class TradingBot:
                     elapsed += int(sleep_time)
 
                     if self.running:
+                        # A/B test resolution (every 30 min)
+                        try:
+                            _ab_last = getattr(self, '_ab_test_last_resolve', 0)
+                            if time.time() - _ab_last >= 1800 and getattr(config, 'AB_TEST_ENABLED', False):
+                                self._resolve_ab_test_entries()
+                                self._ab_test_last_resolve = time.time()
+                        except Exception:
+                            pass
+
                         try:
                             now_ts = time.time()
                             last_ts = self._last_agent_monitor_tick or 0
@@ -4464,6 +4473,13 @@ class TradingBot:
             )
             loop.close()
 
+            # A/B test: minimal vision-only call (Chamada B)
+            try:
+                if getattr(config, 'AB_TEST_ENABLED', False) and chart_images and chart_images.get("success"):
+                    self._run_ab_test_minimal(chart_images, agent_result)
+            except Exception:
+                pass
+
             try:
                 write_floki_heartbeat()
             except Exception:
@@ -6087,6 +6103,242 @@ class TradingBot:
         if not isinstance(s, str):
             return s
         return s.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+
+    # ── A/B Test: Full Floki vs Minimal Vision-Only ──
+
+    _AB_TEST_MINIMAL_PROMPT = (
+        "You are an expert XAU/USD intraday trader. You receive chart screenshots and basic market data.\n\n"
+        "Look at the H1 and M15 charts carefully. Describe what you see: candle patterns, "
+        "S/R line interactions, momentum, wicks, and structure.\n\n"
+        "Current price: {price}\n"
+        "Nearest support: {support}\n"
+        "Nearest resistance: {resistance}\n"
+        "RSI(H1): {rsi} | ADX: {adx} | MACD: {macd}\n\n"
+        "Decide: BUY, SELL, or WAIT.\n"
+        'Respond with JSON: {{"decision": "BUY/SELL/WAIT", "confidence": 0-100, "reasoning": "2-3 sentences"}}'
+    )
+
+    def _run_ab_test_minimal(self, chart_images: dict, agent_result) -> None:
+        """Run minimal vision-only call (Chamada B) and save both results."""
+        t0 = time.time()
+        try:
+            from openai import OpenAI
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            if not api_key:
+                return
+
+            # Read current price + indicators from bot_state
+            _bs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+            with open(_bs_path, "r", encoding="utf-8") as f:
+                _bs = json.load(f)
+
+            _mtf = _bs.get("multi_tf_indicators", {})
+            _h1 = _mtf.get("H1", {})
+            _price = _bs.get("last_price") or _bs.get("last_analysis", {}).get("price") or "?"
+            _rsi = _h1.get("rsi", "?")
+            _adx_d = _h1.get("adx", {})
+            _adx = _adx_d.get("value", "?") if isinstance(_adx_d, dict) else _adx_d or "?"
+            _macd_v = _h1.get("macd", {})
+            if isinstance(_macd_v, dict):
+                _macd = f"{_macd_v.get('value', '?')}"
+            else:
+                _macd = str(_macd_v) if _macd_v is not None else "?"
+
+            # Read S/R zones
+            _sr_path = getattr(config, "SR_ZONES_JSON_PATH", "")
+            _support = []
+            _resistance = []
+            if _sr_path and os.path.exists(_sr_path):
+                with open(_sr_path, "r", encoding="utf-8") as f:
+                    _sr = json.load(f)
+                for z in (_sr.get("zones") or []):
+                    _label = f"{z.get('price', '?')} ({z.get('timeframe','?')} {z.get('zone_type','?')} {z.get('touches','?')}T)"
+                    if z.get("position") == "below":
+                        _support.append(_label)
+                    else:
+                        _resistance.append(_label)
+
+            _prompt_text = self._AB_TEST_MINIMAL_PROMPT.format(
+                price=_price,
+                support=", ".join(_support[:3]) or "none nearby",
+                resistance=", ".join(_resistance[:3]) or "none nearby",
+                rsi=f"{_rsi:.1f}" if isinstance(_rsi, (int, float)) else str(_rsi),
+                adx=f"{_adx:.1f}" if isinstance(_adx, (int, float)) else str(_adx),
+                macd=_macd,
+            )
+
+            # Build content blocks with images
+            content_blocks = [{"type": "text", "text": _prompt_text}]
+            if chart_images.get("h1_b64"):
+                content_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{chart_images['h1_b64']}", "detail": "high"}})
+                content_blocks.append({"type": "text", "text": "Above: XAUUSD H1 chart."})
+            if chart_images.get("m15_b64"):
+                content_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{chart_images['m15_b64']}", "detail": "high"}})
+                content_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart."})
+
+            client = OpenAI(api_key=api_key)
+            model = getattr(config, "FLOKI_MODEL", "gpt-5.4")
+
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": content_blocks}],
+                max_completion_tokens=512,
+                temperature=1.0,
+                timeout=30,
+            )
+
+            _raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+            _b_tokens_in = resp.usage.prompt_tokens if resp.usage else 0
+            _b_tokens_out = resp.usage.completion_tokens if resp.usage else 0
+
+            # Parse JSON from response
+            import re as _re_ab
+            _b_result = None
+            _json_match = _re_ab.search(r'\{[^{}]*"decision"[^{}]*\}', _raw)
+            if _json_match:
+                try:
+                    _b_result = json.loads(_json_match.group())
+                except Exception:
+                    pass
+
+            if not _b_result:
+                log.warning(f"AB_TEST | B parse failed: {_raw[:200]}")
+                return
+
+            # Extract A result
+            _a_decision = "?"
+            _a_confidence = 0
+            _a_reasoning = ""
+            try:
+                if hasattr(agent_result, "decision"):
+                    _a_decision = agent_result.decision or "?"
+                    _a_confidence = agent_result.confidence or 0
+                    _a_reasoning = agent_result.reasoning or ""
+            except Exception:
+                pass
+
+            # Build entry
+            _entry = {
+                "id": int(time.time()),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "price_at_decision": float(_price) if isinstance(_price, (int, float)) else None,
+                "test_a": {
+                    "decision": _a_decision,
+                    "confidence": _a_confidence,
+                    "reasoning": str(_a_reasoning)[:300],
+                    "tokens": f"{getattr(agent_result, 'input_tokens', '?')}+{getattr(agent_result, 'output_tokens', '?')}",
+                },
+                "test_b": {
+                    "decision": _b_result.get("decision", "?"),
+                    "confidence": _b_result.get("confidence", 0),
+                    "reasoning": str(_b_result.get("reasoning", ""))[:300],
+                    "tokens": f"{_b_tokens_in}+{_b_tokens_out}",
+                },
+                "price_after_30m": None,
+                "winner_a": None,
+                "winner_b": None,
+            }
+
+            # Append to results file
+            _ab_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ab_test_results.json")
+            _results = []
+            if os.path.exists(_ab_path):
+                try:
+                    with open(_ab_path, "r", encoding="utf-8") as f:
+                        _results = json.load(f)
+                except Exception:
+                    _results = []
+            _results.append(_entry)
+
+            _tmp = _ab_path + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as f:
+                json.dump(_results, f, ensure_ascii=False, indent=2)
+            os.replace(_tmp, _ab_path)
+
+            latency = time.time() - t0
+            log.info(f"AB_TEST | B={_b_result.get('decision','?')}/{_b_result.get('confidence',0)} "
+                     f"vs A={_a_decision}/{_a_confidence} | {_b_tokens_in}+{_b_tokens_out} tokens | {latency:.1f}s")
+
+        except Exception as e:
+            log.warning(f"AB_TEST | error: {e}")
+
+    def _resolve_ab_test_entries(self) -> None:
+        """Check old A/B test entries and fill in price_after_30m + winner."""
+        try:
+            _ab_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ab_test_results.json")
+            if not os.path.exists(_ab_path):
+                return
+
+            with open(_ab_path, "r", encoding="utf-8") as f:
+                _results = json.load(f)
+
+            if not isinstance(_results, list) or not _results:
+                return
+
+            # Get current price
+            _cp = None
+            try:
+                import MetaTrader5 as mt5
+                tick = mt5.symbol_info_tick("XAUUSD")
+                if tick:
+                    _cp = tick.bid
+            except Exception:
+                pass
+            if not _cp:
+                return
+
+            _changed = False
+            _now = time.time()
+            _PIP_THRESHOLD = 5.0  # pips (0.1 per pip for XAUUSD = 0.5 price units)
+            _PRICE_THRESHOLD = _PIP_THRESHOLD * 0.1
+
+            for entry in _results:
+                if entry.get("price_after_30m") is not None:
+                    continue  # already resolved
+
+                _ts_str = entry.get("timestamp", "")
+                try:
+                    from datetime import timezone
+                    _ts = datetime.fromisoformat(_ts_str.replace("Z", "+00:00"))
+                    _age_min = (_now - _ts.timestamp()) / 60
+                except Exception:
+                    continue
+
+                if _age_min < 30:
+                    continue  # too recent
+
+                _price_at = entry.get("price_at_decision")
+                if not _price_at:
+                    continue
+
+                entry["price_after_30m"] = round(_cp, 2)
+                _move = _cp - _price_at
+
+                # Evaluate each variant
+                for key in ("test_a", "test_b"):
+                    _d = entry.get(key, {}).get("decision", "").upper()
+                    _winner_key = "winner_a" if key == "test_a" else "winner_b"
+                    if _d in ("BUY", "OPEN_BUY") and _move >= _PRICE_THRESHOLD:
+                        entry[_winner_key] = "CORRECT"
+                    elif _d in ("SELL", "OPEN_SELL") and _move <= -_PRICE_THRESHOLD:
+                        entry[_winner_key] = "CORRECT"
+                    elif _d in ("WAIT", "HOLD_TRADE") and abs(_move) < _PRICE_THRESHOLD:
+                        entry[_winner_key] = "CORRECT"
+                    else:
+                        entry[_winner_key] = "INCORRECT"
+
+                _changed = True
+                log.info(f"AB_TEST | RESOLVED id={entry.get('id')} | move={_move:+.2f} | "
+                         f"A={entry.get('winner_a')} B={entry.get('winner_b')}")
+
+            if _changed:
+                _tmp = _ab_path + ".tmp"
+                with open(_tmp, "w", encoding="utf-8") as f:
+                    json.dump(_results, f, ensure_ascii=False, indent=2)
+                os.replace(_tmp, _ab_path)
+
+        except Exception as e:
+            log.debug(f"AB_TEST | resolve error: {e}")
 
     def _request_chart_screenshots(self, timeout: float = 10.0) -> dict:
         """Request chart screenshots from EA and return base64-encoded images."""

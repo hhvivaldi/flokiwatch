@@ -427,6 +427,11 @@ CHART_H1_PNG_PATH = os.environ.get("CHART_H1_PNG_PATH", os.path.join(_MQL5_FILES
 CHART_M15_PNG_PATH = os.environ.get("CHART_M15_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m15.png"))
 
 # ============================================================================
+# A/B TEST — Full Floki vs Minimal Vision-Only
+# ============================================================================
+AB_TEST_ENABLED = os.environ.get("AB_TEST_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# ============================================================================
 # AI AGENT (Claude-based decision maker)
 # ============================================================================
 USE_AI_AGENT = True                       # True = enable AI Agent, False = Brain-only mode
