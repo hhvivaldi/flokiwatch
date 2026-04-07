@@ -3885,17 +3885,49 @@ class TradingBot:
                 _regime = getattr(self, "_last_regime_context", None)
                 if _regime and isinstance(_regime, dict) and _regime.get("regime"):
                     _r = _regime
-                    _evidence_str = ", ".join(_r.get("evidence", [])[:5])
+                    _rn = _r["regime"]
+                    _adx_val = _r.get("adx")
+                    _dur = _r.get("duration_display") or "just started"
+                    _prev = _r.get("previous_regime") or "unknown"
+                    _stab = _r.get("stability") or "unknown"
+                    _ch24 = _r.get("regime_changes_24h", 0)
+                    _atr_c = _r.get("atr_current")
+                    _atr_r = _r.get("atr_ratio", 1.0)
+                    _trans = _r.get("transition") or f"Transitioned from {_prev}"
+                    _ev = _r.get("evidence", [])
+                    if _ev:
+                        _evidence_str = ", ".join(str(e) for e in _ev[:5])
+                    else:
+                        _evidence_str = {
+                            "RANGING": f"ADX {_adx_val or '?'}, low directional conviction, price between support and resistance",
+                            "TRENDING_BULLISH": f"ADX {_adx_val or '?'}, bullish EMA alignment, price above EMA50",
+                            "TRENDING_BEARISH": f"ADX {_adx_val or '?'}, bearish EMA alignment, price below EMA50",
+                            "BREAKOUT_IMMINENT": f"Volatility compressing, ADX {_adx_val or '?'} rising from low base",
+                            "VOLATILE": f"ATR elevated, large candles, ADX {_adx_val or '?'}",
+                            "TRANSITIONAL": f"Regime shifting, ADX {_adx_val or '?'}, mixed signals",
+                            "QUIET": f"Very low volume and ATR, ADX {_adx_val or '?'}",
+                        }.get(_rn, f"ADX {_adx_val or '?'}")
+                    _regime_ctx = {
+                        "RANGING": "RANGING means price oscillates between support and resistance with no clear direction. False breakouts are common. Support and resistance levels are the key reference points.",
+                        "TRENDING_BULLISH": "TRENDING BULLISH means price is in a sustained uptrend. Pullbacks to support are opportunities. Selling tops is risky.",
+                        "TRENDING_BEARISH": "TRENDING BEARISH means price is in a sustained downtrend. Buying dips is risky. The trend is your friend until it changes.",
+                        "BREAKOUT_IMMINENT": "BREAKOUT IMMINENT means volatility is compressing. A large move is likely soon. Wait for confirmation before acting.",
+                        "VOLATILE": "VOLATILE means large erratic swings. Risk is elevated. Stops may get hit by noise.",
+                        "TRANSITIONAL": "TRANSITIONAL means the regime is changing. The previous pattern may no longer hold. Wait for the new regime to establish.",
+                        "QUIET": "QUIET means very low activity. Volume is thin. Moves may be unreliable.",
+                    }.get(_rn, "")
                     _regime_block = (
                         f"\n<market_regime>\n"
-                        f"Current: {_r['regime']} ({_r.get('confidence', '?')} confidence)\n"
-                        f"Duration: {_r.get('duration_display', '?')} (since transition from {_r.get('previous_regime', '?')})\n"
-                        f"Stability: {_r.get('stability', '?')} ({_r.get('regime_changes_24h', 0)} changes in 24h)\n"
+                        f"Current: {_rn} ({_r.get('confidence', 'moderate')} confidence)\n"
+                        f"Duration: {_dur} (since transition from {_prev})\n"
+                        f"Stability: {_stab} ({_ch24} changes in 24h)\n"
+                        f"ADX: {_adx_val or 'N/A'}\n"
+                        f"ATR: {_atr_c or 'N/A'} pips ({_atr_r}x vs 5-day avg)\n"
                         f"Evidence: {_evidence_str}\n"
-                        f"ATR: {_r.get('atr_current', '?')} pips ({_r.get('atr_ratio', '?')}x vs 5-day avg)\n"
-                        f"Transition: {_r.get('transition', '?')}\n"
-                        f"</market_regime>\n"
                     )
+                    if _regime_ctx:
+                        _regime_block += f"\n{_regime_ctx}\n"
+                    _regime_block += f"</market_regime>\n"
                     trigger_context += _regime_block
             except Exception:
                 pass
