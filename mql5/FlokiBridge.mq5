@@ -113,6 +113,12 @@ PriceAlert g_alerts[];
 int        g_alertCount = 0;
 int        g_lastAlertVersion = -1;
 
+// ── Chart Screenshot Capture ──
+string   ScreenshotRequestFile = "screenshot_request.json";
+string   ScreenshotReadyFile   = "screenshot_ready.json";
+string   ScreenshotH1File      = "chart_h1.png";
+string   ScreenshotM15File     = "chart_m15.png";
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
 //+------------------------------------------------------------------+
@@ -210,9 +216,12 @@ void OnTimer()
          Print("ALERT: ", g_consecutiveWriteFailures, " consecutive write failures. Error: ", g_lastWriteError);
    }
    
+   // Check for screenshot requests from Python
+   CheckScreenshotRequest();
+
    // Periodic heartbeat log (every 60 seconds = ~60 timer calls at 1000ms)
    if(EnableLogging && g_heartbeatCount % 60 == 0)
-      Print("Heartbeat #", g_heartbeatCount, " | Positions: ", g_positionCount, 
+      Print("Heartbeat #", g_heartbeatCount, " | Positions: ", g_positionCount,
             " | Write failures: ", g_consecutiveWriteFailures);
 }
 
@@ -945,6 +954,94 @@ string BuildClosedJson(int index)
    json += "    }";
    
    return json;
+}
+
+//+------------------------------------------------------------------+
+//| Find an open chart by symbol and period                           |
+//+------------------------------------------------------------------+
+long FindChart(string symbol, ENUM_TIMEFRAMES period)
+{
+   long chart_id = ChartFirst();
+   while(chart_id >= 0)
+   {
+      if(chart_id != ChartID())  // skip own chart
+      {
+         if(ChartSymbol(chart_id) == symbol && ChartPeriod(chart_id) == period)
+            return chart_id;
+      }
+      chart_id = ChartNext(chart_id);
+   }
+   return -1;
+}
+
+//+------------------------------------------------------------------+
+//| Check for screenshot request from Python                          |
+//+------------------------------------------------------------------+
+void CheckScreenshotRequest()
+{
+   if(!FileIsExist(ScreenshotRequestFile))
+      return;
+
+   // Read the request file
+   int handle = FileOpen(ScreenshotRequestFile, FILE_READ | FILE_TXT | FILE_ANSI);
+   if(handle == INVALID_HANDLE)
+      return;
+
+   string content = "";
+   while(!FileIsEnding(handle))
+      content += FileReadString(handle);
+   FileClose(handle);
+
+   if(StringLen(content) < 5)
+      return;
+
+   int reqWidth  = (int)GetJsonInt(content, "width");
+   int reqHeight = (int)GetJsonInt(content, "height");
+   if(reqWidth  <= 0) reqWidth  = 1280;
+   if(reqHeight <= 0) reqHeight = 720;
+
+   // Capture H1 (own chart, chart_id = 0)
+   bool h1_ok = ChartScreenShot(0, ScreenshotH1File, reqWidth, reqHeight, ALIGN_RIGHT);
+   if(EnableLogging)
+      Print("Screenshot H1: ", h1_ok ? "OK" : "FAILED");
+
+   // Find and capture M15 chart
+   bool m15_ok = false;
+   long m15_chart_id = FindChart(_Symbol, PERIOD_M15);
+   if(m15_chart_id > 0)
+   {
+      m15_ok = ChartScreenShot(m15_chart_id, ScreenshotM15File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot M15 (chart ", m15_chart_id, "): ", m15_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      // Try to find any XAUUSD chart that isn't our timeframe
+      if(EnableLogging)
+         Print("Screenshot M15: XAUUSD M15 chart not found (not open in MT5)");
+   }
+
+   // Write screenshot_ready.json
+   int wHandle = FileOpen(ScreenshotReadyFile, FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if(wHandle != INVALID_HANDLE)
+   {
+      string json = "{";
+      json += "\"version\":1,";
+      json += "\"timestamp\":\"" + TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS) + "\",";
+      json += "\"h1_file\":\"" + (h1_ok ? ScreenshotH1File : "") + "\",";
+      json += "\"h1_ok\":" + (h1_ok ? "true" : "false") + ",";
+      json += "\"m15_file\":\"" + (m15_ok ? ScreenshotM15File : "") + "\",";
+      json += "\"m15_ok\":" + (m15_ok ? "true" : "false");
+      json += "}";
+      FileWriteString(wHandle, json);
+      FileClose(wHandle);
+   }
+
+   // Delete the request file (signal consumed)
+   FileDelete(ScreenshotRequestFile);
+
+   if(EnableLogging)
+      Print("Screenshot request processed: H1=", h1_ok, " M15=", m15_ok);
 }
 
 //+------------------------------------------------------------------+

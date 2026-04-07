@@ -460,7 +460,7 @@ class AIAgent:
             self.enabled = False
             return False
 
-    async def decide(self, trigger_context: Any, tools: Any, trigger_type: str = "SIGNAL") -> AgentResult:
+    async def decide(self, trigger_context: Any, tools: Any, trigger_type: str = "SIGNAL", chart_images: Optional[dict] = None) -> AgentResult:
         """
         Make a trading decision based on minimal trigger context.
 
@@ -482,7 +482,7 @@ class AIAgent:
                 user_message = "Scheduled analysis. Decide what to check and whether to act."
 
             response = await asyncio.wait_for(
-                self._call_openai_with_tools(user_message, tools=tools),
+                self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
                 timeout=self.timeout,
             )
             
@@ -882,7 +882,7 @@ class AIAgent:
         except Exception:
             return False
 
-    async def _call_openai_with_tools(self, trigger_context: str, tools: Any) -> Dict[str, Any]:
+    async def _call_openai_with_tools(self, trigger_context: str, tools: Any, chart_images: Optional[dict] = None) -> Dict[str, Any]:
         """FLO-130: OpenAI GPT-5.4 tool loop (migrated from Gemini)."""
         loop = asyncio.get_event_loop()
         start_time = time.time()
@@ -905,7 +905,33 @@ class AIAgent:
         messages: List[Dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": str(trigger_context or "").strip()})
+
+        # Build user message: text + optional chart images (GPT-5.4 vision)
+        _tc_text = str(trigger_context or "").strip()
+        if chart_images and chart_images.get("success"):
+            content_blocks: list = [{"type": "text", "text": _tc_text}]
+            if chart_images.get("h1_b64"):
+                content_blocks.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{chart_images['h1_b64']}",
+                        "detail": "high",
+                    },
+                })
+                content_blocks.append({"type": "text", "text": "Above: XAUUSD H1 chart. Analyze candle patterns, S/R interactions, and momentum visually."})
+            if chart_images.get("m15_b64"):
+                content_blocks.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{chart_images['m15_b64']}",
+                        "detail": "high",
+                    },
+                })
+                content_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart. Analyze short-term structure and entry timing."})
+            messages.append({"role": "user", "content": content_blocks})
+            logger.info(f"FLOKI | vision: h1={'yes' if chart_images.get('h1_b64') else 'no'} m15={'yes' if chart_images.get('m15_b64') else 'no'}")
+        else:
+            messages.append({"role": "user", "content": _tc_text})
 
         PER_CALL_TIMEOUT = 30
         MAX_ITERATIONS = int(self.max_tool_calls) + 2
@@ -1359,6 +1385,7 @@ async def agent_decide(
     tools: Any,
     trigger_type: str = "SIGNAL",
     allow_memory_write: bool = True,
+    chart_images: Optional[dict] = None,
 ) -> AgentResult:
     """
     Convenience function to get Agent decision.
@@ -1385,7 +1412,7 @@ async def agent_decide(
             logger.warning(f"Failed to inject memory context: {e}")
 
     # Get Agent decision
-    result = await agent.decide(trigger_context, tools=tools, trigger_type=trigger_type)
+    result = await agent.decide(trigger_context, tools=tools, trigger_type=trigger_type, chart_images=chart_images)
 
     try:
         parsed_obj = None

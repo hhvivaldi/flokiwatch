@@ -414,6 +414,19 @@ PRICE_ALERTS_JSON_PATH = os.environ.get("PRICE_ALERTS_JSON_PATH", r"C:\Users\Her
 PRICE_ALERT_TRIGGERED_JSON_PATH = os.environ.get("PRICE_ALERT_TRIGGERED_JSON_PATH", r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files\price_alert_triggered.json")
 
 # ============================================================================
+# CHART SCREENSHOTS (Python ↔ EA Vision Pipeline)
+# ============================================================================
+CHART_SCREENSHOT_ENABLED = os.environ.get("CHART_SCREENSHOT_ENABLED", "true").lower() in ("true", "1", "yes")
+CHART_SCREENSHOT_WIDTH = 1280
+CHART_SCREENSHOT_HEIGHT = 720
+CHART_SCREENSHOT_TIMEOUT = 10  # seconds to wait for EA to produce screenshots
+_MQL5_FILES = r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files"
+SCREENSHOT_REQUEST_JSON_PATH = os.environ.get("SCREENSHOT_REQUEST_JSON_PATH", os.path.join(_MQL5_FILES, "screenshot_request.json"))
+SCREENSHOT_READY_JSON_PATH = os.environ.get("SCREENSHOT_READY_JSON_PATH", os.path.join(_MQL5_FILES, "screenshot_ready.json"))
+CHART_H1_PNG_PATH = os.environ.get("CHART_H1_PNG_PATH", os.path.join(_MQL5_FILES, "chart_h1.png"))
+CHART_M15_PNG_PATH = os.environ.get("CHART_M15_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m15.png"))
+
+# ============================================================================
 # AI AGENT (Claude-based decision maker)
 # ============================================================================
 USE_AI_AGENT = True                       # True = enable AI Agent, False = Brain-only mode

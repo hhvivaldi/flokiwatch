@@ -4433,6 +4433,16 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Capture chart screenshots for Floki vision (GPT-5.4)
+            chart_images = None
+            try:
+                if getattr(config, 'CHART_SCREENSHOT_ENABLED', False):
+                    chart_images = self._request_chart_screenshots(
+                        timeout=getattr(config, 'CHART_SCREENSHOT_TIMEOUT', 10)
+                    )
+            except Exception as _ss_e:
+                log.warning(f"SCREENSHOT | error: {_ss_e}")
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
@@ -4449,6 +4459,7 @@ class TradingBot:
                     tools_obj,
                     trigger_type=trigger_type,
                     allow_memory_write=False,
+                    chart_images=chart_images,
                 )
             )
             loop.close()
@@ -6076,6 +6087,98 @@ class TradingBot:
         if not isinstance(s, str):
             return s
         return s.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
+
+    def _request_chart_screenshots(self, timeout: float = 10.0) -> dict:
+        """Request chart screenshots from EA and return base64-encoded images."""
+        import base64 as _b64
+
+        request_path = getattr(config, 'SCREENSHOT_REQUEST_JSON_PATH', '')
+        ready_path = getattr(config, 'SCREENSHOT_READY_JSON_PATH', '')
+        h1_path = getattr(config, 'CHART_H1_PNG_PATH', '')
+        m15_path = getattr(config, 'CHART_M15_PNG_PATH', '')
+
+        if not request_path or not ready_path:
+            return {"h1_b64": None, "m15_b64": None, "success": False}
+
+        # Clean stale ready file
+        try:
+            if os.path.exists(ready_path):
+                os.remove(ready_path)
+        except Exception:
+            pass
+
+        # Write request
+        try:
+            req = json.dumps({
+                "version": 1,
+                "timestamp": datetime.utcnow().isoformat(),
+                "width": getattr(config, 'CHART_SCREENSHOT_WIDTH', 1280),
+                "height": getattr(config, 'CHART_SCREENSHOT_HEIGHT', 720),
+            })
+            _tmp = request_path + ".tmp"
+            with open(_tmp, 'w', encoding='utf-8') as f:
+                f.write(req)
+            os.replace(_tmp, request_path)
+        except Exception as e:
+            log.warning(f"SCREENSHOT | failed to write request: {e}")
+            return {"h1_b64": None, "m15_b64": None, "success": False}
+
+        # Poll for ready file
+        t0 = time.time()
+        ready = None
+        while time.time() - t0 < timeout:
+            if os.path.exists(ready_path):
+                try:
+                    with open(ready_path, 'r', encoding='utf-8') as f:
+                        ready = json.load(f)
+                    break
+                except (json.JSONDecodeError, PermissionError):
+                    time.sleep(0.2)
+                    continue
+            time.sleep(0.3)
+
+        if ready is None:
+            latency = time.time() - t0
+            log.warning(f"SCREENSHOT | timeout after {latency:.1f}s")
+            try:
+                if os.path.exists(request_path):
+                    os.remove(request_path)
+            except Exception:
+                pass
+            return {"h1_b64": None, "m15_b64": None, "success": False}
+
+        result = {"h1_b64": None, "m15_b64": None, "success": False}
+
+        # Read H1 PNG
+        if ready.get("h1_ok") and h1_path and os.path.exists(h1_path):
+            try:
+                with open(h1_path, 'rb') as f:
+                    result["h1_b64"] = _b64.b64encode(f.read()).decode('ascii')
+            except Exception as e:
+                log.warning(f"SCREENSHOT | failed to read H1: {e}")
+
+        # Read M15 PNG
+        if ready.get("m15_ok") and m15_path and os.path.exists(m15_path):
+            try:
+                with open(m15_path, 'rb') as f:
+                    result["m15_b64"] = _b64.b64encode(f.read()).decode('ascii')
+            except Exception as e:
+                log.warning(f"SCREENSHOT | failed to read M15: {e}")
+
+        result["success"] = bool(result["h1_b64"] or result["m15_b64"])
+
+        # Clean up
+        try:
+            os.remove(ready_path)
+        except Exception:
+            pass
+
+        latency = time.time() - t0
+        h1_kb = len(result["h1_b64"]) // 1024 if result["h1_b64"] else 0
+        m15_kb = len(result["m15_b64"]) // 1024 if result["m15_b64"] else 0
+        log.info(f"SCREENSHOT | h1={'yes' if result['h1_b64'] else 'no'} ({h1_kb}KB) "
+                 f"m15={'yes' if result['m15_b64'] else 'no'} ({m15_kb}KB) | {latency:.1f}s")
+        return result
 
     def _write_sr_zones_json(self, current_price: float):
         """Write nearest S/R zones to JSON for MQL5 EA to draw on chart."""
