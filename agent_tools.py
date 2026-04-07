@@ -2560,11 +2560,21 @@ class AgentTools:
                 # FLO-241: Reject duplicate notes — force Floki to think about what changed
                 try:
                     import re as _re_sm
+                    _SYN = {"middle": "center", "box": "range", "reclaim": "push",
+                            "under": "below", "wake": "reassess", "business": "trade",
+                            "unchanged": "same", "framework": "thesis", "lean": "consider",
+                            "actionable": "tradeable", "acceptance": "confirmation",
+                            "continuation": "extension", "opens": "targets"}
+                    _STOP = {"a", "an", "the", "is", "in", "on", "of", "to", "for",
+                             "and", "or", "but", "not", "this", "that", "with", "from",
+                             "at", "by", "do", "if", "it", "my", "no", "so", "be", "i"}
                     def _sm_norm(s):
                         s = s.lower().strip()
                         s = _re_sm.sub(r'\d{4,}\.?\d*', 'PRICE', s)
+                        s = _re_sm.sub(r'[.,;:!?()"\'\-/]', ' ', s)
                         s = _re_sm.sub(r'\s+', ' ', s)
-                        return s
+                        words = [_SYN.get(w, w) for w in s.split() if w not in _STOP and len(w) > 1]
+                        return ' '.join(words)
                     _new_norm = _sm_norm(note_s)[:120]
                     _new_words = set(_new_norm.split())
                     for _existing_n in (payload.get("notes") or []):
@@ -2575,7 +2585,7 @@ class AgentTools:
                         _ex_words = set(_ex_norm.split())
                         if _new_words and _ex_words:
                             _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
-                            if _overlap >= 0.8:
+                            if _overlap >= 0.65:
                                 self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
                                 return {
                                     "saved": False,
