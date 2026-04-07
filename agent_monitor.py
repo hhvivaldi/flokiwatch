@@ -1066,6 +1066,27 @@ class AgentMonitor:
             # FLO-184: conditions preserved after wake. Fingerprint cooldown
             # (lines 340-354) prevents re-trigger for cooldown_minutes.
             self._save_wake_conditions(wake_conditions)
+
+            # Remove fired levels from EA price_alerts.json to stop monitoring
+            if triggered_ids:
+                try:
+                    import config as _cfg_ea
+                    _pa_path = _cfg_ea.PRICE_ALERTS_JSON_PATH
+                    if os.path.exists(_pa_path):
+                        with open(_pa_path, "r", encoding="utf-8") as _paf:
+                            _pa = json.load(_paf)
+                        _fired_set = set(str(x) for x in updated_fired)
+                        _orig_count = len(_pa.get("alerts", []))
+                        _pa["alerts"] = [a for a in _pa.get("alerts", []) if str(a.get("id", "")) not in _fired_set]
+                        if len(_pa["alerts"]) < _orig_count:
+                            _pa["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                            _tmp = _pa_path + ".tmp"
+                            with open(_tmp, "w", encoding="utf-8") as _paf2:
+                                json.dump(_pa, _paf2, ensure_ascii=False, indent=2)
+                            os.replace(_tmp, _pa_path)
+                            log.debug(f"SIMBA | removed {_orig_count - len(_pa['alerts'])} fired alerts from EA price_alerts.json")
+                except Exception:
+                    pass
         except Exception:
             pass
 
