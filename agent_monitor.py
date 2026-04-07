@@ -630,11 +630,17 @@ class AgentMonitor:
                     if _aid not in set(triggered_ids):
                         triggered_ids.append(_aid)
                         met_count += 1
-                    # FLO-242: EA tick-level trigger bypasses cooldown
-                    # (fresh market event detected regardless of cooldown state)
-                    if in_cooldown_window:
-                        in_cooldown_window = False
-                        log.info(f"SIMBA | EA alert {_aid} bypasses cooldown — fresh tick-level detection")
+                    # FLO-242: EA tick-level trigger bypasses cooldown (once per level per hour)
+                    if in_cooldown_window and _aid:
+                        _ea_bp = getattr(self, "_ea_bypass_times", {})
+                        _ea_now_ts = time.time()
+                        if (_ea_now_ts - _ea_bp.get(_aid, 0)) > 3600:
+                            in_cooldown_window = False
+                            _ea_bp[_aid] = _ea_now_ts
+                            self._ea_bypass_times = _ea_bp
+                            log.info(f"SIMBA | EA alert {_aid} bypasses cooldown — fresh tick-level detection")
+                        else:
+                            log.debug(f"SIMBA | EA alert {_aid} already bypassed recently — respecting cooldown")
         except Exception:
             pass
 

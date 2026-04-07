@@ -2566,7 +2566,14 @@ class AgentTools:
                 except Exception:
                     pass
 
-                if not _has_pos:
+                # During positions: only skip dedup for actual trade management notes
+                _skip_dedup = False
+                if _has_pos:
+                    _mgmt_kw = ["sl", "stop loss", "tp", "take profit", "adjust", "close",
+                                "breakeven", "trailing", "tighten", "moved sl", "moved tp"]
+                    _skip_dedup = any(kw in note_s.lower() for kw in _mgmt_kw)
+
+                if not _skip_dedup:
                     try:
                         import re as _re_sm
                         _SYN = {"middle": "center", "box": "range", "reclaim": "push",
