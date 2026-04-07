@@ -1000,10 +1000,20 @@ void CheckScreenshotRequest()
    if(reqWidth  <= 0) reqWidth  = 1280;
    if(reqHeight <= 0) reqHeight = 720;
 
-   // Capture H1 (own chart, chart_id = 0)
-   bool h1_ok = ChartScreenShot(0, ScreenshotH1File, reqWidth, reqHeight, ALIGN_RIGHT);
-   if(EnableLogging)
-      Print("Screenshot H1: ", h1_ok ? "OK" : "FAILED");
+   // Find and capture H1 chart (separate tab with SRZoneDrawer)
+   bool h1_ok = false;
+   long h1_chart_id = FindChart(_Symbol, PERIOD_H1);
+   if(h1_chart_id > 0)
+   {
+      h1_ok = ChartScreenShot(h1_chart_id, ScreenshotH1File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot H1 (chart ", h1_chart_id, "): ", h1_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      if(EnableLogging)
+         Print("Screenshot H1: XAUUSD H1 chart not found (not open in MT5)");
+   }
 
    // Find and capture M15 chart
    bool m15_ok = false;
