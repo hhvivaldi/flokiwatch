@@ -783,11 +783,7 @@ class AIAgent:
                 "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns alert_level (QUIET/NORMAL/ELEVATED/CRITICAL) and findings.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-            {
-                "name": "get_oracle_verdict",
-                "description": "Returns the latest Research Manager verdict from the Rex Bull vs Bear debate. The Oracle analyzes the bull and bear cases from Rex, Luna's macro analysis, and analyst research to determine which side has the stronger argument. Returns: winner (BULL/BEAR), recommendation, conviction (1-10), reasoning, and both Rex convictions. This is the TEAM's opinion, not market data — use it as one input among many when you want a second opinion on direction.",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
+            # FLO-243: get_oracle_verdict removed — verdict now auto-injected at end of trigger_context
             {
                 "name": "write_trading_journal",
                 "description": "Write a persistent journal entry (reflection, lesson, frustration, idea, missing_data, market_observation). Accumulates over days — your product owner reads this.",

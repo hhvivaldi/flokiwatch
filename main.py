@@ -3845,13 +3845,23 @@ class TradingBot:
                                 except Exception:
                                     pass
 
+                                # Direction-aware test type for nearest zone
                                 _loc_note = ""
-                                if _rm_sups and _rm_sups[0]["dist"] < 10:
-                                    _loc_note = f"Price is NEAR SUPPORT ({_rm_sups[0]['dist']:.0f} pips above) \u2014 selling is risky."
-                                elif _rm_ress and _rm_ress[0]["dist"] < 10:
-                                    _loc_note = f"Price is NEAR RESISTANCE ({_rm_ress[0]['dist']:.0f} pips below) \u2014 buying is risky."
+                                _nearest_all = sorted(_rm_sups + _rm_ress, key=lambda x: x["dist"])
+                                if _nearest_all and _nearest_all[0]["dist"] < 5:
+                                    _nz = _nearest_all[0]
+                                    if _rm_dir == "DOWN":
+                                        _loc_note = f"Price is FALLING toward {_nz['price']} ({_nz['dist']:.0f} pips) \u2014 SUPPORT TEST (may bounce)."
+                                    elif _rm_dir == "UP":
+                                        _loc_note = f"Price is RISING toward {_nz['price']} ({_nz['dist']:.0f} pips) \u2014 RESISTANCE TEST (may reject)."
+                                    else:
+                                        _loc_note = f"Price is FLAT near {_nz['price']} ({_nz['dist']:.0f} pips) \u2014 consolidating at level."
+                                elif _rm_sups and _rm_sups[0]["dist"] < 15:
+                                    _loc_note = f"Price is near support ({_rm_sups[0]['dist']:.0f} pips above)."
+                                elif _rm_ress and _rm_ress[0]["dist"] < 15:
+                                    _loc_note = f"Price is near resistance ({_rm_ress[0]['dist']:.0f} pips below)."
                                 else:
-                                    _loc_note = "Price is in the middle of support and resistance \u2014 no clear location edge."
+                                    _loc_note = "Price is in the middle \u2014 no clear location edge, use momentum."
 
                                 _rm_snapshot = {
                                     "price": _rm_price,
@@ -4382,6 +4392,25 @@ class TradingBot:
                         f"{volume_block}{confluence}{patterns_block}\n</market_structure>\n"
                         f"\n{h4_candles}\n{d1_candles}\n"
                     )
+            except Exception:
+                pass
+
+            # FLO-243: Oracle verdict at END of trigger_context (after data, before tools)
+            # Floki sees data first, forms his view, then Oracle challenges at the end.
+            try:
+                _ov_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "oracle_verdict.json")
+                if os.path.exists(_ov_path):
+                    with open(_ov_path, "r", encoding="utf-8") as _ovf:
+                        _ov = json.load(_ovf)
+                    if isinstance(_ov, dict) and _ov.get("winner"):
+                        _ov_text = f"RESEARCH MANAGER VERDICT: {_ov.get('recommendation', 'N/A')}. Conviction: {_ov.get('conviction', '?')}/10.\n"
+                        _ov_text += f"Rex Bull: {_ov.get('rex_bull', {}).get('conviction', '?')}/10, Rex Bear: {_ov.get('rex_bear', {}).get('conviction', '?')}/10.\n"
+                        _ov_text += str(_ov.get("reasoning", ""))
+                        trigger_context += (
+                            f"\n<oracle_verdict>\n{_ov_text}\n"
+                            f"This is your advisory team's recommendation. If you disagree, explain why in your reasoning.\n"
+                            f"</oracle_verdict>\n"
+                        )
             except Exception:
                 pass
 
