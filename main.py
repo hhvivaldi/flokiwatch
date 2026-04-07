@@ -283,6 +283,8 @@ class TradingBot:
             log.debug(f"Failed to load persisted dashboard state: {e}")
 
     def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
+        # FLO-241: Reset progressive backoff on Simba wake
+        self._consecutive_no_timer = 0
 
         acquired = False
         try:
@@ -4334,8 +4336,18 @@ class TradingBot:
                     positions_now = []
                 has_open_position = bool(positions_now)
 
+                # FLO-241: Reset backoff if Floki called set_next_check
+                if post_next_check_mtime != pre_next_check_mtime:
+                    self._consecutive_no_timer = 0
+
                 if post_next_check_mtime == pre_next_check_mtime:
-                    fallback_minutes = get_fallback_minutes(has_open_position)
+                    # FLO-241: Progressive backoff when Floki doesn't set timer
+                    _cnt = getattr(self, "_consecutive_no_timer", 0) + 1
+                    self._consecutive_no_timer = _cnt
+                    if has_open_position:
+                        fallback_minutes = get_fallback_minutes(True)  # always short with position
+                    else:
+                        fallback_minutes = min(5 + ((_cnt - 1) * 5), 60)
                     now_utc = datetime.utcnow()
                     next_at = now_utc + timedelta(minutes=fallback_minutes)
                     payload = {
@@ -4350,7 +4362,7 @@ class TradingBot:
                             json.dump(payload, f, ensure_ascii=False, indent=2)
                         os.replace(tmp_path, next_path)
                         log.info(
-                            f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes"
+                            f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes (backoff #{_cnt})"
                         )
                     except Exception as e:
                         log.debug(f"FLOKI_SCHEDULE | default schedule write failed (ignored): {e}")

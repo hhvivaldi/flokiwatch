@@ -2557,24 +2557,45 @@ class AgentTools:
                 payload["notes"] = []
 
             if note_s:
+                # FLO-241: Reject duplicate notes — force Floki to think about what changed
+                try:
+                    import re as _re_sm
+                    def _sm_norm(s):
+                        s = s.lower().strip()
+                        s = _re_sm.sub(r'\d{4,}\.?\d*', 'PRICE', s)
+                        s = _re_sm.sub(r'\s+', ' ', s)
+                        return s
+                    _new_norm = _sm_norm(note_s)[:120]
+                    _new_words = set(_new_norm.split())
+                    for _existing_n in (payload.get("notes") or []):
+                        _ex_text = _existing_n.get("note", _existing_n.get("text", "")) if isinstance(_existing_n, dict) else str(_existing_n)
+                        if isinstance(_existing_n, dict) and str(_existing_n.get("source") or "").lower() == "sage":
+                            continue  # never compare with Sage notes
+                        _ex_norm = _sm_norm(_ex_text)[:120]
+                        _ex_words = set(_ex_norm.split())
+                        if _new_words and _ex_words:
+                            _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
+                            if _overlap >= 0.8:
+                                self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
+                                return {
+                                    "saved": False,
+                                    "reason": "Similar note already exists in your memory. What has CHANGED since then? Write only what's new or different.",
+                                }
+                except Exception:
+                    pass  # if similarity check fails, allow the write
+
                 payload["notes"].append({"time": now.strftime("%H:%M"), "note": note_s})
 
-                # Keep max 20 notes, protect Sage notes from truncation.
-                # Strategy: keep all notes where source == 'sage', truncate only non-sage notes to last 19.
+                # FLO-241: Cap at 8 notes (was 20). Protect Sage notes.
                 try:
                     all_notes = payload.get("notes") or []
-                    sage_notes = []
-                    normal_notes = []
-                    for n in all_notes:
-                        if isinstance(n, dict) and str(n.get("source") or "").strip().lower() == "sage":
-                            sage_notes.append(n)
-                        else:
-                            normal_notes.append(n)
-                    normal_notes = normal_notes[-19:]
+                    sage_notes = [n for n in all_notes if isinstance(n, dict) and str(n.get("source") or "").lower() == "sage"]
+                    normal_notes = [n for n in all_notes if not (isinstance(n, dict) and str(n.get("source") or "").lower() == "sage")]
+                    normal_notes = normal_notes[-7:]  # 7 normal + sage notes = ~8 total
                     payload["notes"] = normal_notes + sage_notes
-                    payload["notes"] = payload["notes"][-20:]
+                    payload["notes"] = payload["notes"][-8:]
                 except Exception:
-                    payload["notes"] = payload["notes"][-20:]
+                    payload["notes"] = payload["notes"][-8:]
 
             payload["last_updated"] = now.isoformat(timespec="seconds")
 
