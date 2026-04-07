@@ -213,7 +213,7 @@ def detect_market_regime(
         quiet_evidence.append(f"Volume {volume_ratio:.2f}x average (very thin)")
     if adx and adx < 15:
         quiet_signals += 1
-        quiet_evidence.append(f"ADX {adx:.1f} (no trend)")
+        quiet_evidence.append(f"ADX {adx:.1f}")
     # Use ATR as proxy for "normal" band width since we don't track bb_width history
     atr_avg = sum(atr_history[-20:]) / len(atr_history[-20:]) if atr_history and len(atr_history) >= 20 else 0
     # Bollinger width < 2x ATR average indicates tight bands (normal width ~3-4x ATR)
@@ -438,7 +438,7 @@ def detect_market_regime(
         below_ema50 = current_price < ema50
 
         if bullish_aligned and above_ema50:
-            evidence = [f"ADX {adx:.1f} (strong trend)", "EMAs bullish aligned (9>21>50)", "Price above EMA50"]
+            evidence = [f"ADX {adx:.1f}", "EMAs bullish aligned (9>21>50)", "Price above EMA50"]
             supporting = 0
             if mtf_d1 == "UP" and mtf_h4 == "UP":
                 supporting += 1
@@ -460,7 +460,7 @@ def detect_market_regime(
             return result
 
         if bearish_aligned and below_ema50:
-            evidence = [f"ADX {adx:.1f} (strong trend)", "EMAs bearish aligned (9<21<50)", "Price below EMA50"]
+            evidence = [f"ADX {adx:.1f}", "EMAs bearish aligned (9<21<50)", "Price below EMA50"]
             supporting = 0
             if mtf_d1 == "DOWN" and mtf_h4 == "DOWN":
                 supporting += 1
@@ -483,7 +483,7 @@ def detect_market_regime(
     # -----------------------------------------------------------------------
     ranging_evidence = []
     if adx and adx < 20:
-        ranging_evidence.append(f"ADX {adx:.1f} (weak trend)")
+        ranging_evidence.append(f"ADX {adx:.1f}")
     elif adx and adx < 25 and ema9 and ema21 and ema50:
         if not (ema9 > ema21 > ema50) and not (ema9 < ema21 < ema50):
             ranging_evidence.append(f"ADX {adx:.1f} with mixed EMA order")

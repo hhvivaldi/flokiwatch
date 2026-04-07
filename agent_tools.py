@@ -1301,11 +1301,10 @@ class AgentTools:
                         diff_h = hist_now - hist_5ago
                         out["macd_histogram_direction"] = "rising" if diff_h > 0.5 else ("falling" if diff_h < -0.5 else "flat")
 
-                    # ADX trend (use cached values from Brain)
-                    adx_now = self._safe_float((ind.get("adx") or {}).get("value"))
-                    # Approximate 5-bar-ago from candle-based calculation
-                    if adx_now is not None:
-                        out["adx_direction"] = "rising" if adx_now > 22 and out.get("rsi_direction") != "falling" else "flat"
+                    # ADX direction from actual 4-bar change (FLO-240: no threshold bias)
+                    adx_change = self._safe_float(out.get("adx_change_4bars"))
+                    if adx_change is not None:
+                        out["adx_direction"] = "rising" if adx_change > 2 else ("falling" if adx_change < -2 else "steady")
 
                     # Bollinger width + direction
                     bb_u = self._safe_float((ind.get("bollinger") or {}).get("upper"))
@@ -1376,6 +1375,40 @@ class AgentTools:
                     above.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
                     below.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
                     zones = above[:4] + below[:4]
+            except Exception:
+                pass
+
+            # FLO-240: Cross-reference with pivot points, confluence zones first
+            try:
+                _bs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                with open(_bs_path, "r", encoding="utf-8") as _bsf:
+                    _bs_sr = json.load(_bsf)
+                _pivots = {}
+                for _layer in ("daily", "weekly", "monthly"):
+                    _cl = _bs_sr.get("pivot_points", {}).get(_layer, {}).get("classic", {})
+                    for _pk, _pv in _cl.items():
+                        if _pv:
+                            _pivots[f"{_layer}_{_pk}"] = float(_pv)
+                _with_conf = []
+                _without_conf = []
+                for z in zones:
+                    zp = float(z.get("price") or z.get("midpoint", 0) or 0)
+                    if not zp:
+                        _without_conf.append(z)
+                        continue
+                    confl = []
+                    for _pk, _pv in _pivots.items():
+                        if abs(zp - _pv) < 10:
+                            confl.append(f"{_pk} ({abs(zp - _pv):.1f})")
+                    if confl:
+                        z["pivot_confluence"] = confl
+                        _with_conf.append(z)
+                    else:
+                        _without_conf.append(z)
+                if len(_with_conf) >= 3:
+                    zones = _with_conf
+                else:
+                    zones = _with_conf + _without_conf
             except Exception:
                 pass
 
