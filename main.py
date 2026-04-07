@@ -6134,7 +6134,7 @@ class TradingBot:
 
             _mtf = _bs.get("multi_tf_indicators", {})
             _h1 = _mtf.get("H1", {})
-            _price = _bs.get("last_price") or _bs.get("last_analysis", {}).get("price") or "?"
+            _price = _bs.get("last_known_price") or _bs.get("last_analysis", {}).get("current_price") or "?"
             _rsi = _h1.get("rsi", "?")
             _adx_d = _h1.get("adx", {})
             _adx = _adx_d.get("value", "?") if isinstance(_adx_d, dict) else _adx_d or "?"
