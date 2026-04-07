@@ -1412,28 +1412,52 @@ class AgentTools:
             except Exception:
                 pass
 
-            # FLO-244: Label each zone's current ROLE based on price position
-            # FLIP zones get phase info (support→resistance or vice versa)
+            # FLO-244: Label zones with role + direction-aware test_type for nearby levels
             try:
                 _cp_role = self._safe_float((dp.get("current_price") or {}).get("mid")) or self._safe_float((dp.get("current_price") or {}).get("bid"))
                 if _cp_role:
+                    # Determine price direction from bot_state
+                    _price_dir = "FLAT"
+                    try:
+                        _bs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
+                        with open(_bs_dir, "r", encoding="utf-8") as _fd:
+                            _pct = json.load(_fd).get("price_daily_change_pct", 0) or 0
+                        _price_dir = "FALLING" if _pct < -0.1 else ("RISING" if _pct > 0.1 else "FLAT")
+                    except Exception:
+                        pass
+
                     for z in zones:
                         _zp = float(z.get("price") or z.get("midpoint", 0) or 0)
                         _zt = str(z.get("zone_type", "")).upper()
                         _dist = round(abs(_cp_role - _zp), 1)
+
+                        # Base role from position — overwrite zone_type so Floki says SUPPORT/RESISTANCE not FLIP
                         if _zp < _cp_role:
                             z["role"] = "SUPPORT"
-                            z["distance_pips"] = _dist
                             if _zt == "FLIP":
                                 z["flip_phase"] = "resistance \u2192 support"
+                            z["zone_type"] = "SUPPORT"
                         elif _zp > _cp_role:
                             z["role"] = "RESISTANCE"
-                            z["distance_pips"] = _dist
                             if _zt == "FLIP":
                                 z["flip_phase"] = "support \u2192 resistance"
+                            z["zone_type"] = "RESISTANCE"
                         else:
                             z["role"] = "AT_PRICE"
-                            z["distance_pips"] = 0.0
+                            z["zone_type"] = "AT_PRICE"
+                        z["distance_pips"] = _dist
+
+                        # Direction-aware test type for nearby zones (<5 pips)
+                        if _dist < 5:
+                            if _price_dir == "FALLING":
+                                z["test_type"] = "SUPPORT_TEST"
+                                z["test_note"] = f"Price falling toward {_zp:.1f} \u2014 testing as support"
+                            elif _price_dir == "RISING":
+                                z["test_type"] = "RESISTANCE_TEST"
+                                z["test_note"] = f"Price rising toward {_zp:.1f} \u2014 testing as resistance"
+                            else:
+                                z["test_type"] = "CONSOLIDATING"
+                                z["test_note"] = f"Price flat near {_zp:.1f} \u2014 consolidating at level"
             except Exception:
                 pass
 
@@ -2605,7 +2629,9 @@ class AgentTools:
                                 "under": "below", "wake": "reassess", "business": "trade",
                                 "unchanged": "same", "framework": "thesis", "lean": "consider",
                                 "actionable": "tradeable", "acceptance": "confirmation",
-                                "continuation": "extension", "opens": "targets"}
+                                "continuation": "extension", "opens": "targets",
+                                "stay": "remain", "flat": "idle", "decisive": "clear",
+                                "engage": "enter", "respect": "watch", "especially": "particularly"}
                         _STOP = {"a", "an", "the", "is", "in", "on", "of", "to", "for",
                                  "and", "or", "but", "not", "this", "that", "with", "from",
                                  "at", "by", "do", "if", "it", "my", "no", "so", "be", "i"}
@@ -2626,7 +2652,7 @@ class AgentTools:
                             _ex_words = set(_ex_norm.split())
                             if _new_words and _ex_words:
                                 _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
-                                if _overlap >= 0.65:
+                                if _overlap >= 0.55:
                                     self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
                                     return {
                                         "saved": False,
