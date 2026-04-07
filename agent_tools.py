@@ -2638,11 +2638,19 @@ class AgentTools:
                             _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
                             if _overlap >= 0.55:
                                 self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
+                                _rej_preview = []
+                                try:
+                                    for _rn in (payload.get("notes") or [])[-5:]:
+                                        _rnt = _rn.get("note", _rn.get("text", "")) if isinstance(_rn, dict) else str(_rn)
+                                        _rej_preview.append(_rnt[:80])
+                                except Exception:
+                                    pass
                                 return {
                                     "saved": False,
                                     "reason": "You already have a similar note in your memory. "
                                               "Are you seeing the market the same way, or are you missing something new? "
                                               "Look again at what price is actually doing right now.",
+                                    "your_recent_notes": _rej_preview,
                                 }
                 except Exception:
                     pass
@@ -2669,8 +2677,22 @@ class AgentTools:
                 self._log_tool("write_session_memory", start, "error=write_failed")
                 return {"success": False, "reason": "write failed"}
 
+            # Return existing notes so Floki sees what he already wrote
+            _existing_preview = []
+            try:
+                for _n in (payload.get("notes") or [])[-5:]:
+                    _nt = _n.get("note", _n.get("text", "")) if isinstance(_n, dict) else str(_n)
+                    _existing_preview.append(_nt[:80])
+            except Exception:
+                pass
+
             self._log_tool("write_session_memory", start, f"notes_count={len(payload.get('notes') or [])}")
-            return {"success": True, "notes_count": len(payload.get("notes") or [])}
+            return {
+                "saved": True,
+                "notes_count": len(payload.get("notes") or []),
+                "your_recent_notes": _existing_preview,
+                "reminder": "Review your notes above. Next time, only write what is genuinely NEW.",
+            }
         except Exception as e:
             self._log_tool("write_session_memory", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
