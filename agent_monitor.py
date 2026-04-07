@@ -573,7 +573,8 @@ class AgentMonitor:
         except Exception:
             expired = False
 
-        # FLO-149 Fix 1: Skip max_sleep wake if Floki's timer is due within 2 minutes
+        # FLO-149 + FLO-241: Skip max_sleep wake if Floki already has a scheduled check
+        # (respects backoff timer — don't wake early if Floki deliberately set a longer interval)
         if expired:
             try:
                 _nc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_next_check.json")
@@ -587,7 +588,7 @@ class AgentMonitor:
                         if nc_dt.tzinfo is None:
                             nc_dt = nc_dt.replace(tzinfo=_tz.utc)
                         secs_until = (nc_dt - datetime.now(_tz.utc)).total_seconds()
-                        if 0 < secs_until < 120:
+                        if 0 < secs_until < max(120, max_sleep_i * 60):
                             log.info(f"SIMBA | max_sleep expired but Floki check due in {int(secs_until)}s — skipping wake")
                             expired = False
             except Exception:
