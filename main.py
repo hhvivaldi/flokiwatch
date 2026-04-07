@@ -283,8 +283,9 @@ class TradingBot:
             log.debug(f"Failed to load persisted dashboard state: {e}")
 
     def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
-        # FLO-241: Reset progressive backoff on Simba wake
-        self._consecutive_no_timer = 0
+        # FLO-241: Reset progressive backoff on Simba wake (not scheduled cycles)
+        if str(trigger_type or "") in ("SIMBA_WAKE", "SIMBA_WATCH"):
+            self._consecutive_no_timer = 0
 
         acquired = False
         try:
