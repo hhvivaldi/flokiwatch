@@ -2606,62 +2606,46 @@ class AgentTools:
                 payload["notes"] = []
 
             if note_s:
-                # FLO-241: Dedup — skip when position open (SL/TP notes are critical)
-                _has_pos = False
+                # FLO-241: Dedup — ALWAYS check, no exceptions. Reflection forces Floki to think.
                 try:
-                    _bs_dedup = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json")
-                    with open(_bs_dedup, "r", encoding="utf-8") as _fp_dd:
-                        _has_pos = len(json.load(_fp_dd).get("positions", [])) > 0
+                    import re as _re_sm
+                    _SYN = {"middle": "center", "box": "range", "reclaim": "push",
+                            "under": "below", "wake": "reassess", "business": "trade",
+                            "unchanged": "same", "framework": "thesis", "lean": "consider",
+                            "actionable": "tradeable", "acceptance": "confirmation",
+                            "continuation": "extension", "opens": "targets",
+                            "stay": "remain", "flat": "idle", "decisive": "clear",
+                            "engage": "enter", "respect": "watch", "especially": "particularly"}
+                    _STOP = {"a", "an", "the", "is", "in", "on", "of", "to", "for",
+                             "and", "or", "but", "not", "this", "that", "with", "from",
+                             "at", "by", "do", "if", "it", "my", "no", "so", "be", "i"}
+                    def _sm_norm(s):
+                        s = s.lower().strip()
+                        s = _re_sm.sub(r'\d{4,}\.?\d*', 'PRICE', s)
+                        s = _re_sm.sub(r'[.,;:!?()"\'\-/]', ' ', s)
+                        s = _re_sm.sub(r'\s+', ' ', s)
+                        words = [_SYN.get(w, w) for w in s.split() if w not in _STOP and len(w) > 1]
+                        return ' '.join(words)
+                    _new_norm = _sm_norm(note_s)[:120]
+                    _new_words = set(_new_norm.split())
+                    for _existing_n in (payload.get("notes") or []):
+                        _ex_text = _existing_n.get("note", _existing_n.get("text", "")) if isinstance(_existing_n, dict) else str(_existing_n)
+                        if isinstance(_existing_n, dict) and str(_existing_n.get("source") or "").lower() == "sage":
+                            continue
+                        _ex_norm = _sm_norm(_ex_text)[:120]
+                        _ex_words = set(_ex_norm.split())
+                        if _new_words and _ex_words:
+                            _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
+                            if _overlap >= 0.55:
+                                self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
+                                return {
+                                    "saved": False,
+                                    "reason": "You already have a similar note in your memory. "
+                                              "Are you seeing the market the same way, or are you missing something new? "
+                                              "Look again at what price is actually doing right now.",
+                                }
                 except Exception:
                     pass
-
-                # During positions: only skip dedup for actual trade management notes
-                _skip_dedup = False
-                if _has_pos:
-                    _mgmt_kw = ["sl", "stop loss", "tp", "take profit", "adjust", "close",
-                                "breakeven", "trailing", "tighten", "moved sl", "moved tp"]
-                    _skip_dedup = any(kw in note_s.lower() for kw in _mgmt_kw)
-
-                if not _skip_dedup:
-                    try:
-                        import re as _re_sm
-                        _SYN = {"middle": "center", "box": "range", "reclaim": "push",
-                                "under": "below", "wake": "reassess", "business": "trade",
-                                "unchanged": "same", "framework": "thesis", "lean": "consider",
-                                "actionable": "tradeable", "acceptance": "confirmation",
-                                "continuation": "extension", "opens": "targets",
-                                "stay": "remain", "flat": "idle", "decisive": "clear",
-                                "engage": "enter", "respect": "watch", "especially": "particularly"}
-                        _STOP = {"a", "an", "the", "is", "in", "on", "of", "to", "for",
-                                 "and", "or", "but", "not", "this", "that", "with", "from",
-                                 "at", "by", "do", "if", "it", "my", "no", "so", "be", "i"}
-                        def _sm_norm(s):
-                            s = s.lower().strip()
-                            s = _re_sm.sub(r'\d{4,}\.?\d*', 'PRICE', s)
-                            s = _re_sm.sub(r'[.,;:!?()"\'\-/]', ' ', s)
-                            s = _re_sm.sub(r'\s+', ' ', s)
-                            words = [_SYN.get(w, w) for w in s.split() if w not in _STOP and len(w) > 1]
-                            return ' '.join(words)
-                        _new_norm = _sm_norm(note_s)[:120]
-                        _new_words = set(_new_norm.split())
-                        for _existing_n in (payload.get("notes") or []):
-                            _ex_text = _existing_n.get("note", _existing_n.get("text", "")) if isinstance(_existing_n, dict) else str(_existing_n)
-                            if isinstance(_existing_n, dict) and str(_existing_n.get("source") or "").lower() == "sage":
-                                continue
-                            _ex_norm = _sm_norm(_ex_text)[:120]
-                            _ex_words = set(_ex_norm.split())
-                            if _new_words and _ex_words:
-                                _overlap = len(_new_words & _ex_words) / max(len(_new_words), len(_ex_words))
-                                if _overlap >= 0.55:
-                                    self._log_tool("write_session_memory", start, "REJECTED (similar note exists)")
-                                    return {
-                                        "saved": False,
-                                        "reason": "You already have a similar note in your memory. "
-                                                  "Are you seeing the market the same way, or are you missing something new? "
-                                                  "Look again at what price is actually doing right now.",
-                                    }
-                    except Exception:
-                        pass
 
                 payload["notes"].append({"time": now.strftime("%H:%M"), "note": note_s})
 

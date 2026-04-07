@@ -3475,46 +3475,7 @@ class TradingBot:
                 trigger_context += f"Trigger data: {trigger_data}. "
             trigger_context += "Investigate using tools and respond with final decision JSON."
 
-            # FLO-242: Confront Floki with his own conditions when met
-            try:
-                _wc_path_242 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_wake_conditions.json")
-                if os.path.exists(_wc_path_242):
-                    with open(_wc_path_242, "r", encoding="utf-8") as _wcf_242:
-                        _wc_242 = json.load(_wcf_242)
-                    _conds_242 = _wc_242.get("conditions", [])
-                    _cp_242 = float(getattr(self, "last_known_price", 0) or 0)
-                    if _cp_242 > 0 and _conds_242:
-                        _met_lines = []
-                        for _c in _conds_242:
-                            _ct = _c.get("type", "")
-                            _lvl = _c.get("level")
-                            if _lvl is None:
-                                continue
-                            _lvl = float(_lvl)
-                            _desc = _c.get("description", "")
-                            _desc_s = f" ({_desc})" if _desc else ""
-                            if _ct == "price_above" and _cp_242 >= _lvl:
-                                _met_lines.append(f'YOUR CONDITION MET: "price above {_lvl}" \u2014 price is now {_cp_242:.2f}.{_desc_s}')
-                            elif _ct == "price_below" and _cp_242 <= _lvl:
-                                _met_lines.append(f'YOUR CONDITION MET: "price below {_lvl}" \u2014 price is now {_cp_242:.2f}.{_desc_s}')
-                            elif _ct == "price_touch" and abs(_cp_242 - _lvl) <= 2.0:
-                                _met_lines.append(f'YOUR CONDITION MET: "price touch {_lvl}" \u2014 price is now {_cp_242:.2f}.{_desc_s}')
-                        if _met_lines:
-                            trigger_context += "\n\n" + "\n".join(_met_lines)
-                            trigger_context += "\nThis is the setup you were waiting for. Act on your plan or explain what changed."
-                # Also check EA tick alert
-                try:
-                    import config as _cfg242
-                    _trig_242 = _cfg242.PRICE_ALERT_TRIGGERED_JSON_PATH
-                    if os.path.exists(_trig_242):
-                        with open(_trig_242, "r", encoding="utf-8") as _tf242:
-                            _ea_242 = json.load(_tf242)
-                        if isinstance(_ea_242, dict) and _ea_242.get("alert_id"):
-                            trigger_context += f"\nEA TICK ALERT: level {_ea_242.get('level')} touched at {_ea_242.get('touch_time')} (price {_ea_242.get('touch_price')})."
-                except Exception:
-                    pass
-            except Exception:
-                pass
+            # FLO-242: Condition confrontation REMOVED — Oracle at end (FLO-243) is the sole challenger.
 
             # FLO-179: previous_thesis injection removed to prevent confirmation bias.
             # Floki sees market data first. He can check his own notes via read_session_memory.
