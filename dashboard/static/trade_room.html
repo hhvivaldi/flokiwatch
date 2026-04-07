@@ -2596,18 +2596,26 @@
             }
           }
 
-          /* Watch conditions compact */
+          /* Watch conditions compact — filter out fired */
           if (watchEl) {
             try {
-              var wc = (state.wake_conditions || {}).conditions || [];
-              if (wc.length > 0) {
+              var wcData = state.wake_conditions || {};
+              var wc = wcData.conditions || [];
+              var wcFired = wcData.fired_ids || [];
+              var wcFiredSet = {};
+              for (var wfi = 0; wfi < wcFired.length; wfi++) wcFiredSet[String(wcFired[wfi])] = true;
+              var activeWc = [];
+              for (var wi = 0; wi < wc.length; wi++) {
+                if (!wcFiredSet[String(wc[wi].id || '')]) activeWc.push(wc[wi]);
+              }
+              if (activeWc.length > 0) {
                 var wcHtml = '';
-                for (var wi = 0; wi < wc.length; wi++) {
-                  wcHtml += '<span style="margin-right:14px;font-weight:700">' + formatWatchConditionHuman(wc[wi]) + '</span>';
+                for (var wai = 0; wai < activeWc.length; wai++) {
+                  wcHtml += '<span style="margin-right:14px;font-weight:700">' + formatWatchConditionHuman(activeWc[wai]) + '</span>';
                 }
                 watchEl.innerHTML = wcHtml;
               } else {
-                watchEl.textContent = 'No active watch conditions';
+                watchEl.textContent = wc.length > 0 ? 'All conditions fired' : 'No active watch conditions';
               }
             } catch(e) {
               watchEl.textContent = '—';
@@ -4067,7 +4075,14 @@
             if (!payload || typeof payload !== 'object') return 0;
             var conds = payload.conditions;
             if (!Array.isArray(conds)) return 0;
-            return conds.length;
+            var fired = payload.fired_ids || [];
+            var firedSet = {};
+            for (var fi = 0; fi < fired.length; fi++) firedSet[String(fired[fi])] = true;
+            var active = 0;
+            for (var ci = 0; ci < conds.length; ci++) {
+              if (!firedSet[String(conds[ci].id || '')]) active++;
+            }
+            return active;
           } catch (e) {
             return 0;
           }
@@ -4172,6 +4187,10 @@
               var conds = payload.conditions;
               if (Array.isArray(conds) && conds.length > 0) {
                 var maxSleep = payload.max_sleep_minutes;
+                // Build fired set for visual distinction
+                var firedArr = payload.fired_ids || [];
+                var firedSet = {};
+                for (var ffi = 0; ffi < firedArr.length; ffi++) firedSet[String(firedArr[ffi])] = true;
                 // FLO-67: Group conditions for display
                 var grouped = {};
                 var ungrouped = [];
@@ -4186,6 +4205,15 @@
                     ungrouped.push(gc);
                   }
                 }
+                function _condHtml(c, indent) {
+                  var isFired = firedSet[String(c.id || '')];
+                  var style = 'font-size:10px;line-height:1.6;font-family:monospace';
+                  if (indent) style += ';padding-left:8px';
+                  if (isFired) style += ';color:#6b7280;text-decoration:line-through';
+                  else style += ';color:#d1d5db';
+                  var badge = isFired ? ' <span style="font-size:8px;color:#f59e0b;font-weight:700;text-decoration:none">FIRED</span>' : '';
+                  return '<div style="' + style + '">' + formatCondition(c) + badge + '</div>';
+                }
                 var html = '';
                 var groupKeys = Object.keys(grouped);
                 for (var gki = 0; gki < groupKeys.length; gki++) {
@@ -4193,18 +4221,22 @@
                   var gConds = grouped[gName];
                   html += '<div style="font-size:9px;color:#6b7280;margin-top:3px;letter-spacing:0.05em">Group ' + gName + ' (AND):</div>';
                   for (var gci = 0; gci < gConds.length; gci++) {
-                    html += '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace;padding-left:8px">' + formatCondition(gConds[gci]) + '</div>';
+                    html += _condHtml(gConds[gci], true);
                   }
                 }
                 if (ungrouped.length > 0 && groupKeys.length > 0) {
                   html += '<div style="font-size:9px;color:#6b7280;margin-top:3px;letter-spacing:0.05em">Standalone:</div>';
                 }
                 for (var ui = 0; ui < ungrouped.length; ui++) {
-                  html += '<div style="font-size:10px;color:#d1d5db;line-height:1.6;font-family:monospace">' + formatCondition(ungrouped[ui]) + '</div>';
+                  html += _condHtml(ungrouped[ui], false);
                 }
                 var html_final = html;
                 if (maxSleep) {
                   html_final += '<div style="font-size:10px;color:#6b7280;line-height:1.6;font-family:monospace">\u23F0 Max sleep: ' + maxSleep + ' min</div>';
+                }
+                // Show "all fired" notice when no active conditions remain
+                if (n === 0 && conds.length > 0) {
+                  html_final += '<div style="font-size:10px;color:#f59e0b;font-weight:700;margin-top:4px">\u26A0 All conditions fired — waiting for Floki to set new ones</div>';
                 }
                 expandEl.innerHTML = html_final;
                 expandEl.style.display = 'block';

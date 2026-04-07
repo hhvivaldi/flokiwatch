@@ -3577,17 +3577,24 @@ class TradingBot:
                                         _wc_d = json.load(_wcf)
                                     _wc_conds = _wc_d.get("conditions", [])
                                     if _wc_conds:
+                                        _fired_ids = set(str(x) for x in _wc_d.get("fired_ids", []))
+                                        _active_conds = [c for c in _wc_conds if str(c.get("id", "")) not in _fired_ids]
                                         _nearest = None
                                         _cprice = float(_cur_snap["price"])
-                                        for _wcc in _wc_conds:
+                                        for _wcc in _active_conds:
                                             _lvl = _wcc.get("level")
                                             if _lvl is not None:
                                                 _dist = abs(float(_lvl) - _cprice)
                                                 if _nearest is None or _dist < _nearest[1]:
                                                     _nearest = (_wcc.get("type", "?"), _dist, float(_lvl))
-                                        _simba_str = f"SIMBA: {len(_wc_conds)} conditions active"
-                                        if _nearest:
-                                            _simba_str += f", nearest: {_nearest[0]} {_nearest[2]:.0f} ({_nearest[1]:.0f} away)"
+                                        if _active_conds:
+                                            _simba_str = f"SIMBA: {len(_active_conds)} conditions active"
+                                            if _nearest:
+                                                _simba_str += f", nearest: {_nearest[0]} {_nearest[2]:.0f} ({_nearest[1]:.0f} away)"
+                                        elif _wc_conds:
+                                            _simba_str = "SIMBA: All conditions have fired. Set new wake conditions."
+                                        else:
+                                            _simba_str = "SIMBA: No conditions set"
                                         lines.append(_simba_str)
                             except Exception:
                                 pass
