@@ -982,6 +982,28 @@ class AgentTools:
             if not ok:
                 return {"success": False, "reason": "persist failed"}
 
+            # Sync price-level conditions to EA for tick-level monitoring + chart lines
+            try:
+                import config as _cfg_ea
+                _fired_set = set(str(x) for x in (payload.get("fired_ids") or []))
+                _ea_alerts = []
+                for c in cleaned:
+                    if c.get("type") in ("price_above", "price_below", "price_touch") and c.get("level") is not None:
+                        if str(c.get("id", "")) not in _fired_set:
+                            _ea_alerts.append({"id": str(c["id"]), "type": c["type"], "level": float(c["level"])})
+                _ea_payload = {
+                    "version": 1,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "alerts": _ea_alerts,
+                }
+                _ea_path = _cfg_ea.PRICE_ALERTS_JSON_PATH
+                _ea_tmp = _ea_path + ".tmp"
+                with open(_ea_tmp, "w", encoding="utf-8") as f:
+                    json.dump(_ea_payload, f, ensure_ascii=False, indent=2)
+                os.replace(_ea_tmp, _ea_path)
+            except Exception:
+                pass
+
             try:
                 from db_writer import record_agent_event
 
