@@ -417,8 +417,8 @@ PRICE_ALERT_TRIGGERED_JSON_PATH = os.environ.get("PRICE_ALERT_TRIGGERED_JSON_PAT
 # CHART SCREENSHOTS (Python ↔ EA Vision Pipeline)
 # ============================================================================
 CHART_SCREENSHOT_ENABLED = os.environ.get("CHART_SCREENSHOT_ENABLED", "true").lower() in ("true", "1", "yes")
-CHART_SCREENSHOT_WIDTH = 1280
-CHART_SCREENSHOT_HEIGHT = 720
+CHART_SCREENSHOT_WIDTH = 1920
+CHART_SCREENSHOT_HEIGHT = 1080
 CHART_SCREENSHOT_TIMEOUT = 10  # seconds to wait for EA to produce screenshots
 _MQL5_FILES = r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files"
 SCREENSHOT_REQUEST_JSON_PATH = os.environ.get("SCREENSHOT_REQUEST_JSON_PATH", os.path.join(_MQL5_FILES, "screenshot_request.json"))
