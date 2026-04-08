@@ -950,8 +950,17 @@ class AIAgent:
                     },
                 })
                 content_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart. Analyze short-term structure and entry timing."})
+            if chart_images.get("m5_b64"):
+                content_blocks.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{chart_images['m5_b64']}",
+                        "detail": "high",
+                    },
+                })
+                content_blocks.append({"type": "text", "text": "Above: XAUUSD M5 chart. Micro-structure: immediate momentum, entry timing, volume conviction on current candle."})
             messages.append({"role": "user", "content": content_blocks})
-            logger.info(f"FLOKI | vision: h1={'yes' if chart_images.get('h1_b64') else 'no'} m15={'yes' if chart_images.get('m15_b64') else 'no'}")
+            logger.info(f"FLOKI | vision: h1={'yes' if chart_images.get('h1_b64') else 'no'} m15={'yes' if chart_images.get('m15_b64') else 'no'} m5={'yes' if chart_images.get('m5_b64') else 'no'}")
         else:
             messages.append({"role": "user", "content": _tc_text})
 

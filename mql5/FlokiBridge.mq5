@@ -118,6 +118,7 @@ string   ScreenshotRequestFile = "screenshot_request.json";
 string   ScreenshotReadyFile   = "screenshot_ready.json";
 string   ScreenshotH1File      = "chart_h1.png";
 string   ScreenshotM15File     = "chart_m15.png";
+string   ScreenshotM5File      = "chart_m5.png";
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
@@ -1031,6 +1032,21 @@ void CheckScreenshotRequest()
          Print("Screenshot M15: XAUUSD M15 chart not found (not open in MT5)");
    }
 
+   // Find and capture M5 chart
+   bool m5_ok = false;
+   long m5_chart_id = FindChart(_Symbol, PERIOD_M5);
+   if(m5_chart_id > 0)
+   {
+      m5_ok = ChartScreenShot(m5_chart_id, ScreenshotM5File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot M5 (chart ", m5_chart_id, "): ", m5_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      if(EnableLogging)
+         Print("Screenshot M5: XAUUSD M5 chart not found (not open in MT5)");
+   }
+
    // Write screenshot_ready.json
    int wHandle = FileOpen(ScreenshotReadyFile, FILE_WRITE | FILE_TXT | FILE_ANSI);
    if(wHandle != INVALID_HANDLE)
@@ -1041,7 +1057,9 @@ void CheckScreenshotRequest()
       json += "\"h1_file\":\"" + (h1_ok ? ScreenshotH1File : "") + "\",";
       json += "\"h1_ok\":" + (h1_ok ? "true" : "false") + ",";
       json += "\"m15_file\":\"" + (m15_ok ? ScreenshotM15File : "") + "\",";
-      json += "\"m15_ok\":" + (m15_ok ? "true" : "false");
+      json += "\"m15_ok\":" + (m15_ok ? "true" : "false") + ",";
+      json += "\"m5_file\":\"" + (m5_ok ? ScreenshotM5File : "") + "\",";
+      json += "\"m5_ok\":" + (m5_ok ? "true" : "false");
       json += "}";
       FileWriteString(wHandle, json);
       FileClose(wHandle);
@@ -1051,7 +1069,7 @@ void CheckScreenshotRequest()
    FileDelete(ScreenshotRequestFile);
 
    if(EnableLogging)
-      Print("Screenshot request processed: H1=", h1_ok, " M15=", m15_ok);
+      Print("Screenshot request processed: H1=", h1_ok, " M15=", m15_ok, " M5=", m5_ok);
 }
 
 //+------------------------------------------------------------------+
