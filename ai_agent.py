@@ -904,6 +904,7 @@ class AIAgent:
 
         total_input_tokens = 0
         total_output_tokens = 0
+        _last_prompt_tokens = 0
         last_model = self.model
         tool_calls_count = 0
         tool_trace: List[Dict[str, Any]] = []
@@ -994,7 +995,8 @@ class AIAgent:
             try:
                 usage = resp.usage
                 if usage:
-                    total_input_tokens += usage.prompt_tokens or 0
+                    _last_prompt_tokens = usage.prompt_tokens or 0
+                    total_input_tokens += _last_prompt_tokens
                     total_output_tokens += usage.completion_tokens or 0
                     last_model = resp.model or self.model
             except Exception:
@@ -1107,10 +1109,10 @@ class AIAgent:
                 _cost_total = _cost_in + _cost_out
                 _latency = int((time.time() - start_time) * 1000)
                 logger.info(
-                    f"FLOKI | model={last_model} | input_tokens={total_input_tokens} | output_tokens={total_output_tokens} | "
+                    f"FLOKI | model={last_model} | ctx={_last_prompt_tokens} | sum_in={total_input_tokens} | out={total_output_tokens} | "
                     f"cost=${_cost_total:.4f} | tools_called={tool_calls_count} | latency={_latency}ms"
                 )
-                return {"content": text_out.strip(), "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace}
+                return {"content": text_out.strip(), "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace}
 
             logger.warning(f"FLOKI | empty response at iteration {iteration}, finish={finish}")
             continue
@@ -1118,7 +1120,7 @@ class AIAgent:
         logger.warning(f"FLOKI | loop exhausted after {MAX_ITERATIONS} iterations")
         return {
             "content": json.dumps({"decision": "WAIT", "confidence": 0, "reasoning": "loop exhausted", "key_factors": [], "concerns": ["loop_exhausted"]}),
-            "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace,
+            "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace,
         }
 
 
@@ -1341,19 +1343,32 @@ class AIAgent:
         content = response.get("content", "")
 
         if self._looks_like_non_json_text(content):
-            logger.warning("AGENT_JSON_RETRY | non-JSON response detected, retrying once")
-            try:
-                retry_response = await self._request_json_retry(trigger_context)
-                response = {
-                    "content": retry_response.get("content", ""),
-                    "input_tokens": int(response.get("input_tokens", 0) or 0) + int(retry_response.get("input_tokens", 0) or 0),
-                    "output_tokens": int(response.get("output_tokens", 0) or 0) + int(retry_response.get("output_tokens", 0) or 0),
-                    "model": retry_response.get("model", response.get("model", self.model)),
-                    "tool_trace": response.get("tool_trace", []),
-                }
-                logger.warning(f"AGENT_JSON_RETRY | retry_response_preview={str(response.get('content', ''))[:200]}")
-            except Exception as e:
-                logger.warning(f"AGENT_JSON_RETRY | retry failed: {e}")
+            # Try extracting JSON from thinking+response text first (saves 30-60s retry)
+            _extracted = self._extract_first_json_object(content)
+            if _extracted:
+                try:
+                    json.loads(_extracted)  # validate it's real JSON
+                    response["content"] = _extracted
+                    content = _extracted
+                    logger.info("AGENT_JSON_RETRY | extracted JSON from thinking text (no retry needed)")
+                except Exception:
+                    _extracted = None
+
+            if not _extracted:
+                # Extraction failed — fall back to retry API call
+                logger.warning("AGENT_JSON_RETRY | non-JSON response, retrying once")
+                try:
+                    retry_response = await self._request_json_retry(trigger_context)
+                    response = {
+                        "content": retry_response.get("content", ""),
+                        "input_tokens": int(response.get("input_tokens", 0) or 0) + int(retry_response.get("input_tokens", 0) or 0),
+                        "output_tokens": int(response.get("output_tokens", 0) or 0) + int(retry_response.get("output_tokens", 0) or 0),
+                        "model": retry_response.get("model", response.get("model", self.model)),
+                        "tool_trace": response.get("tool_trace", []),
+                    }
+                    logger.warning(f"AGENT_JSON_RETRY | retry_response_preview={str(response.get('content', ''))[:200]}")
+                except Exception as e:
+                    logger.warning(f"AGENT_JSON_RETRY | retry failed: {e}")
 
         return self._parse_response(response, latency_ms)
 

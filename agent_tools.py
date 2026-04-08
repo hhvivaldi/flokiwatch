@@ -1073,9 +1073,11 @@ class AgentTools:
         start = time.time()
         try:
             tf = str(timeframe or "").upper().strip()
-            if tf not in ("M5", "H1", "H4", "D1"):
+            _TF_ALIASES = {"4H": "H4", "1H": "H1", "1D": "D1", "15M": "M15", "5M": "M5", "30M": "M30"}
+            tf = _TF_ALIASES.get(tf, tf)
+            if tf not in ("M5", "M15", "M30", "H1", "H4", "D1"):
                 self._log_fail("get_candles", start, "unsupported timeframe")
-                return {"success": False, "reason": "unsupported timeframe"}
+                return {"success": False, "reason": f"unsupported timeframe '{tf}'. Use: M5, M15, H1, H4, D1"}
 
             try:
                 c = int(count)
