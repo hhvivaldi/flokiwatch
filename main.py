@@ -946,6 +946,25 @@ class TradingBot:
         self._load_persisted_state()
         init_db()
 
+        # FLO-SAFETY: Clear stale agent timer on startup so Floki doesn't
+        # fire immediately from a schedule left by a previous session.
+        try:
+            _next_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_next_check.json")
+            if os.path.exists(_next_path):
+                _startup_delay_min = 2  # give the bot time to stabilize
+                _new_check = datetime.utcnow() + timedelta(minutes=_startup_delay_min)
+                _payload = {
+                    "next_check_at": _new_check.isoformat(timespec="seconds") + "Z",
+                    "requested_minutes": _startup_delay_min,
+                }
+                _tmp = _next_path + ".tmp"
+                with open(_tmp, "w", encoding="utf-8") as _f:
+                    json.dump(_payload, _f, ensure_ascii=False, indent=2)
+                os.replace(_tmp, _next_path)
+                log.info(f"STARTUP | Reset agent timer — first Floki call in {_startup_delay_min} minutes")
+        except Exception as e:
+            log.debug(f"STARTUP | agent timer reset failed (ignored): {e}")
+
         # L2 Reflection engine (warm memory)
         try:
             run_reflection_async("startup")
@@ -7079,19 +7098,69 @@ def test_discord_connection():
 # MAIN
 # ============================================================================
 
+def _acquire_pid_lock() -> bool:
+    """Ensure only one bot instance runs at a time (process-level singleton).
+
+    Writes current PID to data/bot.pid.  If the file already exists and the
+    PID inside is still alive, refuse to start.  Returns True if lock acquired.
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    pid_path = os.path.join(base_dir, "data", "bot.pid")
+    os.makedirs(os.path.dirname(pid_path), exist_ok=True)
+
+    if os.path.exists(pid_path):
+        try:
+            with open(pid_path, "r") as f:
+                old_pid = int(f.read().strip())
+            # Check if old process is still alive
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            SYNCHRONIZE = 0x00100000
+            handle = kernel32.OpenProcess(SYNCHRONIZE, False, old_pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                print(f"FATAL: Another bot instance is already running (PID {old_pid}).")
+                print(f"Kill it first:  taskkill /PID {old_pid} /F")
+                return False
+        except (ValueError, OSError, AttributeError):
+            pass  # stale/corrupt pid file or non-Windows — safe to proceed
+
+    # Write our PID
+    try:
+        with open(pid_path, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        pass
+    return True
+
+
+def _release_pid_lock():
+    """Remove PID lockfile on exit."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    pid_path = os.path.join(base_dir, "data", "bot.pid")
+    try:
+        if os.path.exists(pid_path):
+            with open(pid_path, "r") as f:
+                stored_pid = int(f.read().strip())
+            if stored_pid == os.getpid():
+                os.remove(pid_path)
+    except Exception:
+        pass
+
+
 def main():
     """Main function"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='XAU/USD Trading Bot')
     parser.add_argument('--test', action='store_true', help='Run single test analysis')
     parser.add_argument('--discord-test', action='store_true', help='Test Discord connection')
     parser.add_argument('--dry-run', action='store_true', help='Force DRY RUN mode (simulation)')
     parser.add_argument('--demo', action='store_true', help='Force DEMO mode (MT5 demo, fake $)')
     parser.add_argument('--live', action='store_true', help='Force LIVE mode (MT5 real, real $)')
-    
+
     args = parser.parse_args()
-    
+
     # Override mode if specified via CLI
     if args.dry_run:
         config.TRADING_MODE = "DRY_RUN"
@@ -7100,13 +7169,19 @@ def main():
     elif args.live:
         config.TRADING_MODE = "LIVE"
     config.DRY_RUN = (config.TRADING_MODE == "DRY_RUN")
-    
+
     # Execute action
     if args.test:
         run_single_analysis()
     elif args.discord_test:
         test_discord_connection()
     else:
+        # Singleton guard — prevent two bot instances from running
+        if not _acquire_pid_lock():
+            sys.exit(1)
+        import atexit
+        atexit.register(_release_pid_lock)
+
         # Run bot
         bot = TradingBot()
         bot.run()
