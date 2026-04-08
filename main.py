@@ -4558,8 +4558,15 @@ class TradingBot:
                 pass
 
             if agent_result.decision in ("REJECT", "DEFER_TO_BRAIN"):
-                log.info(f"PROACTIVE_H1 | Coerced invalid decision '{agent_result.decision}' -> WAIT")
-                agent_result.decision = "WAIT"
+                # Safe coercion: HOLD_TRADE if position open, WAIT if not
+                _has_pos_coerce = False
+                try:
+                    _has_pos_coerce = bool(executor.get_open_positions() if self.executes_trades else [])
+                except Exception:
+                    pass
+                _safe = "HOLD_TRADE" if _has_pos_coerce else "WAIT"
+                log.info(f"PROACTIVE_H1 | Coerced '{agent_result.decision}' -> {_safe} (position={'yes' if _has_pos_coerce else 'no'})")
+                agent_result.decision = _safe
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent call failed (non-blocking): {e}")
             return

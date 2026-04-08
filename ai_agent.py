@@ -956,8 +956,8 @@ class AIAgent:
             if (time.time() - start_time) >= float(self.timeout):
                 logger.warning(f"FLOKI | tool loop timeout after {iteration} iterations")
                 return {
-                    "content": json.dumps({"decision": "WAIT", "confidence": 0, "reasoning": "timeout during tool loop", "key_factors": [], "concerns": ["timeout"]}),
-                    "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "model": last_model, "tool_trace": tool_trace,
+                    "content": json.dumps({"decision": "DEFER_TO_BRAIN", "confidence": 0, "reasoning": "timeout during tool loop", "key_factors": [], "concerns": ["timeout"]}),
+                    "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace,
                 }
 
             try:
@@ -1120,7 +1120,7 @@ class AIAgent:
 
         logger.warning(f"FLOKI | loop exhausted after {MAX_ITERATIONS} iterations")
         return {
-            "content": json.dumps({"decision": "WAIT", "confidence": 0, "reasoning": "loop exhausted", "key_factors": [], "concerns": ["loop_exhausted"]}),
+            "content": json.dumps({"decision": "DEFER_TO_BRAIN", "confidence": 0, "reasoning": "loop exhausted", "key_factors": [], "concerns": ["loop_exhausted"]}),
             "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace,
         }
 
