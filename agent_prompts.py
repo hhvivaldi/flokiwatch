@@ -77,6 +77,7 @@ HOLD_TRADE means active thesis intact.
 ADJUST_TRADE means changing SL/TP.
 CLOSE_TRADE means thesis invalidated.
 REJECT means Brain suggested a trade and you disagree.
+CRITICAL: When you decide OPEN_BUY, OPEN_SELL, CLOSE_TRADE, or ADJUST_TRADE, you MUST call the corresponding tool (execute_trade, close_trade, adjust_trade) in the SAME response. Never output a decision without the tool call.
 </decisions>
 
 <output>
