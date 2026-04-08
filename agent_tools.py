@@ -2862,6 +2862,23 @@ class AgentTools:
                 "timestamp": ts,
             }
 
+            # Refresh regime duration in findings (frozen at scan time)
+            try:
+                import re as _re
+                regime_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "regime_state.json")
+                if os.path.exists(regime_path):
+                    import json as _json2
+                    with open(regime_path, "r", encoding="utf-8") as _rf:
+                        _rdata = _json2.load(_rf)
+                    _cts = _rdata.get("change_ts")
+                    if _cts:
+                        _fresh_dur = int((time.time() - float(_cts)) / 60)
+                        for _f in summary.get("findings", []):
+                            if _f.get("type") == "REGIME_CHANGE":
+                                _f["detail"] = _re.sub(r'\d+m ago$', f'{_fresh_dur}m ago', _f["detail"])
+            except Exception:
+                pass
+
             self._log_tool("get_rex_monitor", start, f"alert={summary['alert_level']} findings={summary['finding_count']}")
             return {
                 "success": True,
