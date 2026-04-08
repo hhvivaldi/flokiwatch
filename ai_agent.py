@@ -443,8 +443,8 @@ class AIAgent:
             try:
                 from openai import OpenAI
                 if _qwen_key and _qwen_base:
-                    self.client = OpenAI(api_key=_qwen_key, base_url=_qwen_base)
-                    logger.info(f"AI Agent: primary client = Qwen ({_qwen_base})")
+                    self.client = OpenAI(api_key=_qwen_key, base_url=_qwen_base, timeout=90, max_retries=0)
+                    logger.info(f"AI Agent: primary client = Qwen ({_qwen_base}, timeout=90s)")
                 else:
                     self.client = OpenAI(api_key=_openai_key)
                     logger.info("AI Agent: primary client = OpenAI (no Qwen key)")
@@ -904,6 +904,9 @@ class AIAgent:
         """FLO-130: OpenAI GPT-5.4 tool loop (migrated from Gemini)."""
         loop = asyncio.get_event_loop()
         start_time = time.time()
+        # Clean up per-iteration retry flags from previous cycles
+        for attr in [k for k in self.__dict__ if k.startswith("_retry_iter_")]:
+            delattr(self, attr)
 
         total_input_tokens = 0
         total_output_tokens = 0
@@ -952,7 +955,7 @@ class AIAgent:
         else:
             messages.append({"role": "user", "content": _tc_text})
 
-        PER_CALL_TIMEOUT = 30
+        PER_CALL_TIMEOUT = 90  # httpx timeout set at client level; this is a fallback
         MAX_ITERATIONS = int(self.max_tool_calls) + 2
 
         for iteration in range(MAX_ITERATIONS):
@@ -988,7 +991,14 @@ class AIAgent:
                 self._using_fallback = False  # reset on success
             except Exception as e:
                 logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
-                # FLO-247: switch to fallback on failure
+                # Retry once on primary (Qwen) before falling back to GPT
+                _retry_key = f"_retry_iter_{iteration}"
+                if not getattr(self, '_using_fallback', False) and not getattr(self, _retry_key, False):
+                    setattr(self, _retry_key, True)
+                    logger.info(f"FLOKI | retrying iteration {iteration} on primary model")
+                    await asyncio.sleep(2)
+                    continue
+                # FLO-247: switch to fallback after retry exhausted
                 if not getattr(self, '_using_fallback', False) and self._fallback_client:
                     logger.warning(f"FLOKI | switching to fallback model: {self._fallback_model}")
                     self._using_fallback = True
