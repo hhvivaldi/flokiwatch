@@ -4423,6 +4423,20 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Position management mode — lighter context hint for faster cycles
+            if _has_open_position:
+                trigger_context = (
+                    "<position_mode>\n"
+                    "You have an open position. Your ONLY job is managing it.\n"
+                    "Call all tools you need in ONE batch — do not call them one at a time.\n"
+                    "Essential tools: get_open_positions, get_current_price, get_indicators, get_sr_zones, get_candles, read_session_memory.\n"
+                    "Do NOT call: get_trade_lessons, get_trade_patterns, get_fibonacci_levels, get_market_context, get_calendar, get_luna_brief, debate_with_rex.\n"
+                    "Decide: HOLD_TRADE, ADJUST_TRADE, or CLOSE_TRADE.\n"
+                    "Be fast and decisive.\n"
+                    "</position_mode>\n\n"
+                ) + trigger_context
+                log.info("FLOKI | position_mode=ON — lighter context for faster management")
+
             tools_obj = AgentTools(
                 self,
                 executor=executor,
@@ -4525,8 +4539,9 @@ class TradingBot:
                         with open(tmp_path, "w", encoding="utf-8") as f:
                             json.dump(payload, f, ensure_ascii=False, indent=2)
                         os.replace(tmp_path, next_path)
+                        _mode_label = "position mode" if has_open_position else f"backoff #{_cnt}"
                         log.info(
-                            f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes (backoff #{_cnt})"
+                            f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes ({_mode_label})"
                         )
                     except Exception as e:
                         log.debug(f"FLOKI_SCHEDULE | default schedule write failed (ignored): {e}")

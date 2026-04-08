@@ -131,7 +131,7 @@ FLOKI_MAX_DRAWDOWN_PIPS = MAX_POSITION_DRAWDOWN_PIPS
 
 # Scheduling caps with open position
 FLOKI_MAX_CHECK_WITH_POSITION = 10   # Max minutes between checks when a position is open
-FLOKI_FALLBACK_CHECK_WITH_POSITION = 3  # Fallback minutes if Floki forgets set_next_check with open position
+FLOKI_FALLBACK_CHECK_WITH_POSITION = 2  # Fallback minutes if Floki forgets set_next_check with open position
 
 # ADJUST_TRADE rate limit
 MAX_ADJUSTMENTS_PER_HOUR = 3  # Max successful ADJUST_TRADE per trade per rolling hour
