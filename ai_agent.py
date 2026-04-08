@@ -1056,6 +1056,7 @@ class AIAgent:
                     # Parse the decision field from JSON to avoid false positives
                     # ("decided against OPEN_BUY" should NOT trigger followup)
                     _parsed_decision = ""
+                    _parsed_json = None
                     try:
                         _parsed_json = json.loads(text_out)
                         _parsed_decision = str(_parsed_json.get("decision", "")).upper()
@@ -1080,7 +1081,7 @@ class AIAgent:
 
                     # FLO-230: Decision override — actions trump words.
                     # If a trading tool was already executed, the decision MUST reflect it.
-                    if "execute_trade" in _trace_names and _parsed_decision not in ("OPEN_BUY", "OPEN_SELL"):
+                    if _parsed_json and "execute_trade" in _trace_names and _parsed_decision not in ("OPEN_BUY", "OPEN_SELL"):
                         _exec_dir = None
                         for _tt in tool_trace:
                             if _tt.get("name") == "execute_trade":
@@ -1088,17 +1089,17 @@ class AIAgent:
                                 break
                         if _exec_dir in ("BUY", "SELL"):
                             _override = f"OPEN_{_exec_dir}"
-                            logger.warning(f"DECISION_OVERRIDE | GPT said {_parsed_decision} but execute_trade({_exec_dir}) was called | overriding to {_override}")
+                            logger.warning(f"DECISION_OVERRIDE | said {_parsed_decision} but execute_trade({_exec_dir}) was called | overriding to {_override}")
                             _parsed_json["decision"] = _override
                             text_out = json.dumps(_parsed_json, ensure_ascii=False)
 
-                    if "close_trade" in _trace_names and _parsed_decision != "CLOSE_TRADE":
-                        logger.warning(f"DECISION_OVERRIDE | GPT said {_parsed_decision} but close_trade was called | overriding to CLOSE_TRADE")
+                    if _parsed_json and "close_trade" in _trace_names and _parsed_decision != "CLOSE_TRADE":
+                        logger.warning(f"DECISION_OVERRIDE | said {_parsed_decision} but close_trade was called | overriding to CLOSE_TRADE")
                         _parsed_json["decision"] = "CLOSE_TRADE"
                         text_out = json.dumps(_parsed_json, ensure_ascii=False)
 
-                    if "adjust_trade" in _trace_names and _parsed_decision != "ADJUST_TRADE":
-                        logger.warning(f"DECISION_OVERRIDE | GPT said {_parsed_decision} but adjust_trade was called | overriding to ADJUST_TRADE")
+                    if _parsed_json and "adjust_trade" in _trace_names and _parsed_decision != "ADJUST_TRADE":
+                        logger.warning(f"DECISION_OVERRIDE | said {_parsed_decision} but adjust_trade was called | overriding to ADJUST_TRADE")
                         _parsed_json["decision"] = "ADJUST_TRADE"
                         text_out = json.dumps(_parsed_json, ensure_ascii=False)
 
