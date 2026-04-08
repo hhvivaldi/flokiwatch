@@ -440,8 +440,11 @@ AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) mode
 AI_AGENT_TIMEOUT = 240                    # Timeout in seconds for API calls
 AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
-# FLO-130: Floki model (migrated from Gemini to OpenAI GPT-5.4)
-FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "gpt-5.4")
+# FLO-130/FLO-247: Floki model — Qwen3.6-Plus primary, GPT-5.4 fallback
+FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "qwen3.6-plus")
+FLOKI_API_BASE = os.environ.get("FLOKI_API_BASE", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
+FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "gpt-5.4")
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
 # ============================================================================

@@ -6176,8 +6176,9 @@ class TradingBot:
                 content_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{chart_images['m15_b64']}", "detail": "high"}})
                 content_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart."})
 
+            # B call always uses GPT-5.4 (comparing Qwen Full vs GPT Minimal)
             client = OpenAI(api_key=api_key)
-            model = getattr(config, "FLOKI_MODEL", "gpt-5.4")
+            model = getattr(config, "FLOKI_FALLBACK_MODEL", "gpt-5.4")
 
             resp = client.chat.completions.create(
                 model=model,
@@ -6223,12 +6224,14 @@ class TradingBot:
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "price_at_decision": float(_price) if isinstance(_price, (int, float)) else None,
                 "test_a": {
+                    "model": getattr(agent_result, 'model', None) or getattr(config, 'FLOKI_MODEL', '?'),
                     "decision": _a_decision,
                     "confidence": _a_confidence,
                     "reasoning": str(_a_reasoning)[:300],
                     "tokens": f"{getattr(agent_result, 'input_tokens', '?')}+{getattr(agent_result, 'output_tokens', '?')}",
                 },
                 "test_b": {
+                    "model": model,
                     "decision": _b_result.get("decision", "?"),
                     "confidence": _b_result.get("confidence", 0),
                     "reasoning": str(_b_result.get("reasoning", ""))[:300],

@@ -427,15 +427,30 @@ class AIAgent:
                 logger.info("AI Agent is disabled in config")
                 return False
 
-            api_key = os.environ.get("OPENAI_API_KEY", "")
-            if not api_key:
-                logger.warning("OPENAI_API_KEY not set - AI Agent disabled")
+            # FLO-247: Qwen primary, GPT-5.4 fallback
+            _qwen_key = getattr(config, 'FLOKI_API_KEY', '') or os.environ.get("QWEN_API_KEY", "")
+            _qwen_base = getattr(config, 'FLOKI_API_BASE', '')
+            _openai_key = os.environ.get("OPENAI_API_KEY", "")
+
+            if not _qwen_key and not _openai_key:
+                logger.warning("No API key set (QWEN_API_KEY / OPENAI_API_KEY) - AI Agent disabled")
                 self.enabled = False
                 return False
 
             try:
                 from openai import OpenAI
-                self.client = OpenAI(api_key=api_key)
+                if _qwen_key and _qwen_base:
+                    self.client = OpenAI(api_key=_qwen_key, base_url=_qwen_base)
+                    logger.info(f"AI Agent: primary client = Qwen ({_qwen_base})")
+                else:
+                    self.client = OpenAI(api_key=_openai_key)
+                    logger.info("AI Agent: primary client = OpenAI (no Qwen key)")
+
+                # Fallback client (GPT-5.4)
+                self._fallback_client = None
+                self._fallback_model = getattr(config, 'FLOKI_FALLBACK_MODEL', 'gpt-5.4')
+                if _openai_key:
+                    self._fallback_client = OpenAI(api_key=_openai_key)
             except ImportError:
                 logger.error("openai package not installed. Run: pip install openai")
                 self.enabled = False
@@ -445,7 +460,7 @@ class AIAgent:
                 self.enabled = False
                 return False
 
-            self.model = getattr(config, 'FLOKI_MODEL', 'gpt-5.4')
+            self.model = getattr(config, 'FLOKI_MODEL', 'qwen3.6-plus')
             self.timeout = getattr(config, 'AI_AGENT_TIMEOUT', 240)
             self.mode = getattr(config, 'AI_AGENT_MODE', 'shadow')
             self.max_tool_calls = int(getattr(config, 'AI_AGENT_MAX_TOOL_CALLS', 40) or 40)
@@ -945,9 +960,16 @@ class AIAgent:
                 }
 
             try:
+                _use_client = self.client
+                _use_model = self.model
+                # FLO-247: fallback to GPT-5.4 if primary failed on previous iteration
+                if getattr(self, '_using_fallback', False) and self._fallback_client:
+                    _use_client = self._fallback_client
+                    _use_model = self._fallback_model
+
                 def _sync_call():
                     kwargs = {
-                        "model": self.model,
+                        "model": _use_model,
                         "messages": messages,
                         "tools": openai_tools,
                         "max_completion_tokens": int(self.max_tokens),
@@ -957,11 +979,15 @@ class AIAgent:
                     # Only force JSON output when no tool calls are expected (avoids degrading tool use)
                     if not openai_tools:
                         kwargs["response_format"] = {"type": "json_object"}
-                    return self.client.chat.completions.create(**kwargs)
+                    return _use_client.chat.completions.create(**kwargs)
                 resp = await loop.run_in_executor(None, _sync_call)
+                self._using_fallback = False  # reset on success
             except Exception as e:
                 logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
-                # Backoff: sleep 2s before retry to avoid hammering rate limits
+                # FLO-247: switch to fallback on failure
+                if not getattr(self, '_using_fallback', False) and self._fallback_client:
+                    logger.warning(f"FLOKI | switching to fallback model: {self._fallback_model}")
+                    self._using_fallback = True
                 await asyncio.sleep(2)
                 continue
 
@@ -1074,8 +1100,10 @@ class AIAgent:
                         _parsed_json["decision"] = "ADJUST_TRADE"
                         text_out = json.dumps(_parsed_json, ensure_ascii=False)
 
-                _cost_in = total_input_tokens * 2.50 / 1_000_000
-                _cost_out = total_output_tokens * 15.00 / 1_000_000
+                # Cost per model ($/M tokens)
+                _is_qwen = "qwen" in (last_model or "").lower()
+                _cost_in = total_input_tokens * (0.50 if _is_qwen else 2.50) / 1_000_000
+                _cost_out = total_output_tokens * (2.00 if _is_qwen else 15.00) / 1_000_000
                 _cost_total = _cost_in + _cost_out
                 _latency = int((time.time() - start_time) * 1000)
                 logger.info(
