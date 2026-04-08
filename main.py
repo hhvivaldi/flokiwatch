@@ -4423,24 +4423,9 @@ class TradingBot:
             except Exception:
                 pass
 
-            # FLO-243: Oracle verdict at END of trigger_context (after data, before tools)
-            # Floki sees data first, forms his view, then Oracle challenges at the end.
-            try:
-                _ov_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "oracle_verdict.json")
-                if os.path.exists(_ov_path):
-                    with open(_ov_path, "r", encoding="utf-8") as _ovf:
-                        _ov = json.load(_ovf)
-                    if isinstance(_ov, dict) and _ov.get("winner"):
-                        _ov_text = f"RESEARCH MANAGER VERDICT: {_ov.get('recommendation', 'N/A')}. Conviction: {_ov.get('conviction', '?')}/10.\n"
-                        _ov_text += f"Rex Bull: {_ov.get('rex_bull', {}).get('conviction', '?')}/10, Rex Bear: {_ov.get('rex_bear', {}).get('conviction', '?')}/10.\n"
-                        _ov_text += str(_ov.get("reasoning", ""))
-                        trigger_context += (
-                            f"\n<oracle_verdict>\n{_ov_text}\n"
-                            f"This is your advisory team's recommendation. If you disagree, explain why in your reasoning.\n"
-                            f"</oracle_verdict>\n"
-                        )
-            except Exception:
-                pass
+            # FLO-243: Oracle verdict — no longer force-injected.
+            # Oracle had 44% accuracy in live; forcing it may hurt Qwen's decisions.
+            # Floki can call get_oracle_verdict tool when he wants advisory input.
 
             # Self-assessment prompt — diagnostic only
             trigger_context += (
