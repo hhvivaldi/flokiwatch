@@ -60,7 +60,7 @@ DATA YOU RECEIVE:
 - Treasury Yields 10Y: value + 24h change
 - Oil (Crude WTI): price + 24h change + 1h change
 - S&P 500: value + 24h change
-- Gold price: current price + 24h change + 1h change
+- Gold price: current price + 24h change + 1h change + day high/low + 3-day high/low + distance from 3-day peak
 - GLD ETF: price + volume + 24h change (gold proxy with real volume — high volume confirms conviction, low volume flags divergence risk)
 - USD/CNY: exchange rate + 24h change (yuan weakness signals capital flight into gold; strengthening yuan reduces gold demand from China)
 - Real Yields (TIPS 10Y, FRED DFII10): current value + change (higher real yields = gold less attractive as non-yielding asset; falling real yields = bullish gold)
@@ -102,6 +102,12 @@ dollar_gold_correlation_break:
   Normal: DXY up = Gold down (inverse correlation)
   Meaning: unusual force overriding normal correlation. Often geopolitical or central bank driven.
   Gold impact: INVESTIGATE — the unusual driver is the story.
+
+blow_off_reversal:
+  Gold is down >1.5% from 3-day high WHILE macro indicators remain bullish (DXY falling, yields falling)
+  Meaning: forced liquidation or profit-taking from exhaustion top. Price diverges from fundamentals.
+  Gold impact: SHORT-TERM BEARISH (liquidation), override bullish bias with CAUTION/DANGER + reduce bias_confidence by 2-3 points.
+  Action: flag the divergence explicitly in summary. Do NOT stay BULLISH when price is crashing from a blow-off top.
 
 OUTPUT FORMAT — Return ONLY valid JSON:
 {
@@ -298,6 +304,25 @@ def _get_macro_data() -> Dict[str, Any]:
             _pc = getattr(_gi, "session_close", 0) if _gi else 0
             _chg = round(((_gt.bid - _pc) / _pc) * 100, 2) if _pc and _pc > 0 else 0
             gold = {"current": round(_gt.bid, 2), "change_percent": _chg}
+            # Day high/low from symbol_info
+            if _gi:
+                try:
+                    gold["day_high"] = round(float(_gi.bidhigh), 2) if _gi.bidhigh else None
+                    gold["day_low"] = round(float(_gi.bidlow), 2) if _gi.bidlow else None
+                except Exception:
+                    pass
+            # 3-day high/low from D1 candles
+            try:
+                _d1 = _mt5.copy_rates_from_pos("XAUUSD", _mt5.TIMEFRAME_D1, 0, 4)
+                if _d1 is not None and len(_d1) >= 3:
+                    _d3h = max(float(r["high"]) for r in _d1[-3:])
+                    _d3l = min(float(r["low"]) for r in _d1[-3:])
+                    gold["3d_high"] = round(_d3h, 2)
+                    gold["3d_low"] = round(_d3l, 2)
+                    gold["from_3d_high_pct"] = round((_gt.bid - _d3h) / _d3h * 100, 2)
+                    gold["from_3d_low_pct"] = round((_gt.bid - _d3l) / _d3l * 100, 2)
+            except Exception:
+                pass
     except Exception:
         pass
     if not gold.get("current"):
@@ -499,7 +524,22 @@ def _build_data_context(macro: Dict[str, Any], echo_alerts: List[Dict],
     lines.append(f"S&P 500: {sp500.get('current', 'N/A')} (24h: {sp500.get('change_percent', 'N/A')}%)")
 
     gold = macro.get("gold", {})
-    lines.append(f"Gold: ${gold.get('current', 'N/A')} (24h: {gold.get('change_percent', 'N/A')}%, 1h: {gold.get('change_1h_percent', 'N/A')}%)")
+    _gold_line = f"Gold: ${gold.get('current', 'N/A')} (24h: {gold.get('change_percent', 'N/A')}%, 1h: {gold.get('change_1h_percent', 'N/A')}%)"
+    lines.append(_gold_line)
+    # Day and 3-day range context for blow-off/crash detection
+    _dh = gold.get("day_high")
+    _dl = gold.get("day_low")
+    if _dh and _dl:
+        lines.append(f"  Day range: ${_dl} - ${_dh}")
+    _3h = gold.get("3d_high")
+    _3l = gold.get("3d_low")
+    if _3h and _3l:
+        _from_h = gold.get("from_3d_high_pct", "?")
+        _from_l = gold.get("from_3d_low_pct", "?")
+        _cur = gold.get("current", 0)
+        _dist_h = round(_cur - _3h, 0) if _cur and _3h else "?"
+        _dist_l = round(_cur - _3l, 0) if _cur and _3l else "?"
+        lines.append(f"  3-day range: ${_3l} - ${_3h} | From 3d-high: {_dist_h} ({_from_h}%) | From 3d-low: +{_dist_l} (+{_from_l}%)")
 
     gld = macro.get("gld", {})
     lines.append(f"GLD ETF: ${gld.get('current', 'N/A')} (vol: {gld.get('volume', 'N/A')}, 24h: {gld.get('change_percent', 'N/A')}%)")

@@ -171,6 +171,17 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
         )
 
         latency_ms = int((time.time() - t0) * 1000)
+
+        # Diagnostic: log finish_reason and parts count
+        try:
+            _cand = response.candidates[0] if response.candidates else None
+            _fr = getattr(_cand, "finish_reason", "?") if _cand else "NO_CANDIDATES"
+            _parts_count = len(_cand.content.parts) if _cand and _cand.content and _cand.content.parts else 0
+            _has_grounding = bool(getattr(_cand, "grounding_metadata", None)) if _cand else False
+            log.debug(f"LUNA_DEEP | finish_reason={_fr} | parts={_parts_count} | grounding={_has_grounding} | {latency_ms}ms")
+        except Exception as _diag_e:
+            log.debug(f"LUNA_DEEP | diagnostic failed: {_diag_e}")
+
         # response.text may fail if response has multiple parts; use manual extraction
         raw = ""
         try:
@@ -186,6 +197,10 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
         if not raw:
             log.warning(f"LUNA_DEEP | Gemini returned empty response ({latency_ms}ms)")
             return None
+
+        # Detect grounding bypass — model responding from knowledge instead of searching
+        if raw and not raw.strip().startswith("{"):
+            log.warning(f"LUNA_DEEP | GROUNDING_BYPASS — model returned plain text instead of JSON ({latency_ms}ms): {raw[:150]}")
 
         # Extract JSON object from response (may be wrapped in markdown fences)
         start = raw.find("{")
