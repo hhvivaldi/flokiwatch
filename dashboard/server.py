@@ -864,7 +864,7 @@ def trade_room_api(limit: int = 50):
                     journal.append({"text": n, "time": "", "source": "floki"})
         except Exception:
             pass
-        return JSONResponse({"messages": msgs, "journal": journal})
+        return JSONResponse(_sanitize_for_json({"messages": msgs, "journal": journal}))
     except Exception:
         return JSONResponse({"messages": [], "journal": []})
 
