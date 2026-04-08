@@ -7095,14 +7095,16 @@ def test_discord_connection():
 # MAIN
 # ============================================================================
 
+_PID_LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "bot.pid")
+
+
 def _acquire_pid_lock() -> bool:
     """Ensure only one bot instance runs at a time (process-level singleton).
 
     Writes current PID to data/bot.pid.  If the file already exists and the
     PID inside is still alive, refuse to start.  Returns True if lock acquired.
     """
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    pid_path = os.path.join(base_dir, "data", "bot.pid")
+    pid_path = _PID_LOCK_PATH
     os.makedirs(os.path.dirname(pid_path), exist_ok=True)
 
     if os.path.exists(pid_path):
@@ -7133,14 +7135,12 @@ def _acquire_pid_lock() -> bool:
 
 def _release_pid_lock():
     """Remove PID lockfile on exit."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    pid_path = os.path.join(base_dir, "data", "bot.pid")
     try:
-        if os.path.exists(pid_path):
-            with open(pid_path, "r") as f:
+        if os.path.exists(_PID_LOCK_PATH):
+            with open(_PID_LOCK_PATH, "r") as f:
                 stored_pid = int(f.read().strip())
             if stored_pid == os.getpid():
-                os.remove(pid_path)
+                os.remove(_PID_LOCK_PATH)
     except Exception:
         pass
 

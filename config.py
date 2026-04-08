@@ -431,7 +431,7 @@ M5_SCREENSHOT_ENABLED = os.environ.get("M5_SCREENSHOT_ENABLED", "true").lower() 
 # ============================================================================
 # A/B TEST — Full Floki vs Minimal Vision-Only
 # ============================================================================
-AB_TEST_ENABLED = os.environ.get("AB_TEST_ENABLED", "true").lower() in ("true", "1", "yes")
+AB_TEST_ENABLED = os.environ.get("AB_TEST_ENABLED", "false").lower() in ("true", "1", "yes")
 
 # ============================================================================
 # AI AGENT (Claude-based decision maker)
