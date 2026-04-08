@@ -24,6 +24,18 @@ def _safe_iso(dt: Optional[datetime]) -> Optional[str]:
         return None
 
 
+def _sanitize_for_json(obj):
+    """Replace NaN/Inf floats with None (invalid in JSON, crashes FastAPI)."""
+    import math
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
     directory = os.path.dirname(os.path.abspath(path))
     if directory:
@@ -31,7 +43,7 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
 
     tmp_path = f"{path}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        json.dump(_sanitize_for_json(payload), f, ensure_ascii=False, indent=2, default=str)
     os.replace(tmp_path, path)
 
 
