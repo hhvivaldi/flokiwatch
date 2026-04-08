@@ -367,6 +367,20 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # Diagnostic: surface data_needs from agent result
+        try:
+            _pa = last_analysis.get("proactive_analysis") if isinstance(last_analysis, dict) else None
+            _ad = last_analysis.get("agent_decision") if isinstance(last_analysis, dict) else None
+            _dn = None
+            if isinstance(_pa, dict):
+                _dn = _pa.get("data_needs")
+            if not _dn and isinstance(_ad, dict):
+                _dn = _ad.get("data_needs")
+            if _dn:
+                last_analysis["data_needs"] = _dn
+        except Exception:
+            pass
+
         # FLO-194: Inject Research Manager verdict for dashboard
         try:
             _verdict = getattr(bot_instance, "_last_verdict_result", None)

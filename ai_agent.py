@@ -331,6 +331,7 @@ class AgentResult:
     invalidation: Optional[str] = None
     adjustment: Optional[Dict] = None
     close_reason: Optional[str] = None
+    data_needs: Optional[str] = None  # Diagnostic: what data Floki wanted but couldn't access
     rex_agreed: Optional[bool] = None  # FLO-158: kept for DB compat, always None now
     rex_reasoning: Optional[str] = None
     rex_insights: Optional[list] = None  # FLO-158: new insights format
@@ -357,6 +358,8 @@ class AgentResult:
             "error": self.error,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.data_needs:
+            result["data_needs"] = self.data_needs
         try:
             tool_trace = getattr(self, "tool_trace", None)
             if tool_trace is not None:
@@ -1255,7 +1258,14 @@ class AIAgent:
             # Parse adjustment and close_reason
             adjustment = parsed.get("adjustment")
             close_reason = parsed.get("close_reason")
-            
+
+            # Diagnostic: data_needs (optional, never affects decisions)
+            data_needs = None
+            _dn_raw = parsed.get("data_needs")
+            if isinstance(_dn_raw, str) and _dn_raw.strip():
+                data_needs = _dn_raw.strip()[:500]
+                logger.info(f"FLOKI_DATA_NEEDS | {data_needs}")
+
             return AgentResult(
                 decision=decision,
                 confidence=int(parsed.get("confidence", 50)),
@@ -1278,8 +1288,9 @@ class AIAgent:
                 invalidation=invalidation,
                 adjustment=adjustment,
                 close_reason=close_reason,
+                data_needs=data_needs,
             )
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Agent response as JSON: {e}")
             logger.debug(f"Raw response: {content[:500]}")

@@ -84,7 +84,7 @@ Respond with ONLY valid JSON. Start with { end with }.
 
 Required fields: decision, confidence (0-100), reasoning (2-4 sentences), key_factors (2-5 items), concerns (0-3 items).
 
-Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup).
+Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup), data_needs (brief diagnostic — what data was missing, stale, or conflicting).
 
 trade_plan: entry_strategy, entry_price, entry_rationale, stop_loss, stop_loss_rationale, take_profit, take_profit_rationale, risk_reward_ratio.
 

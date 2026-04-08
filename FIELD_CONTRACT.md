@@ -87,6 +87,7 @@
 | `last_analysis.hold_forced` | bool | `main.py` → `state_writer.py` | `render()` → `#goldcon-blocked` |
 | `last_analysis.original_decision` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
 | `last_analysis.hold_reason` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
+| `last_analysis.data_needs` | string \| null | `ai_agent.py` → `main.py` → `state_writer.py` | Diagnostic only — Floki's self-assessment of missing/stale/conflicting data |
 
 ### `last_analysis.simba` Object (Simba Watcher)
 

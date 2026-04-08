@@ -4423,6 +4423,17 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Self-assessment prompt — diagnostic only
+            trigger_context += (
+                "\n<self_assessment>\n"
+                "After your decision, answer briefly:\n"
+                "1. Was there any data you wanted but couldn't access?\n"
+                "2. What single piece of information would most improve your confidence?\n"
+                "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
+                "Include your answers in a \"data_needs\" field in your JSON response.\n"
+                "</self_assessment>\n"
+            )
+
             # Position management mode — lighter context hint for faster cycles
             if _has_open_position:
                 trigger_context = (
@@ -4857,6 +4868,13 @@ class TradingBot:
                         cr = getattr(agent_result, "close_reason", None)
                         if cr is not None:
                             proactive_payload["close_reason"] = cr
+                except Exception:
+                    pass
+
+                try:
+                    _dn = getattr(agent_result, "data_needs", None)
+                    if _dn:
+                        proactive_payload["data_needs"] = _dn
                 except Exception:
                     pass
 
@@ -5962,6 +5980,17 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Self-assessment prompt — diagnostic only
+            trigger_context += (
+                "\n<self_assessment>\n"
+                "After your decision, answer briefly:\n"
+                "1. Was there any data you wanted but couldn't access?\n"
+                "2. What single piece of information would most improve your confidence?\n"
+                "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
+                "Include your answers in a \"data_needs\" field in your JSON response.\n"
+                "</self_assessment>\n"
+            )
+
             tools_obj = AgentTools(
                 self,
                 executor=executor,
@@ -6049,7 +6078,7 @@ class TradingBot:
         
         # Store in last_analysis for dashboard
         if self.last_analysis:
-            self.last_analysis["agent_decision"] = {
+            _ad = {
                 "decision": agent_decision,
                 "confidence": agent_confidence,
                 "reasoning": agent_result.reasoning,
@@ -6061,6 +6090,10 @@ class TradingBot:
                 "trigger_type": "HOLD_FORCED" if hold_forced else "SIGNAL",
                 "original_decision": original_decision if hold_forced else None,
             }
+            _dn = getattr(agent_result, "data_needs", None)
+            if _dn:
+                _ad["data_needs"] = _dn
+            self.last_analysis["agent_decision"] = _ad
     
     def _check_heartbeat(self) -> None:
         """Send periodic status heartbeat to Discord (keep-alive)."""
