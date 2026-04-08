@@ -1592,7 +1592,7 @@ def get_hybrid_score_cached(force_refresh=False):
             }
     
     # Cache expired - fetch new data
-    print(f"🔄 Updating Hybrid News Score...")
+    log.info("Updating Hybrid News Score...")
     result = calculate_news_score_hybrid()
     
     # Update cache

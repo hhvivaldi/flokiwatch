@@ -37,7 +37,12 @@ class TradingLogger:
             file_handler.setLevel(logging.DEBUG)
             
             # Console handler
-            console_handler = logging.StreamHandler()
+            import sys, io
+            if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+                console_stream = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+            else:
+                console_stream = None
+            console_handler = logging.StreamHandler(stream=console_stream)
             console_handler.setLevel(logging.INFO)
             
             # Format

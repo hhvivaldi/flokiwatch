@@ -170,7 +170,7 @@ def _call_reflexion_llm(system: str, user: str) -> Dict:
     import config
     from openai import OpenAI
 
-    model = getattr(config, "FLOKI_MODEL", "gpt-4o")
+    model = getattr(config, "REFLEXION_MODEL", None) or "gpt-4o-mini"
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", getattr(config, "OPENAI_API_KEY", "")))
 
     start = time.time()
