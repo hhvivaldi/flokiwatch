@@ -761,13 +761,25 @@ def health():
     return JSONResponse({"ok": age <= OFFLINE_AFTER_SECONDS, "file_age_seconds": round(age, 2), "state_file": str(STATE_FILE)})
 
 
+def _sanitize_for_json(obj):
+    """Replace NaN/Inf floats with None (invalid JSON, crashes JSONResponse)."""
+    import math
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
 def _read_state() -> Dict[str, Any]:
     """Read bot_state.json and enrich with _meta. Used by REST and WebSocket."""
     if not STATE_FILE.exists():
         return _offline_state("missing_state_file", file_age_seconds=10**9)
     age = _file_age_seconds(STATE_FILE)
     try:
-        payload = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        payload = _sanitize_for_json(json.loads(STATE_FILE.read_text(encoding="utf-8")))
     except Exception:
         return _offline_state("invalid_json", file_age_seconds=age)
     return _enrich_state(payload, age)
@@ -777,7 +789,7 @@ def _read_state_from_bytes(content: bytes) -> Dict[str, Any]:
     """Same as _read_state but from already-read bytes (avoids double file read)."""
     age = _file_age_seconds(STATE_FILE)
     try:
-        payload = json.loads(content.decode("utf-8"))
+        payload = _sanitize_for_json(json.loads(content.decode("utf-8")))
     except Exception:
         return _offline_state("invalid_json", file_age_seconds=age)
     return _enrich_state(payload, age)
