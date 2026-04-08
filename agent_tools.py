@@ -36,6 +36,19 @@ class AgentTools:
             if m > 120:
                 m = 120
 
+            # Position mode cap: max 2 min with open position
+            _capped = False
+            _requested = int(m)
+            try:
+                import config as _cfg_snc
+                _max_pos = int(getattr(_cfg_snc, "FLOKI_MAX_CHECK_WITH_POSITION", 10) or 10)
+                _positions = self._executor.get_open_positions() if self._executor else []
+                if _positions and m > _max_pos:
+                    m = _max_pos
+                    _capped = True
+            except Exception:
+                pass
+
             now = datetime.utcnow()
             next_at = now + timedelta(minutes=int(m))
             payload = {
@@ -49,7 +62,12 @@ class AgentTools:
                 return {"success": False, "reason": "persist failed"}
 
             self._log_tool("set_next_check", start, f"minutes={m}")
-            return {"success": True, **payload}
+            result = {"success": True, **payload}
+            if _capped:
+                result["capped"] = True
+                result["original_requested"] = _requested
+                result["reason"] = f"Position open — capped from {_requested} to {m} minutes"
+            return result
         except Exception as e:
             self._log_tool("set_next_check", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}

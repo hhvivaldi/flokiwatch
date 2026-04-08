@@ -130,7 +130,7 @@ FLOKI_TRAILING_DISTANCE_PIPS = 300  # Wide trailing distance to avoid cutting wi
 FLOKI_MAX_DRAWDOWN_PIPS = MAX_POSITION_DRAWDOWN_PIPS
 
 # Scheduling caps with open position
-FLOKI_MAX_CHECK_WITH_POSITION = 10   # Max minutes between checks when a position is open
+FLOKI_MAX_CHECK_WITH_POSITION = 2    # Max minutes between checks when a position is open (hard cap)
 FLOKI_FALLBACK_CHECK_WITH_POSITION = 2  # Fallback minutes if Floki forgets set_next_check with open position
 
 # ADJUST_TRADE rate limit
