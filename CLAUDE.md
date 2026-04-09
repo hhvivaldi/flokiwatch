@@ -109,6 +109,8 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 
 **Rule 19 — Verify Tools Before Blaming Agent.** When an agent appears to ignore a tool, verify the tool works first. Run it manually or check logs for error responses. A broken tool looks identical to an adoption problem — but the fix is completely different. (Learned: Floki "ignored" pending orders for a full day; root cause was `_get_balance` AttributeError making the tool fail silently.)
 
+**Rule 20 — Test New Tools Before Push.** Every new agent tool must be called successfully at least once before pushing. Run `python -c "from agent_tools import AgentTools; ..."` or equivalent and verify a valid response. A tool that has never been called successfully in any environment is not deployable. (Learned: `place_pending_order` shipped with a nonexistent method call that would have been caught by a single test invocation.)
+
 **Bug Classification:** P0=crash/corruption → fix now. P1=logic error → with approval. P2=smell → deferred.
 
 ## File Conventions
