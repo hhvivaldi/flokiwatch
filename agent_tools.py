@@ -2958,9 +2958,11 @@ class AgentTools:
         sl_pips = abs(price_f - sl_f) / 0.1
 
         # Safety checks (same as execute_trade)
-        balance = self._get_balance()
+        acct = self._executor.get_account_info() or {}
+        balance = self._safe_float(acct.get("balance"))
         if not balance or balance <= 0:
-            return {"success": False, "reason": "no balance"}
+            self._log_tool("place_pending_order", start, "REJECTED | account balance unavailable")
+            return {"success": False, "reason": "account balance unavailable"}
 
         try:
             open_positions_list = self._executor.get_open_positions() or []
