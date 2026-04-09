@@ -172,7 +172,8 @@ void ReadAndDraw()
          phase_tag = " (S>R)";
 
       string mtf_tag = has_mtf ? " MTF" : "";
-      string label_text = timeframe + mtf_tag + " " + type_short + phase_tag + " " + IntegerToString(touches) + "T";
+      string price_str = IntegerToString((int)MathRound(price));
+      string label_text = price_str + " | " + timeframe + mtf_tag + " " + type_short + phase_tag + " " + IntegerToString(touches) + "T";
 
       // Draw text label at right edge of chart
       string label_name = ObjectPrefix + "LABEL_" + IntegerToString(i);
@@ -180,7 +181,7 @@ void ReadAndDraw()
       ObjectSetString(0, label_name, OBJPROP_TEXT, label_text);
       ObjectSetString(0, label_name, OBJPROP_FONT, LabelFont);
       ObjectSetInteger(0, label_name, OBJPROP_FONTSIZE, LabelFontSize);
-      ObjectSetInteger(0, label_name, OBJPROP_COLOR, line_color);
+      ObjectSetInteger(0, label_name, OBJPROP_COLOR, clrWhite);
       ObjectSetInteger(0, label_name, OBJPROP_ANCHOR, ANCHOR_RIGHT);
       ObjectSetInteger(0, label_name, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, label_name, OBJPROP_HIDDEN, true);
