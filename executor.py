@@ -536,9 +536,14 @@ class MT5Executor:
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
         if expiry_minutes and expiry_minutes > 0:
-            from datetime import datetime, timedelta
-            request["type_time"] = mt5.ORDER_TIME_SPECIFIED
-            request["expiration"] = datetime.now() + timedelta(minutes=expiry_minutes)
+            # Expiration must be in broker server time (UTC+3), not Python local time (FLO-96)
+            _tick = mt5.symbol_info_tick(self.symbol)
+            _server_now = int(_tick.time) if _tick else 0
+            if _server_now > 0:
+                request["type_time"] = mt5.ORDER_TIME_SPECIFIED
+                request["expiration"] = _server_now + (int(expiry_minutes) * 60)
+            else:
+                request["type_time"] = mt5.ORDER_TIME_GTC  # fallback: no expiry
         else:
             request["type_time"] = mt5.ORDER_TIME_GTC
 
