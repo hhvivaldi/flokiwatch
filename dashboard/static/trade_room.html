@@ -4808,14 +4808,14 @@
                 var vConv = parseInt(verdict.conviction) || 0;
 
                 if (vWinnerPill) {
-                  vWinnerPill.textContent = vWinner + ' WINS';
-                  vWinnerPill.style.background = vWinner === 'BULL' ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)';
-                  vWinnerPill.style.color = vWinner === 'BULL' ? '#4CAF50' : '#F44336';
+                  vWinnerPill.textContent = vWinner === 'NEUTRAL' ? 'NEUTRAL' : vWinner + ' WINS';
+                  vWinnerPill.style.background = vWinner === 'BULL' ? 'rgba(76,175,80,0.2)' : vWinner === 'NEUTRAL' ? 'rgba(255,215,0,0.2)' : 'rgba(244,67,54,0.2)';
+                  vWinnerPill.style.color = vWinner === 'BULL' ? '#4CAF50' : vWinner === 'NEUTRAL' ? '#FFD700' : '#F44336';
                 }
                 if (vRecPill) {
-                  vRecPill.textContent = vRec.replace('_', ' ');
-                  vRecPill.style.background = vRec === 'ENTER_BUY' ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)';
-                  vRecPill.style.color = vRec === 'ENTER_BUY' ? '#4CAF50' : '#F44336';
+                  vRecPill.textContent = vRec === 'NEUTRAL' ? 'AVOID' : vRec.replace('_', ' ');
+                  vRecPill.style.background = vRec === 'ENTER_BUY' ? 'rgba(76,175,80,0.2)' : vRec === 'NEUTRAL' ? 'rgba(255,215,0,0.2)' : 'rgba(244,67,54,0.2)';
+                  vRecPill.style.color = vRec === 'ENTER_BUY' ? '#4CAF50' : vRec === 'NEUTRAL' ? '#FFD700' : '#F44336';
                 }
                 if (vConvText) vConvText.textContent = vConv + '/10';
                 if (vConvBar) vConvBar.style.width = (vConv * 10) + '%';

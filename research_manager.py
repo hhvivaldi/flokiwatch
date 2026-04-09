@@ -30,15 +30,24 @@ _SYSTEM_PROMPT = (
     "- CONSOLIDATING = price flat near a level = no directional edge from location.\n"
     "- When no level is nearby, use momentum as primary signal.\n"
     "- If Luna says news_price_divergence, lower conviction.\n\n"
-    "You MUST choose a direction: ENTER_BUY or ENTER_SELL. There is no NO_TRADE option. "
+    "Choose a direction: ENTER_BUY, ENTER_SELL, or NEUTRAL.\n"
     "Use conviction (1-10) to express certainty. Low conviction (1-4) = weak signal. "
-    "High conviction (7-10) = strong signal.\n"
-    "Always define entry, SL, target.\n"
+    "High conviction (7-10) = strong signal.\n\n"
+    "NEUTRAL CRITERIA — output NEUTRAL when ANY of these apply:\n"
+    "- Rex Bull and Rex Bear have similar conviction (within 2 points of each other)\n"
+    "- Luna environment is DANGER with NEUTRAL bias\n"
+    "- Luna detects blow_off_reversal or forced_liquidation patterns\n"
+    "- Market is CONSOLIDATING with no directional edge from S/R levels\n"
+    "- Price is in a ranging regime with conflicting signals\n"
+    "When NEUTRAL: set winner to 'NEUTRAL', recommendation to 'NEUTRAL', "
+    "entry/sl/target to null. Conviction reflects how confident you are that "
+    "staying out is correct (high = strong avoid signal).\n\n"
+    "When ENTER_BUY or ENTER_SELL: always define entry, SL, target.\n"
     "Be DECISIVE but INFORMED.\n\n"
     "Return this exact JSON schema:\n"
-    '{"winner":"BULL" or "BEAR",'
+    '{"winner":"BULL" or "BEAR" or "NEUTRAL",'
     '"reasoning":"1-2 sentences why, referencing which reports influenced you",'
-    '"recommendation":"ENTER_BUY" or "ENTER_SELL",'
+    '"recommendation":"ENTER_BUY" or "ENTER_SELL" or "NEUTRAL",'
     '"entry":price_or_null,"sl":price_or_null,"target":price_or_null,'
     '"trigger_buy":"price+condition or null","trigger_sell":"price+condition or null",'
     '"conviction":1_to_10}'
@@ -85,9 +94,9 @@ def _validate(parsed: dict) -> bool:
     """Check required fields."""
     if not isinstance(parsed, dict):
         return False
-    if parsed.get("winner") not in ("BULL", "BEAR"):
+    if parsed.get("winner") not in ("BULL", "BEAR", "NEUTRAL"):
         return False
-    if parsed.get("recommendation") not in ("ENTER_BUY", "ENTER_SELL"):
+    if parsed.get("recommendation") not in ("ENTER_BUY", "ENTER_SELL", "NEUTRAL"):
         return False
     if not isinstance(parsed.get("reasoning"), str) or not parsed["reasoning"]:
         return False

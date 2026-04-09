@@ -125,9 +125,9 @@
 | Field | Type | Writer | Reader |
 |-------|------|--------|--------|
 | `last_analysis.verdict.status` | string (`"OK"` \| `"FAILED"` \| `"DISABLED"`) | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.winner` | string (`"BULL"` \| `"BEAR"`) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.winner` | string (`"BULL"` \| `"BEAR"` \| `"NEUTRAL"`) | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.reasoning` | string | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.recommendation` | string (`"ENTER_BUY"` \| `"ENTER_SELL"`) | `state_writer.py` | Dashboard verdict card |
+| `last_analysis.verdict.recommendation` | string (`"ENTER_BUY"` \| `"ENTER_SELL"` \| `"NEUTRAL"`) | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.entry` | float \| null | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.sl` | float \| null | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.target` | float \| null | `state_writer.py` | Dashboard verdict card |
