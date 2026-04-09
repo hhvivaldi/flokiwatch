@@ -4449,6 +4449,7 @@ class TradingBot:
                 "2. What single piece of information would most improve your confidence?\n"
                 "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
                 "4. If you wanted chart screenshots, did you call get_chart_screenshots? If not, call it next cycle.\n"
+                "5. Did any tool calls return errors this cycle? If so, which tool and what error?\n"
                 "Include your answers in a \"data_needs\" field in your JSON response.\n"
                 "</self_assessment>\n"
             )
@@ -6011,6 +6012,7 @@ class TradingBot:
                 "2. What single piece of information would most improve your confidence?\n"
                 "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
                 "4. If you wanted chart screenshots, did you call get_chart_screenshots? If not, call it next cycle.\n"
+                "5. Did any tool calls return errors this cycle? If so, which tool and what error?\n"
                 "Include your answers in a \"data_needs\" field in your JSON response.\n"
                 "</self_assessment>\n"
             )
