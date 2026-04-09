@@ -350,6 +350,16 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             pass
 
+        # FLO-263: Pending orders for dashboard
+        try:
+            if getattr(config, "PENDING_ORDERS_ENABLED", False):
+                _pending = executor.get_pending_orders()
+                state["pending_orders"] = _pending if _pending else []
+            else:
+                state["pending_orders"] = []
+        except Exception:
+            state["pending_orders"] = []
+
         # FLO-190: Inject debate results for dashboard
         try:
             _debate = getattr(bot_instance, "_last_debate_result", None)

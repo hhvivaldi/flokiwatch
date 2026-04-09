@@ -2161,6 +2161,18 @@
           </div>
         </div>
 
+        <!-- PENDING ORDERS (FLO-263) -->
+        <div class="bc-card" id="pending-orders-card" style="border-color:#7C4DFF">
+          <div class="bc-row1" style="padding:8px 10px 4px">
+            <div class="bc-identity">
+              <span class="bc-name" style="color:#7C4DFF;font-size:10px">PENDING ORDERS</span>
+            </div>
+          </div>
+          <div id="pending-orders-list" style="padding:4px 10px 8px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280">
+            No pending orders
+          </div>
+        </div>
+
         <!-- SAGE -->
         <div class="bc-card" id="sage-card" style="border-color:#FFB300">
           <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
@@ -4255,6 +4267,31 @@
           }
         }
 
+        function renderPendingOrders(state) {
+          try {
+            var el = document.getElementById('pending-orders-list');
+            if (!el) return;
+            var orders = (state && state.pending_orders) ? state.pending_orders : [];
+            if (!Array.isArray(orders) || orders.length === 0) {
+              el.innerHTML = '<span style="color:#6b7280">No pending orders</span>';
+              return;
+            }
+            var html = '';
+            for (var i = 0; i < orders.length; i++) {
+              var o = orders[i];
+              var isBuy = (o.type || '').indexOf('BUY') >= 0;
+              var color = isBuy ? '#4CAF50' : '#F44336';
+              var typeLabel = (o.type || '?').replace('_', ' ');
+              html += '<div style="margin-bottom:4px;padding:4px 6px;background:' + color + '11;border-left:2px solid ' + color + ';border-radius:2px">';
+              html += '<span style="color:' + color + ';font-weight:700">' + typeLabel + '</span>';
+              html += ' <span style="color:#d1d5db">@ ' + (o.price || '?') + '</span>';
+              html += '<br><span style="color:#8a8a9a">SL ' + (o.sl || '?') + ' | TP ' + (o.tp || '?') + ' | Lot ' + (o.volume || '?') + '</span>';
+              html += '</div>';
+            }
+            el.innerHTML = html;
+          } catch(e) {}
+        }
+
         function renderSimbaFromState(state) {
           try {
             if (_marketClosedGlobal) return; // REST DAY/COFFEE BREAK set by updatePanels
@@ -4516,6 +4553,9 @@
 
             try {
               renderSimbaFromState(state);
+            } catch (e) {}
+            try {
+              renderPendingOrders(state);
             } catch (e) {}
 
             // Override Simba status from /api/agent-watch-conditions (authoritative for Trade Room).
