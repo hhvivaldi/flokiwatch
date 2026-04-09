@@ -1955,7 +1955,11 @@ class AgentTools:
             if not getattr(res, "success", False):
                 reason = getattr(res, "error_message", None) or "execution failed"
                 self._log_tool("execute_trade", start, f"{dir_s} | success=false | {reason}")
-                return {"success": False, "reason": str(reason)}
+                return {
+                    "success": False,
+                    "reason": str(reason),
+                    "suggestion": "Price may have moved. Consider place_pending_order at your target level instead of retrying market order.",
+                }
 
             fill_price = self._safe_float(getattr(res, "price", None))
             ticket = getattr(res, "ticket", None)
@@ -1964,7 +1968,11 @@ class AgentTools:
             if not ticket or (isinstance(ticket, (int, float)) and int(ticket) <= 0):
                 reason = getattr(res, "error_message", None) or "ticket_not_resolved"
                 self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | ticket={ticket} ({reason})")
-                return {"success": False, "reason": str(reason)}
+                return {
+                    "success": False,
+                    "reason": str(reason),
+                    "suggestion": "Execution failed. Consider place_pending_order at your target level instead of retrying.",
+                }
 
             # FLO-63: Save trade conditions snapshot at open time
             if ticket is not None:

@@ -321,22 +321,10 @@ class MT5Executor:
                                     log.warning(f"PHANTOM_POSITION | EA path detection failed: {e_phantom}")
 
                             if real_ticket == 0:
-                                log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — trade not confirmed")
-                                # FLO-98: CRITICAL alert — trade may be open but untracked
-                                alert_error(
-                                    "Trade Ticket Unresolved",
-                                    f"EA executed {direction} signal but ticket not resolved after 10s. "
-                                    f"Position may exist in MT5 untracked. CHECK IMMEDIATELY.",
-                                    severity="critical",
-                                )
-                                return OrderResult(
-                                    success=False,
-                                    ticket=0,
-                                    error_code=-1,
-                                    error_message="ticket_not_resolved",
-                                    price=ref_price,
-                                    volume=lot_size,
-                                )
+                                log.warning("EA_BRIDGE | Could not resolve real ticket after 10s — falling through to MT5 direct API")
+                                # FLO-263: Fall through to direct MT5 API instead of returning failure.
+                                # The direct API gives actual error codes (margin, price, etc.)
+                                raise RuntimeError("EA_BRIDGE_FALLTHROUGH")
                         except Exception as e_poll:
                             log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
                             # FLO-197: Re-run phantom check after exception — position
@@ -375,7 +363,11 @@ class MT5Executor:
                             volume=lot_size,
                         )
             except Exception as e_ea:
-                log.error(f"EA_BRIDGE | Failed, falling through to MT5 direct: {e_ea}")
+                _is_fallthrough = "EA_BRIDGE_FALLTHROUGH" in str(e_ea)
+                if _is_fallthrough:
+                    log.info(f"EA_BRIDGE | ticket_not_resolved — retrying via MT5 direct API")
+                else:
+                    log.error(f"EA_BRIDGE | Failed, falling through to MT5 direct: {e_ea}")
         
         # FLO-197: Pre-snapshot for phantom position detection (MT5 direct path)
         pre_tickets_direct = set()
