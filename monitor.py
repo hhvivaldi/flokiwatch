@@ -42,6 +42,8 @@ class PositionMonitor:
         self.last_known_sl = {}
         # Track account balance at trade open (captured when ticket is first detected in MT5)
         self.balance_at_open = {}
+        # FLO-263: Track pending order tickets for OCO fill detection
+        self.known_pending_tickets = set()
 
     def _agent_monitor_events_path(self) -> str:
         import os
@@ -131,6 +133,41 @@ class PositionMonitor:
 
         # Update known_positions with current positions
         self.known_positions = {pos.ticket: pos for pos in positions}
+
+        # FLO-263: ONE FILLS → ALL CANCEL — detect pending order fills
+        try:
+            import config as _cfg
+            if getattr(_cfg, "PENDING_ORDERS_ENABLED", False):
+                import MetaTrader5 as _mt5_m
+                _pending = _mt5_m.orders_get(symbol="XAUUSD")
+                _pending_tickets = set()
+                if _pending:
+                    _pending_tickets = {o.ticket for o in _pending if o.magic == getattr(_cfg, "MAGIC_NUMBER", 234000)}
+
+                if self.known_pending_tickets:
+                    _filled = self.known_pending_tickets - _pending_tickets
+                    _new_positions = current_tickets - set(self.known_positions.keys()) if self._initialized else set()
+                    if _filled and _new_positions:
+                        log.info(f"PENDING_ORDER | FILL_DETECTED | filled={_filled} | new_positions={_new_positions} | cancelling remaining {len(_pending_tickets)} orders")
+                        from executor import get_executor
+                        _ex = get_executor()
+                        _ex.cancel_all_pending()
+                        actions.append({"action": "PENDING_FILL", "filled_tickets": list(_filled), "new_positions": list(_new_positions)})
+                        # Wake Floki for position management
+                        try:
+                            if self.bot and hasattr(self.bot, "agent_proactive_out_of_cycle"):
+                                _fill_info = list(_filled)[0] if _filled else "?"
+                                log.info(f"FLOKI_SCHEDULE | PENDING_FILL — order #{_fill_info} filled, waking Floki immediately")
+                                self.bot.agent_proactive_out_of_cycle(
+                                    trigger_type="PENDING_FILL",
+                                    trigger_data={"filled_tickets": list(_filled), "new_positions": list(_new_positions)},
+                                )
+                        except Exception as _wake_err:
+                            log.warning(f"PENDING_FILL | wake failed: {_wake_err}")
+
+                self.known_pending_tickets = _pending_tickets
+        except Exception as _pend_err:
+            log.debug(f"   Monitor: pending order check error (non-blocking): {_pend_err}")
 
         # Set _initialized AFTER known_positions is populated so balance capture sees correct state
         if not self._initialized:

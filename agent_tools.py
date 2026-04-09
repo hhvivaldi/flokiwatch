@@ -1925,6 +1925,15 @@ class AgentTools:
                 stop_loss_pips=float(sl_pips),
             )
 
+            # FLO-263: Cancel all pending orders before market execution (OCO safety)
+            try:
+                _pending = self._executor.get_pending_orders()
+                if _pending:
+                    _cancelled = self._executor.cancel_all_pending()
+                    log.info(f"PENDING_ORDER | MARKET_OVERRIDE | execute_trade called → cancelled {_cancelled.get('cancelled', 0)} pending orders")
+            except Exception:
+                pass
+
             # Execute
             try:
                 comment = f"Agent-{dir_s}"
@@ -2911,6 +2920,105 @@ class AgentTools:
             "h1": h1, "m15": m15, "m5": m5,
             "note": "Charts attached in next message. Analyze candle patterns, S/R zone interactions, volume bars, and momentum visually.",
         }
+
+    # ================================================================
+    # PENDING ORDERS (FLO-263)
+    # ================================================================
+
+    def place_pending_order(self, order_type: str, price: float, sl: float, tp: float,
+                            expiry_minutes: int = 60, reason: str = "") -> Dict[str, Any]:
+        """Place a pending order (BUY_LIMIT/SELL_LIMIT/BUY_STOP/SELL_STOP)."""
+        start = time.time()
+        import config
+
+        if not getattr(config, "PENDING_ORDERS_ENABLED", False):
+            self._log_tool("place_pending_order", start, "DISABLED")
+            return {"success": False, "reason": "Pending orders disabled"}
+
+        valid = ("BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP")
+        ot = str(order_type or "").upper().strip()
+        if ot not in valid:
+            self._log_tool("place_pending_order", start, f"invalid type: {ot}")
+            return {"success": False, "reason": f"Invalid type. Use: {', '.join(valid)}"}
+
+        try:
+            price_f, sl_f, tp_f = float(price), float(sl), float(tp)
+        except Exception:
+            return {"success": False, "reason": "Invalid price/sl/tp"}
+
+        dir_s = "BUY" if "BUY" in ot else "SELL"
+        sl_pips = abs(price_f - sl_f) / 0.1
+
+        # Safety checks (same as execute_trade)
+        balance = self._get_balance()
+        if not balance or balance <= 0:
+            return {"success": False, "reason": "no balance"}
+
+        try:
+            open_positions_list = self._executor.get_open_positions() or []
+        except Exception:
+            open_positions_list = []
+
+        is_safe, reasons = self._safety.is_safe_to_trade(
+            account_balance=float(balance),
+            open_positions=len(open_positions_list),
+            mt5_connected=True,
+            has_high_impact_news=False,
+            trade_direction=dir_s,
+            open_positions_list=open_positions_list,
+        )
+        if not is_safe:
+            self._log_tool("place_pending_order", start, f"REJECTED | safety: {'; '.join(reasons[:3])}")
+            return {"success": False, "reason": "; ".join(reasons[:3])}
+
+        # Risk sizing
+        risk_pct = float(getattr(config, "RISK_PER_TRADE", 2.0))
+        pos = self._risk.calculate_position_size(
+            account_balance=float(balance),
+            risk_percent=risk_pct,
+            stop_loss_pips=float(sl_pips),
+        )
+
+        exp = max(1, int(expiry_minutes)) if expiry_minutes else 60
+        res = self._executor.place_pending_order(
+            order_type_str=ot,
+            price=price_f,
+            lot_size=float(pos.lot_size),
+            stop_loss=sl_f,
+            take_profit=tp_f,
+            expiry_minutes=exp,
+            comment=f"Pending-{ot}",
+        )
+
+        if res.get("success"):
+            ticket = res.get("ticket")
+            self._log_tool("place_pending_order", start,
+                f"{ot} @ {price_f} SL={sl_f} TP={tp_f} lot={pos.lot_size} exp={exp}min ticket={ticket}")
+            return {"success": True, "ticket": ticket, "type": ot, "price": price_f,
+                    "sl": sl_f, "tp": tp_f, "volume": float(pos.lot_size), "expiry_minutes": exp}
+        else:
+            self._log_tool("place_pending_order", start, f"FAILED | {res.get('error')}")
+            return {"success": False, "reason": res.get("error", "placement failed")}
+
+    def cancel_pending_order(self, ticket: int = None, cancel_all: bool = False) -> Dict[str, Any]:
+        """Cancel a pending order by ticket, or cancel all pending orders."""
+        start = time.time()
+        if cancel_all:
+            res = self._executor.cancel_all_pending()
+            self._log_tool("cancel_pending_order", start, f"cancel_all | cancelled={res.get('cancelled', 0)}")
+            return res
+        if not ticket:
+            return {"success": False, "reason": "ticket required (or cancel_all=true)"}
+        res = self._executor.cancel_pending_order(int(ticket))
+        self._log_tool("cancel_pending_order", start, f"ticket={ticket} | success={res.get('success')}")
+        return res
+
+    def get_pending_orders(self) -> Dict[str, Any]:
+        """List all current pending orders."""
+        start = time.time()
+        orders = self._executor.get_pending_orders()
+        self._log_tool("get_pending_orders", start, f"count={len(orders)}")
+        return {"success": True, "orders": orders, "count": len(orders)}
 
     def get_oracle_verdict(self) -> Dict[str, Any]:
         """FLO-239: Return the latest Research Manager verdict from the Rex Bull vs Bear debate."""

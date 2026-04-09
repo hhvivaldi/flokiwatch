@@ -295,7 +295,7 @@ class TradingBot:
                 acquired = True
 
             # FLO-90: ECHO_CRITICAL removed — Echo is pull-only, no forced cycles
-            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH"}
+            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "PENDING_FILL"}
             if str(trigger_type or "") not in allowed:
                 log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
                 return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
@@ -975,6 +975,20 @@ class TradingBot:
         try:
             from trade_reflexion import sync_chromadb_on_startup
             sync_chromadb_on_startup()
+        except Exception:
+            pass
+
+        # FLO-263: Log existing pending orders at startup (do NOT cancel — Floki placed them)
+        try:
+            if getattr(config, "PENDING_ORDERS_ENABLED", False):
+                import MetaTrader5 as _mt5_startup
+                _pending_startup = _mt5_startup.orders_get(symbol=config.SYMBOL)
+                _our_pending = [o for o in (_pending_startup or []) if o.magic == config.MAGIC_NUMBER]
+                if _our_pending:
+                    log.info(f"STARTUP | Found {len(_our_pending)} pending orders (preserving)")
+                    for _po in _our_pending:
+                        _type_names = {2: "BUY_LIMIT", 3: "SELL_LIMIT", 4: "BUY_STOP", 5: "SELL_STOP"}
+                        log.info(f"STARTUP | Pending: #{_po.ticket} {_type_names.get(_po.type, '?')} @ {_po.price_open} SL={_po.sl} TP={_po.tp}")
         except Exception:
             pass
 

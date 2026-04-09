@@ -136,6 +136,18 @@
 | `last_analysis.verdict.conviction` | int (1-10) | `state_writer.py` | Dashboard verdict card |
 | `last_analysis.verdict.timestamp` | string (ISO) | `state_writer.py` | Dashboard verdict card |
 
+### `pending_orders` Array (FLO-263 Pending Orders)
+
+| Field | Type | Writer | Reader |
+|-------|------|--------|--------|
+| `pending_orders` | array of objects | `executor.py` | Dashboard |
+| `pending_orders[].ticket` | int | `executor.py` | Dashboard |
+| `pending_orders[].type` | string (`"BUY_LIMIT"` \| `"SELL_LIMIT"` \| `"BUY_STOP"` \| `"SELL_STOP"`) | `executor.py` | Dashboard |
+| `pending_orders[].price` | float | `executor.py` | Dashboard |
+| `pending_orders[].sl` | float | `executor.py` | Dashboard |
+| `pending_orders[].tp` | float | `executor.py` | Dashboard |
+| `pending_orders[].volume` | float | `executor.py` | Dashboard |
+
 ### `/api/rex-monitor` Endpoint (FLO-214 Rex Proactive Monitor)
 
 | Field | Type | Writer | Reader |

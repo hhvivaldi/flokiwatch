@@ -428,6 +428,9 @@ CHART_M15_PNG_PATH = os.environ.get("CHART_M15_PNG_PATH", os.path.join(_MQL5_FIL
 CHART_M5_PNG_PATH = os.environ.get("CHART_M5_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m5.png"))
 M5_SCREENSHOT_ENABLED = os.environ.get("M5_SCREENSHOT_ENABLED", "true").lower() in ("true", "1", "yes")
 
+# PENDING ORDERS (FLO-263)
+PENDING_ORDERS_ENABLED = os.environ.get("PENDING_ORDERS_ENABLED", "true").lower() in ("true", "1", "yes")
+
 # ============================================================================
 # A/B TEST — Full Floki vs Minimal Vision-Only
 # ============================================================================

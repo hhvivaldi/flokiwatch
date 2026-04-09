@@ -505,7 +505,113 @@ class MT5Executor:
             price=result.price,
             volume=result.volume
         )
-    
+
+    # ================================================================
+    # PENDING ORDERS (FLO-263)
+    # ================================================================
+
+    def place_pending_order(self, order_type_str: str, price: float, lot_size: float,
+                            stop_loss: float, take_profit: float,
+                            expiry_minutes: int = 0, comment: str = "") -> dict:
+        """Place a pending order (BUY_LIMIT/SELL_LIMIT/BUY_STOP/SELL_STOP) via MT5."""
+        import MetaTrader5 as mt5
+
+        _TYPE_MAP = {
+            "BUY_LIMIT": mt5.ORDER_TYPE_BUY_LIMIT,
+            "SELL_LIMIT": mt5.ORDER_TYPE_SELL_LIMIT,
+            "BUY_STOP": mt5.ORDER_TYPE_BUY_STOP,
+            "SELL_STOP": mt5.ORDER_TYPE_SELL_STOP,
+        }
+        mt5_type = _TYPE_MAP.get(order_type_str.upper())
+        if mt5_type is None:
+            return {"success": False, "error": f"Invalid order type: {order_type_str}"}
+
+        request = {
+            "action": mt5.TRADE_ACTION_PENDING,
+            "symbol": self.symbol,
+            "volume": lot_size,
+            "type": mt5_type,
+            "price": price,
+            "sl": stop_loss,
+            "tp": take_profit,
+            "magic": self.magic,
+            "comment": comment or f"Pending-{order_type_str}",
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        if expiry_minutes and expiry_minutes > 0:
+            from datetime import datetime, timedelta
+            request["type_time"] = mt5.ORDER_TIME_SPECIFIED
+            request["expiration"] = datetime.now() + timedelta(minutes=expiry_minutes)
+        else:
+            request["type_time"] = mt5.ORDER_TIME_GTC
+
+        check = mt5.order_check(request)
+        if check is None or check.retcode != 0:
+            _comment = getattr(check, "comment", "unknown") if check else "order_check returned None"
+            log.warning(f"PENDING_ORDER | order_check failed: {_comment}")
+            return {"success": False, "error": f"order_check failed: {_comment}"}
+
+        result = mt5.order_send(request)
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            _rc = getattr(result, "retcode", "?") if result else "None"
+            _cm = getattr(result, "comment", "") if result else ""
+            log.warning(f"PENDING_ORDER | order_send failed: retcode={_rc} {_cm}")
+            return {"success": False, "error": f"order_send failed: retcode={_rc} {_cm}"}
+
+        log.info(f"PENDING_ORDER | PLACED {order_type_str} @ {price} | SL={stop_loss} TP={take_profit} | "
+                 f"lot={lot_size} | expiry={expiry_minutes}min | ticket={result.order}")
+        return {"success": True, "ticket": result.order, "type": order_type_str, "price": price}
+
+    def cancel_pending_order(self, ticket: int) -> dict:
+        """Cancel a pending order by ticket."""
+        import MetaTrader5 as mt5
+
+        request = {"action": mt5.TRADE_ACTION_REMOVE, "order": ticket}
+        result = mt5.order_send(request)
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            _rc = getattr(result, "retcode", "?") if result else "None"
+            log.warning(f"PENDING_ORDER | cancel failed: ticket={ticket} retcode={_rc}")
+            return {"success": False, "error": f"cancel failed: retcode={_rc}"}
+
+        log.info(f"PENDING_ORDER | CANCELLED ticket={ticket}")
+        return {"success": True, "ticket": ticket}
+
+    def cancel_all_pending(self) -> dict:
+        """Cancel all pending orders for this symbol with our magic number."""
+        import MetaTrader5 as mt5
+
+        orders = mt5.orders_get(symbol=self.symbol)
+        cancelled = 0
+        if orders:
+            for o in orders:
+                if o.magic == self.magic:
+                    self.cancel_pending_order(o.ticket)
+                    cancelled += 1
+        if cancelled:
+            log.info(f"PENDING_ORDER | CANCEL_ALL | cancelled={cancelled}")
+        return {"success": True, "cancelled": cancelled}
+
+    def get_pending_orders(self) -> list:
+        """List all pending orders for this symbol with our magic number."""
+        import MetaTrader5 as mt5
+
+        orders = mt5.orders_get(symbol=self.symbol)
+        result = []
+        if orders:
+            _type_names = {2: "BUY_LIMIT", 3: "SELL_LIMIT", 4: "BUY_STOP", 5: "SELL_STOP"}
+            for o in orders:
+                if o.magic == self.magic:
+                    result.append({
+                        "ticket": o.ticket,
+                        "type": _type_names.get(o.type, str(o.type)),
+                        "price": o.price_open,
+                        "sl": o.sl,
+                        "tp": o.tp,
+                        "volume": o.volume_initial,
+                        "time_setup": str(o.time_setup),
+                    })
+        return result
+
     def get_open_positions(self) -> List[PositionInfo]:
         """Return list of bot's open positions"""
         if not self.is_connected():

@@ -844,6 +844,41 @@ class AIAgent:
                 "description": "View live XAU/USD chart screenshots (H1, M15, M5) with SRZoneDrawer S/R levels and volume bars. Call when entering a trade, at key levels, or to confirm a pattern visually. Don't call every cycle — only when visual context would change your decision.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            # FLO-263: Pending orders
+            {
+                "name": "place_pending_order",
+                "description": "Place a pending order at a specific price level. BUY_LIMIT=buy at support (below current price), SELL_LIMIT=sell at resistance (above current price), BUY_STOP=buy on breakout (above current price), SELL_STOP=sell on breakdown (below current price). When one fills, all others cancel automatically. Use instead of waiting for price to arrive.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "order_type": {"type": "string", "description": "BUY_LIMIT, SELL_LIMIT, BUY_STOP, or SELL_STOP"},
+                        "price": {"type": "number", "description": "Entry price level"},
+                        "sl": {"type": "number", "description": "Stop loss price"},
+                        "tp": {"type": "number", "description": "Take profit price"},
+                        "expiry_minutes": {"type": "integer", "description": "How long the order stays pending (default 60)"},
+                        "reason": {"type": "string", "description": "Why this order"},
+                    },
+                    "required": ["order_type", "price", "sl", "tp"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "cancel_pending_order",
+                "description": "Cancel a pending order by ticket, or cancel all pending orders (cancel_all=true).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket": {"type": "integer", "description": "Order ticket to cancel"},
+                        "cancel_all": {"type": "boolean", "description": "Set true to cancel ALL pending orders"},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_pending_orders",
+                "description": "List all current pending orders with type, price, SL, TP, and volume.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
             # FLO-243: get_oracle_verdict removed — verdict now auto-injected at end of trigger_context
             {
                 "name": "write_trading_journal",
