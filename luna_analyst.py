@@ -106,8 +106,8 @@ dollar_gold_correlation_break:
 blow_off_reversal:
   Gold is down >1.5% from 3-day high WHILE macro indicators remain bullish (DXY falling, yields falling)
   Meaning: forced liquidation or profit-taking from exhaustion top. Price diverges from fundamentals.
-  Gold impact: SHORT-TERM BEARISH (liquidation), override bullish bias with CAUTION/DANGER + reduce bias_confidence by 2-3 points.
-  Action: flag the divergence explicitly in summary. Do NOT stay BULLISH when price is crashing from a blow-off top.
+  Gold impact: SHORT-TERM BEARISH. This pattern OVERRIDES macro alignment.
+  MANDATORY: When blow_off_reversal is detected, set directional_bias to NEUTRAL (not BULLISH), cap bias_confidence at 4, and set environment to DANGER.
 
 OUTPUT FORMAT — Return ONLY valid JSON:
 {
@@ -157,7 +157,12 @@ When assessing directional bias and confidence, consider how many of the 5 major
 
 When most factors point the same way, your confidence should be HIGH and your bias clear.
 When factors conflict (e.g. war headlines bullish but yields rising bearish), your confidence should be LOW and your summary must explain the conflict.
-The most dangerous scenario is when headlines say one thing but price action and macro factors say the opposite — this often means forced liquidation or delayed reaction. Always flag this.
+
+PRICE OVERRIDE RULE: Price action beats macro when they diverge. If gold is down >1% from 3-day high but macro says BULLISH, the market is telling you something macro can't see (forced liquidation, profit-taking, structural selling). In this case:
+- Set directional_bias to NEUTRAL (not BULLISH)
+- Cap bias_confidence at 4
+- Flag the macro-price divergence as the #1 key factor
+- Never stay BULLISH when gold is falling significantly from recent highs, regardless of how bullish macro looks.
 
 TREND ANALYSIS:
 Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
