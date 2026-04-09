@@ -165,7 +165,7 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
             config=types.GenerateContentConfig(
                 system_instruction=_SYSTEM_INSTRUCTION,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                max_output_tokens=2048,
+                max_output_tokens=4096,
                 temperature=0.7,
             ),
         )
@@ -208,8 +208,34 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
         start = raw.find("{")
         end = raw.rfind("}")
         if start < 0 or end <= start:
-            log.warning(f"LUNA_DEEP | no JSON object in response ({latency_ms}ms): {raw[:200]}")
-            return None
+            # Retry once with stronger JSON instruction
+            log.warning(f"LUNA_DEEP | no JSON — retrying with strict instruction ({latency_ms}ms)")
+            try:
+                retry_resp = client.models.generate_content(
+                    model=DEEP_SEARCH_MODEL,
+                    contents=f"Based on your analysis: {raw[:500]}\n\nRespond with ONLY a valid JSON object. No prose, no markdown. Start with {{ end with }}.",
+                    config=types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_INSTRUCTION,
+                        max_output_tokens=4096,
+                        temperature=0.3,
+                    ),
+                )
+                retry_raw = ""
+                try:
+                    retry_raw = retry_resp.text or ""
+                except Exception:
+                    pass
+                start = retry_raw.find("{")
+                end = retry_raw.rfind("}")
+                if start >= 0 and end > start:
+                    raw = retry_raw
+                    log.info(f"LUNA_DEEP | JSON retry succeeded ({len(retry_raw)} chars)")
+                else:
+                    log.warning(f"LUNA_DEEP | JSON retry also failed — no JSON in retry response")
+                    return None
+            except Exception as e_retry:
+                log.warning(f"LUNA_DEEP | JSON retry error: {e_retry}")
+                return None
         clean = raw[start:end + 1]
 
         parsed = None
