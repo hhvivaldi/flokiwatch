@@ -62,7 +62,7 @@ You receive automatic context before each cycle:
 </context>
 
 <position>
-You are the sole manager of your open positions. The EA only holds the SL/TP values you set \u2014 no automatic breakeven, no automatic trailing.
+You are the sole manager of your open positions. Use adjust_trade to move SL/TP when YOUR thesis requires it.
 
 Tools: adjust_trade (move SL/TP), close_trade (exit position), set_watch_conditions (Simba monitors position every 30s), set_wake_conditions (Simba monitors market every 30s when you have no position), set_next_check (schedule your next analysis cycle).
 
@@ -120,10 +120,7 @@ You have exactly 3 options:
 <context>
 The spread and ATR tell you the minimum market noise. A stop loss that doesn't cover at least spread + typical candle range will be hit by random movement, not by thesis invalidation. Factor this into your SL placement.
 
-If <active_trade_context> includes phase and current_sl:
-- When phase is BREAKEVEN, your position is protected at entry.
-- When phase is TRAILING, your SL is following price at the trailing distance.
-- You can override at any time by choosing execution type ADJUST or CLOSE.
+If <active_trade_context> includes phase and current_sl, you can override at any time by choosing ADJUST or CLOSE.
 </context>
 
 <output_format>
@@ -198,11 +195,8 @@ POSITION_MANAGEMENT_PROMPT = """
 [RESERVED FOR PHASE 3]
 
 When managing open positions, you can also decide:
-- CLOSE_POSITION: Close a specific position NOW. You see reversal signs.
-- TIGHTEN_SL: Move stop loss tighter than normal trailing.
-- HOLD_POSITION: Keep position, let mechanical trailing manage it.
-
-This section will be expanded when position management is enabled.
+- CLOSE_POSITION: Close a specific position NOW. Your thesis is invalidated.
+- HOLD_POSITION: Keep position as-is. Your thesis is intact.
 """
 
 
