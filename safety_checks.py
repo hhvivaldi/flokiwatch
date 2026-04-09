@@ -3,7 +3,7 @@ SAFETY CHECKS - Safety Validations
 Checks conditions before executing trades
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple, List, Optional
 import json
 import logging
@@ -23,7 +23,7 @@ class SafetyChecker:
         self.pause_until: Optional[datetime] = None
         self.daily_loss = 0.0
         self.daily_trades = 0
-        self.last_reset_date = datetime.now().date()
+        self.last_reset_date = datetime.now(timezone.utc).date()
         # Anti-overtrading: last trade per direction
         self.last_trade_time: dict = {'BUY': None, 'SELL': None}
         self.last_close_type: dict = {'BUY': None, 'SELL': None}  # "trailing", "sl", "tp", None
@@ -83,7 +83,7 @@ class SafetyChecker:
 
             # --- daily counters: only restore if same day ---
             saved_date_str = data.get("last_reset_date")
-            today = datetime.now().date()
+            today = datetime.now(timezone.utc).date()
             same_day = False
             if saved_date_str:
                 try:
@@ -125,7 +125,7 @@ class SafetyChecker:
 
     def reset_daily_stats(self):
         """Reset daily statistics"""
-        today = datetime.now().date()
+        today = datetime.now(timezone.utc).date()
         if today != self.last_reset_date:
             self.daily_loss = 0.0
             self.daily_trades = 0
