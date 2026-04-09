@@ -2892,6 +2892,26 @@ class AgentTools:
             self._log_tool("get_rex_monitor", start, f"error={e}")
             return {"success": False, "reason": f"rex_monitor_error: {e}", "latency_ms": elapsed}
 
+    def get_chart_screenshots(self) -> Dict[str, Any]:
+        """Return pre-captured chart screenshots (H1, M15, M5). Images injected by caller."""
+        start = time.time()
+        ci = getattr(self, '_chart_images', {}) or {}
+        h1 = bool(ci.get("h1_b64"))
+        m15 = bool(ci.get("m15_b64"))
+        m5 = bool(ci.get("m5_b64"))
+        if not h1 and not m15 and not m5:
+            self._log_tool("get_chart_screenshots", start, "no screenshots available")
+            return {"success": False, "reason": "No screenshots captured this cycle"}
+        h1_kb = len(ci["h1_b64"]) // 1024 if h1 else 0
+        m15_kb = len(ci["m15_b64"]) // 1024 if m15 else 0
+        m5_kb = len(ci["m5_b64"]) // 1024 if m5 else 0
+        self._log_tool("get_chart_screenshots", start, f"h1={h1}({h1_kb}KB) m15={m15}({m15_kb}KB) m5={m5}({m5_kb}KB)")
+        return {
+            "success": True,
+            "h1": h1, "m15": m15, "m5": m5,
+            "note": "Charts attached in next message. Analyze candle patterns, S/R zone interactions, volume bars, and momentum visually.",
+        }
+
     def get_oracle_verdict(self) -> Dict[str, Any]:
         """FLO-239: Return the latest Research Manager verdict from the Rex Bull vs Bear debate."""
         start = time.time()

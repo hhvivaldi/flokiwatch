@@ -4471,7 +4471,7 @@ class TradingBot:
             except Exception:
                 pass
 
-            # Capture chart screenshots for Floki vision (GPT-5.4)
+            # Capture chart screenshots (pre-capture; Floki pulls via get_chart_screenshots tool)
             chart_images = None
             try:
                 if getattr(config, 'CHART_SCREENSHOT_ENABLED', False):
@@ -4480,6 +4480,10 @@ class TradingBot:
                     )
             except Exception as _ss_e:
                 log.warning(f"SCREENSHOT | error: {_ss_e}")
+
+            # Store pre-captured images on tools_obj for get_chart_screenshots tool
+            if chart_images:
+                tools_obj._chart_images = chart_images
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

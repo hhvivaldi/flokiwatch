@@ -839,6 +839,11 @@ class AIAgent:
                 "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns alert_level (QUIET/NORMAL/ELEVATED/CRITICAL) and findings.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            {
+                "name": "get_chart_screenshots",
+                "description": "View live XAU/USD chart screenshots (H1, M15, M5) with SRZoneDrawer S/R levels and volume bars. Call when entering a trade, at key levels, or to confirm a pattern visually. Don't call every cycle — only when visual context would change your decision.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
             # FLO-243: get_oracle_verdict removed — verdict now auto-injected at end of trigger_context
             {
                 "name": "write_trading_journal",
@@ -928,41 +933,13 @@ class AIAgent:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        # Build user message: text + optional chart images (GPT-5.4 vision)
+        # Build user message (text only — images available via get_chart_screenshots tool)
         _tc_text = str(trigger_context or "").strip()
-        if chart_images and chart_images.get("success"):
-            content_blocks: list = [{"type": "text", "text": _tc_text}]
-            if chart_images.get("h1_b64"):
-                content_blocks.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{chart_images['h1_b64']}",
-                        "detail": "high",
-                    },
-                })
-                content_blocks.append({"type": "text", "text": "Above: XAUUSD H1 chart. Analyze candle patterns, S/R interactions, and momentum visually."})
-            if chart_images.get("m15_b64"):
-                content_blocks.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{chart_images['m15_b64']}",
-                        "detail": "high",
-                    },
-                })
-                content_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart. Analyze short-term structure and entry timing."})
-            if chart_images.get("m5_b64"):
-                content_blocks.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{chart_images['m5_b64']}",
-                        "detail": "high",
-                    },
-                })
-                content_blocks.append({"type": "text", "text": "Above: XAUUSD M5 chart. Micro-structure: immediate momentum, entry timing, volume conviction on current candle."})
-            messages.append({"role": "user", "content": content_blocks})
-            logger.info(f"FLOKI | vision: h1={'yes' if chart_images.get('h1_b64') else 'no'} m15={'yes' if chart_images.get('m15_b64') else 'no'} m5={'yes' if chart_images.get('m5_b64') else 'no'}")
-        else:
-            messages.append({"role": "user", "content": _tc_text})
+        messages.append({"role": "user", "content": _tc_text})
+
+        # Store chart_images on tools instance for get_chart_screenshots tool access
+        if tools and chart_images:
+            tools._chart_images = chart_images
 
         PER_CALL_TIMEOUT = 90  # httpx timeout set at client level; this is a fallback
         MAX_ITERATIONS = int(self.max_tool_calls) + 2
@@ -1067,6 +1044,24 @@ class AIAgent:
                     dt_ms = int((time.time() - t0) * 1000)
                     tool_trace.append({"name": fname, "input": fargs, "result": result, "latency_ms": dt_ms})
                     messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False, default=str)})
+
+                    # Inject chart images as user message when get_chart_screenshots was called
+                    if fname == "get_chart_screenshots" and isinstance(result, dict) and result.get("success"):
+                        _ci = getattr(tools, '_chart_images', {}) or {}
+                        _img_blocks = [{"type": "text", "text": "Chart screenshots attached. Analyze candle patterns, S/R interactions, volume bars, and momentum visually:"}]
+                        if _ci.get("h1_b64"):
+                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['h1_b64']}", "detail": "high"}})
+                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD H1 chart."})
+                        if _ci.get("m15_b64"):
+                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['m15_b64']}", "detail": "high"}})
+                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart."})
+                        if _ci.get("m5_b64"):
+                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['m5_b64']}", "detail": "high"}})
+                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD M5 chart."})
+                        if len(_img_blocks) > 1:
+                            messages.append({"role": "user", "content": _img_blocks})
+                            logger.info(f"FLOKI | chart images injected via get_chart_screenshots tool")
+
                 continue
 
             text_out = msg.content or ""
