@@ -165,7 +165,7 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
             config=types.GenerateContentConfig(
                 system_instruction=_SYSTEM_INSTRUCTION,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                max_output_tokens=1024,
+                max_output_tokens=2048,
                 temperature=0.7,
             ),
         )
@@ -199,7 +199,9 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
             return None
 
         # Detect grounding bypass — model responding from knowledge instead of searching
-        if raw and not raw.strip().startswith("{"):
+        # Markdown-fenced JSON (```json ... ```) is normal — only flag true plain text
+        _stripped = raw.strip().lstrip("`").lstrip("json").lstrip("\n").strip()
+        if raw and not _stripped.startswith("{"):
             log.warning(f"LUNA_DEEP | GROUNDING_BYPASS — model returned plain text instead of JSON ({latency_ms}ms): {raw[:150]}")
 
         # Extract JSON object from response (may be wrapped in markdown fences)
