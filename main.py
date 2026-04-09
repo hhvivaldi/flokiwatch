@@ -19,6 +19,26 @@ import traceback
 # Add directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# FLO-96: MT5 server time offset (EEST=UTC+3 in summer, EET=UTC+2 in winter).
+# MT5 timestamps (copy_rates, tick.time) are server-local epochs, not UTC.
+# Subtract this offset to convert to true UTC. Cached, refreshes every 60 min.
+_mt5_offset_cache = {"value": 10800, "computed_at": 0.0}
+
+def _mt5_server_offset() -> int:
+    """Return seconds to subtract from MT5 timestamps to get true UTC epoch."""
+    if time.time() - _mt5_offset_cache["computed_at"] < 3600:
+        return _mt5_offset_cache["value"]
+    try:
+        import MetaTrader5 as _mt5_tz
+        _tick = _mt5_tz.symbol_info_tick("XAUUSD")
+        if _tick and _tick.time > 0:
+            offset = int(_tick.time) - int(time.time())
+            _mt5_offset_cache.update({"value": offset, "computed_at": time.time()})
+            return offset
+    except Exception:
+        pass
+    return _mt5_offset_cache["value"]
+
 import config
 from logger import log
 from state_writer import write_state, add_closed_trade
@@ -1829,7 +1849,7 @@ class TradingBot:
                                             tv = 0.0
                                     out.append(
                                         {
-                                            "time": datetime.fromtimestamp(int(r["time"])).isoformat(),
+                                            "time": datetime.utcfromtimestamp(int(r["time"]) - _mt5_server_offset()).isoformat(),
                                             "open": float(r["open"]),
                                             "high": float(r["high"]),
                                             "low": float(r["low"]),
@@ -3027,7 +3047,7 @@ class TradingBot:
                 if rates is not None:
                     for r in rates:
                         m5_candles.append({
-                            "time": datetime.fromtimestamp(int(r["time"]), tz=timezone.utc).isoformat(),
+                            "time": datetime.utcfromtimestamp(int(r["time"]) - _mt5_server_offset()).isoformat(),
                             "o": float(r["open"]),
                             "h": float(r["high"]),
                             "l": float(r["low"]),
@@ -5704,35 +5724,38 @@ class TradingBot:
             # M5 candles
             m5_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
             if m5_rates is not None:
+                _tz_off = _mt5_server_offset()
                 for r in m5_rates:
                     m5_candles.append({
-                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "time": datetime.utcfromtimestamp(int(r["time"]) - _tz_off).isoformat(),
                         "open": float(r["open"]),
                         "high": float(r["high"]),
                         "low": float(r["low"]),
                         "close": float(r["close"]),
                         "tick_volume": int(r["tick_volume"]),
                     })
-            
+
             # D1 candles (weekly context)
             d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, 10)
             if d1_rates is not None:
+                _tz_off = _mt5_server_offset()
                 for r in d1_rates:
                     d1_candles.append({
-                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "time": datetime.utcfromtimestamp(int(r["time"]) - _tz_off).isoformat(),
                         "open": float(r["open"]),
                         "high": float(r["high"]),
                         "low": float(r["low"]),
                         "close": float(r["close"]),
                         "tick_volume": int(r["tick_volume"]),
                     })
-            
+
             # H4 candles (2-3 day structure)
             h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, 20)
             if h4_rates is not None:
+                _tz_off = _mt5_server_offset()
                 for r in h4_rates:
                     h4_candles.append({
-                        "time": datetime.fromtimestamp(r["time"]).isoformat(),
+                        "time": datetime.utcfromtimestamp(int(r["time"]) - _tz_off).isoformat(),
                         "open": float(r["open"]),
                         "high": float(r["high"]),
                         "low": float(r["low"]),
