@@ -2917,8 +2917,9 @@
           if (regimeEl) regimeEl.textContent = (b.market_regime || '—').toUpperCase().replace('_', ' ');
 
           var pats = b.patterns_detected || [];
+          var PATTERN_LABELS = {'blow_off_reversal':'Blow-Off Reversal','news_price_divergence':'News-Price Divergence','safe_haven_flow':'Safe Haven Flow','forced_liquidation':'Forced Liquidation','dollar_gold_correlation_break':'Dollar-Gold Correlation Break'};
           if (patternsEl) {
-            patternsEl.textContent = pats.length > 0 ? pats.join(', ') : 'none';
+            patternsEl.textContent = pats.length > 0 ? pats.map(function(p){return PATTERN_LABELS[p]||p.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}).join(', ') : 'none';
             patternsEl.style.color = pats.length > 0 ? '#f59e0b' : '#6b7280';
           }
 
@@ -3684,9 +3685,11 @@
                 var pats = lm.patterns_detected || [];
                 var l4 = '';
                 if (Array.isArray(pats) && pats.length > 0) {
+                  var PLABELS = {'blow_off_reversal':'Blow-Off Reversal','news_price_divergence':'News-Price Divergence','safe_haven_flow':'Safe Haven Flow','forced_liquidation':'Forced Liquidation','dollar_gold_correlation_break':'Dollar-Gold Correlation Break'};
                   var patHtml = pats.map(function(p) {
-                    var pc = (p === 'forced_liquidation' || p === 'news_price_divergence') ? '#ef4444' : (p === 'safe_haven_flow' ? '#4ade80' : '#f59e0b');
-                    return '<span style="background:' + pc + '22;color:' + pc + ';border:1px solid ' + pc + '44;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:800;letter-spacing:0.06em">' + esc(p.replace(/_/g, ' ').toUpperCase()) + '</span>';
+                    var pc = (p === 'forced_liquidation' || p === 'news_price_divergence' || p === 'blow_off_reversal') ? '#ef4444' : (p === 'safe_haven_flow' ? '#4ade80' : '#f59e0b');
+                    var label = PLABELS[p] || p.replace(/_/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase()});
+                    return '<span style="background:' + pc + '22;color:' + pc + ';border:1px solid ' + pc + '44;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:800;letter-spacing:0.06em">' + esc(label) + '</span>';
                   }).join(' ');
                   l4 = '<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">' + patHtml + '</div>';
                 }
