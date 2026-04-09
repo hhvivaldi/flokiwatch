@@ -107,6 +107,8 @@ main.py (orchestrator)
 Plugin skills are at: `~/.claude/plugins/cache/claude-code-skills/{plugin}/{version}/{skill}/SKILL.md`
 User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `/{skill-name}`
 
+**Rule 19 — Verify Tools Before Blaming Agent.** When an agent appears to ignore a tool, verify the tool works first. Run it manually or check logs for error responses. A broken tool looks identical to an adoption problem — but the fix is completely different. (Learned: Floki "ignored" pending orders for a full day; root cause was `_get_balance` AttributeError making the tool fail silently.)
+
 **Bug Classification:** P0=crash/corruption → fix now. P1=logic error → with approval. P2=smell → deferred.
 
 ## File Conventions
