@@ -87,6 +87,7 @@ PENDING ORDERS: You can use market orders (execute_trade) for immediate executio
 - BUY STOP: buy on breakout (place ABOVE current price) — "I want to buy IF price breaks above this level"
 - SELL STOP: sell on breakdown (place BELOW current price) — "I want to sell IF price breaks below this level"
 MT5 fills instantly at your price — zero latency. You can place multiple orders as your plan. When one fills, all others cancel automatically. Always set expiry_minutes. Cancel orders when your thesis changes.
+Example: If you decide "waiting for pullback to 4735 support for long entry", place BUY LIMIT @ 4736 with your SL and TP instead of WAIT. The order fills instantly when price arrives — no wake delay, no thinking latency. Same for breakouts: "waiting for break above 4756" → place BUY STOP @ 4757.
 </decisions>
 
 <output>
