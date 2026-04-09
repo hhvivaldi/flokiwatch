@@ -9,6 +9,23 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
 import config
+
+# FLO-96: MT5 server time offset (shared helper, same as main.py)
+_mt5_offset_cache_ex = {"value": 10800, "computed_at": 0.0}
+
+def _mt5_server_offset() -> int:
+    """Return seconds to subtract from MT5 timestamps to get true UTC epoch."""
+    if time.time() - _mt5_offset_cache_ex["computed_at"] < 3600:
+        return _mt5_offset_cache_ex["value"]
+    try:
+        _tick = mt5.symbol_info_tick("XAUUSD")
+        if _tick and _tick.time > 0:
+            offset = int(_tick.time) - int(time.time())
+            _mt5_offset_cache_ex.update({"value": offset, "computed_at": time.time()})
+            return offset
+    except Exception:
+        pass
+    return _mt5_offset_cache_ex["value"]
 from logger import log
 from alerts import (
     alert_trade_executed, alert_trade_closed, 
@@ -649,7 +666,7 @@ class MT5Executor:
                 tp=pos.tp,
                 profit=pos.profit,
                 profit_pips=profit_pips,
-                open_time=datetime.fromtimestamp(pos.time),
+                open_time=datetime.utcfromtimestamp(int(pos.time) - _mt5_server_offset()),
                 magic=pos.magic,
                 comment=pos.comment
             ))
@@ -1062,9 +1079,9 @@ class MT5Executor:
                 'commission': deal.commission,
                 'swap': deal.swap,
                 'reason': reason,
-                'close_time': datetime.fromtimestamp(deal.time)
+                'close_time': datetime.utcfromtimestamp(int(deal.time) - _mt5_server_offset())
             }
-        
+
         entry_types_found = [self._entry_type_name(d.entry) for d in deals]
         log.warning(
             f"Deal history [{level}]: {len(deals)} deals with correct position_id but no close deal "
@@ -1192,7 +1209,7 @@ class MT5Executor:
             f"entry={entry_name}(raw={deal.entry}) | type={type_name}(raw={deal.type}) | "
             f"price={deal.price:.2f} | profit={deal.profit:.2f} | volume={deal.volume} | "
             f"commission={deal.commission:.2f} | swap={deal.swap:.2f} | "
-            f"reason={deal.reason} | time={datetime.fromtimestamp(deal.time)}"
+            f"reason={deal.reason} | time={datetime.utcfromtimestamp(int(deal.time) - _mt5_server_offset())}"
         )
     
     def _get_error_message(self, code: int) -> str:
@@ -1425,8 +1442,8 @@ def get_recent_closed_deals(hours: int = 48) -> List[dict]:
                 'commission': deal.commission,
                 'swap': deal.swap,
                 'reason': reason,
-                'open_time': datetime.fromtimestamp(open_deal.time) if open_deal else None,
-                'close_time': datetime.fromtimestamp(deal.time),
+                'open_time': datetime.utcfromtimestamp(int(open_deal.time) - _mt5_server_offset()) if open_deal else None,
+                'close_time': datetime.utcfromtimestamp(int(deal.time) - _mt5_server_offset()),
                 'comment': getattr(open_deal, 'comment', '') if open_deal else '',
             })
         

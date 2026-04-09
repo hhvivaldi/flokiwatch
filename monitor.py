@@ -635,7 +635,7 @@ class PositionMonitor:
     
     def _check_max_time(self, pos: PositionInfo) -> Optional[dict]:
         """Check maximum open position time"""
-        time_open = datetime.now() - pos.open_time
+        time_open = datetime.utcnow() - pos.open_time
         max_time = timedelta(hours=config.MAX_POSITION_HOURS)
         
         if time_open < max_time:
