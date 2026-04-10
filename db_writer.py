@@ -184,6 +184,18 @@ def init_db() -> None:
         except Exception:
             pass
 
+        # FLO-269: Migration — add MFE/MAE/final_sl columns to trades
+        for col_name, col_type in [
+            ("mfe_points", "REAL"),
+            ("mae_points", "REAL"),
+            ("final_sl", "REAL"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE trades ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS account_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -363,6 +375,23 @@ def init_db() -> None:
             except sqlite3.OperationalError:
                 pass
 
+        # FLO-269: trade_adjustments table — SL/TP modification history for post-trade reports
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trade_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                old_sl REAL,
+                new_sl REAL,
+                old_tp REAL,
+                new_tp REAL,
+                source TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trade_adjustments_ticket ON trade_adjustments(ticket)"
+        )
+
         conn.commit()
         conn.close()
         db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
@@ -421,6 +450,59 @@ def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str
             conn.close()
     except Exception as e:
         log.debug(f"db_writer: failed to record agent event: {e}")
+
+
+def record_trade_adjustment(
+    ticket: int,
+    old_sl: Optional[float],
+    new_sl: Optional[float],
+    old_tp: Optional[float],
+    new_tp: Optional[float],
+    source: str,
+) -> None:
+    """Record an SL/TP modification for post-trade report (FLO-269).
+
+    Sources: 'floki_adjust', 'monitor_breakeven', 'monitor_trailing'.
+    Must never throw outward.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            conn.execute(
+                "INSERT INTO trade_adjustments (ticket, timestamp, old_sl, new_sl, old_tp, new_tp, source) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    int(ticket),
+                    datetime.utcnow().isoformat(),
+                    old_sl,
+                    new_sl,
+                    old_tp,
+                    new_tp,
+                    str(source),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to record trade adjustment: {e}")
+
+
+def get_trade_adjustments(ticket: int) -> List[Dict[str, Any]]:
+    """Return all SL/TP adjustments for a given ticket, ordered chronologically."""
+    try:
+        conn = _get_connection()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM trade_adjustments WHERE ticket = ? ORDER BY timestamp ASC",
+                (int(ticket),),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+    except Exception:
+        return []
 
 
 def record_analysis(last_analysis: Dict[str, Any]) -> None:
@@ -614,15 +696,19 @@ def record_trade_close(
     close_reason: str,
     close_time: Optional[str] = None,
     breakeven_activated: Optional[bool] = None,
+    mfe_points: Optional[float] = None,
+    mae_points: Optional[float] = None,
+    final_sl: Optional[float] = None,
 ) -> None:
-    """Update trade with close data."""
+    """Update trade with close data (FLO-269: includes MFE/MAE/final_sl)."""
     try:
         conn = _get_connection()
         try:
             be_int = 1 if breakeven_activated else (0 if breakeven_activated is False else None)
             cursor = conn.execute(
                 """UPDATE trades
-                   SET close_price = ?, profit = ?, close_reason = ?, close_time = ?, breakeven_activated = ?
+                   SET close_price = ?, profit = ?, close_reason = ?, close_time = ?,
+                       breakeven_activated = ?, mfe_points = ?, mae_points = ?, final_sl = ?
                    WHERE ticket = ?""",
                 (
                     close_price,
@@ -630,6 +716,9 @@ def record_trade_close(
                     close_reason,
                     close_time or datetime.utcnow().isoformat(),
                     be_int,
+                    mfe_points,
+                    mae_points,
+                    final_sl,
                     ticket,
                 ),
             )

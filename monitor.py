@@ -554,7 +554,17 @@ class PositionMonitor:
             self.breakeven_hit_tickets.add(pos.ticket)
             self.breakeven_activated_tickets[pos.ticket] = True
             self.trailing_sl[pos.ticket] = breakeven_sl
-            
+
+            # FLO-269: Record SL adjustment for post-trade report
+            try:
+                from db_writer import record_trade_adjustment
+                record_trade_adjustment(
+                    ticket=pos.ticket, old_sl=pos.sl, new_sl=breakeven_sl,
+                    old_tp=None, new_tp=None, source="monitor_breakeven",
+                )
+            except Exception:
+                pass
+
             # Confirm that trailing triggers did NOT change after breakeven
             sl_orig = self._get_original_sl_pips(pos)
             tr_trig = sl_orig * getattr(config, 'TRAILING_ATR_MULT', 0.7)
@@ -627,11 +637,21 @@ class PositionMonitor:
         
         # Move SL
         result = modify_sl(pos.ticket, new_sl)
-        
+
         if result.success:
             old_sl = current_sl
             self.trailing_sl[pos.ticket] = new_sl
-            
+
+            # FLO-269: Record SL adjustment for post-trade report
+            try:
+                from db_writer import record_trade_adjustment
+                record_trade_adjustment(
+                    ticket=pos.ticket, old_sl=old_sl, new_sl=new_sl,
+                    old_tp=None, new_tp=None, source="monitor_trailing",
+                )
+            except Exception:
+                pass
+
             log.position_update(pos.ticket, "TRAILING_STOP", f"SL: {old_sl:.2f} → {new_sl:.2f}")
             alert_trailing_stop(
                 pos.ticket,

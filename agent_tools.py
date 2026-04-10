@@ -2198,6 +2198,16 @@ class AgentTools:
             # Record successful adjustment for rate limiting
             self._record_adjustment(t)
 
+            # FLO-269: Record SL/TP adjustment for post-trade report
+            try:
+                from db_writer import record_trade_adjustment
+                record_trade_adjustment(
+                    ticket=t, old_sl=old_sl, new_sl=sl_f,
+                    old_tp=old_tp, new_tp=tp_f, source="floki_adjust",
+                )
+            except Exception:
+                pass
+
             _fmt = lambda v: f"{v:.2f}" if v is not None else "—"
             log.info(
                 f"ADJUST_TRADE | SL: {_fmt(old_sl)}→{_fmt(sl_f)} | "
