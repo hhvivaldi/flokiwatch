@@ -712,12 +712,15 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
         reference_time = _get_reference_time(raw_data)
         server_utc_offset_hours = _get_server_utc_offset_hours(raw_data)
         
+        # FLO-96: Convert event times to UTC for Floki's display
+        _utc_offset_td = timedelta(hours=server_utc_offset_hours)
+
         upcoming = []
         for event in events:
             event_time = _parse_event_time(event.get("time_server", ""))
             if event_time is None:
                 continue
-            
+
             importance = event.get("importance", "MEDIUM")
             minutes_until = (event_time - reference_time).total_seconds() / 60
             
@@ -741,9 +744,10 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                 time_until = f"{mins_ago}m ago"
                 is_past = True
             
+            _event_utc = event_time - _utc_offset_td
             upcoming.append({
                 "name": event.get("name", "?"),
-                "time": event_time.strftime("%H:%M"),
+                "time": _event_utc.strftime("%H:%M") + " UTC",
                 "importance": importance,
                 "time_until": time_until,
                 "is_past": is_past,
@@ -767,7 +771,9 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                     continue
                 name = event.get("name", "?")
                 # If not already included, add it.
-                if not any(str(x.get("name")) == str(name) and str(x.get("time")) == event_time.strftime("%H:%M") for x in upcoming):
+                _safe_utc = event_time - _utc_offset_td
+                _safe_time_str = _safe_utc.strftime("%H:%M") + " UTC"
+                if not any(str(x.get("name")) == str(name) and str(x.get("time")) == _safe_time_str for x in upcoming):
                     if minutes_until > 0:
                         time_until = f"{int(minutes_until)}m"
                         is_past = False
@@ -777,7 +783,7 @@ def get_upcoming_events(max_events: int = 5) -> List[Dict]:
                     upcoming.append(
                         {
                             "name": name,
-                            "time": event_time.strftime("%H:%M"),
+                            "time": _safe_time_str,
                             "importance": importance,
                             "time_until": time_until,
                             "is_past": is_past,
