@@ -1217,6 +1217,13 @@ class TradingBot:
 
                                         run_sage_auditor()
 
+                                        # FLO-269: EOD counterfactual replay for post-trade reports
+                                        try:
+                                            from trade_reflexion import run_eod_counterfactuals
+                                            run_eod_counterfactuals()
+                                        except Exception as e_cf:
+                                            log.debug(f"EOD_COUNTERFACTUAL | error (ignored): {e_cf}")
+
                                         # FLO-113: Update sage_last_run.json so dashboard shows correct date
                                         try:
                                             import json as _json
@@ -4461,6 +4468,15 @@ class TradingBot:
             # Oracle had 44% accuracy in live; forcing it may hurt Qwen's decisions.
             # Floki can call get_oracle_verdict tool when he wants advisory input.
 
+            # FLO-269: Inject last trade report (hard data, no advice)
+            try:
+                from trade_reflexion import get_last_trade_report_summary
+                _trade_report = get_last_trade_report_summary()
+                if _trade_report:
+                    trigger_context += f"\n{_trade_report}\n"
+            except Exception:
+                pass
+
             # Self-assessment prompt — diagnostic only
             trigger_context += (
                 "\n<self_assessment>\n"
@@ -6027,6 +6043,15 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-269: Inject last trade report (reactive path)
+            try:
+                from trade_reflexion import get_last_trade_report_summary
+                _trade_report_r = get_last_trade_report_summary()
+                if _trade_report_r:
+                    trigger_context += f"\n{_trade_report_r}\n"
+            except Exception:
+                pass
+
             # Self-assessment prompt — diagnostic only
             trigger_context += (
                 "\n<self_assessment>\n"
@@ -6995,6 +7020,13 @@ class TradingBot:
                         from trade_reflexion import run_trade_reflexion_async, schedule_delayed_hindsight
                         run_trade_reflexion_async(action)
                         schedule_delayed_hindsight(action)
+                    except Exception:
+                        pass
+
+                    # FLO-269: Generate hard-data post-trade report
+                    try:
+                        from trade_reflexion import generate_post_trade_report
+                        generate_post_trade_report(action)
                     except Exception:
                         pass
                 
