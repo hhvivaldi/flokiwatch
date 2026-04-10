@@ -131,10 +131,8 @@ class PositionMonitor:
             if positions:
                 log.info(f"   Monitor: {len(positions)} position(s) detected at startup")
 
-        # Update known_positions with current positions
-        self.known_positions = {pos.ticket: pos for pos in positions}
-
         # FLO-263: ONE FILLS → ALL CANCEL — detect pending order fills
+        # MUST run BEFORE known_positions update so we can detect new positions
         try:
             import config as _cfg
             if getattr(_cfg, "PENDING_ORDERS_ENABLED", False):
@@ -164,10 +162,36 @@ class PositionMonitor:
                                 )
                         except Exception as _wake_err:
                             log.warning(f"PENDING_FILL | wake failed: {_wake_err}")
+                    elif _filled and not _new_positions:
+                        # Pending order disappeared but no new position detected (edge case: filled between cycles)
+                        log.warning(f"PENDING_ORDER | ORDER_DISAPPEARED | tickets={_filled} — may have filled or expired, check MT5")
+                elif not self.known_pending_tickets and _pending_tickets:
+                    # First time seeing pending orders this session — populate tracker
+                    log.info(f"PENDING_ORDER | TRACKING {len(_pending_tickets)} pending orders")
+
+                # Fallback: new position appeared while pending orders exist (catches restart edge case)
+                if self._initialized and _pending_tickets:
+                    _new_pos_fallback = current_tickets - set(self.known_positions.keys())
+                    if _new_pos_fallback:
+                        log.info(f"PENDING_ORDER | NEW_POSITION_WITH_PENDING | positions={_new_pos_fallback} | cancelling {len(_pending_tickets)} pending orders")
+                        from executor import get_executor
+                        get_executor().cancel_all_pending()
+                        try:
+                            if self.bot and hasattr(self.bot, "agent_proactive_out_of_cycle"):
+                                log.info(f"FLOKI_SCHEDULE | PENDING_FILL (fallback) — new position detected while pending orders active, waking Floki")
+                                self.bot.agent_proactive_out_of_cycle(
+                                    trigger_type="PENDING_FILL",
+                                    trigger_data={"new_positions": list(_new_pos_fallback)},
+                                )
+                        except Exception as _wake_err:
+                            log.warning(f"PENDING_FILL | fallback wake failed: {_wake_err}")
 
                 self.known_pending_tickets = _pending_tickets
         except Exception as _pend_err:
             log.debug(f"   Monitor: pending order check error (non-blocking): {_pend_err}")
+
+        # Update known_positions with current positions (AFTER pending fill check)
+        self.known_positions = {pos.ticket: pos for pos in positions}
 
         # Set _initialized AFTER known_positions is populated so balance capture sees correct state
         if not self._initialized:
