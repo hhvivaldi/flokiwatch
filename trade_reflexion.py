@@ -661,3 +661,425 @@ def schedule_delayed_hindsight(action: Dict) -> None:
     t = threading.Thread(target=_delayed, daemon=True)
     t.start()
     log.info(f"REFLEXION | hindsight scheduled for ticket={ticket} in {HINDSIGHT_DELAY_SECONDS}s")
+
+
+# -------------------------------------------------------------------------
+# FLO-269: Post-trade report generator (Steps 3 & 4)
+# -------------------------------------------------------------------------
+
+_REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "post_trade_reports")
+
+
+def generate_post_trade_report(action: Dict) -> Optional[Dict]:
+    """Build a hard-data post-trade report from trades + trade_adjustments tables.
+
+    Called immediately after a confirmed trade close. Counterfactual field
+    is left as None — populated later by run_eod_counterfactuals() at 21:00 UTC.
+
+    Args:
+        action: closed trade dict from monitor (ticket, direction, open_price,
+                close_price, profit, close_time, close_type, etc.)
+
+    Returns:
+        The report dict, or None on failure.
+    """
+    try:
+        ticket = action.get("ticket")
+        if not ticket:
+            return None
+
+        from db_writer import get_trade_adjustments
+
+        import sqlite3
+        import config as _cfg
+
+        db_path = os.path.abspath(getattr(_cfg, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM trades WHERE ticket = ?", (int(ticket),)
+        ).fetchone()
+        conn.close()
+
+        if not row:
+            log.debug(f"POST_TRADE_REPORT | ticket #{ticket} not in trades table")
+            return None
+
+        trade = dict(row)
+        adjustments = get_trade_adjustments(int(ticket))
+
+        # Original SL: first adjustment's old_sl, else trades.sl
+        original_sl = trade.get("sl")
+        if adjustments:
+            original_sl = adjustments[0].get("old_sl") or original_sl
+
+        # MFE / MAE / capture rate
+        mfe = trade.get("mfe_points")
+        mae = trade.get("mae_points")
+        profit = action.get("profit") or trade.get("profit")
+        final_sl = trade.get("final_sl") or action.get("orig_sl")
+
+        capture_rate = None
+        if mfe is not None and mfe > 0 and profit is not None:
+            try:
+                capture_rate = round((float(profit) / float(mfe)) * 100, 1)
+            except Exception:
+                pass
+
+        # SL adjustment timeline
+        sl_timeline = []
+        for adj in adjustments:
+            ts = adj.get("timestamp", "")
+            # Compute minutes after open
+            minutes_after = None
+            try:
+                open_time_str = trade.get("open_time") or action.get("open_time")
+                if open_time_str and ts:
+                    open_dt = datetime.fromisoformat(open_time_str.replace("Z", "+00:00"))
+                    adj_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    if open_dt.tzinfo is None:
+                        open_dt = open_dt.replace(tzinfo=timezone.utc)
+                    if adj_dt.tzinfo is None:
+                        adj_dt = adj_dt.replace(tzinfo=timezone.utc)
+                    minutes_after = round((adj_dt - open_dt).total_seconds() / 60)
+            except Exception:
+                pass
+            sl_timeline.append({
+                "timestamp": ts,
+                "minutes_after_open": minutes_after,
+                "old_sl": adj.get("old_sl"),
+                "new_sl": adj.get("new_sl"),
+                "old_tp": adj.get("old_tp"),
+                "new_tp": adj.get("new_tp"),
+                "source": adj.get("source"),
+            })
+
+        # Duration
+        duration_minutes = None
+        try:
+            open_t = trade.get("open_time") or action.get("open_time")
+            close_t = trade.get("close_time") or action.get("close_time")
+            if open_t and close_t:
+                od = datetime.fromisoformat(open_t.replace("Z", "+00:00"))
+                cd = datetime.fromisoformat(close_t.replace("Z", "+00:00"))
+                if od.tzinfo is None:
+                    od = od.replace(tzinfo=timezone.utc)
+                if cd.tzinfo is None:
+                    cd = cd.replace(tzinfo=timezone.utc)
+                duration_minutes = round((cd - od).total_seconds() / 60)
+        except Exception:
+            pass
+
+        report = {
+            "ticket": int(ticket),
+            "generated_at": datetime.utcnow().isoformat(),
+            "direction": action.get("direction") or trade.get("direction"),
+            "entry_price": trade.get("open_price"),
+            "close_price": action.get("close_price") or trade.get("close_price"),
+            "original_sl": original_sl,
+            "final_sl": final_sl,
+            "tp": trade.get("tp"),
+            "pnl": profit,
+            "close_type": action.get("close_type"),
+            "close_reason": action.get("reason") or trade.get("close_reason"),
+            "open_time": trade.get("open_time"),
+            "close_time": trade.get("close_time") or action.get("close_time"),
+            "duration_minutes": duration_minutes,
+            "mfe_points": mfe,
+            "mae_points": mae,
+            "capture_rate_pct": capture_rate,
+            "sl_adjustments": sl_timeline,
+            "sl_adjustment_count": len(sl_timeline),
+            "counterfactual": None,  # Populated by run_eod_counterfactuals()
+        }
+
+        # Write to data/post_trade_reports/{ticket}.json
+        os.makedirs(_REPORTS_DIR, exist_ok=True)
+        report_path = os.path.join(_REPORTS_DIR, f"{ticket}.json")
+        tmp = report_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, default=str)
+        os.replace(tmp, report_path)
+
+        _fmt_pnl = f"${float(profit):+.2f}" if profit is not None else "?"
+        _fmt_cap = f"{capture_rate}%" if capture_rate is not None else "?"
+        log.info(
+            f"POST_TRADE_REPORT | #{ticket} | P&L={_fmt_pnl} | "
+            f"MFE={mfe} | capture={_fmt_cap} | SL_adj={len(sl_timeline)}"
+        )
+        return report
+
+    except Exception as e:
+        log.warning(f"POST_TRADE_REPORT | failed for ticket={action.get('ticket')}: {e}")
+        return None
+
+
+def run_eod_counterfactuals() -> int:
+    """End-of-day counterfactual replay for all trades closed today.
+
+    Called at 21:00 UTC alongside Sage. For each trade:
+    - Fetches M5 candles from close_time to now
+    - Replays original SL and TP against candle highs/lows
+    - Updates the report JSON with counterfactual results
+
+    Returns:
+        Number of reports enriched.
+    """
+    enriched = 0
+    try:
+        import sqlite3
+        import config as _cfg
+        import MetaTrader5 as mt5
+        from datetime import timedelta
+        import time as _time
+
+        if not mt5.initialize():
+            log.warning("EOD_COUNTERFACTUAL | MT5 not available")
+            return 0
+
+        # Get today's closed trades
+        db_path = os.path.abspath(getattr(_cfg, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.row_factory = sqlite3.Row
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        rows = conn.execute(
+            "SELECT ticket, direction, open_price, sl, tp, close_price, close_time "
+            "FROM trades WHERE close_time LIKE ? AND close_price IS NOT NULL",
+            (f"{today}%",),
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            log.info("EOD_COUNTERFACTUAL | no closed trades today")
+            return 0
+
+        from db_writer import get_trade_adjustments
+
+        for row in rows:
+            try:
+                trade = dict(row)
+                ticket = trade["ticket"]
+                direction = (trade.get("direction") or "").upper()
+                entry = trade.get("open_price")
+                tp = trade.get("tp")
+                close_time_str = trade.get("close_time")
+
+                if not all([direction, entry, close_time_str]):
+                    continue
+
+                # Original SL: first adjustment's old_sl, else trades.sl
+                adjustments = get_trade_adjustments(int(ticket))
+                original_sl = trade.get("sl")
+                if adjustments:
+                    original_sl = adjustments[0].get("old_sl") or original_sl
+
+                if original_sl is None:
+                    continue
+
+                # Fetch M5 candles from close_time to now
+                close_dt = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+                if close_dt.tzinfo is None:
+                    close_dt = close_dt.replace(tzinfo=timezone.utc)
+
+                # Adjust for server time offset
+                try:
+                    tick = mt5.symbol_info_tick("XAUUSD")
+                    if tick and tick.time:
+                        server_offset_s = int(tick.time) - int(_time.time())
+                        close_dt = close_dt - timedelta(seconds=server_offset_s)
+                except Exception:
+                    pass
+
+                now_dt = datetime.utcnow()
+                bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, now_dt)
+
+                if bars is None or len(bars) == 0:
+                    continue
+
+                # Replay: walk candles, check if original SL or TP is hit
+                original_sl_hit = False
+                original_sl_hit_time = None
+                tp_hit = False
+                tp_hit_time = None
+                tp_hit_pnl = None
+
+                for bar in bars:
+                    bar_time = datetime.utcfromtimestamp(int(bar[0])).isoformat()
+                    bar_high = float(bar[2])
+                    bar_low = float(bar[3])
+
+                    if direction == "BUY":
+                        # SL hit if low <= original_sl
+                        if not original_sl_hit and bar_low <= float(original_sl):
+                            original_sl_hit = True
+                            original_sl_hit_time = bar_time
+                        # TP hit if high >= tp
+                        if tp and not tp_hit and bar_high >= float(tp):
+                            tp_hit = True
+                            tp_hit_time = bar_time
+                            tp_hit_pnl = round(float(tp) - float(entry), 2)
+                    else:  # SELL
+                        if not original_sl_hit and bar_high >= float(original_sl):
+                            original_sl_hit = True
+                            original_sl_hit_time = bar_time
+                        if tp and not tp_hit and bar_low <= float(tp):
+                            tp_hit = True
+                            tp_hit_time = bar_time
+                            tp_hit_pnl = round(float(entry) - float(tp), 2)
+
+                    # If both hit in same candle, SL takes priority (conservative)
+                    if original_sl_hit and tp_hit and original_sl_hit_time == tp_hit_time:
+                        tp_hit = False
+                        tp_hit_time = None
+                        tp_hit_pnl = None
+
+                    # If SL hit before TP, TP doesn't count
+                    if original_sl_hit and not tp_hit:
+                        pass  # keep searching for TP only if SL not yet hit
+                    if original_sl_hit and original_sl_hit_time and tp_hit_time:
+                        if original_sl_hit_time < tp_hit_time:
+                            # SL hit first — TP is moot
+                            tp_hit = False
+                            tp_hit_time = None
+                            tp_hit_pnl = None
+
+                # Hours of data available
+                hours_of_data = len(bars) * 5 / 60
+
+                counterfactual = {
+                    "original_sl": float(original_sl),
+                    "original_sl_survived": not original_sl_hit,
+                    "original_sl_hit_time": original_sl_hit_time,
+                    "tp_would_have_been_hit": tp_hit,
+                    "tp_hit_time": tp_hit_time,
+                    "tp_hit_pnl": tp_hit_pnl,
+                    "hours_of_data": round(hours_of_data, 1),
+                    "bars_analyzed": len(bars),
+                    "analyzed_at": datetime.utcnow().isoformat(),
+                }
+
+                # Load existing report and update
+                report_path = os.path.join(_REPORTS_DIR, f"{ticket}.json")
+                if os.path.exists(report_path):
+                    with open(report_path, "r", encoding="utf-8") as f:
+                        report = json.load(f)
+                    report["counterfactual"] = counterfactual
+                    tmp = report_path + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        json.dump(report, f, indent=2, default=str)
+                    os.replace(tmp, report_path)
+                else:
+                    # No report from Step 3 — create minimal one
+                    os.makedirs(_REPORTS_DIR, exist_ok=True)
+                    report = {"ticket": ticket, "counterfactual": counterfactual}
+                    tmp = report_path + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        json.dump(report, f, indent=2, default=str)
+                    os.replace(tmp, report_path)
+
+                sl_msg = "survived" if not original_sl_hit else f"hit at {original_sl_hit_time}"
+                tp_msg = f"hit at {tp_hit_time} = +${tp_hit_pnl}" if tp_hit else "not reached"
+                log.info(
+                    f"EOD_COUNTERFACTUAL | #{ticket} | orig_SL {sl_msg} | TP {tp_msg} | "
+                    f"{len(bars)} bars ({hours_of_data:.1f}h)"
+                )
+                enriched += 1
+
+            except Exception as e:
+                log.debug(f"EOD_COUNTERFACTUAL | error on ticket={row['ticket']}: {e}")
+
+    except Exception as e:
+        log.warning(f"EOD_COUNTERFACTUAL | failed: {e}")
+
+    log.info(f"EOD_COUNTERFACTUAL | enriched {enriched} reports")
+    return enriched
+
+
+def get_last_trade_report_summary() -> Optional[str]:
+    """Return a 2-3 line XML summary of the most recent post-trade report.
+
+    Used by trigger_context injection (Step 5). Returns None if no report
+    exists or report is stale (>24h).
+    """
+    try:
+        if not os.path.isdir(_REPORTS_DIR):
+            return None
+
+        # Find most recent report by file mtime
+        files = [
+            os.path.join(_REPORTS_DIR, f)
+            for f in os.listdir(_REPORTS_DIR)
+            if f.endswith(".json")
+        ]
+        if not files:
+            return None
+
+        latest = max(files, key=os.path.getmtime)
+
+        # Stale check: >24h old
+        age_hours = (time.time() - os.path.getmtime(latest)) / 3600
+        if age_hours > 24:
+            return None
+
+        with open(latest, "r", encoding="utf-8") as f:
+            report = json.load(f)
+
+        ticket = report.get("ticket", "?")
+        direction = report.get("direction", "?")
+        pnl = report.get("pnl")
+        close_type = report.get("close_type", "?")
+        mfe = report.get("mfe_points")
+        mae = report.get("mae_points")
+        capture = report.get("capture_rate_pct")
+        adj_count = report.get("sl_adjustment_count", 0)
+
+        # Build SL adjustment summary
+        sl_summary = "none"
+        adjustments = report.get("sl_adjustments", [])
+        if adjustments:
+            parts = []
+            for a in adjustments:
+                mins = a.get("minutes_after_open")
+                src = a.get("source", "?")
+                old = a.get("old_sl")
+                new = a.get("new_sl")
+                time_str = f"{mins}min" if mins is not None else "?"
+                parts.append(f"{time_str}: {old}→{new} ({src})")
+            sl_summary = "; ".join(parts)
+
+        pnl_str = f"${float(pnl):+.2f}" if pnl is not None else "?"
+        mfe_str = f"{mfe:+.1f}pts" if mfe is not None else "?"
+        mae_str = f"{mae:+.1f}pts" if mae is not None else "?"
+        cap_str = f"{capture}%" if capture is not None else "?"
+
+        lines = [
+            f'<last_trade_report ticket="{ticket}" direction="{direction}" pnl="{pnl_str}" close="{close_type}">',
+            f"  MFE: {mfe_str} | MAE: {mae_str} | Captured: {cap_str} | SL changes: {adj_count} ({sl_summary})",
+        ]
+
+        # Counterfactual line (only if populated)
+        cf = report.get("counterfactual")
+        if cf:
+            sl_survived = cf.get("original_sl_survived")
+            tp_hit = cf.get("tp_would_have_been_hit")
+            tp_time = cf.get("tp_hit_time", "")
+            tp_pnl = cf.get("tp_hit_pnl")
+            hours = cf.get("hours_of_data", 0)
+
+            cf_parts = []
+            if sl_survived is True:
+                cf_parts.append("original SL survived")
+            elif sl_survived is False:
+                cf_parts.append(f"original SL hit at {cf.get('original_sl_hit_time', '?')}")
+            if tp_hit:
+                cf_parts.append(f"TP hit at {tp_time} = +${tp_pnl}")
+            elif sl_survived:
+                cf_parts.append(f"TP not reached in {hours:.0f}h window")
+            lines.append(f"  Counterfactual ({hours:.0f}h window): {', '.join(cf_parts)}")
+
+        lines.append("</last_trade_report>")
+        return "\n".join(lines)
+
+    except Exception as e:
+        log.debug(f"POST_TRADE_REPORT | summary failed: {e}")
+        return None
