@@ -1033,6 +1033,15 @@ class AIAgent:
                     total_input_tokens += _last_prompt_tokens
                     total_output_tokens += usage.completion_tokens or 0
                     last_model = resp.model or self.model
+                    # FLO-96: Log context caching metrics if available
+                    try:
+                        _ptd = getattr(usage, "prompt_tokens_details", None)
+                        if _ptd:
+                            _cached = getattr(_ptd, "cached_tokens", 0) or 0
+                            if _cached > 0:
+                                logger.info(f"FLOKI_CACHE | iter={iteration} cached={_cached}/{_last_prompt_tokens} ({_cached/_last_prompt_tokens*100:.0f}%)")
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
