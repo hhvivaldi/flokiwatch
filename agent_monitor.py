@@ -17,6 +17,7 @@ class AgentMonitor:
         self.last_price_used: Optional[float] = None
         self.last_trade_pnl_points: Optional[float] = None
         self.max_profit_seen_points_by_ticket: Dict[int, float] = {}
+        self.min_profit_seen_points_by_ticket: Dict[int, float] = {}  # FLO-269: MAE tracker
         self._last_drawdown_track_log_ts_by_ticket: Dict[int, float] = {}
         self.recent_prices: List[Tuple[float, float]] = []
         self.session_last_trigger_date: Dict[str, str] = {}
@@ -51,6 +52,7 @@ class AgentMonitor:
                         stale = [t for t in list(self.max_profit_seen_points_by_ticket.keys()) if int(t) not in live_tickets]
                         for t in stale:
                             self.max_profit_seen_points_by_ticket.pop(t, None)
+                            self.min_profit_seen_points_by_ticket.pop(t, None)  # FLO-269: cleanup MAE
                     except Exception:
                         pass
                     try:
@@ -2042,6 +2044,7 @@ class AgentMonitor:
             live_positions = executor.get_open_positions()
             if not live_positions:
                 self.max_profit_seen_points_by_ticket = {}
+                self.min_profit_seen_points_by_ticket = {}  # FLO-269: reset MAE
                 return
         except Exception:
             return
@@ -2080,6 +2083,10 @@ class AgentMonitor:
             prev_peak = self.max_profit_seen_points_by_ticket.get(ticket_i)
             if prev_peak is None or current_profit_points > prev_peak:
                 self.max_profit_seen_points_by_ticket[ticket_i] = float(current_profit_points)
+            # FLO-269: MAE — track worst adverse excursion
+            prev_trough = self.min_profit_seen_points_by_ticket.get(ticket_i)
+            if prev_trough is None or current_profit_points < prev_trough:
+                self.min_profit_seen_points_by_ticket[ticket_i] = float(current_profit_points)
 
             try:
                 now_ts = time.time()

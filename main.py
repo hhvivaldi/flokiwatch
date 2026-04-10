@@ -42,7 +42,7 @@ def _mt5_server_offset() -> int:
 import config
 from logger import log
 from state_writer import write_state, add_closed_trade
-from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision, get_recent_agent_decisions, get_trade_feedback
+from db_writer import init_db, record_analysis, record_trade_open, record_trade_close, record_agent_decision, get_recent_agent_decisions, get_trade_feedback, record_trade_adjustment, get_trade_adjustments
 from agent_reflection import run_reflection_async
 from alerts import (
     alert_bot_started, alert_bot_stopped,
@@ -6941,6 +6941,22 @@ class TradingBot:
                     pass
                 if is_pending:
                     close_reason = f"{close_reason} (pending)"
+                # FLO-269: Extract MFE/MAE from agent_monitor before cleanup
+                _mfe = None
+                _mae = None
+                _final_sl = action.get("orig_sl")  # fallback: SL at close from monitor
+                try:
+                    _t = action.get("ticket")
+                    if self._agent_monitor and _t:
+                        _mfe = self._agent_monitor.max_profit_seen_points_by_ticket.get(int(_t))
+                        _mae = self._agent_monitor.min_profit_seen_points_by_ticket.get(int(_t))
+                    # final_sl: use the last known SL from position_monitor (more accurate)
+                    if hasattr(self, '_position_monitor') and self._position_monitor and _t:
+                        _tsl = self._position_monitor.trailing_sl.get(int(_t))
+                        if _tsl is not None:
+                            _final_sl = _tsl
+                except Exception:
+                    pass
                 record_trade_close(
                     ticket=action.get("ticket"),
                     close_price=action.get("close_price"),
@@ -6948,6 +6964,9 @@ class TradingBot:
                     close_reason=close_reason,
                     close_time=action.get("close_time"),
                     breakeven_activated=action.get("breakeven_activated", False),
+                    mfe_points=_mfe,
+                    mae_points=_mae,
+                    final_sl=_final_sl,
                 )
 
                 # Update L2 pattern memory after a confirmed close (non-blocking)
