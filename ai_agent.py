@@ -586,7 +586,7 @@ class AIAgent:
             },
             {
                 "name": "get_position_events",
-                "description": "Get recent position-management events from the Monitor (breakeven, trailing, forced closes)",
+                "description": "Get recent position-management events from the Monitor (SL adjustments, trailing, forced closes)",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {

@@ -758,8 +758,8 @@ def format_proactive_xml(data_package: Dict) -> str:
                             reason_short = "SL"
                         elif ct == "trailing":
                             reason_short = "TRAIL"
-                        elif ct == "breakeven":
-                            reason_short = "BE"
+                        elif ct == "breakeven" or ct == "sl_adjusted":
+                            reason_short = "SL_ADJ"
                     except Exception:
                         reason_short = close_reason
 
@@ -1426,7 +1426,7 @@ def build_proactive_data_package(
                     except Exception:
                         dist_tp = None
 
-                    pnl_status = "BREAKEVEN"
+                    pnl_status = "FLAT"
                     if pnl_points > 0:
                         pnl_status = "WINNING"
                     elif pnl_points < 0:
@@ -1823,7 +1823,7 @@ def _format_positions(positions: List[Dict]) -> List[Dict]:
             "sl": _safe_round(pos.get("sl", 0), 2),
             "tp": _safe_round(pos.get("tp", 0), 2),
             "duration_hours": _safe_round(pos.get("duration_hours", 0), 1),
-            "phase": pos.get("phase", "active"),  # active, breakeven, trailing
+            "phase": pos.get("phase", "open"),  # open, sl_adjusted, trailing
         })
     
     return formatted

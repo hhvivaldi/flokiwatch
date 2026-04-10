@@ -398,7 +398,7 @@ Data source: `data/market_context_cache.json` (written by `agent_tools.get_marke
 | `positions[].tp` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].profit` | float | `state_writer.py` | `renderPositions()` |
 | `positions[].profit_pips` | float | `state_writer.py` | `renderPositions()` |
-| `positions[].phase` | `"OPEN"` \| `"BREAKEVEN"` \| `"TRAILING"` | `state_writer.py` via `monitor.get_position_phase()` | `renderPositions()` |
+| `positions[].phase` | `"OPEN"` \| `"SL_ADJUSTED"` \| `"TRAILING"` | `state_writer.py` via `monitor.get_position_phase()` | `renderPositions()` |
 | `positions[].be_trigger_pips` | float \| null | `state_writer.py` via `monitor.get_be_info()` | `renderPositions()` → Protection column |
 | `positions[].be_remaining_pips` | float \| null | `state_writer.py` via `monitor.get_be_info()` | `renderPositions()` → Protection column |
 
@@ -613,8 +613,8 @@ USE_EA_BRIDGE = False OR ea_status.json > 60s old:
 | `positions[].profit` | float | P&L in account currency |
 | `positions[].profit_pips` | float | P&L in pips |
 | `positions[].open_time` | string | Open time |
-| `positions[].phase` | `"OPEN"` \| `"BREAKEVEN"` \| `"TRAILING"` | Position phase |
-| `positions[].breakeven_hit` | bool | Breakeven triggered |
+| `positions[].phase` | `"OPEN"` \| `"SL_ADJUSTED"` \| `"TRAILING"` | Position phase |
+| `positions[].breakeven_hit` | bool | SL adjusted to entry |
 | `positions[].trailing_active` | bool | Trailing active |
 | `positions[].max_profit_pips` | float | Max profit reached |
 
@@ -638,7 +638,7 @@ The following elements have been added to the dashboard:
 | `simba-mode-tag` | derived from decision | OFF/MONITORING/ALERT tag |
 | `simba-summary-tag` | `state.last_analysis.simba.summary` | Human summary of why Simba chose sleep/wake |
 
-**Note:** `position-phase` (OPEN/BREAKEVEN/TRAILING) is deferred until EA Bridge is enabled for live trading.
+**Note:** `position-phase` (OPEN/SL_ADJUSTED/TRAILING) is deferred until EA Bridge is enabled for live trading.
 
 ### `floki_next_check_at` (FLO-143)
 

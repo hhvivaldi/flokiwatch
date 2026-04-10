@@ -27,7 +27,7 @@ class EAPosition:
     profit: float
     profit_pips: float
     open_time: datetime
-    phase: str  # OPEN, BREAKEVEN, TRAILING
+    phase: str  # OPEN, SL_ADJUSTED, TRAILING
     breakeven_hit: bool
     trailing_active: bool
     max_profit_pips: float
@@ -248,7 +248,7 @@ def read_ea_status(stale_threshold_seconds: int = 60, max_retries: int = 3, retr
                         profit=float(pos_data.get('profit', 0)),
                         profit_pips=float(pos_data.get('profit_pips', 0)),
                         open_time=open_time,
-                        phase=pos_data.get('phase', 'OPEN'),
+                        phase={"BREAKEVEN": "SL_ADJUSTED"}.get(pos_data.get('phase', 'OPEN'), pos_data.get('phase', 'OPEN')),
                         breakeven_hit=pos_data.get('breakeven_hit', False),
                         trailing_active=pos_data.get('trailing_active', False),
                         max_profit_pips=float(pos_data.get('max_profit_pips', 0))

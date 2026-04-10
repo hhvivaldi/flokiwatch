@@ -597,18 +597,16 @@ function renderPositions(positions) {
     let phaseBadge = "";
     if (phase === "TRAILING") {
       phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-trailing">TRAILING</span>`;
-    } else if (phase === "BREAKEVEN") {
-      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-breakeven">BE ACTIVE</span>`;
+    } else if (phase === "SL_ADJUSTED") {
+      phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-sl-adjusted">SL ADJ</span>`;
     } else {
       phaseBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border phase-badge-open">OPEN</span>`;
     }
 
-    // BE distance indicator
+    // SL status indicator
     let beIndicator = "";
-    if (phase === "OPEN" && p.be_remaining_pips != null) {
-      beIndicator = `<span class="text-[10px] text-gray-500 font-mono">BE in ${fmtNum(p.be_remaining_pips, 0)}p</span>`;
-    } else if (phase === "BREAKEVEN" || phase === "TRAILING") {
-      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">BE ✓</span>`;
+    if (phase === "SL_ADJUSTED" || phase === "TRAILING") {
+      beIndicator = `<span class="text-[10px] text-green-500 font-mono font-bold">SL ✓</span>`;
     }
 
     const dirBorderClass = (p.direction || "").toUpperCase() === "BUY" ? "border-l-4 border-l-green-500" : (p.direction || "").toUpperCase() === "SELL" ? "border-l-4 border-l-red-500" : "";

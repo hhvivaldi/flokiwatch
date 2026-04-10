@@ -316,36 +316,13 @@ class PositionMonitor:
         # Status log per position (visibility every 30s cycle)
         for pos in positions:
             sl_orig = self._get_original_sl_pips(pos)
-            has_be = pos.ticket in self.breakeven_hit_tickets
-            
-            if not has_be:
-                # Has not yet hit breakeven
-                if self.volatility_status == "COOLING_DOWN":
-                    be_trigger = config.COOLING_BREAKEVEN_TRIGGER_PIPS
-                elif sl_orig > 0:
-                    be_trigger = sl_orig * getattr(config, 'BREAKEVEN_ATR_MULT', 0.7)
-                else:
-                    be_trigger = config.BREAKEVEN_TRIGGER_PIPS
-                remaining = be_trigger - pos.profit_pips
-                next_phase = f"BE at {be_trigger:.0f} pips ({remaining:.0f} remaining)"
-            else:
-                # Already has breakeven, next is trailing
-                if self.volatility_status == "COOLING_DOWN":
-                    tr_trigger = config.COOLING_TRAILING_TRIGGER_PIPS
-                elif sl_orig > 0:
-                    tr_trigger = sl_orig * getattr(config, 'TRAILING_ATR_MULT', 0.7)
-                else:
-                    tr_trigger = config.TRAILING_TRIGGER_PIPS
-                if pos.profit_pips < tr_trigger:
-                    remaining = tr_trigger - pos.profit_pips
-                    next_phase = f"BE✓ | Trail at {tr_trigger:.0f} pips ({remaining:.0f} remaining)"
-                else:
-                    next_phase = f"BE✓ | Trail ACTIVE"
-            
+            sl_distance = abs(pos.current_price - pos.sl) if pos.sl else 0
+            phase = self.get_position_phase(pos.ticket)
+
             log.info(
                 f"   Monitor: #{pos.ticket} {pos.direction} | "
                 f"P&L: {pos.profit_pips:+.0f} pips (${pos.profit:+.2f}) | "
-                f"SL: {pos.sl:.2f} | {next_phase}"
+                f"SL: {pos.sl:.2f} (dist: {sl_distance:.1f}) | phase: {phase}"
             )
         
         return actions
@@ -570,7 +547,7 @@ class PositionMonitor:
             tr_trig = sl_orig * getattr(config, 'TRAILING_ATR_MULT', 0.7)
             tr_dist = sl_orig * getattr(config, 'TRAILING_DISTANCE_ATR_MULT', 0.7)
             log.position_update(
-                pos.ticket, "BREAKEVEN",
+                pos.ticket, "SL_TO_ENTRY",
                 f"Profit: {pos.profit_pips:.0f} pips → SL moved to {breakeven_sl:.2f} (entry) | "
                 f"Original SL={sl_orig:.0f} pips (unchanged) | Trail trigger={tr_trig:.0f} pips, dist={tr_dist:.0f} pips"
             )
@@ -584,13 +561,13 @@ class PositionMonitor:
             )
 
             self._append_agent_monitor_event(
-                "BREAKEVEN_ACTIVATED",
+                "SL_ADJUSTED_TO_ENTRY",
                 pos.ticket,
                 details=f"SL moved to {breakeven_sl:.2f} (entry) from {pos.sl:.2f} at profit {pos.profit_pips:+.0f} pips",
             )
-            
+
             return {
-                'action': 'BREAKEVEN',
+                'action': 'SL_ADJUSTED',
                 'ticket': pos.ticket,
                 'new_sl': breakeven_sl,
                 'profit_pips': pos.profit_pips
@@ -987,16 +964,16 @@ class PositionMonitor:
     def get_position_phase(self, ticket: int) -> str:
         """
         Get the current phase of a position.
-        
+
         Returns:
-            "OPEN" - Position has not hit breakeven
-            "BREAKEVEN" - SL moved to entry, trailing not yet active
+            "OPEN" - No SL adjustment yet
+            "SL_ADJUSTED" - SL has been moved (e.g. to entry)
             "TRAILING" - Trailing stop is active
         """
         if ticket in self.trailing_sl:
             return "TRAILING"
         elif ticket in self.breakeven_hit_tickets:
-            return "BREAKEVEN"
+            return "SL_ADJUSTED"
         else:
             return "OPEN"
     

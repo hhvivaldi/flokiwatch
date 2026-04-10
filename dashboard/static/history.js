@@ -491,7 +491,7 @@ class HistoryApp {
             if (pnl > 0) {
                 return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#60a5fa;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2)">TRAILING</span>';
             } else if (pnl > -1.0) {
-                return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#94a3b8;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.15)">BREAKEVEN</span>';
+                return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#94a3b8;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.15)">FLAT</span>';
             } else {
                 return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;color:#f87171;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2)">SL</span>';
             }
