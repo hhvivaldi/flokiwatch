@@ -660,29 +660,31 @@ def update_trade_open_price(
 ) -> None:
     """
     Update pending trade record (ticket=0) with actual MT5 fill price and ticket.
-    Called after EA confirms execution.
-    
-    Matches on direction and recent open_time to handle edge case of
-    multiple pending trades in different directions.
+    Called from monitor.py when a new position is first seen.
+
+    FLO-269: Widened window from 10 min to 24h — pending orders can fill hours
+    after placement. Matches most recent ticket=0 row for the same direction.
     """
     try:
         conn = _get_connection()
         # Use subquery to find the most recent pending trade for this direction
         cursor = conn.execute(
-            """UPDATE trades 
+            """UPDATE trades
                SET ticket = ?, open_price = ?
                WHERE id = (
-                   SELECT id FROM trades 
-                   WHERE ticket = 0 
+                   SELECT id FROM trades
+                   WHERE ticket = 0
                      AND direction = ?
-                     AND open_time > datetime('now', '-10 minutes')
+                     AND open_time > datetime('now', '-24 hours')
                    ORDER BY open_time DESC
                    LIMIT 1
                )""",
             (new_ticket, actual_open_price, direction),
         )
         if cursor.rowcount > 0:
-            log.debug(f"db_writer: updated pending trade → ticket={new_ticket}, open_price={actual_open_price}")
+            log.info(f"PENDING_FILL_DB | ticket=0 → #{new_ticket} | direction={direction} | open_price={actual_open_price}")
+        else:
+            log.warning(f"PENDING_FILL_DB | no ticket=0 row found for direction={direction} (ticket #{new_ticket})")
         conn.commit()
         conn.close()
     except Exception as e:

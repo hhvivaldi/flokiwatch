@@ -3012,6 +3012,24 @@ class AgentTools:
 
         if res.get("success"):
             ticket = res.get("ticket")
+
+            # FLO-269: Record pending order in trades table (ticket=0 placeholder).
+            # monitor.update_trade_open_price() updates to real ticket on fill.
+            try:
+                from db_writer import record_trade_open
+                record_trade_open(
+                    ticket=0,
+                    direction=dir_s,
+                    volume=float(pos.lot_size),
+                    open_price=price_f,
+                    sl=sl_f,
+                    tp=tp_f,
+                    comment=f"Pending-{ot}",
+                    decision_source="floki_agent",
+                )
+            except Exception:
+                pass
+
             self._log_tool("place_pending_order", start,
                 f"{ot} @ {price_f} SL={sl_f} TP={tp_f} lot={pos.lot_size} exp={exp}min ticket={ticket}")
             return {"success": True, "ticket": ticket, "type": ot, "price": price_f,
