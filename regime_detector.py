@@ -24,6 +24,9 @@ _last_regime_change_ts: Optional[float] = None
 _prev_adx: Optional[float] = None
 _prev_bollinger_width: Optional[float] = None
 _state_loaded: bool = False
+_breakout_imminent_until: Optional[float] = None  # hysteresis: persist for 5 min
+_bb_squeeze_bars: int = 0  # consecutive bars in BB squeeze
+_volume_history: List[float] = []  # last 5 volume_ratio values
 
 _STATE_PATH = None  # set lazily
 
@@ -111,6 +114,7 @@ def detect_market_regime(
     """
     global _regime_history, _last_regime, _last_regime_change_ts
     global _prev_adx, _prev_bollinger_width
+    global _breakout_imminent_until, _bb_squeeze_bars, _volume_history
 
     _load_regime_state()  # FLO-144: restore from disk on first call
     now = time.time()
@@ -176,6 +180,18 @@ def detect_market_regime(
     bb_expanding = False
     if _prev_bollinger_width and _prev_bollinger_width > 0 and bb_width > 0:
         bb_expanding = bb_width > _prev_bollinger_width * 1.5
+
+    # BB squeeze bar counter (for earlier breakout detection)
+    atr_avg = sum(atr_history[-20:]) / len(atr_history[-20:]) if atr_history and len(atr_history) >= 20 else 0
+    if bb_width > 0 and atr_avg > 0 and bb_width < atr_avg * 2.0:
+        _bb_squeeze_bars += 1
+    else:
+        _bb_squeeze_bars = 0
+
+    # Volume trend tracking (last 5 readings)
+    _volume_history.append(volume_ratio)
+    if len(_volume_history) > 5:
+        _volume_history[:] = _volume_history[-5:]
 
     # -----------------------------------------------------------------------
     # REGIME 1: VOLATILE (highest priority)
@@ -397,6 +413,7 @@ def detect_market_regime(
     # If M5 alone has strong signal, flag BREAKOUT_IMMINENT instead
     if m5_trending_signals >= 2 and fast_direction:
         regime = "BREAKOUT_IMMINENT"
+        _breakout_imminent_until = now + 300  # 5-minute hysteresis
         m5_trending_evidence.insert(0, f"M5 fast detection: {m5_trending_signals} signals ({fast_direction})")
         result = _build_result(regime, "moderate", m5_trending_evidence, adx, atr_current, atr_ratio, bb_width)
         _update_temporal(regime, now)
@@ -417,10 +434,21 @@ def detect_market_regime(
         breakout_evidence.append(f"Volume picking up ({volume_ratio:.2f}x)")
     if adx and _prev_adx is not None and adx > _prev_adx and adx > 18:
         breakout_signals += 1
-        breakout_evidence.append(f"ADX rising {_prev_adx:.1f} → {adx:.1f}")
+        breakout_evidence.append(f"ADX rising {_prev_adx:.1f} -> {adx:.1f}")
+    # BB squeeze duration (multi-bar energy accumulation)
+    if _bb_squeeze_bars >= 5:
+        breakout_signals += 1
+        breakout_evidence.append(f"BB squeeze building ({_bb_squeeze_bars} bars)")
+    # Volume trend (rising over last 5 readings)
+    if len(_volume_history) >= 5:
+        _v_rising = sum(1 for i in range(1, len(_volume_history)) if _volume_history[i] > _volume_history[i - 1])
+        if _v_rising >= 3 and volume_ratio > 0.8:
+            breakout_signals += 1
+            breakout_evidence.append(f"Volume rising trend ({_v_rising}/4 bars up, current {volume_ratio:.2f}x)")
 
     if breakout_signals >= 2:
         regime = "BREAKOUT_IMMINENT"
+        _breakout_imminent_until = now + 300  # 5-minute hysteresis
         confidence = "high" if breakout_signals >= 3 else "moderate"
         result = _build_result(regime, confidence, breakout_evidence, adx, atr_current, atr_ratio, bb_width)
         _update_temporal(regime, now)
@@ -493,6 +521,15 @@ def detect_market_regime(
         ranging_evidence.append(f"Volume {volume_ratio:.2f}x avg (below average)")
 
     if len(ranging_evidence) >= 2:
+        # Hysteresis: if BREAKOUT_IMMINENT was recently triggered, persist it
+        if _breakout_imminent_until and now < _breakout_imminent_until:
+            _remaining_m = int((_breakout_imminent_until - now) / 60)
+            _hyst_evidence = [f"BREAKOUT_IMMINENT persisting ({_remaining_m}m remaining)"] + ranging_evidence
+            result = _build_result("BREAKOUT_IMMINENT", "moderate", _hyst_evidence, adx, atr_current, atr_ratio, bb_width)
+            _update_temporal("BREAKOUT_IMMINENT", now)
+            _prev_adx = adx
+            _prev_bollinger_width = bb_width
+            return result
         regime = "RANGING"
         confidence = "high" if len(ranging_evidence) >= 3 else "moderate"
         result = _build_result(regime, confidence, ranging_evidence, adx, atr_current, atr_ratio, bb_width)
@@ -560,13 +597,18 @@ def _build_result(
     # Transition narrative
     transition = _transition_text(previous_regime, regime, duration_minutes)
 
-    # Changes in 24h
+    # Changes in 24h with decay weighting (recent changes count more)
+    import math
     cutoff = now - 86400
     recent_changes = [e for e in _regime_history if e.get("ts", 0) > cutoff]
     changes_24h = len(recent_changes)
-    if changes_24h <= 2:
+    weighted_score = 0.0
+    for e in recent_changes:
+        age_hours = (now - e.get("ts", now)) / 3600.0
+        weighted_score += math.exp(-age_hours / 4.0)
+    if weighted_score <= 1.0:
         stability = "stable"
-    elif changes_24h <= 4:
+    elif weighted_score <= 2.5:
         stability = "moderate"
     else:
         stability = "unstable"
