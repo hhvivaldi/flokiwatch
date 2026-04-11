@@ -5260,6 +5260,25 @@ class TradingBot:
                 mtf_count = sum(1 for z in sr_zones if len(z.confluence) >= 2)
                 log.info(f"   S/R: {zone_count} zones (D1:{d1_count} H4:{h4_count} H1:{h1_count} | {strong_count} strong, {mtf_count} MTF) | Near strong zone: {near_zone}")
                 self._write_sr_zones_json(current_price)
+
+                # FLO-262: Per-TF zone detection for separate chart JSON files
+                try:
+                    from support_resistance import detect_zones_per_tf
+                    per_tf = detect_zones_per_tf(
+                        df_h1_for_sr, df_h4, df_d1=df_d1,
+                        merge_pips=config.SR_ZONE_MERGE_PIPS,
+                        merge_pips_d1=config.SR_ZONE_MERGE_PIPS_D1,
+                        confluence_pips=getattr(config, 'SR_CONFLUENCE_TOLERANCE_PIPS', 5),
+                        max_age_bars=config.SR_ZONE_MAX_AGE_BARS,
+                        min_touches=config.SR_MIN_TOUCHES,
+                        lookback_h1=config.SR_LOOKBACK_H1,
+                        lookback_h4=config.SR_LOOKBACK_H4,
+                        lookback_d1=config.SR_LOOKBACK_D1,
+                    )
+                    self._last_sr_zones_per_tf = per_tf
+                    self._write_sr_zones_per_tf_json(current_price, per_tf)
+                except Exception as e:
+                    log.debug(f"   S/R per-TF: error (non-blocking): {e}")
                 
                 # Detect candlestick patterns with S/R proximity scaling
                 from technical_analyzer import detect_candlestick_patterns
@@ -6614,6 +6633,66 @@ class TradingBot:
                 log.info(f"   S/R JSON: wrote {len(zones_out)} zones to MQL5\\Files\\sr_zones.json")
         except Exception as e:
             log.warning(f"   S/R JSON write error (non-blocking): {e}")
+
+    def _write_sr_zones_per_tf_json(self, current_price: float, per_tf: dict):
+        """FLO-262: Write separate sr_zones_{tf}.json files for per-TF chart display."""
+        try:
+            import json
+            import os
+
+            cp = current_price
+            if not cp:
+                return
+
+            base_path = getattr(config, 'SR_ZONES_JSON_PATH', '')
+            if not base_path:
+                return
+            base_dir = os.path.dirname(base_path)
+
+            tf_max_zones = {"D1": 8, "H4": 12, "H1": 8}
+
+            for tf, zones in per_tf.items():
+                max_z = tf_max_zones.get(tf, 8)
+                # Select nearest zones above + below current price
+                above = sorted([z for z in zones if z.midpoint > cp], key=lambda z: z.midpoint)[:max_z // 2]
+                below = sorted([z for z in zones if z.midpoint <= cp], key=lambda z: -z.midpoint)[:max_z // 2]
+
+                zones_out = []
+                for z in above + below:
+                    zt = "SUPPORT" if z.midpoint <= cp else "RESISTANCE"
+                    flip_phase = ""
+                    if z.zone_type == "FLIP":
+                        flip_phase = "R_TO_S" if z.midpoint <= cp else "S_TO_R"
+                    zones_out.append({
+                        "price": round(z.midpoint, 2),
+                        "zone_type": zt,
+                        "touches": z.touches,
+                        "timeframe": z.timeframe,
+                        "confluence": z.confluence if z.confluence else [],
+                        "strength": z.strength,
+                        "position": "above" if z.midpoint > cp else "below",
+                        "flip_phase": flip_phase,
+                        "is_confluence": len(z.confluence) > 1,
+                    })
+
+                payload = {
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "current_price": round(cp, 2),
+                    "timeframe": tf,
+                    "zones_count": len(zones_out),
+                    "zones": zones_out,
+                }
+
+                tf_path = os.path.join(base_dir, f"sr_zones_{tf.lower()}.json")
+                with open(tf_path, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, indent=2)
+
+            d1_n = len(per_tf.get("D1", []))
+            h4_n = len(per_tf.get("H4", []))
+            h1_n = len(per_tf.get("H1", []))
+            log.info(f"   S/R per-TF JSON: D1={d1_n} H4={h4_n} H1={h1_n} written")
+        except Exception as e:
+            log.debug(f"   S/R per-TF JSON error (non-blocking): {e}")
 
     def _build_intel_feed(self, news_data, calendar_data, brain_result, get_hybrid_score_cached_fn):
         """Build intel_feed dict for dashboard from existing cached data (zero extra requests)."""
