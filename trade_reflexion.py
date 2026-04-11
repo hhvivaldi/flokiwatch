@@ -927,12 +927,12 @@ def run_eod_counterfactuals() -> int:
                 if bars is None or len(bars) == 0:
                     continue
 
-                # Replay: walk candles, check if original SL or TP is hit
+                # Replay: walk candles, track SL and TP independently
                 original_sl_hit = False
                 original_sl_hit_time = None
-                tp_hit = False
-                tp_hit_time = None
-                tp_hit_pnl = None
+                tp_reached = False
+                tp_reached_time = None
+                tp_reached_pnl = None
 
                 for bar in bars:
                     bar_time = datetime.utcfromtimestamp(int(bar[0])).isoformat()
@@ -940,50 +940,48 @@ def run_eod_counterfactuals() -> int:
                     bar_low = float(bar[3])
 
                     if direction == "BUY":
-                        # SL hit if low <= original_sl
                         if not original_sl_hit and bar_low <= float(original_sl):
                             original_sl_hit = True
                             original_sl_hit_time = bar_time
-                        # TP hit if high >= tp
-                        if tp and not tp_hit and bar_high >= float(tp):
-                            tp_hit = True
-                            tp_hit_time = bar_time
-                            tp_hit_pnl = round(float(tp) - float(entry), 2)
+                        if tp and not tp_reached and bar_high >= float(tp):
+                            tp_reached = True
+                            tp_reached_time = bar_time
+                            tp_reached_pnl = round(float(tp) - float(entry), 2)
                     else:  # SELL
                         if not original_sl_hit and bar_high >= float(original_sl):
                             original_sl_hit = True
                             original_sl_hit_time = bar_time
-                        if tp and not tp_hit and bar_low <= float(tp):
-                            tp_hit = True
-                            tp_hit_time = bar_time
-                            tp_hit_pnl = round(float(entry) - float(tp), 2)
+                        if tp and not tp_reached and bar_low <= float(tp):
+                            tp_reached = True
+                            tp_reached_time = bar_time
+                            tp_reached_pnl = round(float(entry) - float(tp), 2)
 
-                    # If both hit in same candle, SL takes priority (conservative)
-                    if original_sl_hit and tp_hit and original_sl_hit_time == tp_hit_time:
-                        tp_hit = False
-                        tp_hit_time = None
-                        tp_hit_pnl = None
+                # Determine if TP would have been hit (position still alive)
+                tp_would_have_been_hit = False
+                if tp_reached:
+                    if not original_sl_hit:
+                        tp_would_have_been_hit = True  # SL survived, TP reached
+                    elif original_sl_hit_time and tp_reached_time and tp_reached_time < original_sl_hit_time:
+                        tp_would_have_been_hit = True  # TP reached before SL hit
+                    # else: SL hit first or same candle — TP moot
 
-                    # If SL hit before TP, TP doesn't count
-                    if original_sl_hit and not tp_hit:
-                        pass  # keep searching for TP only if SL not yet hit
-                    if original_sl_hit and original_sl_hit_time and tp_hit_time:
-                        if original_sl_hit_time < tp_hit_time:
-                            # SL hit first — TP is moot
-                            tp_hit = False
-                            tp_hit_time = None
-                            tp_hit_pnl = None
+                # tp_reached_after_sl: price hit TP level AFTER SL killed the trade
+                tp_reached_after_sl = (
+                    tp_reached and original_sl_hit and not tp_would_have_been_hit
+                )
 
-                # Hours of data available
                 hours_of_data = len(bars) * 5 / 60
 
                 counterfactual = {
                     "original_sl": float(original_sl),
                     "original_sl_survived": not original_sl_hit,
                     "original_sl_hit_time": original_sl_hit_time,
-                    "tp_would_have_been_hit": tp_hit,
-                    "tp_hit_time": tp_hit_time,
-                    "tp_hit_pnl": tp_hit_pnl,
+                    "tp_would_have_been_hit": tp_would_have_been_hit,
+                    "tp_hit_time": tp_reached_time if tp_would_have_been_hit else None,
+                    "tp_hit_pnl": tp_reached_pnl if tp_would_have_been_hit else None,
+                    "tp_reached_after_sl": tp_reached_after_sl,
+                    "tp_reached_after_sl_time": tp_reached_time if tp_reached_after_sl else None,
+                    "tp_reached_after_sl_pnl": tp_reached_pnl if tp_reached_after_sl else None,
                     "hours_of_data": round(hours_of_data, 1),
                     "bars_analyzed": len(bars),
                     "analyzed_at": datetime.utcnow().isoformat(),
@@ -1108,9 +1106,14 @@ def enrich_reflexion_with_report(ticket: int) -> bool:
             elif cf.get("original_sl_survived") is True:
                 parts.append(f"Original SL {orig_sl} survived")
             if cf.get("tp_would_have_been_hit"):
-                parts.append(f"TP {tp} would have been hit = +${cf.get('tp_hit_pnl')}")
+                parts.append(f"TP {tp} hit at {cf.get('tp_hit_time', '?')} = +${cf.get('tp_hit_pnl')}")
+            elif cf.get("tp_reached_after_sl"):
+                parts.append(
+                    f"TP {tp} reached at {cf.get('tp_reached_after_sl_time', '?')} "
+                    f"BUT position already dead (SL hit {cf.get('original_sl_hit_time', '?')})"
+                )
             else:
-                parts.append(f"TP {tp} not reached in {cf.get('hours_of_data', 0):.0f}h")
+                parts.append(f"TP {tp} never reached in {cf.get('hours_of_data', 0):.0f}h")
 
             # Verdict — skip if no valid SL data
             if cf.get("original_sl_survived") is False and pnl is not None and orig_sl and float(orig_sl) > 0 and entry:
@@ -1261,8 +1264,16 @@ def get_last_trade_report_summary() -> Optional[str]:
                 cf_parts.append(f"original SL hit at {cf.get('original_sl_hit_time', '?')}")
             if tp_hit:
                 cf_parts.append(f"TP hit at {tp_time} = +${tp_pnl}")
+            elif cf.get("tp_reached_after_sl"):
+                after_time = cf.get("tp_reached_after_sl_time", "?")
+                after_pnl = cf.get("tp_reached_after_sl_pnl")
+                cf_parts.append(
+                    f"TP reached at {after_time} = +${after_pnl} BUT after SL hit"
+                )
             elif sl_survived:
                 cf_parts.append(f"TP not reached in {hours:.0f}h window")
+            else:
+                cf_parts.append(f"TP never reached")
             lines.append(f"  Counterfactual ({hours:.0f}h window): {', '.join(cf_parts)}")
 
         lines.append("</last_trade_report>")

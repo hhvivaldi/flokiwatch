@@ -2604,8 +2604,16 @@ class AgentTools:
                         except Exception:
                             pass
                         cf_attrs.append(f'tp="hit at {tp_time} = +${cf.get("tp_hit_pnl")}"')
+                    elif cf.get("tp_reached_after_sl"):
+                        after_time = cf.get("tp_reached_after_sl_time", "?")
+                        after_pnl = cf.get("tp_reached_after_sl_pnl")
+                        try:
+                            after_time = after_time[11:16]
+                        except Exception:
+                            pass
+                        cf_attrs.append(f'tp="reached at {after_time} = +${after_pnl} BUT after SL hit"')
                     else:
-                        cf_attrs.append('tp="not reached"')
+                        cf_attrs.append('tp="never reached"')
                     hours = cf.get("hours_of_data", 0)
                     cf_attrs.append(f'window="{hours:.0f}h"')
                     cf_attrs.append(f'verdict="{verdict}"')
