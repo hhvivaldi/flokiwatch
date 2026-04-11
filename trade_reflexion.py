@@ -1079,6 +1079,9 @@ def enrich_reflexion_with_report(ticket: int) -> bool:
         if duration is not None:
             parts.append(f"Duration {duration}min")
 
+        # Load counterfactual early (needed for SL adjustment inference)
+        cf = report.get("counterfactual")
+
         # SL adjustment summary
         if adj_count > 0:
             adjustments = report.get("sl_adjustments", [])
@@ -1088,11 +1091,17 @@ def enrich_reflexion_with_report(ticket: int) -> bool:
                 src = a.get("source", "?")
                 adj_parts.append(f"{a.get('old_sl')}->{a.get('new_sl')} at {mins}min ({src})")
             parts.append(f"{adj_count} SL adjustments: {'; '.join(adj_parts)}")
+        elif final_sl is not None and orig_sl is not None and abs(float(final_sl) - float(orig_sl)) > 0.5:
+            parts.append(f"SL adjusted {orig_sl}->{final_sl} (pre-tracking)")
+        elif (cf and cf.get("original_sl_survived") is False
+              and pnl is not None and float(pnl) >= 0
+              and orig_sl is not None and float(orig_sl) > 0):
+            # Counterfactual says orig SL hit, but trade closed at profit/BE — SL was moved
+            parts.append(f"SL was adjusted before close (pre-tracking, orig SL {orig_sl})")
         else:
             parts.append("No SL adjustments")
 
-        # Counterfactual
-        cf = report.get("counterfactual")
+        # Counterfactual verdict
         if cf:
             if cf.get("original_sl_survived") is False:
                 parts.append(f"Original SL {orig_sl} would have been hit")
