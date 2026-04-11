@@ -6472,19 +6472,24 @@ class TradingBot:
         except Exception as e:
             log.debug(f"AB_TEST | resolve error: {e}")
 
+    # FLO-262: Timeframe-to-config mapping for chart screenshots
+    _CHART_TF_MAP = {
+        "D1":  ("CHART_D1_PNG_PATH",  "d1_ok",  "d1_b64"),
+        "H4":  ("CHART_H4_PNG_PATH",  "h4_ok",  "h4_b64"),
+        "H1":  ("CHART_H1_PNG_PATH",  "h1_ok",  "h1_b64"),
+        "M15": ("CHART_M15_PNG_PATH", "m15_ok", "m15_b64"),
+        "M5":  ("CHART_M5_PNG_PATH",  "m5_ok",  "m5_b64"),
+    }
+
     def _request_chart_screenshots(self, timeout: float = 10.0) -> dict:
         """Request chart screenshots from EA and return base64-encoded images."""
         import base64 as _b64
 
         request_path = getattr(config, 'SCREENSHOT_REQUEST_JSON_PATH', '')
         ready_path = getattr(config, 'SCREENSHOT_READY_JSON_PATH', '')
-        h1_path = getattr(config, 'CHART_H1_PNG_PATH', '')
-        m15_path = getattr(config, 'CHART_M15_PNG_PATH', '')
-        m5_path = getattr(config, 'CHART_M5_PNG_PATH', '')
-        m5_enabled = getattr(config, 'M5_SCREENSHOT_ENABLED', True)
 
         if not request_path or not ready_path:
-            return {"h1_b64": None, "m15_b64": None, "m5_b64": None, "success": False}
+            return {"success": False}
 
         # Clean stale ready file
         try:
@@ -6507,7 +6512,7 @@ class TradingBot:
             os.replace(_tmp, request_path)
         except Exception as e:
             log.warning(f"SCREENSHOT | failed to write request: {e}")
-            return {"h1_b64": None, "m15_b64": None, "m5_b64": None, "success": False}
+            return {"success": False}
 
         # Poll for ready file
         t0 = time.time()
@@ -6531,35 +6536,21 @@ class TradingBot:
                     os.remove(request_path)
             except Exception:
                 pass
-            return {"h1_b64": None, "m15_b64": None, "m5_b64": None, "success": False}
+            return {"success": False}
 
-        result = {"h1_b64": None, "m15_b64": None, "m5_b64": None, "success": False}
+        result = {"success": False}
 
-        # Read H1 PNG
-        if ready.get("h1_ok") and h1_path and os.path.exists(h1_path):
-            try:
-                with open(h1_path, 'rb') as f:
-                    result["h1_b64"] = _b64.b64encode(f.read()).decode('ascii')
-            except Exception as e:
-                log.warning(f"SCREENSHOT | failed to read H1: {e}")
+        # FLO-262: Read all available timeframe PNGs
+        for tf, (cfg_key, ready_key, b64_key) in self._CHART_TF_MAP.items():
+            png_path = getattr(config, cfg_key, '')
+            if ready.get(ready_key) and png_path and os.path.exists(png_path):
+                try:
+                    with open(png_path, 'rb') as f:
+                        result[b64_key] = _b64.b64encode(f.read()).decode('ascii')
+                except Exception as e:
+                    log.warning(f"SCREENSHOT | failed to read {tf}: {e}")
 
-        # Read M15 PNG
-        if ready.get("m15_ok") and m15_path and os.path.exists(m15_path):
-            try:
-                with open(m15_path, 'rb') as f:
-                    result["m15_b64"] = _b64.b64encode(f.read()).decode('ascii')
-            except Exception as e:
-                log.warning(f"SCREENSHOT | failed to read M15: {e}")
-
-        # Read M5 PNG
-        if m5_enabled and ready.get("m5_ok") and m5_path and os.path.exists(m5_path):
-            try:
-                with open(m5_path, 'rb') as f:
-                    result["m5_b64"] = _b64.b64encode(f.read()).decode('ascii')
-            except Exception as e:
-                log.warning(f"SCREENSHOT | failed to read M5: {e}")
-
-        result["success"] = bool(result["h1_b64"] or result["m15_b64"] or result["m5_b64"])
+        result["success"] = any(result.get(v[2]) for v in self._CHART_TF_MAP.values())
 
         # Clean up
         try:

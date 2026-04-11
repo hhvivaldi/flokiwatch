@@ -854,8 +854,18 @@ class AIAgent:
             },
             {
                 "name": "get_chart_screenshots",
-                "description": "View live XAU/USD chart screenshots (H1, M15, M5) with SRZoneDrawer S/R levels and volume bars. Call when entering a trade, at key levels, or to confirm a pattern visually. Don't call every cycle — only when visual context would change your decision.",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                "description": "View live XAU/USD chart screenshots with S/R levels, volume bars, and indicators. Available: D1, H4, H1, M15, M5. Choose timeframes for your need: M5 for position management, H4+D1 for trend analysis, H1+M15+M5 for entry analysis. Omit timeframes for all available.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timeframes": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5"]},
+                            "description": "Timeframes to capture. Examples: ['M5'], ['H4','D1'], ['H1','M15','M5']. Omit for all.",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
             },
             # FLO-263: Pending orders
             {
@@ -1102,22 +1112,20 @@ class AIAgent:
                     tool_trace.append({"name": fname, "input": fargs, "result": result, "latency_ms": dt_ms})
                     messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False, default=str)})
 
-                    # Inject chart images as user message when get_chart_screenshots was called
+                    # FLO-262: Inject chart images for requested timeframes
                     if fname == "get_chart_screenshots" and isinstance(result, dict) and result.get("success"):
                         _ci = getattr(tools, '_chart_images', {}) or {}
+                        _requested_tfs = result.get("timeframes", [])
                         _img_blocks = [{"type": "text", "text": "Chart screenshots attached. Analyze candle patterns, S/R interactions, volume bars, and momentum visually:"}]
-                        if _ci.get("h1_b64"):
-                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['h1_b64']}", "detail": "high"}})
-                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD H1 chart."})
-                        if _ci.get("m15_b64"):
-                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['m15_b64']}", "detail": "high"}})
-                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD M15 chart."})
-                        if _ci.get("m5_b64"):
-                            _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci['m5_b64']}", "detail": "high"}})
-                            _img_blocks.append({"type": "text", "text": "Above: XAUUSD M5 chart."})
+                        _tf_labels = {"D1": "Daily", "H4": "4-Hour", "H1": "1-Hour", "M15": "15-Min", "M5": "5-Min"}
+                        for _tf in ["D1", "H4", "H1", "M15", "M5"]:
+                            _b64_key = f"{_tf.lower()}_b64"
+                            if _tf in _requested_tfs and _ci.get(_b64_key):
+                                _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci[_b64_key]}", "detail": "high"}})
+                                _img_blocks.append({"type": "text", "text": f"Above: XAUUSD {_tf} ({_tf_labels.get(_tf, _tf)}) chart."})
                         if len(_img_blocks) > 1:
                             messages.append({"role": "user", "content": _img_blocks})
-                            logger.info(f"FLOKI | chart images injected via get_chart_screenshots tool")
+                            logger.info(f"FLOKI | chart images injected: {_requested_tfs}")
 
                 continue
 
