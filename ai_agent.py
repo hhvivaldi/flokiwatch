@@ -800,6 +800,19 @@ class AIAgent:
                 },
             },
             {
+                "name": "get_trade_journal",
+                "description": "Full trade journal: last 20 trades with MFE, capture rate, every SL adjustment, and counterfactual analysis (did your SL change help or cost money?). Call before making SL adjustment decisions to see your patterns.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 30, "default": 20, "description": "Number of trades to return"},
+                        "session_filter": {"type": "string", "description": "Filter by session: Asian, London, NY"},
+                        "direction_filter": {"type": "string", "description": "Filter by direction: BUY or SELL"},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {

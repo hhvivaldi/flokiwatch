@@ -2386,6 +2386,227 @@ class AgentTools:
             }
 
     # -----------------------------------------------------------------
+    # FLO-269: Trade Journal — full trade history with MFE/MAE/adjustments
+    # -----------------------------------------------------------------
+
+    def get_trade_journal(
+        self, limit: int = 20, session_filter: str = "", direction_filter: str = ""
+    ) -> Dict[str, Any]:
+        """Return detailed trade journal with MFE, capture rate, SL adjustments, and counterfactuals."""
+        start = time.time()
+        try:
+            import json as _json
+            import os as _os
+            import sqlite3
+            import config as _cfg
+            from db_writer import _get_connection, get_trade_adjustments
+
+            lim = min(max(int(limit or 20), 1), 30)
+
+            conn = _get_connection()
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT ticket, direction, volume, open_price, close_price, sl, tp, "
+                "profit, close_reason, open_time, close_time, mfe_points, mae_points, "
+                "final_sl, breakeven_activated, decision_source "
+                "FROM trades WHERE close_price IS NOT NULL AND profit IS NOT NULL "
+                "ORDER BY close_time DESC LIMIT ?",
+                (lim * 2,),  # fetch extra to allow filtering
+            ).fetchall()
+            conn.close()
+
+            # Session helper (same as sage_auditor corrected logic)
+            _offset = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
+
+            def _session(ts):
+                try:
+                    from datetime import datetime as _dt
+                    d = _dt.fromisoformat((ts or "").split(".")[0])
+                    h = (d.hour - _offset) % 24
+                    if 0 <= h < 7:
+                        return "Asian"
+                    if 7 <= h < 13:
+                        return "London"
+                    if 13 <= h < 22:
+                        return "NY"
+                    return "OffHours"
+                except Exception:
+                    return "?"
+
+            # Filter + build
+            sess_f = (session_filter or "").strip().upper()
+            dir_f = (direction_filter or "").strip().upper()
+            reports_dir = _os.path.join(
+                _os.path.dirname(_os.path.abspath(__file__)), "data", "post_trade_reports"
+            )
+
+            trades_xml = []
+            total_capture = []
+            adj_helped = 0
+            adj_hurt = 0
+            adj_neutral = 0
+            count = 0
+
+            for r in rows:
+                if count >= lim:
+                    break
+                t = dict(r)
+                ticket = t["ticket"]
+                direction = t.get("direction", "?")
+                sess_open = _session(t.get("open_time"))
+                sess_close = _session(t.get("close_time"))
+
+                if sess_f and sess_f not in (sess_open.upper(), sess_close.upper()):
+                    continue
+                if dir_f and direction.upper() != dir_f:
+                    continue
+
+                count += 1
+                pnl = t.get("profit") or 0
+                mfe = t.get("mfe_points")
+                mae = t.get("mae_points")
+                final_sl = t.get("final_sl")
+                orig_sl = t.get("sl")
+
+                # Capture rate
+                capture = None
+                if mfe is not None and mfe > 0 and pnl is not None:
+                    try:
+                        capture = round(float(pnl) / float(mfe) * 100, 1)
+                        total_capture.append(capture)
+                    except Exception:
+                        pass
+
+                # Adjustments
+                adjustments = get_trade_adjustments(int(ticket))
+                if adjustments:
+                    orig_sl = adjustments[0].get("old_sl") or orig_sl
+
+                # Duration
+                dur = ""
+                try:
+                    from datetime import datetime as _dt
+                    od = _dt.fromisoformat((t.get("open_time") or "").split(".")[0])
+                    cd = _dt.fromisoformat((t.get("close_time") or "").split(".")[0])
+                    dur = f"{round((cd - od).total_seconds() / 60)}min"
+                except Exception:
+                    pass
+
+                # Load counterfactual from report JSON
+                cf = None
+                report_path = _os.path.join(reports_dir, f"{ticket}.json")
+                if _os.path.exists(report_path):
+                    try:
+                        with open(report_path, "r", encoding="utf-8") as f:
+                            report_data = _json.load(f)
+                        cf = report_data.get("counterfactual")
+                    except Exception:
+                        pass
+
+                # Verdict: did SL adjustments help or hurt?
+                verdict = ""
+                if cf and adjustments:
+                    sl_survived = cf.get("original_sl_survived")
+                    tp_hit = cf.get("tp_would_have_been_hit")
+                    tp_pnl = cf.get("tp_hit_pnl")
+                    entry = t.get("open_price") or 0
+
+                    if sl_survived is False:
+                        # Original SL would have been hit = adjustment saved money
+                        loss_avoided = abs(float(entry) - float(orig_sl)) if orig_sl else 0
+                        saved = round(float(pnl) + loss_avoided, 2)
+                        verdict = f"saved ${saved:.2f}"
+                        adj_helped += 1
+                    elif tp_hit and tp_pnl is not None:
+                        # TP would have been hit = adjustment cost money
+                        cost = round(float(tp_pnl) - float(pnl), 2)
+                        verdict = f"cost ${cost:.2f}"
+                        adj_hurt += 1
+                    elif sl_survived is True and not tp_hit:
+                        # SL survived but TP not reached — neutral/unclear
+                        verdict = "neutral"
+                        adj_neutral += 1
+                elif adjustments and not cf:
+                    verdict = ""  # no counterfactual yet
+
+                # Format trade XML
+                _f = lambda v, d=2: f"{float(v):.{d}f}" if v is not None else "?"
+                line = (
+                    f'  <trade ticket="{ticket}" dir="{direction}" '
+                    f'session="{sess_open}->{sess_close}" '
+                    f'pnl="${_f(pnl)}" mfe="{_f(mfe, 1)}pts" mae="{_f(mae, 1)}pts" '
+                    f'capture="{capture}%" '
+                    f'entry="{_f(t.get("open_price"))}" orig_sl="{_f(orig_sl)}" '
+                    f'final_sl="{_f(final_sl)}" tp="{_f(t.get("tp"))}" '
+                    f'close="{_f(t.get("close_price"))}" type="{t.get("close_reason", "?")}" '
+                    f'duration="{dur}"'
+                )
+
+                if not adjustments and not cf:
+                    line += "/>"
+                    trades_xml.append(line)
+                    continue
+
+                line += ">"
+                trades_xml.append(line)
+
+                # Adjustments sub-elements
+                if adjustments:
+                    trades_xml.append(f'    <adjustments count="{len(adjustments)}">')
+                    for a in adjustments:
+                        mins = ""
+                        try:
+                            from datetime import datetime as _dt
+                            ot = _dt.fromisoformat((t.get("open_time") or "").split(".")[0])
+                            at = _dt.fromisoformat((a.get("timestamp") or "").split(".")[0])
+                            mins = f'{round((at - ot).total_seconds() / 60)}min'
+                        except Exception:
+                            pass
+                        sl_part = f'sl="{_f(a.get("old_sl"))}->{_f(a.get("new_sl"))}"'
+                        tp_part = ""
+                        if a.get("new_tp") is not None and a.get("old_tp") != a.get("new_tp"):
+                            tp_part = f' tp="{_f(a.get("old_tp"))}->{_f(a.get("new_tp"))}"'
+                        trades_xml.append(
+                            f'      <adj at="{mins}" {sl_part}{tp_part} source="{a.get("source", "?")}"/>'
+                        )
+                    trades_xml.append("    </adjustments>")
+
+                # Counterfactual
+                if cf:
+                    sl_s = "survived" if cf.get("original_sl_survived") else "hit"
+                    tp_s = ""
+                    if cf.get("tp_would_have_been_hit"):
+                        tp_s = f' tp_hit="+${cf.get("tp_hit_pnl")}"'
+                    trades_xml.append(
+                        f'    <counterfactual orig_sl="{sl_s}"{tp_s} verdict="{verdict}"/>'
+                    )
+
+                trades_xml.append("  </trade>")
+
+            # Header stats
+            avg_cap = round(sum(total_capture) / len(total_capture), 1) if total_capture else None
+            total_adj_trades = adj_helped + adj_hurt + adj_neutral
+            helped_pct = round(adj_helped / total_adj_trades * 100) if total_adj_trades > 0 else None
+            hurt_pct = round(adj_hurt / total_adj_trades * 100) if total_adj_trades > 0 else None
+
+            header = (
+                f'<trade_journal count="{count}"'
+                f' avg_capture="{avg_cap}%"' if avg_cap is not None else f'<trade_journal count="{count}"'
+            )
+            if helped_pct is not None:
+                header += f' adj_helped="{helped_pct}%" adj_hurt="{hurt_pct}%"'
+            header += ">"
+
+            xml = header + "\n" + "\n".join(trades_xml) + "\n</trade_journal>"
+
+            self._log_tool("get_trade_journal", start, f"count={count} avg_cap={avg_cap}")
+            return {"success": True, "journal": xml, "count": count}
+
+        except Exception as e:
+            self._log_tool("get_trade_journal", start, f"error={e}")
+            return {"success": False, "reason": f"journal_error: {e}"}
+
+    # -----------------------------------------------------------------
     # FLO-158: Rex-unique tools (not available to Floki)
     # -----------------------------------------------------------------
 
