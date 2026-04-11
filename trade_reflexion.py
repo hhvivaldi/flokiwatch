@@ -1103,14 +1103,23 @@ def enrich_reflexion_with_report(ticket: int) -> bool:
             else:
                 parts.append(f"TP {tp} not reached in {cf.get('hours_of_data', 0):.0f}h")
 
-            # Verdict
-            if cf.get("original_sl_survived") is False and pnl is not None and orig_sl and entry:
-                loss_avoided = abs(float(entry) - float(orig_sl))
-                saved = round(float(pnl) + loss_avoided, 2)
-                parts.append(f"SL adjustment SAVED ${saved:.2f}")
+            # Verdict — skip if no valid SL data
+            if cf.get("original_sl_survived") is False and pnl is not None and orig_sl and float(orig_sl) > 0 and entry:
+                entry_f = float(entry)
+                orig_sl_f = float(orig_sl)
+                if direction and direction.upper() == "SELL":
+                    pnl_if_original = entry_f - orig_sl_f
+                else:
+                    pnl_if_original = orig_sl_f - entry_f
+                diff = round(float(pnl) - pnl_if_original, 2)
+                if diff > 0:
+                    parts.append(f"SL adjustment SAVED ${diff:.2f}")
+                elif diff < 0:
+                    parts.append(f"SL adjustment COST ${abs(diff):.2f}")
             elif cf.get("tp_would_have_been_hit") and cf.get("tp_hit_pnl") is not None and pnl is not None:
                 cost = round(float(cf["tp_hit_pnl"]) - float(pnl), 2)
-                parts.append(f"SL adjustment COST ${cost:.2f}")
+                if cost > 0:
+                    parts.append(f"SL adjustment COST ${cost:.2f}")
 
         # Load trade conditions for regime/indicators
         conditions = _load_trade_conditions(ticket)

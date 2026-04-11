@@ -2504,24 +2504,40 @@ class AgentTools:
                         pass
 
                 # Verdict: compare actual outcome to counterfactual
+                # Skip if no valid SL data (orig_sl=0 or None = reconciled trade with missing data)
                 verdict = ""
-                if cf:
+                if cf and orig_sl is not None and float(orig_sl) > 0:
                     sl_survived = cf.get("original_sl_survived")
                     tp_hit = cf.get("tp_would_have_been_hit")
                     tp_pnl = cf.get("tp_hit_pnl")
-                    entry = t.get("open_price") or 0
+                    entry_f = float(t.get("open_price") or 0)
 
-                    if sl_survived is False:
-                        # Original SL would have been hit = actual close was better
-                        loss_if_original = abs(float(entry) - float(orig_sl)) if orig_sl else 0
-                        saved = round(float(pnl) + loss_if_original, 2)
-                        verdict = f"SAVED ${saved:.2f}"
-                        adj_helped += 1
+                    if sl_survived is False and entry_f > 0:
+                        # Original SL would have been hit — compute P&L if held to SL
+                        orig_sl_f = float(orig_sl)
+                        if direction.upper() == "BUY":
+                            pnl_if_original = orig_sl_f - entry_f  # negative (loss)
+                        else:
+                            pnl_if_original = entry_f - orig_sl_f  # negative (loss)
+                        diff = round(float(pnl) - pnl_if_original, 2)
+                        if diff > 0:
+                            verdict = f"SAVED ${diff:.2f}"
+                            adj_helped += 1
+                        elif diff < 0:
+                            verdict = f"COST ${abs(diff):.2f}"
+                            adj_hurt += 1
+                        else:
+                            verdict = "NEUTRAL"
+                            adj_neutral += 1
                     elif tp_hit and tp_pnl is not None:
                         # TP would have been hit = actual close left money on table
                         cost = round(float(tp_pnl) - float(pnl), 2)
-                        verdict = f"COST ${cost:.2f}"
-                        adj_hurt += 1
+                        if cost > 0:
+                            verdict = f"COST ${cost:.2f}"
+                            adj_hurt += 1
+                        else:
+                            verdict = "NEUTRAL"
+                            adj_neutral += 1
                     elif sl_survived is True and not tp_hit:
                         verdict = "NEUTRAL"
                         adj_neutral += 1

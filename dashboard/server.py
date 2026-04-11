@@ -1706,21 +1706,40 @@ def journal_data():
                 except Exception:
                     pass
 
-            # Verdict
+            # Verdict — skip if no valid SL data (orig_sl=0 or None = missing data)
             verdict = None
             verdict_type = None  # "helped" | "hurt" | "neutral"
-            if cf:
-                if cf.get("original_sl_survived") is False:
-                    loss_avoided = abs(float(entry) - float(orig_sl)) if orig_sl else 0
-                    saved = round(pnl + loss_avoided, 2)
-                    verdict = f"SAVED ${saved:.2f}"
-                    verdict_type = "helped"
-                    adj_helped += 1
+            direction_up = (t.get("direction") or "").upper()
+            if cf and orig_sl is not None and float(orig_sl) > 0:
+                if cf.get("original_sl_survived") is False and entry > 0:
+                    orig_sl_f = float(orig_sl)
+                    if direction_up == "BUY":
+                        pnl_if_original = orig_sl_f - float(entry)
+                    else:
+                        pnl_if_original = float(entry) - orig_sl_f
+                    diff = round(pnl - pnl_if_original, 2)
+                    if diff > 0:
+                        verdict = f"SAVED ${diff:.2f}"
+                        verdict_type = "helped"
+                        adj_helped += 1
+                    elif diff < 0:
+                        verdict = f"COST ${abs(diff):.2f}"
+                        verdict_type = "hurt"
+                        adj_hurt += 1
+                    else:
+                        verdict = "NEUTRAL"
+                        verdict_type = "neutral"
+                        adj_neutral += 1
                 elif cf.get("tp_would_have_been_hit") and cf.get("tp_hit_pnl") is not None:
                     cost = round(float(cf["tp_hit_pnl"]) - pnl, 2)
-                    verdict = f"COST ${cost:.2f}"
-                    verdict_type = "hurt"
-                    adj_hurt += 1
+                    if cost > 0:
+                        verdict = f"COST ${cost:.2f}"
+                        verdict_type = "hurt"
+                        adj_hurt += 1
+                    else:
+                        verdict = "NEUTRAL"
+                        verdict_type = "neutral"
+                        adj_neutral += 1
                 elif cf.get("original_sl_survived") is True:
                     verdict = "NEUTRAL"
                     verdict_type = "neutral"
