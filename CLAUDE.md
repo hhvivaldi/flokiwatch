@@ -131,4 +131,4 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 
 ## Ticket Convention
 
-FLO-NNN format. Commits: `fix: FLO-XXX — description` or `feat: FLO-XXX — description`. Tracked in Linear (Floki Watch team). Known open issues: FLO-96 (timezone audit), FLO-140 (P1 backlog), FLO-146 (dead VIX feature).
+FLO-NNN format. Commits: `fix: FLO-XXX — description` or `feat: FLO-XXX — description`. Tracked in Linear (Floki Watch team). Known open issues: FLO-96 (timezone audit — mostly done: calendar/executor/sage fixed, remaining: verify all DB timestamps), FLO-140 (P1 backlog), FLO-146 (dead VIX feature — 16 files still reference VIX).
