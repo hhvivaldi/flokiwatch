@@ -670,6 +670,29 @@ def schedule_delayed_hindsight(action: Dict) -> None:
 _REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "post_trade_reports")
 
 
+def _session_from_db_time(ts: str) -> str:
+    """Classify session from a DB timestamp (broker time, not UTC).
+
+    Uses config.MT5_SERVER_UTC_OFFSET to convert to real UTC hour.
+    Same logic as sage_auditor.py (FLO-269 corrected).
+    """
+    try:
+        import config as _cfg
+        offset = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
+        dt = datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+        broker_hour = dt.hour
+        utc_hour = (broker_hour - offset) % 24
+        if 0 <= utc_hour < 7:
+            return "Asian"
+        if 7 <= utc_hour < 13:
+            return "London"
+        if 13 <= utc_hour < 22:
+            return "NY"
+        return "OffHours"
+    except Exception:
+        return "unknown"
+
+
 def generate_post_trade_report(action: Dict) -> Optional[Dict]:
     """Build a hard-data post-trade report from trades + trade_adjustments tables.
 
@@ -770,6 +793,12 @@ def generate_post_trade_report(action: Dict) -> Optional[Dict]:
         except Exception:
             pass
 
+        # Session at open/close
+        open_time_str = trade.get("open_time") or action.get("open_time") or ""
+        close_time_str = trade.get("close_time") or action.get("close_time") or ""
+        session_open = _session_from_db_time(open_time_str)
+        session_close = _session_from_db_time(close_time_str)
+
         report = {
             "ticket": int(ticket),
             "generated_at": datetime.utcnow().isoformat(),
@@ -784,6 +813,8 @@ def generate_post_trade_report(action: Dict) -> Optional[Dict]:
             "close_reason": action.get("reason") or trade.get("close_reason"),
             "open_time": trade.get("open_time"),
             "close_time": trade.get("close_time") or action.get("close_time"),
+            "session_open": session_open,
+            "session_close": session_close,
             "duration_minutes": duration_minutes,
             "mfe_points": mfe,
             "mae_points": mae,
@@ -1052,8 +1083,11 @@ def get_last_trade_report_summary() -> Optional[str]:
         mae_str = f"{mae:+.1f}pts" if mae is not None else "?"
         cap_str = f"{capture}%" if capture is not None else "?"
 
+        sess_open = report.get("session_open", "?")
+        sess_close = report.get("session_close", "?")
+
         lines = [
-            f'<last_trade_report ticket="{ticket}" direction="{direction}" pnl="{pnl_str}" close="{close_type}">',
+            f'<last_trade_report ticket="{ticket}" direction="{direction}" pnl="{pnl_str}" close="{close_type}" session_open="{sess_open}" session_close="{sess_close}">',
             f"  MFE: {mfe_str} | MAE: {mae_str} | Captured: {cap_str} | SL changes: {adj_count} ({sl_summary})",
         ]
 
