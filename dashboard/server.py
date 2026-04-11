@@ -1623,6 +1623,158 @@ def history_data():
         return JSONResponse({"error": str(e)})
 
 
+@app.get("/api/journal")
+def journal_data():
+    """FLO-269: Trade journal — trades with MFE, capture rate, adjustments, counterfactual."""
+    if not HISTORY_DB.exists():
+        return JSONResponse({"error": "History DB not found"})
+
+    try:
+        import config as _cfg
+        _offset = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
+
+        def _session(ts):
+            try:
+                d = datetime.fromisoformat((ts or "").split(".")[0])
+                h = (d.hour - _offset) % 24
+                if 0 <= h < 7: return "Asian"
+                if 7 <= h < 13: return "London"
+                if 13 <= h < 22: return "NY"
+                return "OffHours"
+            except Exception:
+                return "?"
+
+        conn = _get_history_conn()
+        rows = conn.execute(
+            "SELECT ticket, direction, volume, open_price, close_price, sl, tp, "
+            "profit, close_reason, open_time, close_time, mfe_points, mae_points, "
+            "final_sl, breakeven_activated, decision_source "
+            "FROM trades WHERE close_price IS NOT NULL AND profit IS NOT NULL "
+            "ORDER BY close_time DESC LIMIT 30"
+        ).fetchall()
+
+        # Load adjustments
+        adj_rows = conn.execute(
+            "SELECT ticket, timestamp, old_sl, new_sl, old_tp, new_tp, source "
+            "FROM trade_adjustments ORDER BY timestamp ASC"
+        ).fetchall()
+        conn.close()
+
+        # Index adjustments by ticket
+        adj_by_ticket = {}
+        for a in adj_rows:
+            ad = dict(a)
+            tk = ad["ticket"]
+            adj_by_ticket.setdefault(tk, []).append(ad)
+
+        # Reports dir
+        reports_dir = os.path.join(str(_ROOT), "data", "post_trade_reports")
+
+        trades = []
+        total_capture = []
+        adj_helped = 0
+        adj_hurt = 0
+        adj_neutral = 0
+
+        for r in rows:
+            t = dict(r)
+            ticket = t["ticket"]
+            pnl = float(t.get("profit") or 0)
+            mfe = t.get("mfe_points")
+            mae = t.get("mae_points")
+            entry = t.get("open_price") or 0
+            orig_sl = t.get("sl")
+            adjustments = adj_by_ticket.get(ticket, [])
+            if adjustments:
+                orig_sl = adjustments[0].get("old_sl") or orig_sl
+
+            capture = None
+            if mfe is not None and mfe > 0:
+                try:
+                    capture = round(pnl / float(mfe) * 100, 1)
+                    total_capture.append(capture)
+                except Exception:
+                    pass
+
+            # Load counterfactual
+            cf = None
+            report_path = os.path.join(reports_dir, f"{ticket}.json")
+            if os.path.exists(report_path):
+                try:
+                    with open(report_path, "r") as f:
+                        cf = json.load(f).get("counterfactual")
+                except Exception:
+                    pass
+
+            # Verdict
+            verdict = None
+            verdict_type = None  # "helped" | "hurt" | "neutral"
+            if cf:
+                if cf.get("original_sl_survived") is False:
+                    loss_avoided = abs(float(entry) - float(orig_sl)) if orig_sl else 0
+                    saved = round(pnl + loss_avoided, 2)
+                    verdict = f"SAVED ${saved:.2f}"
+                    verdict_type = "helped"
+                    adj_helped += 1
+                elif cf.get("tp_would_have_been_hit") and cf.get("tp_hit_pnl") is not None:
+                    cost = round(float(cf["tp_hit_pnl"]) - pnl, 2)
+                    verdict = f"COST ${cost:.2f}"
+                    verdict_type = "hurt"
+                    adj_hurt += 1
+                elif cf.get("original_sl_survived") is True:
+                    verdict = "NEUTRAL"
+                    verdict_type = "neutral"
+                    adj_neutral += 1
+
+            # Duration
+            dur = None
+            try:
+                od = datetime.fromisoformat((t.get("open_time") or "").split(".")[0])
+                cd = datetime.fromisoformat((t.get("close_time") or "").split(".")[0])
+                dur = round((cd - od).total_seconds() / 60)
+            except Exception:
+                pass
+
+            trades.append({
+                "ticket": ticket,
+                "direction": t.get("direction"),
+                "session_open": _session(t.get("open_time")),
+                "session_close": _session(t.get("close_time")),
+                "pnl": pnl,
+                "entry": entry,
+                "orig_sl": orig_sl,
+                "final_sl": t.get("final_sl"),
+                "tp": t.get("tp"),
+                "close_price": t.get("close_price"),
+                "close_reason": t.get("close_reason"),
+                "mfe": mfe,
+                "mae": mae,
+                "capture_pct": capture,
+                "adj_count": len(adjustments),
+                "adjustments": adjustments,
+                "verdict": verdict,
+                "verdict_type": verdict_type,
+                "duration_min": dur,
+                "counterfactual": cf,
+            })
+
+        total_adj = adj_helped + adj_hurt + adj_neutral
+        stats = {
+            "avg_capture": round(sum(total_capture) / len(total_capture), 1) if total_capture else None,
+            "adj_helped_pct": round(adj_helped / total_adj * 100) if total_adj > 0 else None,
+            "adj_hurt_pct": round(adj_hurt / total_adj * 100) if total_adj > 0 else None,
+            "total_trades": len(trades),
+            "trades_with_cf": sum(1 for t in trades if t["counterfactual"]),
+        }
+
+        return JSONResponse({"trades": trades, "stats": stats})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)})
+
+
 @app.get("/api/trade-report")
 def trade_report(ticket: int, force_refresh: int = 0):
     if not HISTORY_DB.exists():

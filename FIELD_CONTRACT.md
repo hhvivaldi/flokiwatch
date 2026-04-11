@@ -414,6 +414,30 @@ Data source: `data/market_context_cache.json` (written by `agent_tools.get_marke
 | `trade_history[].reason` | string | `state_writer.py` | `renderPositions()` |
 | `trade_history[].breakeven_activated` | bool | `state_writer.py` | `renderTrades()` |
 
+### `/api/journal` Endpoint (FLO-269 Trade Journal)
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `trades[]` | array | `trades` + `trade_adjustments` + report JSONs | Last 30 closed trades with full detail |
+| `trades[].ticket` | int | `trades.ticket` | MT5 ticket |
+| `trades[].direction` | string | `trades.direction` | BUY/SELL |
+| `trades[].session_open` | string | Derived from `open_time` | Asian/London/NY/OffHours |
+| `trades[].session_close` | string | Derived from `close_time` | Asian/London/NY/OffHours |
+| `trades[].pnl` | float | `trades.profit` | Realized P&L |
+| `trades[].mfe` | float\|null | `trades.mfe_points` | Max Favorable Excursion |
+| `trades[].mae` | float\|null | `trades.mae_points` | Max Adverse Excursion |
+| `trades[].capture_pct` | float\|null | Computed: pnl/mfe | Capture rate percentage |
+| `trades[].adj_count` | int | `trade_adjustments` count | Number of SL/TP adjustments |
+| `trades[].adjustments` | array | `trade_adjustments` | SL/TP adjustment history |
+| `trades[].verdict` | string\|null | Counterfactual analysis | "SAVED $X" or "COST $X" |
+| `trades[].verdict_type` | string\|null | Derived | "helped" / "hurt" / "neutral" |
+| `trades[].counterfactual` | object\|null | `post_trade_reports/{ticket}.json` | EOD counterfactual data |
+| `stats.avg_capture` | float\|null | Aggregate | Average capture rate % |
+| `stats.adj_helped_pct` | int\|null | Aggregate | % of trades where outcome beat original plan |
+| `stats.adj_hurt_pct` | int\|null | Aggregate | % of trades where original plan was better |
+
+**Reader:** `trade_room.html` → `#journal-table`, `#journal-stats`
+
 ---
 
 ## HTML Element IDs Required by app.js
