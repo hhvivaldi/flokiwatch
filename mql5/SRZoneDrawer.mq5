@@ -9,18 +9,19 @@
 
 //--- Inputs
 input int    RefreshSeconds   = 10;       // Check JSON every N seconds
-input string InputFileName    = "sr_zones.json";
 input string ObjectPrefix     = "SR_";    // Prefix for all objects (only these get deleted)
 input int    LabelFontSize    = 8;        // Font size for zone labels
 input string LabelFont        = "Arial";  // Font for zone labels
 
 //--- Colors
-input color  ColorSupport     = clrLime;      // Support zone color
-input color  ColorResistance  = clrTomato;    // Resistance zone color
-input color  ColorFlip        = clrGold;      // Flip zone color
+input color  ColorSupport     = clrLime;        // Support zone color
+input color  ColorResistance  = clrTomato;      // Resistance zone color
+input color  ColorFlip        = clrGold;        // Flip zone color
+input color  ColorConfluence  = clrGold;        // Confluence zone color (FLO-262)
 
 //--- State
 string LastUpdatedAt = "";   // Track last JSON timestamp to avoid redundant redraws
+string ActiveFileName = "";  // Determined by chart TF
 
 //+------------------------------------------------------------------+
 //| Expert initialization                                             |
@@ -28,7 +29,21 @@ string LastUpdatedAt = "";   // Track last JSON timestamp to avoid redundant red
 int OnInit()
   {
    EventSetTimer(RefreshSeconds);
-   Print("SRZoneDrawer: Started | Refresh: ", RefreshSeconds, "s | File: ", InputFileName);
+
+   // FLO-262: Select JSON file based on chart timeframe
+   ENUM_TIMEFRAMES tf = Period();
+   if(tf == PERIOD_D1 || tf == PERIOD_W1 || tf == PERIOD_MN1)
+      ActiveFileName = "sr_zones_d1.json";
+   else if(tf == PERIOD_H4)
+      ActiveFileName = "sr_zones_h4.json";
+   else
+      ActiveFileName = "sr_zones_h1.json";  // H1, M15, M5 all use H1 zones
+
+   // Fallback: if per-TF file doesn't exist, use legacy merged file
+   if(!FileIsExist(ActiveFileName))
+      ActiveFileName = "sr_zones.json";
+
+   Print("SRZoneDrawer: Started | Refresh: ", RefreshSeconds, "s | TF: ", EnumToString(tf), " | File: ", ActiveFileName);
    // Draw immediately on attach
    ReadAndDraw();
    return(INIT_SUCCEEDED);
@@ -101,7 +116,7 @@ void ReadAndDraw()
    // Get the time coordinate for labels (right edge of visible chart)
    datetime label_time = GetRightEdgeTime();
 
-   for(int i = 0; i < count && i < 8; i++)
+   for(int i = 0; i < count && i < 12; i++)
      {
       string z = zone_objects[i];
 
@@ -113,39 +128,50 @@ void ReadAndDraw()
       string position   = ExtractStringField(z, "position");
       string flip_phase = ExtractStringField(z, "flip_phase");
 
-      // Parse confluence array
-      bool has_mtf = false;
-      string confluence_str = ExtractArrayField(z, "confluence");
-      if(confluence_str != "")
+      // FLO-262: Check is_confluence field (boolean in per-TF JSON)
+      bool is_confluence = false;
+      // Simple check: look for "is_confluence": true
+      if(StringFind(z, "\"is_confluence\": true") >= 0 || StringFind(z, "\"is_confluence\":true") >= 0)
+         is_confluence = true;
+
+      // Legacy: also check confluence array for backward compat with merged JSON
+      bool has_mtf = is_confluence;
+      if(!has_mtf)
         {
-         // Count commas to determine number of TFs
-         int comma_count = 0;
-         for(int c = 0; c < StringLen(confluence_str); c++)
+         string confluence_str = ExtractArrayField(z, "confluence");
+         if(confluence_str != "")
            {
-            if(StringGetCharacter(confluence_str, c) == ',')
-               comma_count++;
+            int comma_count = 0;
+            for(int c = 0; c < StringLen(confluence_str); c++)
+              {
+               if(StringGetCharacter(confluence_str, c) == ',')
+                  comma_count++;
+              }
+            if(comma_count >= 1)
+               has_mtf = true;
            }
-         if(comma_count >= 1)
-            has_mtf = true;
         }
 
       if(price <= 0)
          continue;
 
-      // Determine color — flip zones (with flip_phase) keep gold color
-      bool is_flip = (flip_phase == "R_TO_S" || flip_phase == "S_TO_R");
-      color line_color = ColorSupport;
-      if(is_flip)
+      // FLO-262: Confluence zones always Gold + width 3
+      // Non-confluence: support=Lime, resistance=Tomato, flip=Gold
+      color line_color;
+      if(has_mtf)
+         line_color = ColorConfluence;  // Gold for confluence
+      else if(flip_phase == "R_TO_S" || flip_phase == "S_TO_R")
          line_color = ColorFlip;
       else if(zone_type == "RESISTANCE")
          line_color = ColorResistance;
+      else
+         line_color = ColorSupport;
 
-      // Determine line width based on rules:
-      // D1 or MTF confluence → 3 (thick)
-      // H4 or ≥4 touches → 2 (medium)
-      // H1 only, <4 touches → 1 (thin)
+      // Line width: confluence=3, D1=3, H4/4+T=2, else=1
       int line_width = 1;
-      if(timeframe == "D1" || has_mtf)
+      if(has_mtf)
+         line_width = 3;
+      else if(timeframe == "D1")
          line_width = 3;
       else if(timeframe == "H4" || touches >= 4)
          line_width = 2;
@@ -171,7 +197,7 @@ void ReadAndDraw()
       else if(flip_phase == "S_TO_R")
          phase_tag = " (S>R)";
 
-      string mtf_tag = has_mtf ? " MTF" : "";
+      string mtf_tag = has_mtf ? " CONF" : "";
       string price_str = IntegerToString((int)MathRound(price));
       string label_text = price_str + " | " + timeframe + mtf_tag + " " + type_short + phase_tag + " " + IntegerToString(touches) + "T";
 
@@ -188,7 +214,7 @@ void ReadAndDraw()
      }
 
    ChartRedraw(0);
-   Print("SRZoneDrawer: Drew ", MathMin(count, 8), " zones | Updated: ", updated_at);
+   Print("SRZoneDrawer: Drew ", MathMin(count, 12), " zones | File: ", ActiveFileName, " | Updated: ", updated_at);
   }
 
 //+------------------------------------------------------------------+
@@ -219,10 +245,22 @@ datetime GetRightEdgeTime()
 //+------------------------------------------------------------------+
 string ReadJSONFile()
   {
-   if(!FileIsExist(InputFileName))
+   // FLO-262: Re-check if per-TF file appeared (bot may have started writing after EA init)
+   ENUM_TIMEFRAMES tf = Period();
+   string preferred = "";
+   if(tf == PERIOD_D1 || tf == PERIOD_W1 || tf == PERIOD_MN1)
+      preferred = "sr_zones_d1.json";
+   else if(tf == PERIOD_H4)
+      preferred = "sr_zones_h4.json";
+   else
+      preferred = "sr_zones_h1.json";
+   if(FileIsExist(preferred))
+      ActiveFileName = preferred;
+
+   if(!FileIsExist(ActiveFileName))
       return "";
 
-   int handle = FileOpen(InputFileName, FILE_READ | FILE_TXT | FILE_ANSI);
+   int handle = FileOpen(ActiveFileName, FILE_READ | FILE_TXT | FILE_ANSI);
    if(handle == INVALID_HANDLE)
       return "";
 
