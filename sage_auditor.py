@@ -197,13 +197,19 @@ def _basic_insights(trades: List[sqlite3.Row]) -> List[Dict[str, Any]]:
         return insights
 
     # session_name is not stored on trades; infer from open_time hour
+    # FLO-269: open_time in DB is broker time (UTC+N), not UTC.
+    # Subtract MT5_SERVER_UTC_OFFSET to get real UTC hour.
+    import config as _cfg
+    _broker_offset_h = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
+
     def _utc_hour(open_time: str) -> Optional[int]:
         try:
             s = (open_time or "").replace("Z", "+00:00")
             dt = datetime.fromisoformat(s)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return int(dt.astimezone(timezone.utc).hour)
+            broker_hour = int(dt.astimezone(timezone.utc).hour)
+            return (broker_hour - _broker_offset_h) % 24
         except Exception:
             return None
 
@@ -499,12 +505,20 @@ def _session_from_utc_hour(h: Optional[int]) -> str:
 
 
 def _utc_hour_from_iso(ts: str) -> Optional[int]:
+    """Convert DB timestamp (broker time) to real UTC hour.
+
+    FLO-269: open_time/close_time in DB is broker time (UTC+N).
+    Subtract MT5_SERVER_UTC_OFFSET to get actual UTC hour.
+    """
     try:
+        import config as _cfg
+        _offset = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
         s = (ts or "").replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.astimezone(timezone.utc).hour)
+        broker_hour = int(dt.astimezone(timezone.utc).hour)
+        return (broker_hour - _offset) % 24
     except Exception:
         return None
 
