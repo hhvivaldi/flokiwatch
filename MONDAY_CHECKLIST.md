@@ -13,7 +13,7 @@ python main.py
 ```
 
 Verify in logs:
-- `AI Agent initialized: model=gpt-5.4, mode=active`
+- `AI Agent initialized: model=qwen3.6-plus, mode=active`
 - No import errors or tracebacks
 - `Market open` detected (not "Weekend — market closed")
 
@@ -25,58 +25,55 @@ Access: http://localhost:8080/trade-room
 
 ### 1.3 First Brain cycle (within 60s)
 - Brain analysis completes: Tech/News/ML/Momentum/Calendar scores in log
+- Calendar events show UTC times (FLO-96 fix, commit 675e960)
 - This populates the cache that Floki's tools read from
 
 ---
 
 ## Phase 2: Agent Verification (first 30 min)
 
-### 2.1 Floki (Gemini 3 Flash)
+### 2.1 Floki (Qwen 3.6-Plus)
 - `FLOKI_SCHEDULE | Calling Floki now (timer due)` in log
-- Floki calls `get_luna_brief` + `get_echo_alerts` at start (NOT `get_macro`/`get_headlines` — Luna handles those)
+- Floki calls `get_luna_brief` + `get_echo_alerts` at start
 - Returns valid decision: WAIT/OPEN_BUY/OPEN_SELL/HOLD_TRADE/CLOSE_TRADE
 - Trade Room card shows decision + confidence %
+- **NEW**: Identity is neutral ("the XAU/USD trader" — no "intraday" label)
+- **NEW**: Position phases show "OPEN/SL_ADJUSTED/TRAILING" (not BREAKEVEN)
+- **NEW**: `get_calendar` works in position_mode (cfc2893)
 
 ### 2.2 Luna (MiMo-V2-Flash) — every 15 min
 - `LUNA | MiMo analysis — SAFE/CAUTION/DANGER` in log
 - `data/luna_brief.json` exists and is fresh (< 30 min)
 - Trade Room Luna card shows environment badge + risk level
-- MACRO tab shows Luna messages
 - **CRITICAL**: If Luna log says "AI unavailable — using local fallback", check LUNA_API_KEY
 
 ### 2.3 Rex (GPT-4o) — analyst with 11 tools + Bull/Bear debate
 - Rex Bull/Bear debate injects into trigger_context before each Floki cycle
-- Check log for `REX_DEBATE | INJECTED` (both sides succeeded) or `REX_DEBATE | SKIPPED` (one/both failed)
-- Check log for `REX_BULL | OK | direction=BUY/SELL | conviction=X` and `REX_BEAR | OK | danger=X`
-- Floki can also call `debate_with_rex` tool during his cycle for neutral insights
-- bot_state.json `last_analysis.debate` shows Bull/Bear results for dashboard
+- Check log for `REX_DEBATE | INJECTED` or `REX_DEBATE | SKIPPED`
+- Rex monitor runs every 30 min (get_rex_monitor tool)
 
 ### 2.3.1 Research Manager (Gemini 3 Flash) — verdict after debate
-- Check log for `RESEARCH_MANAGER | OK | winner=BULL/BEAR | rec=ENTER_BUY/ENTER_SELL/NO_TRADE | conv=X`
-- If OK: `<verdict>` block injected into Floki context (replaces `<debate>`)
-- If FAIL: falls back to `<debate>` block (FLO-190 behavior)
-- bot_state.json `last_analysis.verdict` shows verdict for dashboard
+- Check log for `RESEARCH_MANAGER | OK | winner=BULL/BEAR | rec=...`
+- If OK: `<verdict>` block injected. If FAIL: falls back to `<debate>` block
 
 ### 2.4 Simba (Python) — every 30s
 - `SIMBA_CHECK` events in log
-- Trade Room shows patrol reports (price, conditions, trend, levels)
-- Simba card expand panel shows condition details
-- If Floki set wake conditions: Simba monitors 10 condition types
+- Trade Room shows patrol reports
+- Simba monitors wake/watch conditions (10 types)
 
 ### 2.5 Echo (MiMo-V2-Flash) — every 5 min
-- `[ECHO] Direct RSS: N found` in log (11/11 feeds ok)
-- `[ECHO] N scanned, M fresh, K pass keyword filter`
-- IMPORTANT/CRITICAL alerts appear in Trade Room NEWS tab
-- Echo card shows: ACTIVE, last scan time, alert counts, feed health (25/25 healthy)
-- **CRITICAL**: If Echo fails, check LUNA_API_KEY (shared key with Luna)
+- `[ECHO] Direct RSS: N found` in log
+- IMPORTANT/CRITICAL alerts in Trade Room NEWS tab
+- **CRITICAL**: If Echo fails, check LUNA_API_KEY (shared key)
 
 ### 2.6 Session memory
 ```powershell
 Get-Content .\data\agent_session_memory.json -Raw
 ```
-Should contain Floki's session notes after first call.
+- Sage briefing should show: "Best session: off_hours/ny. Worst: london"
+- **NOT** "Best session: asian. Worst: ny" (old inverted data, fixed in 5b0eba3)
 
-### 2.6 No errors
+### 2.7 No errors
 ```powershell
 Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|CRITICAL|Traceback" | Select-Object -Last 10
 ```
@@ -85,19 +82,26 @@ Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|CRITICAL|Traceback"
 
 ## Phase 3: First Trade (when Floki decides OPEN)
 
-### 3.1 Trade execution
+### 3.1 Market order execution
 - Log: `AGENT_TOOL | execute_trade | direction=BUY/SELL sl=X tp=Y`
 - Safety checks pass
-- Trade opens in MT5
-- Trade Room shows Floki decision with green/red badge
+- Trade opens in MT5 with real ticket
+- `record_trade_open` creates DB row with real ticket
 
-### 3.2 Watch conditions
+### 3.2 Pending order execution
+- Log: `AGENT_TOOL | place_pending_order | BUY_LIMIT/SELL_LIMIT @ X`
+- **NEW**: `record_trade_open(ticket=0)` creates DB row at placement (FLO-269 fix ed1a768)
+- When filled: `PENDING_FILL_DB | ticket=0 -> #REAL` updates the row
+- Pending fill detection works (f9df751 fix)
+
+### 3.3 Watch conditions + balance capture
 - After trade: Floki calls `set_watch_conditions`
-- Simba starts monitoring those conditions
-- `data/agent_watch_conditions.json` contains the ticket
-
-### 3.3 Balance capture
 - Log: `BALANCE_CAPTURE | ticket=#X | balance=$Y`
+
+### 3.4 SL/TP tracking (FLO-269)
+- Every SL/TP modification logged to `trade_adjustments` table
+- Sources: `floki_adjust`, `monitor_breakeven`, `monitor_trailing`
+- MFE/MAE tracked in agent_monitor (written to DB on close)
 
 ---
 
@@ -105,42 +109,51 @@ Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|CRITICAL|Traceback"
 
 ### 4.1 Agent scheduling
 - Floki self-schedules via `set_next_check` (5-120 min)
-- Check: `data/agent_next_check.json` for next_check_at timestamp
 
-### 4.2 Simba wake triggers
-- If wake condition met: `SIMBA_WAKE | Floki called immediately`
-- Floki reviews market and decides action
+### 4.2 Post-trade report injection (FLO-269)
+- After first trade closes, check: `data/post_trade_reports/{ticket}.json` exists
+- Next Floki cycle should show `<last_trade_report>` in trigger_context
+- Verify: `get_trade_journal` tool returns data (call manually if needed)
 
-### 4.3 Echo news alerts
-- CRITICAL → Simba wake → Floki called (max 2/hr) + Luna out-of-cycle trigger
-- IMPORTANT → stored in `data/echo_alerts.json` → Luna reads on next cycle
-- Floki gets CRITICAL via `get_echo_alerts`, routine news via `get_luna_brief`
-- Trade Room NEWS tab shows Echo alerts, MACRO tab shows Luna briefs
+### 4.3 Trade Journal tool
+- Floki can call `get_trade_journal` to review past 20 trades
+- Returns MFE, capture rate, SL adjustments, counterfactual verdicts
+- Filter by session or direction
 
-### 4.4 Luna macro briefs
-- Runs every 15 min (market open), 30 min (daily pause), sleeps during weekend
-- When Luna brief is fresh: Floki's `get_macro` and `get_headlines` tools are REMOVED
-- When Luna brief is stale (>30 min): fallback tools auto-restore with log:
-  `LUNA | Brief stale — Floki using raw macro tools (fallback)`
-- Check feed health: `Get-Content .\data\echo_feed_health.json -Raw`
-
-### 4.5 Sage daily audit
+### 4.4 Sage daily audit (21:00 UTC)
 - Runs at 21:00 UTC (Mon-Fri)
+- **NEW**: Session assignments use corrected timezone (5b0eba3)
+- After Sage: `run_eod_counterfactuals()` runs automatically
+- After counterfactuals: ChromaDB reflexions enriched with real data
 - Report in `data/sage_report.json`
-- Trade Room Sage card shows win rate + profit factor
 
 ---
 
 ## Phase 5: Trade Close
 
-### 5.1 Position closes (EA trailing/SL/TP or Floki CLOSE_TRADE)
+### 5.1 Position closes (SL/TP or Floki CLOSE_TRADE)
 - `Position #X disappeared` in log
 - `BALANCE_DIFF | ticket=#X | diff=$W`
-- Deal resolver finds matching MT5 deal
+- MFE/MAE written to trades table
+- Post-trade report generated: `data/post_trade_reports/{ticket}.json`
+- Reflexion generated (GPT-5.4 daemon thread)
+- Hindsight scheduled (1h delayed)
 
-### 5.2 Post-close
+### 5.2 Post-close verification
+- `POST_TRADE_REPORT | #{ticket} | P&L=... | MFE=... | capture=...` in log
 - Watch conditions cleared for that ticket
-- Floki re-evaluates market on next scheduled call
+- Next Floki cycle sees `<last_trade_report>` in context
+
+---
+
+## Trade Room Verification
+
+### New sections (FLO-269)
+- **TRADE JOURNAL** tier (collapsed, bottom of page) — expand to see table
+- Journal shows: Ticket, Dir, Session, P&L, MFE, Capture%, #Adj, Verdict
+- Verdict badges: green SAVED, red COST, gray NEUTRAL
+- Stats bar: Avg Capture Rate, Adj Helped %, Adj Hurt %
+- API: `/api/journal` returns data
 
 ---
 
@@ -150,29 +163,20 @@ Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|CRITICAL|Traceback"
 # Recent Floki tool calls
 Select-String -Path .\logs\trading_bot_*.log -Pattern "AGENT_TOOL" | Select-Object -Last 20
 
-# Echo scan results
-Select-String -Path .\logs\trading_bot_*.log -Pattern "\[ECHO\]" | Select-Object -Last 10
+# Trade adjustments for a ticket
+python -c "from db_writer import get_trade_adjustments; print(get_trade_adjustments(TICKET))"
 
-# Simba status
-Get-Content .\data\agent_wake_conditions.json -Raw
+# Post-trade report
+Get-Content .\data\post_trade_reports\TICKET.json -Raw
+
+# Trade journal (manual test)
+python -c "from agent_tools import AgentTools; # ... see Rule 20"
 
 # Session memory
 Get-Content .\data\agent_session_memory.json -Raw
 
-# Next Floki check
-Get-Content .\data\agent_next_check.json -Raw
-
-# Echo alerts
-Get-Content .\data\echo_alerts.json -Raw
-
-# Luna brief
-Get-Content .\data\luna_brief.json -Raw
-
-# Feed health
-Get-Content .\data\echo_feed_health.json -Raw
-
-# Luna cost
-Get-Content .\data\luna_daily_cost.json -Raw
+# Sage report
+Get-Content .\data\sage_report.json -Raw
 
 # Errors only
 Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|Traceback" | Select-Object -Last 10
@@ -184,20 +188,18 @@ Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|Traceback" | Select
 
 | Setting | Value | File |
 |---------|-------|------|
-| Floki model | gpt-5.4 | config.py |
+| Floki model | qwen3.6-plus | config.py (FLOKI_MODEL) |
 | Rex model | gpt-5-mini | rex_validator.py |
 | Echo model | mimo-v2-flash (Xiaomi API) | config.py |
 | Luna model | mimo-v2-flash (Xiaomi API) | config.py |
+| Sage model | gemini-3-flash-preview | sage_auditor.py |
 | Brain cycle | 60s | config.py (ANALYSIS_INTERVAL_SECONDS) |
 | Monitor cycle | 10s | monitor.py |
-| Simba cycle | 30s | simba_watcher.py |
-| Echo scan | 300s (5 min) | config.py (ECHO_SCAN_INTERVAL_SECONDS) |
-| Luna scan (open) | 900s (15 min) | config.py (LUNA_SCAN_INTERVAL_SECONDS) |
-| Luna scan (closed) | 1800s (30 min) | config.py (LUNA_SCAN_INTERVAL_CLOSED) |
-| Floki default interval | 300s (5 min) | config.py (FLOKI_CALL_INTERVAL) |
-| Echo max wakes/hr | 2 | config.py (ECHO_MAX_WAKES_PER_HOUR) |
-| Echo daily cost cap | $1.00 | config.py (ECHO_DAILY_COST_CAP) |
-| Luna daily cost cap | $1.00 | config.py (LUNA_DAILY_COST_CAP) |
+| Simba cycle | 30s | agent_monitor.py |
+| Echo scan | 300s (5 min) | config.py |
+| Luna scan (open) | 900s (15 min) | config.py |
+| Floki default interval | 300s (5 min) | config.py |
+| MT5 server UTC offset | +2h | config.py (MT5_SERVER_UTC_OFFSET) |
 | Dashboard port | 8080 | uvicorn command |
 
 ---
@@ -206,15 +208,20 @@ Select-String -Path .\logs\trading_bot_*.log -Pattern "ERROR|Traceback" | Select
 
 | Period | Floki/Rex/Simba/Sage | Echo | Luna |
 |--------|---------------------|------|------|
-| Market open (Mon 22:00 → Fri 21:00 UTC) | Normal status | ACTIVE | ACTIVE (15 min) |
+| Market open (Mon 22:00 → Fri 21:00 UTC) | Normal | ACTIVE | ACTIVE (15 min) |
 | Daily pause (21:00-22:00 UTC Mon-Thu) | COFFEE BREAK | ON WATCH | COFFEE BREAK (30 min) |
 | Weekend (Fri 21:00 → Sun 21:00 UTC) | REST DAY | ON WATCH | REST DAY (sleeps) |
 | Pre-market (Sun 21:00, 1h before open) | REST DAY | ON WATCH | Wakes — 1 fresh brief |
 
+---
 
-### NEW CHECKS (FLO-127/128/130)
+## Post-Deploy Checks (FLO-269 Pipeline)
 
-- [ ] Cost logging visible: 
-- [ ]  populated after first cycle
-- [ ]  log line visible on cycle 2+
-- [ ] FLOKI_FOLLOWUP covers: execute_trade, close_trade, adjust_trade
+- [ ] First trade close: `POST_TRADE_REPORT` log line appears
+- [ ] `data/post_trade_reports/{ticket}.json` created with MFE/MAE
+- [ ] Next Floki cycle: `<last_trade_report>` visible in trigger_context
+- [ ] `get_trade_journal` tool returns trades with capture rate
+- [ ] Trade Room TRADE JOURNAL section visible and populated
+- [ ] At 21:00 UTC: `EOD_COUNTERFACTUAL` log lines appear
+- [ ] After EOD: `RICH_REFLEXION` log lines confirm ChromaDB enrichment
+- [ ] Pending orders: `record_trade_open(ticket=0)` at placement, updated on fill
