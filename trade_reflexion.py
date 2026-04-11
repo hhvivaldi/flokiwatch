@@ -1014,6 +1014,13 @@ def run_eod_counterfactuals() -> int:
                     f"EOD_COUNTERFACTUAL | #{ticket} | orig_SL {sl_msg} | TP {tp_msg} | "
                     f"{len(bars)} bars ({hours_of_data:.1f}h)"
                 )
+
+                # FLO-269: Replace generic reflexion with rich data in ChromaDB
+                try:
+                    enrich_reflexion_with_report(ticket)
+                except Exception:
+                    pass
+
                 enriched += 1
 
             except Exception as e:
@@ -1024,6 +1031,135 @@ def run_eod_counterfactuals() -> int:
 
     log.info(f"EOD_COUNTERFACTUAL | enriched {enriched} reports")
     return enriched
+
+
+def enrich_reflexion_with_report(ticket: int) -> bool:
+    """Replace generic reflexion lesson with data-rich text from post-trade report.
+
+    Called after run_eod_counterfactuals() enriches the report with counterfactual data.
+    Builds a rich text string and re-embeds in ChromaDB so semantic search
+    returns real trade data instead of vague advice.
+
+    Returns True if successfully re-embedded.
+    """
+    try:
+        report_path = os.path.join(_REPORTS_DIR, f"{ticket}.json")
+        if not os.path.exists(report_path):
+            return False
+
+        with open(report_path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+
+        direction = report.get("direction", "?")
+        entry = report.get("entry_price")
+        pnl = report.get("pnl")
+        mfe = report.get("mfe_points")
+        mae = report.get("mae_points")
+        capture = report.get("capture_rate_pct")
+        sess_open = report.get("session_open", "?")
+        sess_close = report.get("session_close", "?")
+        adj_count = report.get("sl_adjustment_count", 0)
+        orig_sl = report.get("original_sl")
+        final_sl = report.get("final_sl")
+        tp = report.get("tp")
+        close_type = report.get("close_type", "?")
+        duration = report.get("duration_minutes")
+
+        # Build rich text
+        parts = []
+        parts.append(f"{direction} {entry} in {sess_open} session")
+        if pnl is not None:
+            parts.append(f"P&L ${float(pnl):+.2f} ({close_type})")
+        if mfe is not None:
+            parts.append(f"MFE +{mfe:.1f}pts")
+        if mae is not None:
+            parts.append(f"MAE {mae:.1f}pts")
+        if capture is not None:
+            parts.append(f"Capture {capture}%")
+        if duration is not None:
+            parts.append(f"Duration {duration}min")
+
+        # SL adjustment summary
+        if adj_count > 0:
+            adjustments = report.get("sl_adjustments", [])
+            adj_parts = []
+            for a in adjustments:
+                mins = a.get("minutes_after_open")
+                src = a.get("source", "?")
+                adj_parts.append(f"{a.get('old_sl')}->{a.get('new_sl')} at {mins}min ({src})")
+            parts.append(f"{adj_count} SL adjustments: {'; '.join(adj_parts)}")
+        else:
+            parts.append("No SL adjustments")
+
+        # Counterfactual
+        cf = report.get("counterfactual")
+        if cf:
+            if cf.get("original_sl_survived") is False:
+                parts.append(f"Original SL {orig_sl} would have been hit")
+            elif cf.get("original_sl_survived") is True:
+                parts.append(f"Original SL {orig_sl} survived")
+            if cf.get("tp_would_have_been_hit"):
+                parts.append(f"TP {tp} would have been hit = +${cf.get('tp_hit_pnl')}")
+            else:
+                parts.append(f"TP {tp} not reached in {cf.get('hours_of_data', 0):.0f}h")
+
+            # Verdict
+            if cf.get("original_sl_survived") is False and pnl is not None and orig_sl and entry:
+                loss_avoided = abs(float(entry) - float(orig_sl))
+                saved = round(float(pnl) + loss_avoided, 2)
+                parts.append(f"SL adjustment SAVED ${saved:.2f}")
+            elif cf.get("tp_would_have_been_hit") and cf.get("tp_hit_pnl") is not None and pnl is not None:
+                cost = round(float(cf["tp_hit_pnl"]) - float(pnl), 2)
+                parts.append(f"SL adjustment COST ${cost:.2f}")
+
+        # Load trade conditions for regime/indicators
+        conditions = _load_trade_conditions(ticket)
+        if conditions:
+            regime = conditions.get("regime")
+            adx = conditions.get("adx_h1")
+            rsi = conditions.get("rsi_h1")
+            if regime:
+                parts.append(f"Regime: {regime}")
+            if adx is not None:
+                parts.append(f"ADX {adx}")
+            if rsi is not None:
+                parts.append(f"RSI {rsi}")
+
+        rich_text = " | ".join(parts)
+
+        # Update lesson in trade_reflexions table
+        try:
+            from db_writer import _get_connection
+            conn = _get_connection()
+            try:
+                conn.execute(
+                    "UPDATE trade_reflexions SET lesson = ? WHERE ticket = ?",
+                    (rich_text, int(ticket)),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+        # Re-embed in ChromaDB
+        success = _embed_reflexion(ticket, rich_text, {
+            "ticket": int(ticket),
+            "direction": direction,
+            "pnl": float(pnl) if pnl is not None else 0,
+            "lesson": rich_text[:500],
+            "session": sess_open,
+            "mfe": float(mfe) if mfe is not None else 0,
+            "capture_pct": float(capture) if capture is not None else 0,
+        })
+
+        if success:
+            log.info(f"RICH_REFLEXION | #{ticket} | re-embedded with report data ({len(rich_text)} chars)")
+        return success
+
+    except Exception as e:
+        log.debug(f"RICH_REFLEXION | #{ticket} failed: {e}")
+        return False
 
 
 def get_last_trade_report_summary() -> Optional[str]:
