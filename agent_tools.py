@@ -2503,31 +2503,28 @@ class AgentTools:
                     except Exception:
                         pass
 
-                # Verdict: did SL adjustments help or hurt?
+                # Verdict: compare actual outcome to counterfactual
                 verdict = ""
-                if cf and adjustments:
+                if cf:
                     sl_survived = cf.get("original_sl_survived")
                     tp_hit = cf.get("tp_would_have_been_hit")
                     tp_pnl = cf.get("tp_hit_pnl")
                     entry = t.get("open_price") or 0
 
                     if sl_survived is False:
-                        # Original SL would have been hit = adjustment saved money
-                        loss_avoided = abs(float(entry) - float(orig_sl)) if orig_sl else 0
-                        saved = round(float(pnl) + loss_avoided, 2)
-                        verdict = f"saved ${saved:.2f}"
+                        # Original SL would have been hit = actual close was better
+                        loss_if_original = abs(float(entry) - float(orig_sl)) if orig_sl else 0
+                        saved = round(float(pnl) + loss_if_original, 2)
+                        verdict = f"SAVED ${saved:.2f}"
                         adj_helped += 1
                     elif tp_hit and tp_pnl is not None:
-                        # TP would have been hit = adjustment cost money
+                        # TP would have been hit = actual close left money on table
                         cost = round(float(tp_pnl) - float(pnl), 2)
-                        verdict = f"cost ${cost:.2f}"
+                        verdict = f"COST ${cost:.2f}"
                         adj_hurt += 1
                     elif sl_survived is True and not tp_hit:
-                        # SL survived but TP not reached — neutral/unclear
-                        verdict = "neutral"
+                        verdict = "NEUTRAL"
                         adj_neutral += 1
-                elif adjustments and not cf:
-                    verdict = ""  # no counterfactual yet
 
                 # Format trade XML
                 _f = lambda v, d=2: f"{float(v):.{d}f}" if v is not None else "?"
@@ -2571,15 +2568,32 @@ class AgentTools:
                         )
                     trades_xml.append("    </adjustments>")
 
-                # Counterfactual
+                # Counterfactual (rich detail)
                 if cf:
-                    sl_s = "survived" if cf.get("original_sl_survived") else "hit"
-                    tp_s = ""
+                    cf_attrs = []
+                    if cf.get("original_sl_survived") is True:
+                        cf_attrs.append('orig_sl="survived"')
+                    elif cf.get("original_sl_survived") is False:
+                        hit_time = cf.get("original_sl_hit_time", "?")
+                        # Extract just HH:MM from ISO timestamp
+                        try:
+                            hit_time = hit_time[11:16]
+                        except Exception:
+                            pass
+                        cf_attrs.append(f'orig_sl="hit at {hit_time}"')
                     if cf.get("tp_would_have_been_hit"):
-                        tp_s = f' tp_hit="+${cf.get("tp_hit_pnl")}"'
-                    trades_xml.append(
-                        f'    <counterfactual orig_sl="{sl_s}"{tp_s} verdict="{verdict}"/>'
-                    )
+                        tp_time = cf.get("tp_hit_time", "?")
+                        try:
+                            tp_time = tp_time[11:16]
+                        except Exception:
+                            pass
+                        cf_attrs.append(f'tp="hit at {tp_time} = +${cf.get("tp_hit_pnl")}"')
+                    else:
+                        cf_attrs.append('tp="not reached"')
+                    hours = cf.get("hours_of_data", 0)
+                    cf_attrs.append(f'window="{hours:.0f}h"')
+                    cf_attrs.append(f'verdict="{verdict}"')
+                    trades_xml.append(f'    <counterfactual {" ".join(cf_attrs)}/>')
 
                 trades_xml.append("  </trade>")
 
@@ -2589,10 +2603,9 @@ class AgentTools:
             helped_pct = round(adj_helped / total_adj_trades * 100) if total_adj_trades > 0 else None
             hurt_pct = round(adj_hurt / total_adj_trades * 100) if total_adj_trades > 0 else None
 
-            header = (
-                f'<trade_journal count="{count}"'
-                f' avg_capture="{avg_cap}%"' if avg_cap is not None else f'<trade_journal count="{count}"'
-            )
+            header = f'<trade_journal count="{count}"'
+            if avg_cap is not None:
+                header += f' avg_capture="{avg_cap}%"'
             if helped_pct is not None:
                 header += f' adj_helped="{helped_pct}%" adj_hurt="{hurt_pct}%"'
             header += ">"
