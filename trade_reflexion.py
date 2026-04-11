@@ -1044,7 +1044,7 @@ def get_last_trade_report_summary() -> Optional[str]:
                 old = a.get("old_sl")
                 new = a.get("new_sl")
                 time_str = f"{mins}min" if mins is not None else "?"
-                parts.append(f"{time_str}: {old}→{new} ({src})")
+                parts.append(f"{time_str}: {old}->{new} ({src})")
             sl_summary = "; ".join(parts)
 
         pnl_str = f"${float(pnl):+.2f}" if pnl is not None else "?"
