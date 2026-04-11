@@ -111,6 +111,8 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 
 **Rule 20 — Test New Tools Before Push.** Every new agent tool must be called successfully at least once before pushing. Run `python -c "from agent_tools import AgentTools; ..."` or equivalent and verify a valid response. A tool that has never been called successfully in any environment is not deployable. (Learned: `place_pending_order` shipped with a nonexistent method call that would have been caught by a single test invocation.)
 
+**Rule 21 — Never Speculate on Numbers.** NEVER use "I think", "maybe", "probably", "estimated", "likely", "may have" when discussing prices, P&L, trade outcomes, metrics, or any numerical claim. Either query the actual data (DB, MT5 candles, logs, JSON files) and show the result, or say "I don't know, need to verify." No speculation, no guessing, no rounding from memory. (Learned: speculated "SL would survive, TP hit = +$44" without checking candles. Automated counterfactual proved the opposite — SL was hit, trade SAVED $25. One wrong speculation set the wrong direction for an entire day.)
+
 **Bug Classification:** P0=crash/corruption → fix now. P1=logic error → with approval. P2=smell → deferred.
 
 ## File Conventions
