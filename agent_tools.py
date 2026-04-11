@@ -1380,19 +1380,44 @@ class AgentTools:
             self._log_tool("get_indicators", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
-    def get_sr_zones(self) -> Dict[str, Any]:
+    def get_sr_zones(self, timeframe: str = "") -> Dict[str, Any]:
         start = time.time()
         try:
-            dp = self._last_agent_data()
-            if not dp:
-                self._log_no_cache("get_sr_zones", start)
-                return self._no_cache()
+            # FLO-262: If timeframe specified, use per-TF zones
+            tf = (timeframe or "").strip().upper()
+            if tf and tf in ("D1", "H4", "H1"):
+                per_tf = getattr(self._bot, '_last_sr_zones_per_tf', None)
+                if per_tf and isinstance(per_tf, dict) and tf in per_tf:
+                    tf_zones = per_tf[tf]
+                    zones = []
+                    for z in tf_zones:
+                        zones.append({
+                            "price": round(z.midpoint, 2),
+                            "zone_type": z.zone_type,
+                            "touches": z.touches,
+                            "timeframe": z.timeframe,
+                            "confluence": z.confluence if z.confluence else [],
+                            "strength": z.strength,
+                            "is_confluence": len(z.confluence) > 1,
+                        })
+                    self._log_tool("get_sr_zones", start, f"tf={tf} zones={len(zones)}")
+                    # Fall through to enrichment below
+                    # (skip the merged-zones path)
+                else:
+                    self._log_tool("get_sr_zones", start, f"tf={tf} per-TF data not available, using merged")
+                    tf = ""  # fall through to merged path
 
-            sr = dp.get("sr_zones") or dp.get("support_resistance")
-            if isinstance(sr, dict) and "zones" in sr:
-                zones = sr.get("zones")
-            else:
-                zones = sr
+            if not tf:
+                dp = self._last_agent_data()
+                if not dp:
+                    self._log_no_cache("get_sr_zones", start)
+                    return self._no_cache()
+
+                sr = dp.get("sr_zones") or dp.get("support_resistance")
+                if isinstance(sr, dict) and "zones" in sr:
+                    zones = sr.get("zones")
+                else:
+                    zones = sr
 
             if not isinstance(zones, list) or not zones:
                 self._log_no_cache("get_sr_zones", start)

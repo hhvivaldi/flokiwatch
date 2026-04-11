@@ -609,8 +609,14 @@ class AIAgent:
             },
             {
                 "name": "get_sr_zones",
-                "description": "Get cached support/resistance zones",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                "description": "Get S/R zones with confluence. Optional timeframe: get_sr_zones(timeframe='D1') for D1 zones only, 'H4' for H4, 'H1' for H1. Omit for all (mixed TFs). Confluence zones are marked when levels align within 5 pips across timeframes.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string", "enum": ["D1", "H4", "H1"], "description": "Filter zones by timeframe. Omit for all."},
+                    },
+                    "additionalProperties": False,
+                },
             },
             {
                 "name": "get_fibonacci_levels",
