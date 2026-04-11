@@ -341,6 +341,7 @@ SR_LOOKBACK_H4 = 540                       # H4 bars to analyze (~3 months)
 SR_LOOKBACK_D1 = 130                       # D1 bars to analyze (~6 months)
 SR_FRACTAL_ORDER = 2                       # Fractal order (2 = 5-bar pattern)
 SR_TOUCH_TOLERANCE_PIPS = 30              # Tolerance for touch detection
+SR_CONFLUENCE_TOLERANCE_PIPS = 5            # FLO-262: ±5 pips for cross-TF confluence detection
 SR_CONFIDENCE_PENALTY_MAX = 0              # DISABLED — penalty blocks more winners than losers (zona_sr_forte scenario still active)
 SR_CONFIDENCE_BONUS_MAX = 0                # DISABLED — marginal benefit overwhelmed by scenario cost
 SR_TP_ADJUST_ENABLED = False               # DISABLED — backtest showed TP pull degrades PF by 0.16

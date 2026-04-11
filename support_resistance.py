@@ -450,6 +450,93 @@ def detect_zones_dual(df_h1: pd.DataFrame, df_h4: pd.DataFrame,
 
 
 # ============================================================================
+# FLO-262: PER-TF ZONE DETECTION WITH TIGHT CONFLUENCE
+# ============================================================================
+
+def detect_zones_per_tf(
+    df_h1: pd.DataFrame,
+    df_h4: pd.DataFrame,
+    df_d1: pd.DataFrame = None,
+    merge_pips: float = 80.0,
+    merge_pips_d1: float = 150.0,
+    confluence_pips: float = 5.0,
+    max_age_bars: int = 500,
+    min_touches: int = 2,
+    lookback_h1: int = 200,
+    lookback_h4: int = 540,
+    lookback_d1: int = 130,
+) -> Dict[str, List[SRZone]]:
+    """Detect zones independently per TF with tight cross-TF confluence labeling.
+
+    Unlike detect_zones_triple() which merges zones bottom-up (absorbing lower TF
+    into higher TF), this keeps each TF's zones independent and applies a tight
+    confluence check (±confluence_pips) to label matching zones across TFs.
+
+    Returns:
+        Dict with keys "D1", "H4", "H1", each containing a list of SRZone objects.
+        Zones that align within ±confluence_pips across TFs get confluence labels.
+    """
+    # Detect independently (no merging)
+    h1_zones = detect_zones(df_h1, timeframe="H1", merge_pips=merge_pips,
+                            max_age_bars=max_age_bars, min_touches=min_touches,
+                            lookback=lookback_h1)
+    h4_zones = detect_zones(df_h4, timeframe="H4", merge_pips=merge_pips,
+                            max_age_bars=max_age_bars, min_touches=min_touches,
+                            lookback=lookback_h4)
+    d1_zones = []
+    if df_d1 is not None and len(df_d1) > 30:
+        d1_zones = detect_zones(df_d1, timeframe="D1", merge_pips=merge_pips_d1,
+                                max_age_bars=max_age_bars, min_touches=min_touches,
+                                lookback=lookback_d1)
+
+    # Cross-TF confluence: ±confluence_pips tight matching
+    _label_confluence(d1_zones, h4_zones, h1_zones, confluence_pips)
+
+    return {"D1": d1_zones, "H4": h4_zones, "H1": h1_zones}
+
+
+def _label_confluence(
+    d1_zones: List[SRZone],
+    h4_zones: List[SRZone],
+    h1_zones: List[SRZone],
+    tolerance_pips: float,
+) -> None:
+    """Label zones that align within ±tolerance_pips across timeframes.
+
+    Modifies zones in-place: sets confluence field and upgrades strength.
+    Does NOT merge or absorb — zones stay independent.
+    """
+    tol = tolerance_pips * PIP_SIZE
+
+    # Compare every pair of TF lists
+    tf_lists = [("D1", d1_zones), ("H4", h4_zones), ("H1", h1_zones)]
+
+    for i in range(len(tf_lists)):
+        for j in range(i + 1, len(tf_lists)):
+            tf_a, zones_a = tf_lists[i]
+            tf_b, zones_b = tf_lists[j]
+            for za in zones_a:
+                for zb in zones_b:
+                    if abs(za.midpoint - zb.midpoint) <= tol:
+                        # Match found — label both
+                        if tf_b not in za.confluence:
+                            za.confluence.append(tf_b)
+                        if za.timeframe not in za.confluence:
+                            za.confluence.insert(0, za.timeframe)
+                        if tf_a not in zb.confluence:
+                            zb.confluence.append(tf_a)
+                        if zb.timeframe not in zb.confluence:
+                            zb.confluence.insert(0, zb.timeframe)
+
+    # Sort confluence by hierarchy and upgrade strength
+    tf_order = {"D1": 0, "H4": 1, "H1": 2}
+    for zones in [d1_zones, h4_zones, h1_zones]:
+        for z in zones:
+            z.confluence.sort(key=lambda t: tf_order.get(t, 9))
+        _upgrade_confluence_strength(zones)
+
+
+# ============================================================================
 # S/R CONTEXT FOR BRAIN
 # ============================================================================
 
