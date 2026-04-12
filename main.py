@@ -6,6 +6,16 @@ Orchestrator of the XAU/USD automated trading system
 import sys
 sys.dont_write_bytecode = True
 
+# FLO-274: Force UTF-8 on stdout/stderr so emojis and unicode in prints/logs
+# don't crash on Windows cp1252 consoles. Must run before ANY print or log call.
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 import os
 import time
 import signal
