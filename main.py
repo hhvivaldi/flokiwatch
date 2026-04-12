@@ -4558,6 +4558,25 @@ class TradingBot:
             )
             loop.close()
 
+            # FLO-273: Backfill Floki's decision into latest snapshot per open position
+            try:
+                _decision = getattr(agent_result, "decision", None)
+                _conf = getattr(agent_result, "confidence", None)
+                if _decision:
+                    from db_writer import update_snapshot_floki_decision
+                    _positions_for_snap = executor.get_open_positions() or []
+                    for _p in _positions_for_snap:
+                        try:
+                            update_snapshot_floki_decision(
+                                int(_p.ticket),
+                                str(_decision),
+                                int(_conf) if _conf is not None else None,
+                            )
+                        except Exception:
+                            continue
+            except Exception as e:
+                log.debug(f"   Snapshot Floki backfill error (non-blocking): {e}")
+
             # A/B test: minimal vision-only call (Chamada B)
             try:
                 if getattr(config, 'AB_TEST_ENABLED', False) and chart_images and chart_images.get("success"):
