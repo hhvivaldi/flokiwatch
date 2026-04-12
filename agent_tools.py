@@ -2517,14 +2517,16 @@ class AgentTools:
                 except Exception:
                     pass
 
-                # Load counterfactual from report JSON
+                # Load counterfactual + MFE snapshot from report JSON
                 cf = None
+                mfe_snap = None
                 report_path = _os.path.join(reports_dir, f"{ticket}.json")
                 if _os.path.exists(report_path):
                     try:
                         with open(report_path, "r", encoding="utf-8") as f:
                             report_data = _json.load(f)
                         cf = report_data.get("counterfactual")
+                        mfe_snap = report_data.get("mfe_snapshot")
                     except Exception:
                         pass
 
@@ -2580,7 +2582,12 @@ class AgentTools:
                     f'duration="{dur}"'
                 )
 
-                if not adjustments and not cf:
+                # Pre-check whether MFE snapshot will be rendered (same filter as below)
+                _will_show_mfe = bool(
+                    mfe_snap and (pnl < 0 or (capture is not None and capture < 50))
+                )
+
+                if not adjustments and not cf and not _will_show_mfe:
                     line += "/>"
                     trades_xml.append(line)
                     continue
@@ -2643,6 +2650,54 @@ class AgentTools:
                     cf_attrs.append(f'window="{hours:.0f}h"')
                     cf_attrs.append(f'verdict="{verdict}"')
                     trades_xml.append(f'    <counterfactual {" ".join(cf_attrs)}/>')
+
+                # FLO-273: MFE snapshot — show indicator state at peak profit
+                # Only for losing trades or trades with low capture rate (where MFE matters)
+                show_mfe = False
+                if mfe_snap:
+                    if pnl < 0:
+                        show_mfe = True
+                    elif capture is not None and capture < 50:
+                        show_mfe = True
+
+                if show_mfe and mfe_snap:
+                    m_attrs = []
+                    _mfe_pips = mfe_snap.get("profit_pips")
+                    if _mfe_pips is not None:
+                        m_attrs.append(f'at="+{_mfe_pips}pts"')
+                    _mfe_time = mfe_snap.get("timestamp", "")
+                    try:
+                        _mfe_time_short = _mfe_time[11:16] if _mfe_time else ""
+                        if _mfe_time_short:
+                            m_attrs.append(f'time="{_mfe_time_short}"')
+                    except Exception:
+                        pass
+                    if mfe_snap.get("rsi") is not None:
+                        m_attrs.append(f'rsi="{mfe_snap["rsi"]}"')
+                    _sk = mfe_snap.get("stochastic_k")
+                    _sd = mfe_snap.get("stochastic_d")
+                    if _sk is not None and _sd is not None:
+                        m_attrs.append(f'stoch="{_sk}/{_sd}"')
+                    elif _sk is not None:
+                        m_attrs.append(f'stoch="{_sk}"')
+                    if mfe_snap.get("adx") is not None:
+                        m_attrs.append(f'adx="{mfe_snap["adx"]}"')
+                    if mfe_snap.get("volume_ratio") is not None:
+                        m_attrs.append(f'vol="{mfe_snap["volume_ratio"]}x"')
+                    if mfe_snap.get("macd_histogram") is not None:
+                        m_attrs.append(f'macd_h="{mfe_snap["macd_histogram"]}"')
+                    if mfe_snap.get("bb_position"):
+                        m_attrs.append(f'bb="{mfe_snap["bb_position"]}"')
+                    if mfe_snap.get("nearest_sr"):
+                        m_attrs.append(f'sr="{mfe_snap["nearest_sr"]}"')
+                    if mfe_snap.get("regime"):
+                        m_attrs.append(f'regime="{mfe_snap["regime"]}"')
+                    _fd = mfe_snap.get("floki_decision_at_mfe")
+                    _fc = mfe_snap.get("floki_confidence_at_mfe")
+                    if _fd:
+                        _fc_str = f" ({_fc}%)" if _fc is not None else ""
+                        m_attrs.append(f'floki_said="{_fd}{_fc_str}"')
+                    trades_xml.append(f'    <mfe_snapshot {" ".join(m_attrs)}/>')
 
                 trades_xml.append("  </trade>")
 
