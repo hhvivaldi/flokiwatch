@@ -822,7 +822,32 @@ def generate_post_trade_report(action: Dict) -> Optional[Dict]:
             "sl_adjustments": sl_timeline,
             "sl_adjustment_count": len(sl_timeline),
             "counterfactual": None,  # Populated by run_eod_counterfactuals()
+            "mfe_snapshot": None,    # Populated below (FLO-273)
         }
+
+        # FLO-273: MFE indicator snapshot — find the Brain cycle when this trade peaked
+        try:
+            from db_writer import get_mfe_snapshot
+            mfe_snap = get_mfe_snapshot(int(ticket))
+            if mfe_snap:
+                report["mfe_snapshot"] = {
+                    "timestamp": mfe_snap.get("timestamp"),
+                    "price": mfe_snap.get("price"),
+                    "profit_pips": mfe_snap.get("profit_pips"),
+                    "rsi": mfe_snap.get("rsi"),
+                    "stochastic_k": mfe_snap.get("stochastic_k"),
+                    "stochastic_d": mfe_snap.get("stochastic_d"),
+                    "adx": mfe_snap.get("adx"),
+                    "volume_ratio": mfe_snap.get("volume_ratio"),
+                    "macd_histogram": mfe_snap.get("macd_histogram"),
+                    "bb_position": mfe_snap.get("bb_position"),
+                    "nearest_sr": mfe_snap.get("nearest_sr"),
+                    "regime": mfe_snap.get("regime"),
+                    "floki_decision_at_mfe": mfe_snap.get("floki_decision"),
+                    "floki_confidence_at_mfe": mfe_snap.get("floki_confidence"),
+                }
+        except Exception:
+            pass
 
         # Write to data/post_trade_reports/{ticket}.json
         os.makedirs(_REPORTS_DIR, exist_ok=True)
