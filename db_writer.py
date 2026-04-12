@@ -392,6 +392,31 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_trade_adjustments_ticket ON trade_adjustments(ticket)"
         )
 
+        # FLO-273: trade_snapshots table — indicator state per Brain cycle during open trades
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trade_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                price REAL,
+                profit_pips REAL,
+                rsi REAL,
+                stochastic_k REAL,
+                stochastic_d REAL,
+                adx REAL,
+                volume_ratio REAL,
+                macd_histogram REAL,
+                bb_position TEXT,
+                nearest_sr TEXT,
+                regime TEXT,
+                floki_decision TEXT,
+                floki_confidence INTEGER
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trade_snapshots_ticket ON trade_snapshots(ticket)"
+        )
+
         conn.commit()
         conn.close()
         db_abs_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
@@ -503,6 +528,109 @@ def get_trade_adjustments(ticket: int) -> List[Dict[str, Any]]:
             conn.close()
     except Exception:
         return []
+
+
+def record_trade_snapshot(snapshot: Dict[str, Any]) -> None:
+    """Record indicator state for an open position (FLO-273).
+
+    Called from Brain cycle once per open position per cycle. Fire-and-forget.
+    Expected keys: ticket, timestamp, price, profit_pips, rsi, stochastic_k,
+    stochastic_d, adx, volume_ratio, macd_histogram, bb_position, nearest_sr,
+    regime, floki_decision, floki_confidence.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            conn.execute(
+                "INSERT INTO trade_snapshots "
+                "(ticket, timestamp, price, profit_pips, rsi, stochastic_k, stochastic_d, "
+                "adx, volume_ratio, macd_histogram, bb_position, nearest_sr, regime, "
+                "floki_decision, floki_confidence) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    int(snapshot.get("ticket", 0)),
+                    str(snapshot.get("timestamp", datetime.utcnow().isoformat())),
+                    snapshot.get("price"),
+                    snapshot.get("profit_pips"),
+                    snapshot.get("rsi"),
+                    snapshot.get("stochastic_k"),
+                    snapshot.get("stochastic_d"),
+                    snapshot.get("adx"),
+                    snapshot.get("volume_ratio"),
+                    snapshot.get("macd_histogram"),
+                    snapshot.get("bb_position"),
+                    snapshot.get("nearest_sr"),
+                    snapshot.get("regime"),
+                    snapshot.get("floki_decision"),
+                    snapshot.get("floki_confidence"),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to record trade snapshot: {e}")
+
+
+def get_trade_snapshots(ticket: int) -> List[Dict[str, Any]]:
+    """Return all indicator snapshots for a ticket, ordered chronologically."""
+    try:
+        conn = _get_connection()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM trade_snapshots WHERE ticket = ? ORDER BY timestamp ASC",
+                (int(ticket),),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def get_mfe_snapshot(ticket: int) -> Optional[Dict[str, Any]]:
+    """Return the single snapshot row with maximum profit_pips for a ticket.
+
+    Used by post-trade report to find indicator state at the MFE moment.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM trade_snapshots WHERE ticket = ? AND profit_pips IS NOT NULL "
+                "ORDER BY profit_pips DESC LIMIT 1",
+                (int(ticket),),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def update_snapshot_floki_decision(ticket: int, decision: str, confidence: Optional[int]) -> None:
+    """Update the most recent snapshot for a ticket with Floki's decision (FLO-273).
+
+    Called from ai_agent.py after Floki completes a cycle. Fire-and-forget.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            conn.execute(
+                "UPDATE trade_snapshots SET floki_decision = ?, floki_confidence = ? "
+                "WHERE id = ("
+                "  SELECT id FROM trade_snapshots WHERE ticket = ? "
+                "  ORDER BY timestamp DESC LIMIT 1"
+                ")",
+                (str(decision) if decision else None, confidence, int(ticket)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: failed to update snapshot floki decision: {e}")
 
 
 def record_analysis(last_analysis: Dict[str, Any]) -> None:
