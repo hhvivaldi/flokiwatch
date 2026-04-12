@@ -5279,7 +5279,82 @@ class TradingBot:
                     self._write_sr_zones_per_tf_json(current_price, per_tf)
                 except Exception as e:
                     log.debug(f"   S/R per-TF: error (non-blocking): {e}")
-                
+
+                # FLO-273: Trade snapshots — capture indicator state for open positions
+                try:
+                    positions_now = executor.get_open_positions() or []
+                    if positions_now:
+                        from db_writer import record_trade_snapshot
+                        PIP = 0.1
+                        last_row = df.iloc[-1] if df is not None and len(df) > 0 else None
+
+                        # Nearest S/R helper (inline — scoped to this hook)
+                        def _nearest_sr(zones, px):
+                            if not zones:
+                                return None
+                            best = None
+                            best_dist = 999999
+                            for z in zones:
+                                d = abs(z.midpoint - px)
+                                if d < best_dist:
+                                    best_dist = d
+                                    best = z
+                            if not best:
+                                return None
+                            zt = "SUP" if best.midpoint <= px else "RES"
+                            return f"{best.midpoint:.2f} {zt} {best.touches}T {best_dist/PIP:.0f}pips"
+
+                        def _bb_bucket(pos_label):
+                            # tech_data uses "banda_superior" / "banda_inferior" / "meio"
+                            if pos_label == "banda_superior":
+                                return "above_upper"
+                            if pos_label == "banda_inferior":
+                                return "below_lower"
+                            return "middle"
+
+                        # Pull values once
+                        _rsi = tech_data.get("rsi", {}).get("value") if isinstance(tech_data, dict) else None
+                        _stoch_k = tech_data.get("stochastic", {}).get("value") if isinstance(tech_data, dict) else None
+                        _stoch_d = float(last_row["stoch_d"]) if (last_row is not None and "stoch_d" in last_row.index) else None
+                        _adx = float(last_row["adx_14"]) if (last_row is not None and "adx_14" in last_row.index) else None
+                        _vol_ratio = momentum_data.get("volume", {}).get("volume_ratio") if isinstance(momentum_data, dict) else None
+                        _macd_hist = tech_data.get("macd", {}).get("histogram") if isinstance(tech_data, dict) else None
+                        _bb_pos = _bb_bucket(tech_data.get("bollinger", {}).get("position")) if isinstance(tech_data, dict) else "middle"
+                        _nearest = _nearest_sr(sr_zones, current_price)
+                        _regime = None
+                        try:
+                            _regime = (self._last_regime_context or {}).get("regime")
+                        except Exception:
+                            pass
+
+                        for _pos in positions_now:
+                            try:
+                                _entry = float(_pos.open_price)
+                                _dir = str(_pos.direction or "").upper()
+                                _ppips = (current_price - _entry) / PIP if _dir == "BUY" else (_entry - current_price) / PIP
+                                record_trade_snapshot({
+                                    "ticket": int(_pos.ticket),
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "price": round(current_price, 2),
+                                    "profit_pips": round(_ppips, 1),
+                                    "rsi": _rsi,
+                                    "stochastic_k": _stoch_k,
+                                    "stochastic_d": round(_stoch_d, 2) if _stoch_d is not None else None,
+                                    "adx": round(_adx, 2) if _adx is not None else None,
+                                    "volume_ratio": _vol_ratio,
+                                    "macd_histogram": _macd_hist,
+                                    "bb_position": _bb_pos,
+                                    "nearest_sr": _nearest,
+                                    "regime": _regime,
+                                    "floki_decision": None,
+                                    "floki_confidence": None,
+                                })
+                            except Exception:
+                                continue
+                        log.debug(f"   Snapshots: wrote {len(positions_now)} for open positions")
+                except Exception as e:
+                    log.debug(f"   Trade snapshots: error (non-blocking): {e}")
+
                 # Detect candlestick patterns with S/R proximity scaling
                 from technical_analyzer import detect_candlestick_patterns
                 self._last_candlestick_patterns = detect_candlestick_patterns(
