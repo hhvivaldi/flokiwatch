@@ -1623,6 +1623,205 @@ def history_data():
         return JSONResponse({"error": str(e)})
 
 
+@app.get("/api/live-readiness")
+def live_readiness():
+    """FLO-272: Live readiness panel — 6 metrics measuring trading system maturity."""
+    if not HISTORY_DB.exists():
+        return JSONResponse({"error": "History DB not found"})
+
+    try:
+        conn = _get_history_conn()
+        rows = conn.execute(
+            "SELECT profit, close_time FROM trades "
+            "WHERE close_price IS NOT NULL AND profit IS NOT NULL "
+            "ORDER BY close_time ASC"
+        ).fetchall()
+        conn.close()
+
+        trades = [dict(r) for r in rows]
+
+        def _compute_metrics(trade_list):
+            """Compute the 4 time-windowed metrics for a given trade list."""
+            if not trade_list:
+                return {"profit_factor": 0, "win_rate": 0, "avg_win_loss": 0, "trades": 0}
+            wins = [float(t["profit"]) for t in trade_list if float(t["profit"] or 0) > 0]
+            losses = [float(t["profit"]) for t in trade_list if float(t["profit"] or 0) < 0]
+            total_wins = sum(wins)
+            total_losses = abs(sum(losses))
+            pf = (total_wins / total_losses) if total_losses > 0 else (999.0 if total_wins > 0 else 0)
+            total_wl = len(wins) + len(losses)
+            wr = (len(wins) / total_wl * 100) if total_wl > 0 else 0
+            avg_win = (sum(wins) / len(wins)) if wins else 0
+            avg_loss = abs(sum(losses) / len(losses)) if losses else 0
+            ratio = (avg_win / avg_loss) if avg_loss > 0 else (999.0 if avg_win > 0 else 0)
+            return {
+                "profit_factor": round(pf, 2),
+                "win_rate": round(wr, 1),
+                "avg_win_loss": round(ratio, 2),
+                "trades": len(trade_list),
+            }
+
+        now = datetime.utcnow()
+        cutoff_7d = now - timedelta(days=7)
+        cutoff_14d = now - timedelta(days=14)
+
+        def _parse_ct(ts):
+            try:
+                return datetime.fromisoformat((ts or "").split(".")[0])
+            except Exception:
+                return None
+
+        # Note: close_time in DB is broker time (UTC+offset). For trend windows we
+        # compare relative — offset cancels out. Still convert for consistency.
+        import config as _cfg
+        _offset_h = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
+
+        last_7d_trades = []
+        prev_7d_trades = []
+        for t in trades:
+            ct = _parse_ct(t.get("close_time"))
+            if ct is None:
+                continue
+            ct_utc = ct - timedelta(hours=_offset_h)
+            if ct_utc >= cutoff_7d:
+                last_7d_trades.append(t)
+            elif ct_utc >= cutoff_14d:
+                prev_7d_trades.append(t)
+
+        all_metrics = _compute_metrics(trades)
+        last_7d = _compute_metrics(last_7d_trades)
+        prev_7d = _compute_metrics(prev_7d_trades)
+
+        # Max drawdown (inline — _calc_max_drawdown is nested in history_data)
+        peak_eq = 0.0
+        eq_running = 0.0
+        max_dd_dollars = 0.0
+        for t in sorted(trades, key=lambda x: x.get("close_time") or ""):
+            eq_running += float(t.get("profit") or 0.0)
+            if eq_running > peak_eq:
+                peak_eq = eq_running
+            dd = peak_eq - eq_running
+            if dd > max_dd_dollars:
+                max_dd_dollars = dd
+        max_dd_pct = (max_dd_dollars / float(INITIAL_BALANCE) * 100) if INITIAL_BALANCE else 0
+
+        # Days without P0 incident
+        _p0_path = os.path.join(str(_ROOT), "data", "last_p0_incident.json")
+        days_without_p0 = 0
+        p0_ts = None
+        if os.path.exists(_p0_path):
+            try:
+                with open(_p0_path, "r") as f:
+                    p0_ts = json.load(f).get("timestamp")
+            except Exception:
+                pass
+        if not p0_ts:
+            # Fallback: earliest trade open_time
+            if trades:
+                conn2 = _get_history_conn()
+                row = conn2.execute("SELECT MIN(open_time) FROM trades").fetchone()
+                conn2.close()
+                p0_ts = row[0] if row else None
+        if p0_ts:
+            try:
+                p0_dt = datetime.fromisoformat(str(p0_ts).split(".")[0])
+                days_without_p0 = max(0, (now - p0_dt).days)
+            except Exception:
+                pass
+
+        # Classify each metric
+        def _trend(curr, prev, higher_is_better=True):
+            if prev == 0 or prev is None:
+                return "stable"
+            if curr is None:
+                return "stable"
+            delta_pct = (curr - prev) / abs(prev) * 100 if prev else 0
+            if not higher_is_better:
+                delta_pct = -delta_pct
+            if delta_pct > 2:
+                return "improving"
+            if delta_pct < -2:
+                return "declining"
+            return "stable"
+
+        def _level(value, minimum, ideal, higher_is_better=True):
+            if higher_is_better:
+                if value >= ideal:
+                    return "ideal"
+                if value >= minimum:
+                    return "min"
+                return "below"
+            else:
+                if value <= ideal:
+                    return "ideal"
+                if value <= minimum:
+                    return "min"
+                return "below"
+
+        metrics = {
+            "profit_factor": {
+                "value": all_metrics["profit_factor"],
+                "min": 1.2, "ideal": 1.5,
+                "level": _level(all_metrics["profit_factor"], 1.2, 1.5),
+                "trend": _trend(last_7d["profit_factor"], prev_7d["profit_factor"]),
+            },
+            "win_rate": {
+                "value": all_metrics["win_rate"],
+                "min": 50, "ideal": 55,
+                "level": _level(all_metrics["win_rate"], 50, 55),
+                "trend": _trend(last_7d["win_rate"], prev_7d["win_rate"]),
+            },
+            "avg_win_loss": {
+                "value": all_metrics["avg_win_loss"],
+                "min": 1.5, "ideal": 2.0,
+                "level": _level(all_metrics["avg_win_loss"], 1.5, 2.0),
+                "trend": _trend(last_7d["avg_win_loss"], prev_7d["avg_win_loss"]),
+            },
+            "trades": {
+                "value": all_metrics["trades"],
+                "min": 50, "ideal": 100,
+                "level": _level(all_metrics["trades"], 50, 100),
+                "trend": _trend(last_7d["trades"], prev_7d["trades"]),
+            },
+            "max_drawdown": {
+                "value": round(max_dd_pct, 1),
+                "min": 10, "ideal": 5,
+                "level": _level(max_dd_pct, 10, 5, higher_is_better=False),
+                "trend": "stable",  # cumulative, not windowed
+                "higher_is_better": False,
+            },
+            "days_without_p0": {
+                "value": days_without_p0,
+                "min": 14, "ideal": 30,
+                "level": _level(days_without_p0, 14, 30),
+                "trend": "improving" if days_without_p0 > 0 else "stable",
+            },
+        }
+
+        criteria_met = sum(1 for m in metrics.values() if m["level"] in ("min", "ideal"))
+
+        # Status: all 6 met = READY, at least half (3+) = MINIMUM, else NOT_READY
+        if criteria_met == 6:
+            status = "READY_FOR_LIVE"
+        elif criteria_met >= 3:
+            status = "MINIMUM_READY"
+        else:
+            status = "NOT_READY"
+
+        return JSONResponse({
+            "status": status,
+            "criteria_met": criteria_met,
+            "criteria_total": 6,
+            "metrics": metrics,
+            "last_updated": now.isoformat(),
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)})
+
+
 @app.get("/api/journal")
 def journal_data():
     """FLO-269: Trade journal — trades with MFE, capture rate, adjustments, counterfactual."""

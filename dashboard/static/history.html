@@ -163,6 +163,76 @@
         position: relative;
         flex-shrink: 0;
       }
+
+      /* ── FLO-272: Live Readiness Panel ── */
+      .readiness-panel {
+        background: #0d0d1a;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin-bottom: 24px;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .rp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .rp-icon { font-size: 16px; }
+      .rp-title { font-size: 11px; font-weight: 800; letter-spacing: 0.25em; color: #94a3b8; text-transform: uppercase; }
+      .rp-status {
+        font-size: 16px; font-weight: 900; letter-spacing: 0.15em; text-transform: uppercase;
+        padding: 4px 12px; border-radius: 6px;
+      }
+      .rp-status-NOT_READY    { color: #f87171; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); }
+      .rp-status-MINIMUM_READY { color: #fbbf24; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); }
+      .rp-status-READY_FOR_LIVE { color: #4ade80; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); }
+      .rp-criteria {
+        margin-left: auto; display: flex; flex-direction: column; align-items: flex-end;
+      }
+      .rp-criteria-count { font-size: 20px; font-weight: 800; color: #f87171; }
+      .rp-criteria-count.yellow { color: #fbbf24; }
+      .rp-criteria-count.green { color: #4ade80; }
+      .rp-criteria-label { font-size: 9px; color: #64748b; letter-spacing: 0.15em; }
+      .rp-progress-bar {
+        height: 4px; background: rgba(255,255,255,0.04); border-radius: 2px; margin-bottom: 18px; overflow: hidden;
+      }
+      .rp-progress-fill { height: 100%; transition: width 0.4s ease; border-radius: 2px; }
+      .rp-legend {
+        display: flex; gap: 18px; font-size: 10px; color: #64748b; margin-bottom: 20px;
+        padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      }
+      .rp-legend-dot {
+        display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+      }
+      .rp-metric { margin-bottom: 20px; }
+      .rp-metric-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+      .rp-metric-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #94a3b8; text-transform: uppercase; }
+      .rp-metric-value { font-size: 22px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+      .rp-value-below { color: #f87171; }
+      .rp-value-min { color: #fbbf24; }
+      .rp-value-ideal { color: #4ade80; }
+      .rp-trend { font-size: 14px; }
+      .rp-trend-improving { color: #4ade80; }
+      .rp-trend-declining { color: #f87171; }
+      .rp-trend-stable { color: #64748b; }
+      .rp-metric-bar-wrap { position: relative; height: 6px; background: rgba(255,255,255,0.04); border-radius: 3px; margin-bottom: 6px; }
+      .rp-metric-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.4s ease; }
+      .rp-metric-bar-fill.below { background: linear-gradient(90deg, rgba(248,113,113,0.5), #f87171); }
+      .rp-metric-bar-fill.min { background: linear-gradient(90deg, rgba(251,191,36,0.5), #fbbf24); }
+      .rp-metric-bar-fill.ideal { background: linear-gradient(90deg, rgba(74,222,128,0.5), #4ade80); }
+      .rp-metric-bar-fill.drawdown-ideal { background: linear-gradient(90deg, #4ade80, rgba(74,222,128,0.3)); }
+      .rp-marker {
+        position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px;
+      }
+      .rp-marker-min { background: #fbbf24; }
+      .rp-marker-ideal { background: #4ade80; }
+      .rp-metric-footer {
+        position: relative; height: 14px; font-size: 10px; color: #64748b; font-weight: 600;
+      }
+      .rp-metric-footer .zero-label { position: absolute; left: 0; }
+      .rp-metric-footer .ideal-label { position: absolute; right: 0; color: #4ade80; }
+      .rp-metric-footer .min-label { position: absolute; color: #fbbf24; transform: translateX(-50%); white-space: nowrap; }
+      .rp-footer {
+        margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.04);
+        font-size: 9px; color: #475569; text-align: center; letter-spacing: 0.1em;
+      }
     </style>
 
     <!-- Chart.js -->
@@ -227,6 +297,27 @@
             <div id="loading-indicator" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
         </div>
       </div>
+
+      <!-- FLO-272: Live Readiness Panel -->
+      <section class="readiness-panel stagger-in stagger-2" id="live-readiness-panel">
+        <div class="rp-header">
+          <span class="rp-icon">🎯</span>
+          <span class="rp-title">Live Readiness</span>
+          <span id="rp-status" class="rp-status rp-status-NOT_READY">—</span>
+          <div class="rp-criteria">
+            <span id="rp-criteria-count" class="rp-criteria-count">—/6</span>
+            <span class="rp-criteria-label">CRITERIA MET</span>
+          </div>
+        </div>
+        <div class="rp-progress-bar"><div id="rp-progress-fill" class="rp-progress-fill" style="width:0%"></div></div>
+        <div class="rp-legend">
+          <span><span class="rp-legend-dot" style="background:#f87171"></span>Below min</span>
+          <span><span class="rp-legend-dot" style="background:#fbbf24"></span>Min reached</span>
+          <span><span class="rp-legend-dot" style="background:#4ade80"></span>Ideal</span>
+        </div>
+        <div id="rp-metrics"><!-- Rendered by JS --></div>
+        <div class="rp-footer">▲ improving  ▼ declining  ─ stable (7d trend) &nbsp;·&nbsp; Updated every Sage cycle (21:00 UTC daily)</div>
+      </section>
 
       <!-- Global Stats Grid -->
       <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 stagger-in stagger-2" id="global-stats-grid">

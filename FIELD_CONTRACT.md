@@ -414,6 +414,27 @@ Data source: `data/market_context_cache.json` (written by `agent_tools.get_marke
 | `trade_history[].reason` | string | `state_writer.py` | `renderPositions()` |
 | `trade_history[].breakeven_activated` | bool | `state_writer.py` | `renderTrades()` |
 
+### `/api/live-readiness` Endpoint (FLO-272 Live Readiness Panel)
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `status` | string | computed | `NOT_READY` / `MINIMUM_READY` / `READY_FOR_LIVE` |
+| `criteria_met` | int | computed | 0-6 metrics at or above minimum |
+| `criteria_total` | int | const 6 | Total metrics evaluated |
+| `metrics.profit_factor` | object | `trades` table | `{value, min: 1.2, ideal: 1.5, level, trend}` |
+| `metrics.win_rate` | object | `trades` table | `{value (%), min: 50, ideal: 55, level, trend}` |
+| `metrics.avg_win_loss` | object | `trades` table | `{value (x), min: 1.5, ideal: 2.0, level, trend}` |
+| `metrics.trades` | object | `trades` table | `{value (count), min: 50, ideal: 100, level, trend}` |
+| `metrics.max_drawdown` | object | computed from trades | `{value (%), min: 10, ideal: 5, level, trend, higher_is_better: false}` |
+| `metrics.days_without_p0` | object | `data/last_p0_incident.json` | `{value (days), min: 14, ideal: 30, level, trend}` |
+| `metrics.*.level` | string | computed | `below` / `min` / `ideal` |
+| `metrics.*.trend` | string | 7d vs prev 7d | `improving` / `declining` / `stable` |
+| `last_updated` | string (ISO) | server time | UTC timestamp |
+
+**Reader:** `history.html` → `#live-readiness-panel`, `#rp-metrics`
+
+Status thresholds: `criteria_met == 6` → READY_FOR_LIVE, `criteria_met >= 3` → MINIMUM_READY, else NOT_READY.
+
 ### `/api/journal` Endpoint (FLO-269 Trade Journal)
 
 | Field | Type | Source | Description |

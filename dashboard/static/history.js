@@ -60,6 +60,7 @@ class HistoryApp {
             }
 
             this.render();
+            this.fetchReadiness();
             document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
             document.getElementById('loading-indicator').classList.add('hidden');
         } catch (error) {
@@ -67,6 +68,118 @@ class HistoryApp {
             document.getElementById('last-updated').textContent = 'Error: ' + error.message;
             document.getElementById('loading-indicator').classList.add('hidden');
         }
+    }
+
+    // FLO-272: Live Readiness Panel
+    async fetchReadiness() {
+        try {
+            var r = await fetch('/api/live-readiness');
+            if (!r.ok) return;
+            var data = await r.json();
+            if (data.error) return;
+            this.renderReadiness(data);
+        } catch (e) { console.error('Readiness fetch error:', e); }
+    }
+
+    renderReadiness(data) {
+        var criteria = data.criteria_met || 0;
+        var total = data.criteria_total || 6;
+        var status = data.status || 'NOT_READY';
+
+        // Header status
+        var statusEl = document.getElementById('rp-status');
+        if (statusEl) {
+            statusEl.className = 'rp-status rp-status-' + status;
+            statusEl.textContent = status.replace(/_/g, ' ');
+        }
+        var countEl = document.getElementById('rp-criteria-count');
+        if (countEl) {
+            countEl.textContent = criteria + '/' + total;
+            countEl.className = 'rp-criteria-count' + (criteria === total ? ' green' : criteria >= 3 ? ' yellow' : '');
+        }
+
+        // Overall progress
+        var pct = (criteria / total) * 100;
+        var fillEl = document.getElementById('rp-progress-fill');
+        if (fillEl) {
+            fillEl.style.width = pct + '%';
+            fillEl.style.background = criteria === total
+                ? 'linear-gradient(90deg, #4ade80, #22c55e)'
+                : criteria >= 3
+                    ? 'linear-gradient(90deg, #fbbf24, #f59e0b)'
+                    : 'linear-gradient(90deg, #f87171, #ef4444)';
+        }
+
+        // Metric rows
+        var metricOrder = [
+            { key: 'profit_factor',   label: 'Profit Factor',    fmt: function(v){ return Number(v).toFixed(2); }, suffix: '' },
+            { key: 'win_rate',        label: 'Win Rate',         fmt: function(v){ return Number(v).toFixed(1); }, suffix: '%' },
+            { key: 'avg_win_loss',    label: 'Avg Win / Avg Loss', fmt: function(v){ return Number(v).toFixed(1); }, suffix: 'x' },
+            { key: 'trades',          label: 'Trades',           fmt: function(v){ return String(v); }, suffix: '' },
+            { key: 'max_drawdown',    label: 'Max Drawdown',     fmt: function(v){ return Number(v).toFixed(1); }, suffix: '%' },
+            { key: 'days_without_p0', label: 'Days Without P0',  fmt: function(v){ return String(v); }, suffix: 'd' },
+        ];
+
+        var container = document.getElementById('rp-metrics');
+        if (!container) return;
+        var html = '';
+        metricOrder.forEach(function(cfg) {
+            var m = data.metrics[cfg.key];
+            if (!m) return;
+            var value = m.value;
+            var level = m.level || 'below';
+            var trend = m.trend || 'stable';
+            var higherBetter = m.higher_is_better !== false;
+
+            var trendSym = trend === 'improving' ? '▲' : trend === 'declining' ? '▼' : '─';
+            var valClass = 'rp-value-' + level;
+            var trendClass = 'rp-trend-' + trend;
+
+            // Progress bar calculation
+            // For higher-is-better: fill up to value/ideal*100, capped at 100
+            // For lower-is-better (drawdown): fill is inverted — less is better
+            var barPct, minPct, idealPct;
+            var maxScale = higherBetter ? m.ideal * 1.1 : (m.min * 1.2);  // show up to slightly past ideal or past min
+            if (higherBetter) {
+                maxScale = Math.max(m.ideal * 1.1, value * 1.1, m.ideal + 1);
+                barPct = Math.min(100, (value / maxScale) * 100);
+                minPct = (m.min / maxScale) * 100;
+                idealPct = (m.ideal / maxScale) * 100;
+            } else {
+                // drawdown-style: scale 0 -> min * 1.5
+                maxScale = Math.max(m.min * 1.5, value * 1.2);
+                barPct = Math.min(100, (value / maxScale) * 100);
+                minPct = (m.min / maxScale) * 100;
+                idealPct = (m.ideal / maxScale) * 100;
+            }
+
+            var fillClass = level;
+            if (!higherBetter && level === 'ideal') fillClass = 'drawdown-ideal';
+
+            var minLabelText = higherBetter ? 'min ' + cfg.fmt(m.min) + cfg.suffix : 'min <' + cfg.fmt(m.min) + cfg.suffix;
+            var idealLabelText = 'ideal ' + cfg.fmt(m.ideal) + cfg.suffix;
+            if (!higherBetter) idealLabelText = 'ideal ' + cfg.fmt(m.ideal) + cfg.suffix;
+
+            html += '<div class="rp-metric">';
+            html +=   '<div class="rp-metric-header">';
+            html +=     '<span class="rp-metric-label">' + cfg.label + '</span>';
+            html +=     '<span class="rp-metric-value ' + valClass + '">' + cfg.fmt(value) + cfg.suffix;
+            html +=       '<span class="rp-trend ' + trendClass + '">' + trendSym + '</span>';
+            html +=     '</span>';
+            html +=   '</div>';
+            html +=   '<div class="rp-metric-bar-wrap">';
+            html +=     '<div class="rp-metric-bar-fill ' + fillClass + '" style="width:' + barPct + '%"></div>';
+            html +=     '<div class="rp-marker rp-marker-min" style="left:' + minPct + '%"></div>';
+            html +=     '<div class="rp-marker rp-marker-ideal" style="left:' + idealPct + '%"></div>';
+            html +=   '</div>';
+            html +=   '<div class="rp-metric-footer">';
+            html +=     '<span class="zero-label">0</span>';
+            html +=     '<span class="min-label" style="left:' + minPct + '%">' + minLabelText + '</span>';
+            html +=     '<span class="ideal-label">' + idealLabelText + '</span>';
+            html +=   '</div>';
+            html += '</div>';
+        });
+        container.innerHTML = html;
     }
 
     startPolling() {
