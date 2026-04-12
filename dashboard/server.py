@@ -1586,8 +1586,8 @@ def history_data():
 
         # Build equity curve from ALL trades, anchored to real balance.
         # DB profit doesn't include swap/commission, so sum(profit) != actual P&L.
-        # Distribute the discrepancy evenly so curve starts at $1000 and ends
-        # at the real balance from bot_state.json.
+        # Distribute the discrepancy evenly so curve starts at INITIAL_BALANCE
+        # and ends at the real balance from bot_state.json.
         all_trades_chrono = sorted(trades, key=lambda x: x.get("close_time") or "")
         sum_all_profits = sum(float(t.get("profit") or 0.0) for t in all_trades_chrono)
         n_trades = len(all_trades_chrono)
@@ -1613,7 +1613,8 @@ def history_data():
             "live_stats": live_stats,
             "monthly_stats": monthly_stats,
             "equity_curve": anchored_equity_curve,
-            "trades": trades
+            "trades": trades,
+            "initial_balance": float(INITIAL_BALANCE),
         })
         
     except Exception as e:

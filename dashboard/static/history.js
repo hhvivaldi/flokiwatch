@@ -117,8 +117,9 @@ class HistoryApp {
         var ctx = document.getElementById('equityChart').getContext('2d');
         var curve = this.data.equity_curve || [];
         var trades = this.data.trades || [];
+        var initialBalance = Number(this.data.initial_balance) || 1000;
 
-        var dataPoints = [{x: 'Start', y: 1000}];
+        var dataPoints = [{x: 'Start', y: initialBalance}];
         curve.forEach(function(point) {
             var date = new Date(point.time);
             var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()];
@@ -143,7 +144,7 @@ class HistoryApp {
         var summaryEl = document.getElementById('equity-summary');
         if (summaryEl && data.length > 1) {
             var finalEq = data[data.length - 1];
-            var change = finalEq - 1000;
+            var change = finalEq - initialBalance;
             var sign = change >= 0 ? '+' : '';
             var clr = change >= 0 ? '#4ade80' : '#f87171';
             summaryEl.innerHTML = '<span style="color:#64748b">Balance:</span> <span style="color:' + clr + '">$' + finalEq.toFixed(2) + ' (' + sign + '$' + change.toFixed(2) + ')</span>';
@@ -156,7 +157,7 @@ class HistoryApp {
             this.chart.data.datasets[0].pointRadius = pointRadii;
 
             var finalEq2 = data[data.length - 1] || 0;
-            var color2 = finalEq2 >= 1000 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
+            var color2 = finalEq2 >= initialBalance ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
             var bgGrad2 = ctx.createLinearGradient(0, 0, 0, 320);
             bgGrad2.addColorStop(0, 'rgba(74, 222, 128, 0.18)');
             bgGrad2.addColorStop(0.45, 'rgba(74, 222, 128, 0.04)');
@@ -169,21 +170,21 @@ class HistoryApp {
         }
 
         var finalEq = data[data.length - 1] || 0;
-        var color = finalEq >= 1000 ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
-        // Dual-tone gradient: green above $1000, red below
+        var color = finalEq >= initialBalance ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)';
+        // Dual-tone gradient: green above initial balance, red below
         var bgGradient = ctx.createLinearGradient(0, 0, 0, 320);
         bgGradient.addColorStop(0, 'rgba(74, 222, 128, 0.18)');
         bgGradient.addColorStop(0.45, 'rgba(74, 222, 128, 0.04)');
         bgGradient.addColorStop(0.55, 'rgba(248, 113, 113, 0.04)');
         bgGradient.addColorStop(1, 'rgba(248, 113, 113, 0.12)');
 
-        // Custom plugin: $1,000 baseline dashed reference line
+        // Custom plugin: initial balance baseline dashed reference line
         var baselinePlugin = {
             id: 'baselineLine',
             afterDraw: function(chart) {
                 var yScale = chart.scales.y;
                 if (!yScale) return;
-                var yPos = yScale.getPixelForValue(1000);
+                var yPos = yScale.getPixelForValue(initialBalance);
                 if (yPos < chart.chartArea.top || yPos > chart.chartArea.bottom) return;
                 var ctx2 = chart.ctx;
                 ctx2.save();
@@ -234,12 +235,14 @@ class HistoryApp {
                         padding: 10,
                         cornerRadius: 8,
                         callbacks: {
-                            label: function(context) {
-                                var val = context.parsed.y;
-                                var change = val - 1000;
-                                var sign = change >= 0 ? '+' : '';
-                                return ' $' + val.toFixed(2) + '  (' + sign + '$' + change.toFixed(2) + ')';
-                            }
+                            label: (function(anchor) {
+                                return function(context) {
+                                    var val = context.parsed.y;
+                                    var change = val - anchor;
+                                    var sign = change >= 0 ? '+' : '';
+                                    return ' $' + val.toFixed(2) + '  (' + sign + '$' + change.toFixed(2) + ')';
+                                };
+                            })(initialBalance)
                         }
                     }
                 },
