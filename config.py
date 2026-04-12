@@ -18,7 +18,7 @@ MT5_TERMINAL_PATH = os.environ.get("MT5_TERMINAL_PATH", r"C:\Program Files\MetaT
 # ============================================================================
 # RISK PARAMETERS
 # ============================================================================
-INITIAL_BALANCE = 1000  # USD - Initial account balance for dashboard/history calculations
+INITIAL_BALANCE = 2000  # USD - Initial account balance for dashboard/history calculations (reset 2026-04-12)
 CAPITAL_INICIAL = INITIAL_BALANCE  # USD - Initial account capital
 RISK_PER_TRADE = 2.0  # % - Maximum risk per trade (1-2% recommended)
 MAX_DAILY_LOSS = 6.0  # % - Maximum daily loss (for the bot)
