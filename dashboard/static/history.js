@@ -72,13 +72,25 @@ class HistoryApp {
 
     // FLO-272: Live Readiness Panel
     async fetchReadiness() {
+        var metricsEl = document.getElementById('rp-metrics');
         try {
             var r = await fetch('/api/live-readiness');
-            if (!r.ok) return;
+            if (!r.ok) {
+                console.error('Readiness fetch: HTTP ' + r.status);
+                if (metricsEl) metricsEl.innerHTML = '<div style="color:#f87171;font-size:11px;padding:12px">Endpoint returned ' + r.status + '. Restart the dashboard server.</div>';
+                return;
+            }
             var data = await r.json();
-            if (data.error) return;
+            if (data.error) {
+                console.error('Readiness API error:', data.error);
+                if (metricsEl) metricsEl.innerHTML = '<div style="color:#f87171;font-size:11px;padding:12px">API error: ' + data.error + '</div>';
+                return;
+            }
             this.renderReadiness(data);
-        } catch (e) { console.error('Readiness fetch error:', e); }
+        } catch (e) {
+            console.error('Readiness fetch error:', e);
+            if (metricsEl) metricsEl.innerHTML = '<div style="color:#f87171;font-size:11px;padding:12px">Fetch failed: ' + e.message + '</div>';
+        }
     }
 
     renderReadiness(data) {

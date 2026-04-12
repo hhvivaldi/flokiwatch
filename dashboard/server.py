@@ -1318,13 +1318,14 @@ def history_data():
         conn = _get_history_conn()
         
         # Get all closed trades and join with closest previous analysis
+        # FLO-272: Post-Qwen cutoff — exclude pre-April-8 trades even if reconciliation re-inserts them
         query = """
-            SELECT t.*, 
+            SELECT t.*,
                    (SELECT confidence FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as confidence,
                    (SELECT scenario FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as scenario,
                    (SELECT scenario_description FROM analyses a WHERE a.timestamp <= t.open_time ORDER BY a.timestamp DESC LIMIT 1) as scenario_description
-            FROM trades t 
-            WHERE t.close_time IS NOT NULL 
+            FROM trades t
+            WHERE t.close_time IS NOT NULL AND t.open_time >= '2026-04-08'
             ORDER BY t.close_time ASC
         """
         rows = conn.execute(query).fetchall()
@@ -1630,11 +1631,16 @@ def live_readiness():
         return JSONResponse({"error": "History DB not found"})
 
     try:
+        # FLO-272: Post-Qwen cutoff — only count trades from Qwen migration onward.
+        # This makes the panel immune to reconciliation re-inserting old trades.
+        QWEN_CUTOFF = "2026-04-08"
         conn = _get_history_conn()
         rows = conn.execute(
             "SELECT profit, close_time FROM trades "
             "WHERE close_price IS NOT NULL AND profit IS NOT NULL "
-            "ORDER BY close_time ASC"
+            "AND open_time >= ? "
+            "ORDER BY close_time ASC",
+            (QWEN_CUTOFF,),
         ).fetchall()
         conn.close()
 
