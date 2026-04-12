@@ -1559,10 +1559,10 @@ def history_data():
             "be_activation_rate": round(be_activation_rate, 1),
         }
 
-        cutoff_date = "2026-02-16"
-        live_trades = [t for t in trades if (t.get("open_time") or "") >= cutoff_date]
-        live_stats = _calc_stats(live_trades)
-        live_stats["max_drawdown"] = round(_calc_max_drawdown(live_trades), 2)
+        # Post-Qwen-migration cleanup: all remaining trades are Qwen (≥ 2026-04-08).
+        # No Population A/B distinction — single "All Trades" dataset.
+        live_stats = _calc_stats(trades)
+        live_stats["max_drawdown"] = round(_calc_max_drawdown(trades), 2)
 
         # Total P&L from bot_state.json balance minus INITIAL_BALANCE
         total_pnl = None
@@ -1577,8 +1577,7 @@ def history_data():
         except Exception:
             pass
 
-        # Use live_stats (Population B) for the main stat cards
-        # Override total_profit with balance-derived P&L
+        # Main stat cards — override total_profit with balance-derived P&L
         card_stats = dict(live_stats)
         if total_pnl is not None:
             card_stats["total_profit"] = total_pnl
