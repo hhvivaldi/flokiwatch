@@ -830,7 +830,12 @@ def record_trade_close(
     mae_points: Optional[float] = None,
     final_sl: Optional[float] = None,
 ) -> None:
-    """Update trade with close data (FLO-269: includes MFE/MAE/final_sl)."""
+    """Update trade with close data (FLO-269: includes MFE/MAE/final_sl).
+
+    FLO-277: mfe_points/mae_points/final_sl use COALESCE — existing non-null
+    values are NEVER overwritten by NULL. This protects against reconciliation
+    paths that don't know the MFE/MAE data and would otherwise clobber it.
+    """
     try:
         conn = _get_connection()
         try:
@@ -838,7 +843,10 @@ def record_trade_close(
             cursor = conn.execute(
                 """UPDATE trades
                    SET close_price = ?, profit = ?, close_reason = ?, close_time = ?,
-                       breakeven_activated = ?, mfe_points = ?, mae_points = ?, final_sl = ?
+                       breakeven_activated = ?,
+                       mfe_points = COALESCE(?, mfe_points),
+                       mae_points = COALESCE(?, mae_points),
+                       final_sl = COALESCE(?, final_sl)
                    WHERE ticket = ?""",
                 (
                     close_price,
