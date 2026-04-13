@@ -971,16 +971,39 @@ class MT5Executor:
             return None
 
     def _search_deal_today_only(self, position_ticket: int, open_price: float = None) -> Optional[dict]:
-        """Level 2.5: Today-only search (00:00 → tomorrow) to catch recent deals omitted by long-range MT5 queries."""
-        now = datetime.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
+        """Level 2.5: Today-only search to catch recent deals omitted by long-range MT5 queries.
 
-        log.info(f"Deal history [N2.5]: Today-only search — all XAUUSD deals (today)...")
+        FLO-292: MT5 history_deals_get treats naive datetime args as broker-local
+        time. With local CEST (UTC+2) and broker EEST (UTC+3) — the gap that
+        existed when this code was written — naive `datetime.now()` produced a
+        window 1h SHORT on the upper bound, missing trades that closed in the
+        last broker hour of the day (e.g. #1589450832 closed at broker 00:50
+        next day / UTC 21:50 — outside a window that ended at broker 23:00).
+
+        Fix: extend the upper bound by the live broker offset + a generous
+        safety margin. Cost is just more rows to position_id-filter on; never
+        misses a deal that exists in MT5 history.
+        """
+        import time as _t
+        try:
+            tick = mt5.symbol_info_tick(self.symbol)
+            offset_s = int(tick.time) - int(_t.time()) if tick and tick.time else 0
+        except Exception:
+            offset_s = 0
+
+        now_local = datetime.now()
+        today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Extend upper bound: tomorrow + broker offset + 1h headroom for DST shifts.
+        end = today_start + timedelta(days=1, seconds=max(offset_s, 0) + 3600)
+
+        log.info(
+            f"Deal history [N2.5]: window {today_start} -> {end} "
+            f"(broker_offset={offset_s/3600:.1f}h)"
+        )
 
         deals = mt5.history_deals_get(
             today_start,
-            tomorrow_start,
+            end,
             group=f"*{self.symbol}*",
         )
 
@@ -1423,9 +1446,18 @@ def get_recent_closed_deals(hours: int = 48) -> List[dict]:
         date_to_long = now + timedelta(hours=1)
         deals_long = mt5.history_deals_get(date_from_long, date_to_long, group=symbol_filter)
         
-        # Call 2: today only (works around MT5 long-range bug)
+        # Call 2: today only (works around MT5 long-range bug).
+        # FLO-292: extend upper bound by broker offset + 1h headroom so deals
+        # that close in the last broker hour (when broker > local timezone)
+        # aren't missed. Naive datetimes are interpreted as broker-local by MT5.
+        import time as _t
+        try:
+            tick = mt5.symbol_info_tick(executor.symbol)
+            offset_s = int(tick.time) - int(_t.time()) if tick and tick.time else 0
+        except Exception:
+            offset_s = 0
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
+        tomorrow_start = today_start + timedelta(days=1, seconds=max(offset_s, 0) + 3600)
         deals_today = mt5.history_deals_get(today_start, tomorrow_start, group=symbol_filter)
         
         # Merge + dedup by deal.ticket
