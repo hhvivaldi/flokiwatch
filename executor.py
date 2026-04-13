@@ -275,6 +275,17 @@ class MT5Executor:
                     except Exception as e_pre:
                         log.warning(f"EA_BRIDGE | Pre-snapshot failed (non-blocking): {e_pre}")
 
+                    # FLO-282: ALSO snapshot MT5 directly — EA status JSON can be stale
+                    # exactly when the EA is slow. Querying MT5 is the source of truth
+                    # for "which positions existed BEFORE we fired this signal".
+                    mt5_pre_tickets = set()
+                    try:
+                        _mt5_pre = mt5.positions_get(symbol=self.symbol)
+                        if _mt5_pre:
+                            mt5_pre_tickets = {p.ticket for p in _mt5_pre if p.magic == self.magic}
+                    except Exception as e_mt5_pre:
+                        log.warning(f"EA_BRIDGE | MT5 pre-snapshot failed (non-blocking): {e_mt5_pre}")
+
                     ok = write_signal(
                         signal=direction,
                         sl=float(stop_loss),
@@ -310,13 +321,15 @@ class MT5Executor:
                                             break
                                 if real_ticket > 0:
                                     break
-                            # FLO-197: Last-resort phantom check via MT5 direct API
+                            # FLO-197 + FLO-282: Last-resort phantom check via MT5 direct API.
+                            # Use mt5_pre_tickets (MT5 ground truth) instead of pre_tickets
+                            # (which comes from EA status JSON — can be stale exactly when EA is slow).
                             if real_ticket == 0:
                                 try:
                                     _final_pos = mt5.positions_get(symbol=self.symbol)
                                     if _final_pos:
                                         for p in _final_pos:
-                                            if p.magic == self.magic and p.ticket not in pre_tickets:
+                                            if p.magic == self.magic and p.ticket not in mt5_pre_tickets:
                                                 _dir_match = (
                                                     (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
                                                     or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
@@ -348,6 +361,37 @@ class MT5Executor:
                                     log.info("EA_BRIDGE | Signal cleared (HOLD) before MT5 direct fallthrough")
                                 except Exception:
                                     pass
+
+                                # FLO-282: FINAL safety check — between signal clear and direct
+                                # submission, the EA's order may have completed on the broker.
+                                # Query MT5 ONE MORE TIME against mt5_pre_tickets (the original
+                                # ground-truth snapshot from before write_signal).
+                                try:
+                                    _ultra_final = mt5.positions_get(symbol=self.symbol)
+                                    if _ultra_final:
+                                        for p in _ultra_final:
+                                            if p.magic == self.magic and p.ticket not in mt5_pre_tickets:
+                                                _ud_match = (
+                                                    (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                                    or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
+                                                )
+                                                if _ud_match:
+                                                    real_ticket = p.ticket
+                                                    log.warning(
+                                                        f"EA_BRIDGE | EA filled during polling window "
+                                                        f"(ticket #{p.ticket}) — skipping direct fallthrough "
+                                                        f"to prevent duplicate position"
+                                                    )
+                                                    alert_error(
+                                                        "Duplicate Order Prevented",
+                                                        f"EA filled #{p.ticket} ({direction}) while Python was "
+                                                        f"polling. Direct MT5 submission was about to fire — "
+                                                        f"caught and skipped.",
+                                                        severity="warning",
+                                                    )
+                                                    break
+                                except Exception as e_final:
+                                    log.warning(f"EA_BRIDGE | Final pre-fallthrough MT5 check failed: {e_final}")
                         except Exception as e_poll:
                             log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
                             # FLO-197: Re-run phantom check after exception — position
