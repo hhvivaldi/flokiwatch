@@ -151,6 +151,40 @@ class PositionMonitor:
                         from executor import executor as _ex
                         _ex.cancel_all_pending()
                         actions.append({"action": "PENDING_FILL", "filled_tickets": list(_filled), "new_positions": list(_new_positions)})
+
+                        # FLO-279: Write timeline event so user sees the fill in the Trade Room
+                        try:
+                            from db_writer import record_agent_event
+                            for _np_ticket in _new_positions:
+                                _new_pos_obj = next((p for p in positions if p.ticket == _np_ticket), None)
+                                if _new_pos_obj is not None:
+                                    _fill_dir = str(getattr(_new_pos_obj, "direction", "?") or "?").upper()
+                                    _fill_price = getattr(_new_pos_obj, "open_price", None)
+                                    _fill_sl = getattr(_new_pos_obj, "sl", None)
+                                    _fill_tp = getattr(_new_pos_obj, "tp", None)
+                                    _fill_vol = getattr(_new_pos_obj, "volume", None)
+                                    _content = (
+                                        f"Pending {_fill_dir} order filled — position #{_np_ticket} now open "
+                                        f"@ {_fill_price:.2f}" + (f" | SL {_fill_sl:.2f}" if _fill_sl else "") +
+                                        (f" | TP {_fill_tp:.2f}" if _fill_tp else "") +
+                                        (f" | lot {_fill_vol}" if _fill_vol else "")
+                                    )
+                                    record_agent_event(
+                                        "PENDING_FILL",
+                                        _content,
+                                        payload={
+                                            "ticket": int(_np_ticket),
+                                            "direction": _fill_dir,
+                                            "fill_price": float(_fill_price) if _fill_price else None,
+                                            "sl": float(_fill_sl) if _fill_sl else None,
+                                            "tp": float(_fill_tp) if _fill_tp else None,
+                                            "volume": float(_fill_vol) if _fill_vol else None,
+                                        },
+                                        author="MONITOR",
+                                    )
+                        except Exception as _ev_err:
+                            log.debug(f"PENDING_FILL event write error (non-blocking): {_ev_err}")
+
                         # Wake Floki for position management
                         try:
                             if self.bot and hasattr(self.bot, "agent_proactive_out_of_cycle"):
