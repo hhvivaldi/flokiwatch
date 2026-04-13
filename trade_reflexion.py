@@ -1035,7 +1035,13 @@ def run_eod_counterfactuals() -> int:
                     os.replace(tmp, report_path)
 
                 sl_msg = "survived" if not original_sl_hit else f"hit at {original_sl_hit_time}"
-                tp_msg = f"hit at {tp_hit_time} = +${tp_hit_pnl}" if tp_hit else "not reached"
+                # FLO-293: locals are tp_would_have_been_hit / tp_reached_time / tp_reached_pnl;
+                # tp_hit*/tp_hit_pnl are dict KEYS used elsewhere — referencing them as
+                # bare locals raised NameError, killing every counterfactual run.
+                tp_msg = (
+                    f"hit at {tp_reached_time} = +${tp_reached_pnl}"
+                    if tp_would_have_been_hit else "not reached"
+                )
                 log.info(
                     f"EOD_COUNTERFACTUAL | #{ticket} | orig_SL {sl_msg} | TP {tp_msg} | "
                     f"{len(bars)} bars ({hours_of_data:.1f}h)"
