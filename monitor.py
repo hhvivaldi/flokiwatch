@@ -147,8 +147,8 @@ class PositionMonitor:
                     _new_positions = current_tickets - set(self.known_positions.keys()) if self._initialized else set()
                     if _filled and _new_positions:
                         log.info(f"PENDING_ORDER | FILL_DETECTED | filled={_filled} | new_positions={_new_positions} | cancelling remaining {len(_pending_tickets)} orders")
-                        from executor import get_executor
-                        _ex = get_executor()
+                        # FLO-278: executor is a singleton exported directly (not get_executor())
+                        from executor import executor as _ex
                         _ex.cancel_all_pending()
                         actions.append({"action": "PENDING_FILL", "filled_tickets": list(_filled), "new_positions": list(_new_positions)})
                         # Wake Floki for position management
@@ -174,8 +174,9 @@ class PositionMonitor:
                     _new_pos_fallback = current_tickets - set(self.known_positions.keys())
                     if _new_pos_fallback:
                         log.info(f"PENDING_ORDER | NEW_POSITION_WITH_PENDING | positions={_new_pos_fallback} | cancelling {len(_pending_tickets)} pending orders")
-                        from executor import get_executor
-                        get_executor().cancel_all_pending()
+                        # FLO-278: executor is a singleton exported directly (not get_executor())
+                        from executor import executor as _ex2
+                        _ex2.cancel_all_pending()
                         try:
                             if self.bot and hasattr(self.bot, "agent_proactive_out_of_cycle"):
                                 log.info(f"FLOKI_SCHEDULE | PENDING_FILL (fallback) — new position detected while pending orders active, waking Floki")
