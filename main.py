@@ -7161,8 +7161,12 @@ class TradingBot:
                     pass
                 if is_pending:
                     close_reason = f"{close_reason} (pending)"
-                # FLO-269: Extract MFE/MAE from agent_monitor before cleanup
-                # FLO-276: Fall back to trade_snapshots when agent_monitor dict is empty
+                # MFE/MAE resolution — three tiers, stop at first hit:
+                #   Tier 1 (FLO-269): agent_monitor in-memory tracker
+                #   Tier 2 (FLO-276): trade_snapshots table (COALESCE)
+                #   Tier 3 (FLO-287): MT5 M1 candle backfill — catches fast trades
+                #                     that opened+closed during a Floki cycle, so
+                #                     neither Brain nor monitor ever observed them.
                 _mfe = None
                 _mae = None
                 _final_sl = action.get("orig_sl")  # fallback: SL at close from monitor
@@ -7171,7 +7175,7 @@ class TradingBot:
                     if self._agent_monitor and _t:
                         _mfe = self._agent_monitor.max_profit_seen_points_by_ticket.get(int(_t))
                         _mae = self._agent_monitor.min_profit_seen_points_by_ticket.get(int(_t))
-                    # Fallback to trade_snapshots when agent_monitor tracker was empty
+                    # Tier 2: trade_snapshots
                     if _t and (_mfe is None or _mae is None):
                         try:
                             import sqlite3 as _sql
@@ -7189,6 +7193,35 @@ class TradingBot:
                                     _mae = float(_row[1])
                         except Exception:
                             pass
+                    # Tier 3: MT5 M1 candle backfill (FLO-287)
+                    if _t and (_mfe is None or _mae is None):
+                        try:
+                            from mfe_backfill import backfill_mfe_mae_from_m1
+                            # Look up the canonical trade record for entry/times.
+                            import sqlite3 as _sql
+                            _db = os.path.abspath(getattr(config, 'HISTORY_DB_PATH', 'data/history.db'))
+                            _c = _sql.connect(_db, timeout=5)
+                            _c.row_factory = _sql.Row
+                            _tr = _c.execute(
+                                "SELECT direction, open_price, open_time, close_time FROM trades WHERE ticket = ?",
+                                (int(_t),),
+                            ).fetchone()
+                            _c.close()
+                            if _tr:
+                                _ct = action.get('close_time') or _tr['close_time']
+                                _bf_mfe, _bf_mae = backfill_mfe_mae_from_m1(
+                                    ticket=int(_t),
+                                    direction=_tr['direction'] or action.get('direction'),
+                                    entry=float(_tr['open_price']) if _tr['open_price'] is not None else None,
+                                    open_iso=_tr['open_time'],
+                                    close_iso=_ct,
+                                )
+                                if _mfe is None and _bf_mfe is not None:
+                                    _mfe = _bf_mfe
+                                if _mae is None and _bf_mae is not None:
+                                    _mae = _bf_mae
+                        except Exception as _e:
+                            log.debug(f"MFE backfill tier-3 error (ignored): {_e}")
                     # final_sl: use the last known SL from position_monitor (more accurate)
                     if hasattr(self, '_position_monitor') and self._position_monitor and _t:
                         _tsl = self._position_monitor.trailing_sl.get(int(_t))
