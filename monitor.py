@@ -153,8 +153,10 @@ class PositionMonitor:
                         actions.append({"action": "PENDING_FILL", "filled_tickets": list(_filled), "new_positions": list(_new_positions)})
 
                         # FLO-279: Write timeline event so user sees the fill in the Trade Room
+                        # FLO-285: Also send Discord alert on same event
                         try:
                             from db_writer import record_agent_event
+                            from alerts import alert_pending_fill
                             for _np_ticket in _new_positions:
                                 _new_pos_obj = next((p for p in positions if p.ticket == _np_ticket), None)
                                 if _new_pos_obj is not None:
@@ -182,6 +184,18 @@ class PositionMonitor:
                                         },
                                         author="MONITOR",
                                     )
+                                    # Discord alert (only sent if DISCORD_WEBHOOK_TRADES is configured)
+                                    try:
+                                        alert_pending_fill(
+                                            ticket=int(_np_ticket),
+                                            direction=_fill_dir,
+                                            fill_price=float(_fill_price) if _fill_price else 0.0,
+                                            sl=float(_fill_sl) if _fill_sl else None,
+                                            tp=float(_fill_tp) if _fill_tp else None,
+                                            volume=float(_fill_vol) if _fill_vol else None,
+                                        )
+                                    except Exception as _dc_err:
+                                        log.debug(f"PENDING_FILL Discord alert error (non-blocking): {_dc_err}")
                         except Exception as _ev_err:
                             log.debug(f"PENDING_FILL event write error (non-blocking): {_ev_err}")
 

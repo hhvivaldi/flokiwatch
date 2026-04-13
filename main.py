@@ -6326,13 +6326,17 @@ class TradingBot:
             minutes = remainder // 60
             uptime = f"{hours}h {minutes}m"
 
-        alert_heartbeat_full(
+        _hb_sent = alert_heartbeat_full(
             bot_name=config.DISCORD_BOT_NAME,
             uptime=uptime,
             open_positions=open_positions,
             last_analysis_time=last_analysis_time,
         )
-        log.info("   � Heartbeat sent to Discord")
+        # FLO-285: honest log — alert_heartbeat_full returns False when channel disabled
+        if _hb_sent:
+            log.info("   Heartbeat sent to Discord")
+        else:
+            log.debug("   Heartbeat suppressed (DISCORD_WEBHOOK_STATUS not configured)")
         self.last_heartbeat = now
     
     def _get_dominant_pillar(self, tech_score, news_score, ml_score):

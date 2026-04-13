@@ -565,6 +565,42 @@ def alert_trade_executed(
     )
 
 
+def alert_pending_fill(
+    ticket: int,
+    direction: str,
+    fill_price: float,
+    sl: Optional[float] = None,
+    tp: Optional[float] = None,
+    volume: Optional[float] = None,
+):
+    """FLO-285: Alert when a pending (LIMIT/STOP) order fills into a position."""
+    color = 0x00ff00 if str(direction).upper() == "BUY" else 0xff0000
+    fields = [
+        {"name": "Fill", "value": _format_price(fill_price), "inline": True},
+    ]
+    if volume is not None:
+        fields.append({"name": "Lot", "value": f"{volume}", "inline": True})
+    if sl is not None:
+        try:
+            sl_pips = abs(float(fill_price) - float(sl)) / 0.1
+            fields.append({"name": "SL", "value": f"{_format_price(sl)} ({sl_pips:.0f} pips)", "inline": True})
+        except Exception:
+            fields.append({"name": "SL", "value": _format_price(sl), "inline": True})
+    if tp is not None:
+        try:
+            tp_pips = abs(float(tp) - float(fill_price)) / 0.1
+            fields.append({"name": "TP", "value": f"{_format_price(tp)} (+{tp_pips:.0f} pips)", "inline": True})
+        except Exception:
+            fields.append({"name": "TP", "value": _format_price(tp), "inline": True})
+    return discord_router.send_embed(
+        CHANNEL_TRADES,
+        title=f"📬 PENDING FILLED — {direction} #{ticket}",
+        description="Pending order filled — position now open.",
+        color=color,
+        fields=fields,
+    )
+
+
 def alert_trade_closed(
     ticket: int,
     direction: str,
