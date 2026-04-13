@@ -2806,23 +2806,23 @@ class AgentTools:
             except Exception:
                 pass
 
-            # Simple trend classification
+            # Simple trend classification — FLO-289: all numbers explicitly pips.
             range_p = max_p - min_p
             if range_p < 10:
                 trend_dir = "flat"
                 trend_desc = f"Oscillating between {min_p:+.1f} and {max_p:+.1f} pips for {duration_str}. No directional progress."
             elif current_p >= max_p * 0.8 and max_p > 0:
                 trend_dir = "climbing"
-                trend_desc = f"Near peak profit ({max_p:+.1f}). Currently {current_p:+.1f}."
+                trend_desc = f"Near peak profit ({max_p:+.1f} pips). Currently {current_p:+.1f} pips."
             elif current_p <= min_p * 0.8 and min_p < 0:
                 trend_dir = "losing_ground"
-                trend_desc = f"Near worst drawdown ({min_p:+.1f}). Currently {current_p:+.1f}."
+                trend_desc = f"Near worst drawdown ({min_p:+.1f} pips). Currently {current_p:+.1f} pips."
             elif max_p > 0 and current_p < max_p * 0.3:
                 trend_dir = "gave_back_gains"
-                trend_desc = f"Peaked at {max_p:+.1f} but fell back to {current_p:+.1f}. Gave back {max_p - current_p:.1f} pips."
+                trend_desc = f"Peaked at {max_p:+.1f} pips but fell back to {current_p:+.1f} pips. Gave back {max_p - current_p:.1f} pips."
             else:
                 trend_dir = "mixed"
-                trend_desc = f"Range {min_p:+.1f} to {max_p:+.1f}, currently {current_p:+.1f}."
+                trend_desc = f"Range {min_p:+.1f} to {max_p:+.1f} pips, currently {current_p:+.1f} pips."
 
             # Build XML
             def _attr(v):
@@ -2843,7 +2843,9 @@ class AgentTools:
 
             lines = [
                 f'<position_history ticket="{t}" duration="{duration_str}" snapshots="{n}">',
-                f'  <profit_range min="{_fmt_num(min_p)}" max="{_fmt_num(max_p)}" current="{_fmt_num(current_p)}"/>',
+                # FLO-289: unit="pips" explicit — prevents Floki from reading
+                # these as dollars (the unlabeled 63.8 was misread as "$63 peak").
+                f'  <profit_range unit="pips" min="{_fmt_num(min_p)}" max="{_fmt_num(max_p)}" current="{_fmt_num(current_p)}"/>',
                 f'  <trend direction="{trend_dir}" description="{trend_desc}"/>',
                 f'  <indicators_now rsi="{_attr(now_snap.get("rsi"))}" '
                 f'stoch_k="{_attr(now_snap.get("stochastic_k"))}" '
