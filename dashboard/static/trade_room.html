@@ -36,7 +36,7 @@
         --clr-trending-bull: #10b981;
         --clr-trending-bear: #ef4444;
         --clr-breakout:   #f59e0b;
-        --clr-ranging:    #6366f1;
+        --clr-ranging:    #a5b4fc;  /* FLO-283: was #6366f1 — too dark against near-black bg */
         --clr-quiet:      #94a3b8;
         --clr-transitional: #a78bfa;
 
@@ -1838,7 +1838,7 @@
             <div id="luna-summary" style="font-size:10px;color:#d1d5db;line-height:1.4;margin-bottom:6px">—</div>
             <div class="bc-metric" style="margin-bottom:3px">
               <span class="bc-metric-label">Regime</span>
-              <span id="luna-regime" class="bc-metric-val" style="color:#E040FB">—</span>
+              <span id="luna-regime" class="bc-metric-val" style="color:#e9d5ff">—</span>
             </div>
             <div class="bc-metric" style="margin-bottom:3px">
               <span class="bc-metric-label">Patterns</span>
@@ -2167,18 +2167,6 @@
           </div>
         </div>
 
-        <!-- PENDING ORDERS (FLO-263) -->
-        <div class="bc-card" id="pending-orders-card" style="border-color:#7C4DFF">
-          <div class="bc-row1" style="padding:8px 10px 4px">
-            <div class="bc-identity">
-              <span class="bc-name" style="color:#7C4DFF;font-size:10px">PENDING ORDERS</span>
-            </div>
-          </div>
-          <div id="pending-orders-list" style="padding:4px 10px 8px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280">
-            No pending orders
-          </div>
-        </div>
-
         <!-- SAGE -->
         <div class="bc-card" id="sage-card" style="border-color:#FFB300">
           <button type="button" class="bc-btn" data-expand-target="sage-expand" aria-expanded="false">
@@ -2217,6 +2205,18 @@
             <div id="sage-report-recommendations" class="agent-recommendations" style="font-size:9px;margin-top:2px"></div>
             <span id="sage-report-period" style="display:none"></span>
             <span id="sage-report-trades" style="display:none"></span>
+          </div>
+        </div>
+
+        <!-- PENDING ORDERS (FLO-263) — placed BELOW Sage per FLO-283 -->
+        <div class="bc-card" id="pending-orders-card" style="border-color:#7C4DFF">
+          <div class="bc-row1" style="padding:8px 10px 4px">
+            <div class="bc-identity">
+              <span class="bc-name" style="color:#7C4DFF;font-size:10px">PENDING ORDERS</span>
+            </div>
+          </div>
+          <div id="pending-orders-list" style="padding:4px 10px 8px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#6b7280">
+            No pending orders
           </div>
         </div>
 
@@ -2427,7 +2427,11 @@
               var pnlColor = t.pnl >= 0 ? '#4ade80' : '#f87171';
               var dirColor = t.direction === 'BUY' ? '#4ade80' : '#f87171';
               var capStr = t.capture_pct != null ? t.capture_pct + '%' : '-';
-              var mfeStr = t.mfe != null ? '+' + Number(t.mfe).toFixed(1) : '-';
+              var mfeStr = '-';
+              if (t.mfe != null) {
+                var mfeN = Number(t.mfe);
+                mfeStr = (mfeN >= 0 ? '+' : '') + mfeN.toFixed(1);
+              }
               var verdictHtml = '';
               if (t.verdict) {
                 var vc = t.verdict_type === 'helped' ? '#4ade80' : t.verdict_type === 'hurt' ? '#f87171' : '#94a3b8';
