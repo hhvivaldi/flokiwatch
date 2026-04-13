@@ -738,17 +738,19 @@ def generate_post_trade_report(action: Dict) -> Optional[Dict]:
             original_sl = adjustments[0].get("old_sl") or original_sl
 
         # MFE / MAE / capture rate
+        # FLO-290: capture = pips_captured / mfe_pips × 100. Previous formula
+        # divided DOLLARS by PIPS — unit mismatch understated capture ~10x for gold.
+        from capture import compute_capture_pct
         mfe = trade.get("mfe_points")
         mae = trade.get("mae_points")
         profit = action.get("profit") or trade.get("profit")
         final_sl = trade.get("final_sl") or action.get("orig_sl")
-
-        capture_rate = None
-        if mfe is not None and mfe > 0 and profit is not None:
-            try:
-                capture_rate = round((float(profit) / float(mfe)) * 100, 1)
-            except Exception:
-                pass
+        capture_rate = compute_capture_pct(
+            direction=trade.get("direction"),
+            entry_price=trade.get("open_price"),
+            close_price=action.get("close_price") or trade.get("close_price"),
+            mfe_points=mfe,
+        )
 
         # SL adjustment timeline
         sl_timeline = []

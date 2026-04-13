@@ -449,9 +449,12 @@ class TradingBot:
                     f"open={deal.get('open_price', '?')} → close={deal['close_price']:.2f} | "
                     f"P&L=${deal['profit']:+.2f} | {deal['reason']} | {deal['close_time'].strftime('%H:%M')}"
                 )
-                # Derive close_type from reason + P&L heuristic
-                # On restart, monitor state is lost — MT5 only reports "Stop Loss" or "Take Profit"
-                # Heuristic fallback: profit > $1 = trailing, profit ~$0 = breakeven, profit < 0 = SL
+                # Derive close_type from reason + P&L heuristic.
+                # On restart, monitor state is lost — MT5 only reports reason strings.
+                # FLO-290: "Expert Advisor" = bot sent MarketClose (Floki close_trade
+                # or monitor risk close), NEVER a SL hit (FlokiBridge is a pure
+                # executor and doesn't self-trigger SL/TP). Previously this fell
+                # into the else branch and got mislabeled "sl".
                 deal_reason = deal['reason']
                 deal_profit = deal['profit']
                 if deal_reason == "Take Profit":
@@ -463,6 +466,8 @@ class TradingBot:
                         deal_close_type = "breakeven"
                     else:
                         deal_close_type = "sl"
+                elif deal_reason == "Expert Advisor":
+                    deal_close_type = "floki_close"
                 else:
                     deal_close_type = "sl"
                 

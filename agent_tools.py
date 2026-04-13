@@ -2494,18 +2494,16 @@ class AgentTools:
                 final_sl = t.get("final_sl")
                 orig_sl = t.get("sl")
 
-                # Capture rate — FLO-288: show 0 when MFE <= 0 (trade never in
-                # profit, nothing to capture). Only None when MFE itself is missing.
-                capture = None
-                if mfe is not None:
-                    if mfe > 0 and pnl is not None:
-                        try:
-                            capture = round(float(pnl) / float(mfe) * 100, 1)
-                            total_capture.append(capture)
-                        except Exception:
-                            pass
-                    else:
-                        capture = 0.0
+                # Capture rate — FLO-290: pips/pips (was dollars/pips bug).
+                from capture import compute_capture_pct
+                capture = compute_capture_pct(
+                    direction=t.get("direction"),
+                    entry_price=t.get("open_price"),
+                    close_price=t.get("close_price"),
+                    mfe_points=mfe,
+                )
+                if capture is not None and mfe is not None and mfe > 0:
+                    total_capture.append(capture)
 
                 # Adjustments
                 adjustments = get_trade_adjustments(int(ticket))

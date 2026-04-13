@@ -918,7 +918,13 @@ class PositionMonitor:
                     except Exception:
                         pass
                 
-                # Determine close_type for dynamic cooldown
+                # Determine close_type for dynamic cooldown.
+                # FLO-290: "Expert Advisor" reason = bot sent MarketClose
+                # (Floki's close_trade tool or monitor-driven risk close).
+                # FlokiBridge EA is a pure executor (FLOKI_MANAGES_POSITION=True)
+                # — never self-triggers SL/TP — so "Expert Advisor" is NEVER
+                # an SL hit. Previously this fell into the else branch and got
+                # mislabeled "sl".
                 had_trailing = ticket in self.trailing_sl
                 if reason == "Take Profit":
                     close_type = "tp"
@@ -926,8 +932,10 @@ class PositionMonitor:
                     close_type = "trailing"
                 elif reason == "Stop Loss":
                     close_type = "sl"
+                elif reason == "Expert Advisor":
+                    close_type = "floki_close"
                 else:
-                    close_type = "sl"  # conservative default
+                    close_type = "sl"  # conservative default for unknown reason
                 
                 # Use original direction from position (not N3-derived) to prevent inversion
                 orig_direction = pos.direction if is_pending else direction
