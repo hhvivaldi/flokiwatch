@@ -417,9 +417,12 @@ class TradingBot:
             # Use open_time to determine which day a trade belongs to. A trade opened
             # on March 31 is a March 31 trade even if it closed after midnight in
             # broker time. Falls back to close_time if open_time is unavailable.
+            # FLO-286: `today` is a YYYY-MM-DD string from trading_day_broker_aligned(),
+            # so compare string-to-string (MT5 deal times are broker-local datetimes).
             def _trade_day(d):
                 ot = d.get('open_time')
-                return ot.date() if ot else d['close_time'].date()
+                dt = ot if ot else d['close_time']
+                return dt.strftime("%Y-%m-%d")
 
             today_deals = [d for d in real_deals if _trade_day(d) == today]
             today_tickets = {d['position_id'] for d in today_deals}
