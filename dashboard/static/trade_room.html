@@ -5581,10 +5581,22 @@
                   };
                   var varName = regimeVarMap[r] || '--clr-ranging';
                   var clr = cs2.getPropertyValue(varName).trim();
-                  // Update pill
+                  // FLO-284: hex -> rgba helper (replace() chain was broken for hex values)
+                  function _hexToRgba(h, a) {
+                    h = String(h || '').replace('#', '').trim();
+                    if (h.length === 3) h = h.split('').map(function(c){return c+c;}).join('');
+                    if (h.length !== 6) return 'rgba(99,102,241,' + a + ')';
+                    var R = parseInt(h.substr(0,2), 16);
+                    var G = parseInt(h.substr(2,2), 16);
+                    var B = parseInt(h.substr(4,2), 16);
+                    return 'rgba(' + R + ',' + G + ',' + B + ',' + a + ')';
+                  }
+                  // Update pill — text is WHITE for guaranteed contrast on the colored fill;
+                  // the regime identity shows through the saturated fill itself.
                   rcPill.textContent = r.replace(/_/g, ' ');
-                  rcPill.style.color = clr;
-                  rcPill.style.background = clr.replace(')', ',0.15)').replace('rgb(', 'rgba(');
+                  rcPill.style.color = '#ffffff';
+                  rcPill.style.background = _hexToRgba(clr, 0.35);
+                  rcPill.style.border = '1px solid ' + _hexToRgba(clr, 0.5);
                   // Confidence pill
                   if (rcConf) rcConf.textContent = mr.confidence || '—';
                   // Duration
