@@ -5345,7 +5345,14 @@ class TradingBot:
                         _rsi = tech_data.get("rsi", {}).get("value") if isinstance(tech_data, dict) else None
                         _stoch_k = tech_data.get("stochastic", {}).get("value") if isinstance(tech_data, dict) else None
                         _stoch_d = float(last_row["stoch_d"]) if (last_row is not None and "stoch_d" in last_row.index) else None
-                        _adx = float(last_row["adx_14"]) if (last_row is not None and "adx_14" in last_row.index) else None
+                        # FLO-276: ADX lives in momentum_data["adx"]["adx_value"], not in df
+                        _adx = None
+                        try:
+                            _adx_raw = momentum_data.get("adx", {}).get("adx_value") if isinstance(momentum_data, dict) else None
+                            if _adx_raw is not None:
+                                _adx = round(float(_adx_raw), 2)
+                        except Exception:
+                            pass
                         _vol_ratio = momentum_data.get("volume", {}).get("volume_ratio") if isinstance(momentum_data, dict) else None
                         _macd_hist = tech_data.get("macd", {}).get("histogram") if isinstance(tech_data, dict) else None
                         _bb_pos = _bb_bucket(tech_data.get("bollinger", {}).get("position")) if isinstance(tech_data, dict) else "middle"
@@ -7141,6 +7148,7 @@ class TradingBot:
                 if is_pending:
                     close_reason = f"{close_reason} (pending)"
                 # FLO-269: Extract MFE/MAE from agent_monitor before cleanup
+                # FLO-276: Fall back to trade_snapshots when agent_monitor dict is empty
                 _mfe = None
                 _mae = None
                 _final_sl = action.get("orig_sl")  # fallback: SL at close from monitor
@@ -7149,6 +7157,24 @@ class TradingBot:
                     if self._agent_monitor and _t:
                         _mfe = self._agent_monitor.max_profit_seen_points_by_ticket.get(int(_t))
                         _mae = self._agent_monitor.min_profit_seen_points_by_ticket.get(int(_t))
+                    # Fallback to trade_snapshots when agent_monitor tracker was empty
+                    if _t and (_mfe is None or _mae is None):
+                        try:
+                            import sqlite3 as _sql
+                            _db = os.path.abspath(getattr(config, 'HISTORY_DB_PATH', 'data/history.db'))
+                            _c = _sql.connect(_db, timeout=5)
+                            _row = _c.execute(
+                                'SELECT MAX(profit_pips), MIN(profit_pips) FROM trade_snapshots WHERE ticket = ?',
+                                (int(_t),),
+                            ).fetchone()
+                            _c.close()
+                            if _row:
+                                if _mfe is None and _row[0] is not None:
+                                    _mfe = float(_row[0])
+                                if _mae is None and _row[1] is not None:
+                                    _mae = float(_row[1])
+                        except Exception:
+                            pass
                     # final_sl: use the last known SL from position_monitor (more accurate)
                     if hasattr(self, '_position_monitor') and self._position_monitor and _t:
                         _tsl = self._position_monitor.trailing_sl.get(int(_t))
