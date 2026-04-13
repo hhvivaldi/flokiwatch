@@ -2494,14 +2494,18 @@ class AgentTools:
                 final_sl = t.get("final_sl")
                 orig_sl = t.get("sl")
 
-                # Capture rate
+                # Capture rate — FLO-288: show 0 when MFE <= 0 (trade never in
+                # profit, nothing to capture). Only None when MFE itself is missing.
                 capture = None
-                if mfe is not None and mfe > 0 and pnl is not None:
-                    try:
-                        capture = round(float(pnl) / float(mfe) * 100, 1)
-                        total_capture.append(capture)
-                    except Exception:
-                        pass
+                if mfe is not None:
+                    if mfe > 0 and pnl is not None:
+                        try:
+                            capture = round(float(pnl) / float(mfe) * 100, 1)
+                            total_capture.append(capture)
+                        except Exception:
+                            pass
+                    else:
+                        capture = 0.0
 
                 # Adjustments
                 adjustments = get_trade_adjustments(int(ticket))
@@ -2576,7 +2580,7 @@ class AgentTools:
                     f'  <trade ticket="{ticket}" dir="{direction}" '
                     f'session="{sess_open}->{sess_close}" '
                     f'pnl="${_f(pnl)}" mfe="{_f(mfe, 1)}pts" mae="{_f(mae, 1)}pts" '
-                    f'capture="{capture}%" '
+                    f'capture="{("?" if capture is None else (f"{capture:.0f}%" if float(capture).is_integer() else f"{capture}%"))}" '
                     f'entry="{_f(t.get("open_price"))}" orig_sl="{_f(orig_sl)}" '
                     f'final_sl="{_f(final_sl)}" tp="{_f(t.get("tp"))}" '
                     f'close="{_f(t.get("close_price"))}" type="{t.get("close_reason", "?")}" '

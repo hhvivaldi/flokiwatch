@@ -2428,7 +2428,10 @@
             trades.forEach(function(t){
               var pnlColor = t.pnl >= 0 ? '#4ade80' : '#f87171';
               var dirColor = t.direction === 'BUY' ? '#4ade80' : '#f87171';
-              var capStr = t.capture_pct != null ? t.capture_pct + '%' : '-';
+              // FLO-288: integer-only when it's a whole number (0.0 → "0%", 45.3 → "45.3%")
+              var capStr = t.capture_pct != null
+                ? (Number.isInteger(t.capture_pct) ? t.capture_pct + '%' : t.capture_pct.toFixed(1) + '%')
+                : '-';
               var mfeStr = '-';
               if (t.mfe != null) {
                 var mfeN = Number(t.mfe);

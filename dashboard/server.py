@@ -1915,13 +1915,18 @@ def journal_data():
             if adjustments:
                 orig_sl = adjustments[0].get("old_sl") or orig_sl
 
+            # FLO-288: show 0% when MFE <= 0 (trade never in profit — nothing
+            # to capture). Only keep None when MFE itself is missing/unknown.
             capture = None
-            if mfe is not None and mfe > 0:
-                try:
-                    capture = round(pnl / float(mfe) * 100, 1)
-                    total_capture.append(capture)
-                except Exception:
-                    pass
+            if mfe is not None:
+                if mfe > 0:
+                    try:
+                        capture = round(pnl / float(mfe) * 100, 1)
+                        total_capture.append(capture)
+                    except Exception:
+                        pass
+                else:
+                    capture = 0.0
 
             # Load counterfactual
             cf = None
