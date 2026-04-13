@@ -2797,6 +2797,20 @@
             .replaceAll("'", '&#39;');
         }
 
+        // FLO-291: Backend leaks of snake_case identifiers (e.g. Luna's
+        // "dollar_gold_correlation_break") render with visual underline-like
+        // artifacts in monospace font — the underscore glyphs sit low and
+        // visually connect across letters. Normalize any token that looks like
+        // a snake_case identifier (2+ underscore-separated alnum groups) to
+        // space-separated words. Must run AFTER esc(), since we match on
+        // text, not on entities, and tokens don't contain HTML-special chars.
+        function prettySnake(s) {
+          return (s || '').toString().replace(
+            /\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/gi,
+            function (m) { return m.replace(/_/g, ' '); }
+          );
+        }
+
         function bindAgentExpandersOnce() {
           try {
             var nodes = document.querySelectorAll('[data-expand-target]');
@@ -3395,8 +3409,8 @@
             if (!shouldShowMessage(m)) continue;
 
             if (m.__kind === 'conflict') {
-              html += '<div class="conflict-strip" data-conflict>' + 
-                '<span class="mr-2">⚡</span>' + esc(m.content) + 
+              html += '<div class="conflict-strip" data-conflict>' +
+                '<span class="mr-2">⚡</span>' + prettySnake(esc(m.content)) +
               '</div>';
               continue;
             }
@@ -3524,7 +3538,7 @@
                     '<span style="background:rgba(192,132,252,0.15);color:#c084fc;border:1px solid rgba(192,132,252,0.3);padding:1px 7px;border-radius:4px;font-size:9px;font-weight:900;letter-spacing:0.08em">\uD83E\uDDE0 JOURNAL</span>' +
                     (m.timestamp ? '<span style="color:#6b7280;font-size:9px;font-family:\'JetBrains Mono\',monospace">' + esc(m.timestamp) + '</span>' : '') +
                   '</div>' +
-                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45;font-family:\'JetBrains Mono\',monospace;border-left:2px solid rgba(192,132,252,0.3);padding-left:8px">' + esc(m.content || '') + '</div>';
+                  '<div style="font-size:11px;color:#d1d5db;line-height:1.45;font-family:\'JetBrains Mono\',monospace;border-left:2px solid rgba(192,132,252,0.3);padding-left:8px">' + prettySnake(esc(m.content || '')) + '</div>';
               }
               else if (isFloki && (type === 'FLOKI_DECISION' || type === 'DECISION')) {
                 // Parse: "WAIT (85%). Reasoning text..."
@@ -3778,7 +3792,7 @@
                 '</div>';
 
                 // Line 3: summary
-                var summaryText = esc(lm.summary || (m.content || ''));
+                var summaryText = prettySnake(esc(lm.summary || (m.content || '')));
                 var l3 = '<div style="font-size:10.5px;color:#d1d5db;line-height:1.4">' + summaryText + '</div>';
 
                 // Line 4: patterns (if any)
@@ -3948,7 +3962,7 @@
               var impact = (meta.gold_impact || 'NEUTRAL').toUpperCase();
               var impIcon = impact === 'BULLISH' ? '<span style="color:#4ade80">&#9650;</span>' : (impact === 'BEARISH' ? '<span style="color:#f87171">&#9660;</span>' : '<span style="color:#6b7280">&#9679;</span>');
               var impColor = impact === 'BULLISH' ? '#4ade80' : (impact === 'BEARISH' ? '#f87171' : '#9ca3af');
-              var summary = esc(meta.summary || '');
+              var summary = prettySnake(esc(meta.summary || ''));
               var line3 = '<div style="font-size:10px;color:#9ca3af;line-height:1.3">' +
                 impIcon + ' <span style="color:' + impColor + ';font-weight:700">' + impact + ' for Gold</span>' +
                 (summary ? ' &mdash; ' + summary : '') + '</div>';
@@ -4047,20 +4061,20 @@
 
               badge = dec.replace('_', ' ');
               var firstSentence = reason.split(/\.(?=\s)/)[0] || reason;
-              summary = '<span style="color:#AAFF00;font-weight:700;margin-right:4px">' + conf + '</span>' + esc(firstSentence.substring(0, 120));
-              expandContent = esc(reason).replace(/\n/g, '<br>');
+              summary = '<span style="color:#AAFF00;font-weight:700;margin-right:4px">' + conf + '</span>' + prettySnake(esc(firstSentence.substring(0, 120)));
+              expandContent = prettySnake(esc(reason)).replace(/\n/g, '<br>');
             }
             else if (author === 'FLOKI' && type === 'DEBATE') {
               badgeColor = '#AAFF00'; badgeBg = 'rgba(170,255,0,0.08)';
               badge = 'DEBATE';
-              summary = esc(content.substring(0, 120));
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(content.substring(0, 120)));
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else if (author === 'REX') {
               badgeColor = '#9C27B0'; badgeBg = 'rgba(156,39,176,0.12)';
               badge = 'REX';
-              summary = esc(content.substring(0, 120));
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(content.substring(0, 120)));
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else if (author === 'ECHO') {
               var cls = (meta.classification || '').toUpperCase();
@@ -4069,8 +4083,8 @@
               if (cls === 'CRITICAL') { badgeColor = '#ef4444'; badgeBg = 'rgba(239,68,68,0.15)'; badge = 'CRITICAL'; }
               else { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.12)'; badge = cls || 'NEWS'; }
               var impTag = impact === 'BULLISH' ? ' <span style="color:#4ade80">BULL</span>' : (impact === 'BEARISH' ? ' <span style="color:#f87171">BEAR</span>' : '');
-              summary = esc(headline.substring(0, 100)) + impTag;
-              expandContent = esc(meta.summary || content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(headline.substring(0, 100))) + impTag;
+              expandContent = prettySnake(esc(meta.summary || content)).replace(/\n/g, '<br>');
             }
             else if (author === 'LUNA') {
               var env = (meta.environment || '').toUpperCase();
@@ -4079,36 +4093,36 @@
               else { badgeColor = '#E040FB'; badgeBg = 'rgba(224,64,251,0.1)'; }
               badge = env || 'LUNA';
               var bias = (meta.directional_bias || '').toUpperCase();
-              summary = esc((meta.summary || content).substring(0, 120));
+              summary = prettySnake(esc((meta.summary || content).substring(0, 120)));
               if (bias && bias !== 'NEUTRAL') summary = '<span style="color:' + (bias === 'BULLISH' ? '#4ade80' : '#f87171') + '">' + bias + '</span> ' + summary;
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else if (author === 'SIMBA') {
               badgeColor = '#00E5FF'; badgeBg = 'rgba(0,229,255,0.1)';
               var isWake = content.indexOf('heads up') >= 0 || content.indexOf('punched') >= 0 || (meta.triggered && meta.triggered.length > 0);
               badge = isWake ? 'WAKE' : 'PATROL';
               if (isWake) { badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.15)'; }
-              summary = esc(content.substring(0, 120));
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(content.substring(0, 120)));
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else if (author === 'SAGE') {
               badgeColor = '#FFB300'; badgeBg = 'rgba(255,179,0,0.12)';
               if (type === 'SAGE_ALERT') { badge = 'ALERT'; badgeColor = '#ef4444'; badgeBg = 'rgba(239,68,68,0.15)'; }
               else if (type === 'SAGE_WEEKLY') { badge = 'WEEKLY'; }
               else { badge = 'SAGE'; }
-              summary = esc(content.substring(0, 120));
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(content.substring(0, 120)));
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else if (m.__kind === 'journal') {
               badgeColor = '#c084fc'; badgeBg = 'rgba(192,132,252,0.12)';
               badge = 'JOURNAL';
-              summary = esc(content.substring(0, 120));
-              expandContent = esc(content).replace(/\n/g, '<br>');
+              summary = prettySnake(esc(content.substring(0, 120)));
+              expandContent = prettySnake(esc(content)).replace(/\n/g, '<br>');
             }
             else {
               badgeColor = '#6b7280'; badgeBg = 'rgba(107,114,128,0.1)';
               badge = author;
-              summary = esc(content.substring(0, 120));
+              summary = prettySnake(esc(content.substring(0, 120)));
               expandContent = '';
             }
 

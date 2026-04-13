@@ -1479,9 +1479,25 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
     if critical_count > 0:
         key_factors.append(f"{critical_count} CRITICAL Echo alert(s) active")
 
+    # FLO-291: snake_case pattern IDs render as visual underlines in the
+    # monospace UI (underscore glyphs sit low and connect visually across
+    # characters). Emit human-readable labels in the summary; the raw IDs
+    # are still carried in patterns_detected for code/UI consumers that
+    # want them.
+    _PATTERN_LABELS = {
+        "blow_off_reversal": "Blow-Off Reversal",
+        "news_price_divergence": "News-Price Divergence",
+        "safe_haven_flow": "Safe Haven Flow",
+        "forced_liquidation": "Forced Liquidation",
+        "dollar_gold_correlation_break": "Dollar-Gold Correlation Break",
+    }
+
+    def _pretty(pid: str) -> str:
+        return _PATTERN_LABELS.get(pid) or pid.replace("_", " ").title()
+
     summary_parts = [f"Environment: {environment}."]
     if patterns:
-        summary_parts.append(f"Patterns: {', '.join(patterns)}.")
+        summary_parts.append(f"Patterns: {', '.join(_pretty(p) for p in patterns)}.")
     if directional_bias != "NEUTRAL":
         summary_parts.append(f"Macro bias {directional_bias} (confidence {bias_confidence}/10).")
     else:

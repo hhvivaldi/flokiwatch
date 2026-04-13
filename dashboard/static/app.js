@@ -15,6 +15,24 @@ let proactiveReasoningExpanded = false;
 
 let uiHandlersBound = false;
 
+// FLO-291: escape HTML-special chars + normalize snake_case identifiers.
+// Backend leaks like "dollar_gold_correlation_break" render with visual
+// underline-like artifacts in monospace font (underscores sit low and
+// connect across characters). Apply to any backend text injected into
+// innerHTML template strings.
+function esc(s) {
+  return (s == null ? "" : String(s))
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+function prettySnake(s) {
+  return (s == null ? "" : String(s)).replace(
+    /\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/gi,
+    (m) => m.replaceAll("_", " ")
+  );
+}
+function safeText(s) { return prettySnake(esc(s)); }
+
 function decisionLabel(decision) {
   const d = (decision || "").toString();
   return d.replaceAll("_", " ");
@@ -1648,7 +1666,7 @@ function renderAgentCard(agentDecision) {
   const factorsEl = el("agent-factors");
   if (factorsEl) {
     if (keyFactors.length > 0) {
-      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${f}</li>`).join("");
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${safeText(f)}</li>`).join("");
     } else {
       factorsEl.innerHTML = `<li class="text-gray-600">—</li>`;
     }
@@ -1658,7 +1676,7 @@ function renderAgentCard(agentDecision) {
   const concernsEl = el("agent-concerns");
   if (concernsEl) {
     if (concerns.length > 0) {
-      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${safeText(c)}</li>`).join("");
     } else {
       concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
     }
@@ -2049,7 +2067,7 @@ function renderProactiveAnalysis(proactive, positions) {
   const factorsEl = el("proactive-factors");
   if (factorsEl) {
     if (keyFactors.length > 0) {
-      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${f}</li>`).join("");
+      factorsEl.innerHTML = keyFactors.map(f => `<li class="text-gray-300">• ${safeText(f)}</li>`).join("");
     } else {
       factorsEl.innerHTML = `<li class="text-gray-600">—</li>`;
     }
@@ -2058,7 +2076,7 @@ function renderProactiveAnalysis(proactive, positions) {
   const concernsEl = el("proactive-concerns");
   if (concernsEl) {
     if (concerns.length > 0) {
-      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${c}</li>`).join("");
+      concernsEl.innerHTML = concerns.map(c => `<li class="text-amber-400">• ${safeText(c)}</li>`).join("");
     } else {
       concernsEl.innerHTML = `<li class="text-gray-600">None</li>`;
     }

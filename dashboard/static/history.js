@@ -639,6 +639,12 @@ class HistoryApp {
 
     escapeHtml(s) {
         var str = (s === null || s === undefined) ? '' : String(s);
+        // FLO-291: also replace snake_case tokens with spaces so backend
+        // identifiers (e.g. "dollar_gold_correlation_break") don't render
+        // with visual underline-like artifacts in monospace.
+        str = str.replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/gi, function (m) {
+            return m.replace(/_/g, ' ');
+        });
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
