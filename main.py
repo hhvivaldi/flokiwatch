@@ -6689,12 +6689,15 @@ class TradingBot:
             pass
 
         latency = time.time() - t0
-        h1_kb = len(result["h1_b64"]) // 1024 if result["h1_b64"] else 0
-        m15_kb = len(result["m15_b64"]) // 1024 if result["m15_b64"] else 0
-        m5_kb = len(result["m5_b64"]) // 1024 if result["m5_b64"] else 0
-        log.info(f"SCREENSHOT | h1={'yes' if result['h1_b64'] else 'no'} ({h1_kb}KB) "
-                 f"m15={'yes' if result['m15_b64'] else 'no'} ({m15_kb}KB) "
-                 f"m5={'yes' if result['m5_b64'] else 'no'} ({m5_kb}KB) | {latency:.1f}s")
+        # FLO-262: include D1 and H4 in log when available
+        def _kb(key):
+            v = result.get(key)
+            return len(v) // 1024 if v else 0
+        parts = []
+        for tf in ("d1", "h4", "h1", "m15", "m5"):
+            k = f"{tf}_b64"
+            parts.append(f"{tf}={'yes' if result.get(k) else 'no'} ({_kb(k)}KB)")
+        log.info(f"SCREENSHOT | {' '.join(parts)} | {latency:.1f}s")
         return result
 
     def _write_sr_zones_json(self, current_price: float):

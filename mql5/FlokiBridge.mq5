@@ -116,6 +116,8 @@ int        g_lastAlertVersion = -1;
 // ── Chart Screenshot Capture ──
 string   ScreenshotRequestFile = "screenshot_request.json";
 string   ScreenshotReadyFile   = "screenshot_ready.json";
+string   ScreenshotD1File      = "chart_d1.png";   // FLO-262
+string   ScreenshotH4File      = "chart_h4.png";   // FLO-262
 string   ScreenshotH1File      = "chart_h1.png";
 string   ScreenshotM15File     = "chart_m15.png";
 string   ScreenshotM5File      = "chart_m5.png";
@@ -1001,6 +1003,36 @@ void CheckScreenshotRequest()
    if(reqWidth  <= 0) reqWidth  = 1280;
    if(reqHeight <= 0) reqHeight = 720;
 
+   // FLO-262: Find and capture D1 chart (trend context — EMA 50+200, S/R zones)
+   bool d1_ok = false;
+   long d1_chart_id = FindChart(_Symbol, PERIOD_D1);
+   if(d1_chart_id > 0)
+   {
+      d1_ok = ChartScreenShot(d1_chart_id, ScreenshotD1File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot D1 (chart ", d1_chart_id, "): ", d1_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      if(EnableLogging)
+         Print("Screenshot D1: XAUUSD D1 chart not found (not open in MT5)");
+   }
+
+   // FLO-262: Find and capture H4 chart (structural context — EMA, BB, S/R zones)
+   bool h4_ok = false;
+   long h4_chart_id = FindChart(_Symbol, PERIOD_H4);
+   if(h4_chart_id > 0)
+   {
+      h4_ok = ChartScreenShot(h4_chart_id, ScreenshotH4File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot H4 (chart ", h4_chart_id, "): ", h4_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      if(EnableLogging)
+         Print("Screenshot H4: XAUUSD H4 chart not found (not open in MT5)");
+   }
+
    // Find and capture H1 chart (separate tab with SRZoneDrawer)
    bool h1_ok = false;
    long h1_chart_id = FindChart(_Symbol, PERIOD_H1);
@@ -1054,6 +1086,10 @@ void CheckScreenshotRequest()
       string json = "{";
       json += "\"version\":1,";
       json += "\"timestamp\":\"" + TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS) + "\",";
+      json += "\"d1_file\":\"" + (d1_ok ? ScreenshotD1File : "") + "\",";
+      json += "\"d1_ok\":" + (d1_ok ? "true" : "false") + ",";
+      json += "\"h4_file\":\"" + (h4_ok ? ScreenshotH4File : "") + "\",";
+      json += "\"h4_ok\":" + (h4_ok ? "true" : "false") + ",";
       json += "\"h1_file\":\"" + (h1_ok ? ScreenshotH1File : "") + "\",";
       json += "\"h1_ok\":" + (h1_ok ? "true" : "false") + ",";
       json += "\"m15_file\":\"" + (m15_ok ? ScreenshotM15File : "") + "\",";
@@ -1069,7 +1105,7 @@ void CheckScreenshotRequest()
    FileDelete(ScreenshotRequestFile);
 
    if(EnableLogging)
-      Print("Screenshot request processed: H1=", h1_ok, " M15=", m15_ok, " M5=", m5_ok);
+      Print("Screenshot request processed: D1=", d1_ok, " H4=", h4_ok, " H1=", h1_ok, " M15=", m15_ok, " M5=", m5_ok);
 }
 
 //+------------------------------------------------------------------+
