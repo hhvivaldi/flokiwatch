@@ -15,6 +15,8 @@ from datetime import datetime
 from typing import Dict, Optional, List, Any
 from enum import Enum
 
+from tz_utils import utc_now, utc_iso, trading_day_utc
+
 from logger import log
 from agent_prompts import get_system_prompt, get_prompt_hash, get_prompt_version
 import config
@@ -33,8 +35,9 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
         mem_path = os.path.join(data_dir, "agent_session_memory.json")
         os.makedirs(data_dir, exist_ok=True)
 
-        now = datetime.now()
-        today = now.date().isoformat()
+        # FLO-286: UTC session date and timestamp (was naive datetime.now() = local)
+        now = utc_now()
+        today = trading_day_utc(now)
 
         payload: Dict[str, Any] = {
             "session_date": today,
@@ -43,7 +46,7 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
             "wins_today": 0,
             "losses_today": 0,
             "notes": [],
-            "last_updated": now.isoformat(timespec="seconds"),
+            "last_updated": utc_iso(now),
         }
 
         if os.path.exists(mem_path):

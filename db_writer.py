@@ -2,6 +2,11 @@
 DB WRITER - Persistent History in SQLite
 Complements state_writer (JSON for dashboard) with history for charts and statistics.
 Never throws exceptions outward — same pattern as state_writer.
+
+FLO-286 / CLAUDE.md Rule 22: ALL timestamps stored in UTC via tz_utils.utc_iso().
+Never use datetime.now() — use utc_iso() for new writes and to_utc_iso() to
+normalize inbound strings. Timestamp columns: timestamp, open_time, close_time,
+created_at, analyzed_at, hindsight_timestamp, generated_at — all UTC ISO with Z.
 """
 
 import json
@@ -12,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import config
 from logger import log
+from tz_utils import utc_iso, to_utc_iso
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -468,7 +474,7 @@ def record_agent_event(event_type: str, content: str, payload: Optional[Dict[str
 
             conn.execute(
                 "INSERT INTO agent_events (timestamp, event_type, author, content, payload_json) VALUES (?, ?, ?, ?, ?)",
-                (datetime.now().isoformat(), et, author_s, content_s[:4000], payload_json),
+                (utc_iso(), et, author_s, content_s[:4000], payload_json),
             )
             conn.commit()
         finally:
@@ -498,7 +504,7 @@ def record_trade_adjustment(
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     int(ticket),
-                    datetime.utcnow().isoformat(),
+                    utc_iso(),
                     old_sl,
                     new_sl,
                     old_tp,
@@ -549,7 +555,7 @@ def record_trade_snapshot(snapshot: Dict[str, Any]) -> None:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     int(snapshot.get("ticket", 0)),
-                    str(snapshot.get("timestamp", datetime.utcnow().isoformat())),
+                    str(snapshot.get("timestamp", utc_iso())),
                     snapshot.get("price"),
                     snapshot.get("profit_pips"),
                     snapshot.get("rsi"),
@@ -680,7 +686,7 @@ def record_analysis(last_analysis: Dict[str, Any]) -> None:
                        ?, ?, ?,
                        ?, ?, ?)""",
             (
-                last_analysis.get("timestamp", datetime.now().isoformat()),
+                last_analysis.get("timestamp", utc_iso()),
                 last_analysis.get("decision"),
                 last_analysis.get("final_score"),
                 last_analysis.get("confidence"),
@@ -769,7 +775,7 @@ def record_trade_open(
                     open_price,
                     sl,
                     tp,
-                    open_time or datetime.utcnow().isoformat(),
+                    to_utc_iso(open_time) if open_time else utc_iso(),
                     comment,
                     decision_source,
                 ),
@@ -852,7 +858,7 @@ def record_trade_close(
                     close_price,
                     profit,
                     close_reason,
-                    close_time or datetime.utcnow().isoformat(),
+                    to_utc_iso(close_time) if close_time else utc_iso(),
                     be_int,
                     mfe_points,
                     mae_points,
@@ -931,7 +937,7 @@ def record_agent_decision(
                        ?, ?, ?, ?, ?, ?,
                        ?, ?, ?)""",
             (
-                agent_result.get("timestamp", datetime.now().isoformat()),
+                agent_result.get("timestamp", utc_iso()),
                 brain_decision,
                 brain_score,
                 brain_confidence,
@@ -1018,7 +1024,7 @@ def record_agent_proactive_analysis(
                        ?,
                        ?, ?, ?, ?)""",
             (
-                agent_result.get("timestamp", datetime.now().isoformat()),
+                agent_result.get("timestamp", utc_iso()),
                 h1_close_time,
                 agent_result.get("decision", "DEFER_TO_BRAIN"),
                 agent_result.get("confidence", 0),
@@ -1359,7 +1365,7 @@ def record_account_snapshot(account_info: Optional[Dict[str, Any]]) -> None:
                    (timestamp, balance, equity, margin, free_margin, profit)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (
-                    datetime.now().isoformat(),
+                    utc_iso(),
                     account_info.get("balance"),
                     account_info.get("equity"),
                     account_info.get("margin"),
@@ -1434,7 +1440,7 @@ def record_trade_reflexion(
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     ticket,
-                    datetime.utcnow().isoformat(),
+                    utc_iso(),
                     direction,
                     entry_price,
                     exit_price,
@@ -1514,7 +1520,7 @@ def update_reflexion_hindsight(ticket: int, hindsight_json: str, revised_lesson:
                 """UPDATE trade_reflexions
                    SET hindsight_json = ?, revised_lesson = ?, hindsight_timestamp = ?
                    WHERE ticket = ?""",
-                (hindsight_json, revised_lesson, datetime.utcnow().isoformat(), ticket),
+                (hindsight_json, revised_lesson, utc_iso(), ticket),
             )
             conn.commit()
         finally:

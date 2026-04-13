@@ -8,6 +8,7 @@ from logger import log
 from safety_checks import is_market_open
 from executor import executor
 from db_writer import record_account_snapshot
+from tz_utils import utc_now, utc_iso
 
 
 _last_valid_account_info: Optional[Dict[str, Any]] = None
@@ -16,10 +17,11 @@ _fast_decisions_last_ts: Optional[str] = None
 
 
 def _safe_iso(dt: Optional[datetime]) -> Optional[str]:
+    """FLO-286: Always returns UTC ISO with Z suffix. Naive datetimes assumed UTC."""
     if dt is None:
         return None
     try:
-        return dt.isoformat()
+        return utc_iso(dt)
     except Exception:
         return None
 
@@ -79,7 +81,8 @@ def write_state(bot_instance: Any) -> None:
     Must never throw exceptions outward (cannot block the bot).
     """
     try:
-        now = datetime.now()
+        # FLO-286: UTC for all timestamps (was naive datetime.now() in local time)
+        now = utc_now()
 
         market_open, market_reason, next_open = is_market_open()
 

@@ -21,6 +21,7 @@ identifies market scenarios, dynamically adjusts weights and makes contextual de
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
+from tz_utils import utc_now
 import config
 from logger import log
 
@@ -48,7 +49,7 @@ class BrainResult:
     gpt_validation: Optional[Dict] = None  # FLO-154: kept for compat, always None now
     mtf_trend: Optional[Dict] = None      # Multi-TF trend data for dashboard
     volume_gate: Optional[Dict] = None    # Volume gate data for dashboard
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=utc_now)  # FLO-286: UTC, not local
 
 
 # ============================================================================
