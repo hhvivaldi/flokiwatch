@@ -413,15 +413,18 @@ class TradingBot:
             for d in real_deals:
                 real_deals_by_pos[d['position_id']] = d
             
-            # Separate today's deals vs historical
-            # Use open_time to determine which day a trade belongs to. A trade opened
-            # on March 31 is a March 31 trade even if it closed after midnight in
-            # broker time. Falls back to close_time if open_time is unavailable.
-            # FLO-286: `today` is a YYYY-MM-DD string from trading_day_broker_aligned(),
-            # so compare string-to-string (MT5 deal times are broker-local datetimes).
+            # Separate today's deals vs historical.
+            # FLO-286 + Hermano's directive (2026-04-13): a trade is a "today" trade
+            # by its CLOSE day, not its open day. P&L is realized at close — that's
+            # when the money enters/leaves the account. Aligns with the live path
+            # (add_closed_trade fires at close), trade_reflexion EOD (uses
+            # close_time), server monthly grouping (uses close_time), and Sage
+            # daily drawdown (uses close_time).
+            # `today` is a YYYY-MM-DD string from trading_day_broker_aligned();
+            # MT5 deal times are broker-local datetimes — compare string-to-string.
             def _trade_day(d):
-                ot = d.get('open_time')
-                dt = ot if ot else d['close_time']
+                ct = d.get('close_time')
+                dt = ct if ct else d['open_time']
                 return dt.strftime("%Y-%m-%d")
 
             today_deals = [d for d in real_deals if _trade_day(d) == today]
