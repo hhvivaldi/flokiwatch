@@ -224,11 +224,31 @@ Return ONLY a JSON object: {"results": [{"classification": ..., "relevance_score
 One result per headline, in order."""
 
 
-def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
-    """
-    Classify headlines using ECHO_MODEL via OpenAI SDK.
-    Returns list of classification dicts or None on failure.
-    """
+def _build_echo_user_prompt(headlines: List[Dict]) -> str:
+    """Shared prompt builder used by both MiMo and Gemini paths."""
+    headline_lines = []
+    for i, h in enumerate(headlines):
+        title = h.get("title", "")
+        source = h.get("source", "")
+        headline_lines.append(f"{i+1}. [{source}] {title}")
+    return (
+        f"Classify these {len(headlines)} headlines for gold trading impact.\n\n"
+        + "\n".join(headline_lines)
+    )
+
+
+def _parse_echo_classifications(parsed) -> List[Dict]:
+    """Both MiMo and Gemini may return either a bare array or {results/headlines: [...]}."""
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return parsed.get("results", parsed.get("headlines", []))
+    return []
+
+
+def _classify_with_mimo(headlines: List[Dict]) -> Optional[List[Dict]]:
+    """Primary AI path: MiMo via OpenAI SDK. Returns None on any failure
+    (caller decides whether to set cooldown / fall back to Gemini)."""
     if OpenAI is None:
         log.warning("[ECHO] openai package not installed")
         return None
@@ -240,7 +260,6 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
 
     base_url = getattr(config, "ECHO_API_BASE", "https://api.xiaomimimo.com/v1")
 
-    # Cost cap check
     cost_data = _load_daily_cost()
     cap = getattr(config, "ECHO_DAILY_COST_CAP", 1.00)
     if cost_data["total_usd"] >= cap:
@@ -248,18 +267,7 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
         return None
 
     model = getattr(config, "ECHO_MODEL", "mimo-v2-flash")
-
-    # Build prompt
-    headline_lines = []
-    for i, h in enumerate(headlines):
-        title = h.get("title", "")
-        source = h.get("source", "")
-        headline_lines.append(f"{i+1}. [{source}] {title}")
-
-    user_prompt = (
-        f"Classify these {len(headlines)} headlines for gold trading impact.\n\n"
-        + "\n".join(headline_lines)
-    )
+    user_prompt = _build_echo_user_prompt(headlines)
 
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
@@ -274,34 +282,65 @@ def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
             response_format={"type": "json_object"},
             timeout=20,
         )
-
-        # P1-5: Validate AI response structure before accessing
         if not response.choices or not response.choices[0].message or not response.choices[0].message.content:
-            log.warning("[ECHO] AI response missing choices/message/content")
+            log.warning("[ECHO] MiMo response missing choices/message/content")
             return None
-
         raw = response.choices[0].message.content
         parsed = json.loads(raw)
+        results = _parse_echo_classifications(parsed)
 
-        # P1-2: Check for bare JSON array BEFORE calling .get()
-        if isinstance(parsed, list):
-            results = parsed
-        else:
-            results = parsed.get("results", parsed.get("headlines", []))
-
-        # Track cost
         usage = response.usage
         if usage:
             est = _estimate_cost(usage.prompt_tokens, usage.completion_tokens)
             cost_data["total_usd"] = round(cost_data["total_usd"] + est, 4)
             cost_data["calls"] += 1
             _save_daily_cost(cost_data)
-
         return results
 
     except Exception as e:
-        log.error(f"[ECHO] AI classification failed: {e}")
+        # FLO-294: detect La Liga 451 block → set cooldown so subsequent
+        # cycles skip MiMo entirely until cooldown expires.
+        from mimo_fallback import is_451_error, set_cooldown
+        if is_451_error(e):
+            set_cooldown("echo", reason="MiMo returned 451 (La Liga IP block)")
+        log.error(f"[ECHO] MiMo classification failed: {e}")
         return None
+
+
+def _classify_with_gemini(headlines: List[Dict]) -> Optional[List[Dict]]:
+    """Secondary AI path: Gemini Flash. Same prompts, JSON output."""
+    from mimo_fallback import call_gemini_json
+    user_prompt = _build_echo_user_prompt(headlines)
+    parsed = call_gemini_json(
+        system=ECHO_SYSTEM_PROMPT,
+        user_text=user_prompt,
+        agent="echo",
+    )
+    if parsed is None:
+        return None
+    return _parse_echo_classifications(parsed)
+
+
+def _classify_with_ai(headlines: List[Dict]) -> Optional[List[Dict]]:
+    """FLO-294: cooldown-gated MiMo with Gemini Flash fallback.
+    Returns None when both fail — caller drops to keyword_fallback."""
+    from mimo_fallback import is_in_cooldown, clear_cooldown_if_set
+
+    if not is_in_cooldown("echo"):
+        results = _classify_with_mimo(headlines)
+        if results is not None:
+            clear_cooldown_if_set("echo")
+            return results
+    else:
+        log.info("[ECHO] MiMo in cooldown — going straight to Gemini Flash")
+
+    # Tier 2: Gemini Flash
+    results = _classify_with_gemini(headlines)
+    if results is not None:
+        return results
+
+    # Both AI tiers failed — caller falls through to keyword_fallback (tier 3)
+    return None
 
 
 def _classify_keyword_fallback(headline: Dict) -> Dict:

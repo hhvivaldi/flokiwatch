@@ -1056,11 +1056,38 @@ def _build_correlation_context(correlations: Dict[str, Any]) -> str:
 # MiMo AI Analysis (PRIMARY path)
 # ---------------------------------------------------------------------------
 
+def _build_luna_user_prompt(macro: Dict[str, Any], echo_alerts: List[Dict],
+                            calendar_events: List[Dict]) -> str:
+    """Shared user prompt builder for both MiMo and Gemini paths."""
+    data_context = _build_data_context(macro, echo_alerts, calendar_events)
+    return (
+        "Analyze the current macro environment for gold trading. "
+        "Return your analysis as the JSON structure specified in your instructions.\n\n"
+        + data_context
+    )
+
+
+def _analyze_with_gemini(macro: Dict[str, Any], echo_alerts: List[Dict],
+                         calendar_events: List[Dict]) -> Optional[Dict[str, Any]]:
+    """FLO-294: Gemini Flash secondary path. Same prompt + JSON contract as MiMo."""
+    from mimo_fallback import call_gemini_json
+    user_prompt = _build_luna_user_prompt(macro, echo_alerts, calendar_events)
+    parsed = call_gemini_json(
+        system=LUNA_SYSTEM_PROMPT,
+        user_text=user_prompt,
+        agent="luna",
+        max_output_tokens=1024,
+    )
+    if parsed is None or not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
 def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
                        calendar_events: List[Dict]) -> Optional[Dict[str, Any]]:
-    """
-    Call MiMo-V2-Flash with LUNA_SYSTEM_PROMPT + macro data context.
-    Returns parsed JSON dict on success, None on failure.
+    """Primary AI path: MiMo via OpenAI SDK.
+    Returns parsed dict on success, None on failure.
+    FLO-294: detects 451 errors and sets MiMo cooldown.
     """
     if OpenAI is None:
         log.warning("LUNA: openai package not installed — cannot call MiMo")
@@ -1167,6 +1194,11 @@ def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
         return None
     except Exception as e:
         elapsed_ms = int((time.time() - t0) * 1000)
+        # FLO-294: La Liga IP block (HTTP 451) → set cooldown so subsequent
+        # cycles skip MiMo and use Gemini Flash directly.
+        from mimo_fallback import is_451_error, set_cooldown
+        if is_451_error(e):
+            set_cooldown("luna", reason="MiMo returned 451 (La Liga IP block)")
         log.error(f"LUNA: MiMo API call failed ({elapsed_ms}ms) — {e}")
         return None
 
@@ -1595,19 +1627,37 @@ def run_luna_analysis() -> LunaAnalysisResult:
         echo_alerts = _get_echo_alerts()
         calendar_events = _get_calendar_events()
 
-        # 2. PRIMARY — MiMo AI analysis
-        mimo_response = _analyze_with_mimo(macro, echo_alerts, calendar_events)
+        # FLO-294: 3-tier AI path — MiMo (primary) → Gemini Flash (secondary) → local (last resort)
+        from mimo_fallback import is_in_cooldown, clear_cooldown_if_set
+        ai_response = None
+        ai_source = None
+        if not is_in_cooldown("luna"):
+            ai_response = _analyze_with_mimo(macro, echo_alerts, calendar_events)
+            if ai_response is not None:
+                clear_cooldown_if_set("luna")
+                ai_source = "mimo"
+        else:
+            log.info("LUNA: MiMo in cooldown — going straight to Gemini Flash")
+        if ai_response is None:
+            ai_response = _analyze_with_gemini(macro, echo_alerts, calendar_events)
+            if ai_response is not None:
+                ai_source = "gemini_fallback"
 
-        if mimo_response is not None:
-            result = _parse_mimo_response(mimo_response, macro)
+        if ai_response is not None:
+            result = _parse_mimo_response(ai_response, macro)
+            # Tag source so dashboard can show which tier produced this analysis
+            try:
+                result.source = ai_source or "ai"
+            except Exception:
+                pass
             log.info(
-                f"LUNA: MiMo analysis — {result.environment} | "
+                f"LUNA: {ai_source} analysis — {result.environment} | "
                 f"risk {result.risk_level}/10 | bias {result.directional_bias} "
                 f"({result.bias_confidence}/10) | patterns: {result.patterns_detected or 'none'}"
             )
         else:
-            # 3. FALLBACK — deterministic local analysis
-            log.warning("LUNA: AI unavailable — using local fallback")
+            # 3. LAST RESORT — deterministic local analysis (both AI tiers down)
+            log.warning("LUNA: MiMo + Gemini both unavailable — using local fallback")
             result = _run_local_analysis(macro, echo_alerts, calendar_events)
             log.info(
                 f"LUNA: local fallback — {result.environment} | "
