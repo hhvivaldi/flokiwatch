@@ -181,6 +181,23 @@ def format_fast_xml(
     for p in pos_list:
         if not isinstance(p, dict):
             continue
+        # FLO-280: Compute duration so Floki knows how long the trade has been open
+        _open_time = p.get("open_time") or ""
+        _duration_str = "?"
+        try:
+            if _open_time:
+                from datetime import datetime as _dt, timezone as _tz
+                _od = _dt.fromisoformat(str(_open_time).replace("Z", "+00:00"))
+                if _od.tzinfo is None:
+                    _od = _od.replace(tzinfo=_tz.utc)
+                _now = _dt.now(_tz.utc)
+                _mins = int((_now - _od).total_seconds() / 60)
+                if _mins < 60:
+                    _duration_str = f"{_mins}m"
+                else:
+                    _duration_str = f"{_mins // 60}h{_mins % 60}m"
+        except Exception:
+            pass
         lines.append(
             "  <position "
             f"ticket=\"{_xml_attr(p.get('ticket'))}\" "
@@ -192,7 +209,9 @@ def format_fast_xml(
             f"current_sl=\"{_xml_attr(p.get('sl'))}\" "
             f"tp=\"{_xml_attr(p.get('tp'))}\" "
             f"profit_pips=\"{_xml_attr(p.get('profit_pips'))}\" "
-            f"profit=\"{_xml_attr(p.get('profit'))}\"/>")
+            f"profit=\"{_xml_attr(p.get('profit'))}\" "
+            f"open_time=\"{_xml_attr(_open_time)}\" "
+            f"duration=\"{_duration_str}\"/>")
     lines.append("</positions>")
     lines.append("")
 
@@ -200,8 +219,23 @@ def format_fast_xml(
     try:
         if pos_list and isinstance(pos_list[0], dict):
             p0 = pos_list[0]
+            # FLO-280: also include duration in active_trade_context
+            _p0_open_time = p0.get("open_time") or ""
+            _p0_duration_str = "?"
+            try:
+                if _p0_open_time:
+                    from datetime import datetime as _dt2, timezone as _tz2
+                    _od2 = _dt2.fromisoformat(str(_p0_open_time).replace("Z", "+00:00"))
+                    if _od2.tzinfo is None:
+                        _od2 = _od2.replace(tzinfo=_tz2.utc)
+                    _mins2 = int((_dt2.now(_tz2.utc) - _od2).total_seconds() / 60)
+                    _p0_duration_str = f"{_mins2}m" if _mins2 < 60 else f"{_mins2 // 60}h{_mins2 % 60}m"
+            except Exception:
+                pass
             lines.append(
-                f"<active_trade_context phase=\"{_xml_attr(p0.get('phase'))}\" current_sl=\"{_xml_attr(p0.get('sl'))}\"/>"
+                f"<active_trade_context phase=\"{_xml_attr(p0.get('phase'))}\" "
+                f"current_sl=\"{_xml_attr(p0.get('sl'))}\" "
+                f"duration=\"{_p0_duration_str}\"/>"
             )
             lines.append("")
     except Exception:
