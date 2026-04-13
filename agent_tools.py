@@ -2,6 +2,7 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
+from tz_utils import utc_iso  # FLO-286
 from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
@@ -880,7 +881,7 @@ class AgentTools:
 
             store = self._load_watch_conditions()
             store[str(t)] = {
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": utc_iso(),  # FLO-286
                 "conditions": cleaned,
             }
 
@@ -986,7 +987,7 @@ class AgentTools:
             except Exception:
                 preserved_fired = []
 
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = utc_iso()  # FLO-286
             payload = {
                 "updated_at": now_iso,
                 "sleep_started_at": now_iso,

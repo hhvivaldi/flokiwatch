@@ -343,7 +343,7 @@ class TradingBot:
             if df is None or len(df) < 50:
                 return {"success": False, "reason": "missing_df"}
 
-            snapshot_time_iso = datetime.utcnow().isoformat()
+            snapshot_time_iso = utc_iso()  # FLO-286: UTC ISO with Z suffix
             self._call_agent_proactive_snapshot(
                 trigger_type=str(trigger_type or ""),
                 snapshot_time_iso=snapshot_time_iso,
@@ -2841,7 +2841,7 @@ class TradingBot:
                 close_price=getattr(order_result, "price", None),
                 profit=None,
                 close_reason=f"{reason_str} (pending)",
-                close_time=datetime.utcnow().isoformat(),
+                close_time=utc_iso(),  # FLO-286
                 breakeven_activated=_be_state,
             )
         except Exception:
@@ -2856,7 +2856,7 @@ class TradingBot:
                 "close_price": getattr(order_result, "price", None),
                 "profit": None,
                 "reason": reason_str,
-                "close_time": datetime.utcnow().isoformat(),
+                "close_time": utc_iso(),  # FLO-286
                 "close_type": "agent",
                 "estimated": False,
                 "pending": True,
@@ -3329,7 +3329,7 @@ class TradingBot:
                 action = "HOLD"
 
             fast_state = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_iso(),  # FLO-286
                 "trigger_type": trigger_type,
                 "trigger_data": trigger_data,
                 "action": action,
@@ -4923,7 +4923,7 @@ class TradingBot:
                 proactive_payload = {
                     "trigger": trigger_type,
                     "h1_close_time": snapshot_time_iso,
-                    "timestamp": agent_result.timestamp.isoformat() if agent_result.timestamp else datetime.utcnow().isoformat(),
+                    "timestamp": utc_iso(agent_result.timestamp) if agent_result.timestamp else utc_iso(),  # FLO-286
                     "model": agent_result.model,
                     "prompt_version": agent_result.prompt_version,
                     "prompt_hash": agent_result.prompt_hash,
@@ -5374,7 +5374,7 @@ class TradingBot:
                                 _ppips = (current_price - _entry) / PIP if _dir == "BUY" else (_entry - current_price) / PIP
                                 record_trade_snapshot({
                                     "ticket": int(_pos.ticket),
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": utc_iso(),  # FLO-286: UTC ISO with Z
                                     "price": round(current_price, 2),
                                     "profit_pips": round(_ppips, 1),
                                     "rsi": _rsi,
@@ -5593,7 +5593,7 @@ class TradingBot:
             preserved_proactive = prev_last_analysis.get("proactive_analysis")
 
             self.last_analysis = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_iso(),  # FLO-286: was datetime.now() — LOCAL leaked into analyses table
                 "decision": "HOLD" if hold_forced else brain_result.decision,
                 "final_score": brain_result.final_score,
                 "confidence": brain_result.confidence,
@@ -5757,7 +5757,7 @@ class TradingBot:
             preserved_agent = prev_last_analysis.get("agent_decision")
 
             self.last_analysis = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_iso(),  # FLO-286: was datetime.now() — LOCAL leaked into analyses table
                 "decision": result.decision,
                 "final_score": result.final_score,
                 "confidence": result.confidence,
@@ -6640,7 +6640,7 @@ class TradingBot:
         try:
             req = json.dumps({
                 "version": 1,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_iso(),  # FLO-286
                 "width": getattr(config, 'CHART_SCREENSHOT_WIDTH', 1280),
                 "height": getattr(config, 'CHART_SCREENSHOT_HEIGHT', 720),
             })
@@ -6742,7 +6742,7 @@ class TradingBot:
                 })
 
             payload = {
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": utc_iso(),  # FLO-286: UTC ISO with Z (was LOCAL strftime)
                 "current_price": round(cp, 2),
                 "zones_count": len(zones_out),
                 "zones": zones_out,
@@ -6798,7 +6798,7 @@ class TradingBot:
                     })
 
                 payload = {
-                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "updated_at": utc_iso(),  # FLO-286: UTC ISO with Z (was LOCAL strftime)
                     "current_price": round(cp, 2),
                     "timeframe": tf,
                     "zones_count": len(zones_out),

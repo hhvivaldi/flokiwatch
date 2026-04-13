@@ -1394,7 +1394,7 @@ def history_data():
             # Equity curve and Max Drawdown calculation
             current_equity += profit
             equity_curve.append({
-                "time": trade.get("close_time"),
+                "time": _safe_iso_timestamp(trade.get("close_time")),  # FLO-286: UTC + Z
                 "equity": current_equity
             })
             
@@ -1423,10 +1423,9 @@ def history_data():
             duration_minutes = 0
             if open_time_str and close_time_str:
                 try:
-                    fmt = "%Y-%m-%dT%H:%M:%S"
-                    # Handle possible fractional seconds in open_time
-                    ot = datetime.fromisoformat(open_time_str)
-                    ct = datetime.fromisoformat(close_time_str)
+                    # FLO-286: strip Z so result is naive (consistent with old/new data mix)
+                    ot = datetime.fromisoformat(open_time_str.rstrip("Z"))
+                    ct = datetime.fromisoformat(close_time_str.rstrip("Z"))
                     duration_minutes = max(0, int((ct - ot).total_seconds() / 60))
                 except Exception:
                     pass
@@ -1440,7 +1439,12 @@ def history_data():
                 trade["breakeven_activated"] = True
             else:
                 trade["breakeven_activated"] = False if be_activated == 0 else None
-            
+
+            # FLO-286: normalize all output timestamps to UTC ISO with Z suffix
+            for _tk in ("open_time", "close_time"):
+                if _tk in trade and trade[_tk] is not None:
+                    trade[_tk] = _safe_iso_timestamp(trade[_tk])
+
             trades.append(trade)
             
             # Monthly grouping
@@ -1619,7 +1623,7 @@ def history_data():
         for t in all_trades_chrono:
             running_balance += float(t.get("profit") or 0.0) + per_trade_adj
             anchored_equity_curve.append({
-                "time": t.get("close_time"),
+                "time": _safe_iso_timestamp(t.get("close_time")),  # FLO-286: UTC + Z
                 "equity": round(running_balance, 2)
             })
 
@@ -1686,8 +1690,12 @@ def live_readiness():
         cutoff_14d = now - timedelta(days=14)
 
         def _parse_ct(ts):
+            # FLO-286: After Phase 1, close_time may have "Z" suffix. Always parse
+            # to a NAIVE datetime so comparisons with `now = datetime.utcnow()` work
+            # without "can't compare offset-naive and offset-aware" errors.
             try:
-                return datetime.fromisoformat((ts or "").split(".")[0])
+                s = (ts or "").rstrip("Z").split(".")[0]
+                return datetime.fromisoformat(s)
             except Exception:
                 return None
 
@@ -1744,7 +1752,7 @@ def live_readiness():
                 p0_ts = row[0] if row else None
         if p0_ts:
             try:
-                p0_dt = datetime.fromisoformat(str(p0_ts).split(".")[0])
+                p0_dt = datetime.fromisoformat(str(p0_ts).rstrip("Z").split(".")[0])  # FLO-286: strip Z
                 days_without_p0 = max(0, (now - p0_dt).days)
             except Exception:
                 pass
@@ -1854,7 +1862,7 @@ def journal_data():
 
         def _session(ts):
             try:
-                d = datetime.fromisoformat((ts or "").split(".")[0])
+                d = datetime.fromisoformat((ts or "").rstrip("Z").split(".")[0])  # FLO-286
                 h = (d.hour - _offset) % 24
                 if 0 <= h < 7: return "Asian"
                 if 7 <= h < 13: return "London"
@@ -1967,8 +1975,8 @@ def journal_data():
             # Duration
             dur = None
             try:
-                od = datetime.fromisoformat((t.get("open_time") or "").split(".")[0])
-                cd = datetime.fromisoformat((t.get("close_time") or "").split(".")[0])
+                od = datetime.fromisoformat((t.get("open_time") or "").rstrip("Z").split(".")[0])  # FLO-286
+                cd = datetime.fromisoformat((t.get("close_time") or "").rstrip("Z").split(".")[0])  # FLO-286
                 dur = round((cd - od).total_seconds() / 60)
             except Exception:
                 pass

@@ -218,7 +218,7 @@ def write_state(bot_instance: Any) -> None:
             expected_interval = 60
 
         state = {
-            "timestamp": now.isoformat(),
+            "timestamp": utc_iso(now),  # FLO-286: Z suffix, was +00:00
             "_expected_update_interval_seconds": expected_interval,
             "bot": {
                 "status": bot_status,
