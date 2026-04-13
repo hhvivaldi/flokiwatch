@@ -19,6 +19,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 from datetime import datetime, timedelta
+from tz_utils import trading_day_utc, utc_iso  # FLO-286
 import json
 import os
 import re
@@ -185,9 +186,9 @@ def _save_feed_health(health: dict) -> None:
 def record_feed_success(feed_name: str, headlines_count: int) -> None:
     """Record a successful feed fetch."""
     health = _load_feed_health()
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = trading_day_utc()
     entry = health.get(feed_name, {})
-    entry["last_success"] = datetime.utcnow().isoformat()
+    entry["last_success"] = utc_iso()
     entry["consecutive_failures"] = 0
     # Daily headline counter
     if entry.get("_count_date") != today:
@@ -202,7 +203,7 @@ def record_feed_failure(feed_name: str, error_type: str) -> None:
     """Record a feed fetch failure. Logs warning at 3+ consecutive failures."""
     health = _load_feed_health()
     entry = health.get(feed_name, {})
-    entry["last_failure"] = datetime.utcnow().isoformat()
+    entry["last_failure"] = utc_iso()
     entry["last_error"] = error_type
     consec = entry.get("consecutive_failures", 0) + 1
     entry["consecutive_failures"] = consec
@@ -1318,7 +1319,7 @@ def get_gld_weekly_flows():
     try:
         if os.path.exists(GLD_FLOWS_FILE):
             cached = json.loads(open(GLD_FLOWS_FILE, "r", encoding="utf-8").read())
-            if cached.get("last_updated") == datetime.utcnow().strftime("%Y-%m-%d"):
+            if cached.get("last_updated") == trading_day_utc():
                 return cached
     except Exception:
         pass
@@ -1362,7 +1363,7 @@ def get_gld_weekly_flows():
             "last5_avg_vol": int(last5_avg_vol),
             "prev5_avg_vol": int(prev5_avg_vol),
             "last5_avg_price": round(last5_avg_price, 2),
-            "last_updated": datetime.utcnow().strftime("%Y-%m-%d"),
+            "last_updated": trading_day_utc(),
         }
 
         # Save to file

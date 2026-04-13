@@ -246,7 +246,9 @@ class HistoryApp {
 
         var dataPoints = [{x: 'Start', y: initialBalance}];
         curve.forEach(function(point) {
-            var date = new Date(point.time);
+            var pt = String(point.time || '');
+            if (pt && !/[Zz]|[+\-]\d{2}:?\d{2}$/.test(pt)) pt = pt + 'Z';
+            var date = new Date(pt);
             var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()];
             var label = mo + ' ' + date.getDate() + ' \u00B7 ' + date.getHours() + ':' + date.getMinutes().toString().padStart(2, '0');
             dataPoints.push({x: label, y: point.equity});
@@ -513,10 +515,12 @@ class HistoryApp {
             var pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
             var pipsStr = t.pips ? (t.pips >= 0 ? '+' : '') + t.pips.toFixed(1) + 'p' : '';
 
-            // Compact date: "Apr 2 · 4:59 PM"
+            // Compact date: "Apr 2 · 4:59 PM" — defensive: ensure Z suffix so browser parses as UTC, not local
             var dateStr = '--';
             if (t.open_time) {
-                var d = new Date(t.open_time);
+                var openStr = String(t.open_time);
+                if (!/[Zz]|[+\-]\d{2}:?\d{2}$/.test(openStr)) openStr = openStr + 'Z';
+                var d = new Date(openStr);
                 var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
                 var hr = d.getHours();
                 var ampm = hr >= 12 ? 'PM' : 'AM';
@@ -675,6 +679,7 @@ class HistoryApp {
 
     formatDate(isoString) {
         if (!isoString) return '--';
+        if (window.displayTime) return window.displayTime(isoString);
         var d = new Date(isoString);
         return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
     }
@@ -750,7 +755,7 @@ class HistoryApp {
                 return;
             }
 
-            var createdAt = result.created_at ? new Date(result.created_at).toLocaleString() : '--';
+            var createdAt = result.created_at ? (window.displayTime ? window.displayTime(result.created_at) : new Date(result.created_at).toLocaleString()) : '--';
             var cached = result.cached === true;
             var model = result.model || '';
             var report = result.report || {};

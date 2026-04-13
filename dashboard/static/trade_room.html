@@ -7,6 +7,8 @@
     <link rel="icon" type="image/png" href="/image/flokiwatch.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FLO-286: tz.js exposes window.displayTime / displayHHMM / displayAge etc. Loaded early so inline code can use it. -->
+    <script src="/static/tz.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
@@ -2925,10 +2927,8 @@
             alertPill.style.color = (data.critical_today > 0) ? '#ef4444' : '#8a8a9a';
           }
           if (lastScan && data.last_scan) {
-            try {
-              var d = new Date(data.last_scan);
-              lastScan.textContent = d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
-            } catch(e) { lastScan.textContent = '—'; }
+            try { lastScan.textContent = window.displayHHMM ? window.displayHHMM(data.last_scan) : '—'; }
+            catch(e) { lastScan.textContent = '—'; }
           }
           if (scanCount) scanCount.textContent = String(data.alerts_today || 0);
           if (critCount) critCount.textContent = String(data.critical_today || 0);
@@ -3033,10 +3033,7 @@
 
           if (lastBriefEl && b.timestamp) {
             try {
-              var d = new Date(b.timestamp);
-              var hh = String(d.getHours()).padStart(2, '0');
-              var mm = String(d.getMinutes()).padStart(2, '0');
-              lastBriefEl.textContent = hh + ':' + mm;
+              lastBriefEl.textContent = window.displayHHMM ? window.displayHHMM(b.timestamp) : '—';
               if (data.stale) lastBriefEl.textContent += ' (stale)';
             } catch(e) { lastBriefEl.textContent = '—'; }
           }
@@ -3236,7 +3233,7 @@
               document.getElementById('luna-deep-sources').textContent = srcArr.length ? 'Sources: ' + srcArr.join(', ') : '';
               var drTs = dr.timestamp || '';
               if (drTs) {
-                try { var drAge = Math.round((Date.now() - new Date(drTs).getTime()) / 60000); document.getElementById('luna-deep-time').textContent = drAge + 'm ago'; } catch(e) {}
+                try { document.getElementById('luna-deep-time').textContent = window.displayAge ? window.displayAge(drTs) : '—'; } catch(e) {}
               }
             } else if (drPanel) {
               drPanel.classList.add('hidden');
@@ -3269,18 +3266,10 @@
           }
         }
 
+        // FLO-286: delegate to tz.js helper (UTC→local, defensive Z-suffix handling)
         function fmtTime(ts) {
-          try {
-            if (!ts) return '—';
-            var d = new Date(ts);
-            if (isNaN(d.getTime())) return ts.toString().slice(11, 19) || ts;
-            var hh = String(d.getHours()).padStart(2, '0');
-            var mm = String(d.getMinutes()).padStart(2, '0');
-            var ss = String(d.getSeconds()).padStart(2, '0');
-            return hh + ':' + mm + ':' + ss;
-          } catch (e) {
-            return '—';
-          }
+          if (window.displayTimeShort) return window.displayTimeShort(ts);
+          return '—';
         }
 
         function badgeClass(t) {
@@ -3935,7 +3924,9 @@
               var pubTime = '';
               if (meta.timestamp) {
                 try {
-                  var pd = new Date(meta.timestamp);
+                  var tsStr = String(meta.timestamp);
+                  if (!/[Zz]|[+\-]\d{2}:?\d{2}$/.test(tsStr)) tsStr = tsStr + 'Z';
+                  var pd = new Date(tsStr);
                   var nowMs = Date.now();
                   var ageH = ((nowMs - pd.getTime()) / 3600000).toFixed(1);
                   var hh = String(pd.getUTCHours()).padStart(2,'0');
@@ -4766,8 +4757,7 @@
             try {
               var pa2 = (state && state.last_analysis) ? state.last_analysis.proactive_analysis : null;
               if (pa2 && pa2.timestamp) {
-                var ago = Math.floor((Date.now() - new Date(pa2.timestamp).getTime()) / 60000);
-                thesisSummary += '\n\nLast check: ' + (ago <= 0 ? 'just now' : ago + 'm ago') + ' · ' + (pa2.trigger || 'SCHEDULED');
+                thesisSummary += '\n\nLast check: ' + (window.displayAge ? window.displayAge(pa2.timestamp) : '—') + ' · ' + (pa2.trigger || 'SCHEDULED');
               }
             } catch(e) {}
             setText('floki-summary', thesisSummary);

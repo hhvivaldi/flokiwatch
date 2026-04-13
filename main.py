@@ -23,6 +23,7 @@ import json
 import subprocess
 import threading
 from datetime import datetime, timedelta, timezone
+from tz_utils import utc_now, utc_iso, trading_day_broker_aligned, trading_day_utc
 from typing import Optional, Any
 import traceback
 
@@ -149,7 +150,7 @@ class TradingBot:
             'losses': 0,
             'breakevens': 0,
             'pnl': 0.0,
-            'date': datetime.now().date()
+            'date': trading_day_broker_aligned()  # FLO-286: broker-midnight aligned (string YYYY-MM-DD)
         }
 
         self._breakeven_threshold = float(getattr(config, "BREAKEVEN_PROFIT_THRESHOLD", 0.50))
@@ -394,13 +395,13 @@ class TradingBot:
                 return
             
             mt5_balance = account_info['balance']
-            today = datetime.now().date()
-            
+            today = trading_day_broker_aligned()  # FLO-286: broker-midnight aligned
+
             saved_pnl = float(self.daily_stats.get('pnl', 0.0) or 0.0)
             saved_date = self.daily_stats.get('date')
-            
+
             # If saved state is from another day, clear (daily reset will handle)
-            if saved_date and saved_date != today:
+            if saved_date and str(saved_date) != today:
                 log.info(f"Reconciliation: saved state is from {saved_date}, today is {today} — daily reset will fix")
                 return
             
@@ -7250,9 +7251,9 @@ class TradingBot:
     
     def _check_daily_reset(self):
         """Check and reset daily statistics"""
-        today = datetime.now().date()
-        
-        if today != self.daily_stats['date']:
+        today = trading_day_broker_aligned()  # FLO-286: broker-midnight aligned
+
+        if today != str(self.daily_stats['date']):
             # Rotate log file to new day BEFORE anything else logs
             log.rotate_if_needed()
 

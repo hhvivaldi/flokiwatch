@@ -665,7 +665,7 @@ function renderTrades(trades, daily) {
   for (const t of sorted.slice(0, 30)) {
     const isPending = t.pending === true || t.profit === null || t.profit === undefined;
     const pnl = isPending ? 0 : Number(t.profit);
-    const time = (t.close_time || "").split("T")[1]?.slice(0, 5) || "—";
+    const time = window.displayHHMM ? window.displayHHMM(t.close_time) : ((t.close_time || "").split("T")[1]?.slice(0, 5) || "—");
 
     // Use close_type if available (from monitor), otherwise heuristic fallback for old data
     let displayReason;
@@ -733,7 +733,7 @@ function renderVolBanner(volStatus, volDesc) {
 
 function render(state) {
   const ts = state.timestamp || "—";
-  el("last-update").textContent = ts.replace("T", " ").slice(0, 19);
+  el("last-update").textContent = window.displayTime ? window.displayTime(ts) : ts.replace("T", " ").slice(0, 19);
 
   const metaAge = state._meta?.file_age_seconds;
   const operational = (state.bot?.status || "OFFLINE") === "OPERATIONAL";
@@ -2094,11 +2094,7 @@ function renderAgentMemory(agentMemory) {
   const timestampEl = el("agent-memory-timestamp");
   if (timestampEl) {
     try {
-      const rejectTime = new Date(agentMemory.timestamp);
-      const now = new Date();
-      const diffMs = now - rejectTime;
-      const diffMin = Math.floor(diffMs / 60000);
-      timestampEl.textContent = diffMin < 60 ? `${diffMin} min ago` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m ago`;
+      timestampEl.textContent = window.displayAge ? window.displayAge(agentMemory.timestamp) : "—";
     } catch (e) {
       timestampEl.textContent = "—";
     }
@@ -2207,7 +2203,7 @@ function renderRecentDecisions(decisions) {
 
   container.innerHTML = "";
   for (const d of decisions) {
-    const time = (d.timestamp || "").split("T")[1]?.slice(0, 5) || "—";
+    const time = window.displayHHMM ? window.displayHHMM(d.timestamp) : ((d.timestamp || "").split("T")[1]?.slice(0, 5) || "—");
     const decision = d.decision || "HOLD";
     const score = d.score != null ? `${fmtNum(d.score, 0)}%` : "—";
     const cls = decisionColor(decision);

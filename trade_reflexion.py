@@ -9,6 +9,7 @@ import os
 import time
 import threading
 from datetime import datetime, timezone
+from tz_utils import trading_day_utc, utc_iso, utc_now  # FLO-286
 from typing import Any, Dict, Optional
 
 from logger import log
@@ -801,7 +802,7 @@ def generate_post_trade_report(action: Dict) -> Optional[Dict]:
 
         report = {
             "ticket": int(ticket),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_iso(),
             "direction": action.get("direction") or trade.get("direction"),
             "entry_price": trade.get("open_price"),
             "close_price": action.get("close_price") or trade.get("close_price"),
@@ -897,7 +898,7 @@ def run_eod_counterfactuals() -> int:
         db_path = os.path.abspath(getattr(_cfg, "HISTORY_DB_PATH", "data/history.db"))
         conn = sqlite3.connect(db_path, timeout=5)
         conn.row_factory = sqlite3.Row
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = trading_day_utc()  # FLO-286: canonical UTC trading day
         rows = conn.execute(
             "SELECT ticket, direction, open_price, sl, tp, close_price, close_time "
             "FROM trades WHERE close_time LIKE ? AND close_price IS NOT NULL",
@@ -1009,7 +1010,7 @@ def run_eod_counterfactuals() -> int:
                     "tp_reached_after_sl_pnl": tp_reached_pnl if tp_reached_after_sl else None,
                     "hours_of_data": round(hours_of_data, 1),
                     "bars_analyzed": len(bars),
-                    "analyzed_at": datetime.utcnow().isoformat(),
+                    "analyzed_at": utc_iso(),
                 }
 
                 # Load existing report and update

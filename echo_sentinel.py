@@ -17,6 +17,7 @@ import hashlib
 import os
 import time
 from datetime import datetime, timedelta
+from tz_utils import trading_day_utc  # FLO-286
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field, asdict
@@ -132,11 +133,11 @@ def _load_daily_cost() -> Dict:
     try:
         if COST_FILE.exists():
             data = json.loads(COST_FILE.read_text(encoding="utf-8"))
-            if data.get("date") == datetime.utcnow().strftime("%Y-%m-%d"):
+            if data.get("date") == trading_day_utc():
                 return data
     except Exception:
         pass
-    return {"date": datetime.utcnow().strftime("%Y-%m-%d"), "total_usd": 0.0, "calls": 0}
+    return {"date": trading_day_utc(), "total_usd": 0.0, "calls": 0}
 
 
 def _save_daily_cost(cost_data: Dict) -> None:

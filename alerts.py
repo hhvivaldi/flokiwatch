@@ -6,6 +6,7 @@ Sends notifications to Discord via Webhook
 import os
 import requests
 from datetime import datetime, timedelta
+from tz_utils import utc_now  # FLO-286
 from typing import Dict, List, Optional
 
 import config
@@ -73,7 +74,7 @@ def _extract_scenario(brain_summary: str) -> Optional[str]:
 
 
 def _utc_timestamp() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    return utc_now().strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _rate_limited(key: str, cooldown_seconds: int = None) -> bool:

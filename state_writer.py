@@ -1,3 +1,11 @@
+"""
+STATE WRITER - JSON snapshot for dashboard.
+
+FLO-286 / CLAUDE.md Rule 22: every timestamp written here MUST be UTC ISO
+with explicit "Z" suffix. Use tz_utils.utc_iso(); never call datetime.now().
+The frontend (dashboard/static/tz.js) converts UTC → user-local for display.
+"""
+
 import json
 import os
 from datetime import datetime

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import config
 from logger import log
+from tz_utils import trading_day_utc  # FLO-286 canonical "today" boundary
 
 
 POPULATION_B_MIN_TICKET = 8
@@ -162,7 +163,7 @@ def _query_population_b_closed_trades(conn: sqlite3.Connection) -> List[sqlite3.
 
 def _min_max_open_dates(trades: List[sqlite3.Row]) -> Tuple[str, str]:
     if not trades:
-        today = datetime.utcnow().date().isoformat()
+        today = trading_day_utc()
         return today, today
 
     opens: List[str] = []
@@ -175,7 +176,7 @@ def _min_max_open_dates(trades: List[sqlite3.Row]) -> Tuple[str, str]:
             continue
 
     if not opens:
-        today = datetime.utcnow().date().isoformat()
+        today = trading_day_utc()
         return today, today
 
     # ISO 8601 strings sort lexicographically
@@ -186,7 +187,7 @@ def _min_max_open_dates(trades: List[sqlite3.Row]) -> Tuple[str, str]:
         try:
             return s.split("T")[0]
         except Exception:
-            return datetime.utcnow().date().isoformat()
+            return trading_day_utc()
 
     return _to_date(first), _to_date(last)
 
@@ -318,7 +319,7 @@ def check_intraday_drawdown(db_path: Optional[str] = None) -> Optional[Dict[str,
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
 
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        today_str = trading_day_utc()  # FLO-286
 
         # All trades closed today with known P&L
         rows = conn.execute(
@@ -442,7 +443,7 @@ def _write_sage_alert_to_memory(alert: Dict[str, Any]) -> None:
             except Exception:
                 pass
 
-        today = datetime.utcnow().date().isoformat()
+        today = trading_day_utc()
         if str(payload.get("session_date") or "") != today:
             payload["session_date"] = today
             payload["notes"] = []
@@ -1135,7 +1136,7 @@ def run_sage_auditor() -> SageRunResult:
         insights = (base_insights + llm_insights)[:25]
 
         report = {
-            "report_date": datetime.utcnow().date().isoformat(),
+            "report_date": trading_day_utc(),
             "total_trades_in_db": int(total_trades),
             "trade_count_analyzed": int(len(trades)),
             "period_start": period_start,

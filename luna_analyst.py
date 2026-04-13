@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from logger import log
+from tz_utils import trading_day_utc  # FLO-286
 
 try:
     from openai import OpenAI
@@ -231,11 +232,11 @@ def _load_daily_cost() -> Dict:
     try:
         if COST_FILE.exists():
             data = json.loads(COST_FILE.read_text(encoding="utf-8"))
-            if data.get("date") == datetime.utcnow().strftime("%Y-%m-%d"):
+            if data.get("date") == trading_day_utc():
                 return data
     except Exception:
         pass
-    return {"date": datetime.utcnow().strftime("%Y-%m-%d"), "total_usd": 0.0, "calls": 0}
+    return {"date": trading_day_utc(), "total_usd": 0.0, "calls": 0}
 
 
 def _save_daily_cost(cost_data: Dict) -> None:
@@ -836,7 +837,7 @@ def _build_data_snapshot(macro: Dict[str, Any]) -> Dict[str, Any]:
 def _save_macro_snapshot(macro: Dict[str, Any]) -> None:
     """Save today's macro snapshot to macro_history.json (one entry per day)."""
     try:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = trading_day_utc()
         history = _load_macro_history()
 
         # Extract scalar values for history

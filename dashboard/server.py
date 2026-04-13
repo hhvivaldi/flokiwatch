@@ -1,3 +1,13 @@
+"""
+DASHBOARD API SERVER
+
+FLO-286 / CLAUDE.md Rule 22: All timestamps in API responses MUST be UTC ISO
+with explicit "Z" suffix. Use _safe_iso_timestamp() (which delegates to
+tz_utils.to_utc_iso) for any timestamp emitted to the frontend. The frontend
+(dashboard/static/tz.js) converts UTC → user-local for display via
+window.displayTime() and friends. Never serve broker time, never serve naive ISO.
+"""
+
 import json
 import os
 import sqlite3
