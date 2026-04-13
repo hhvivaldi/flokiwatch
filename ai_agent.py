@@ -819,6 +819,18 @@ class AIAgent:
                 },
             },
             {
+                "name": "get_position_history",
+                "description": "Review how your open position has been performing — profit range, duration, trend direction, indicators now + at peak profit. Call when deciding whether to hold, adjust SL, or close. Shows whether the trade is going somewhere or stuck in a range.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket": {"type": "integer", "description": "The ticket number of the open position to review"},
+                    },
+                    "required": ["ticket"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "write_session_memory",
                 "description": "Write session memory (thesis + note)",
                 "input_schema": {

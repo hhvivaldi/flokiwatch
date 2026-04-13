@@ -2724,6 +2724,146 @@ class AgentTools:
             return {"success": False, "reason": f"journal_error: {e}"}
 
     # -----------------------------------------------------------------
+    # FLO-281: Position history — indicator trajectory for an open trade
+    # -----------------------------------------------------------------
+
+    def get_position_history(self, ticket: int) -> Dict[str, Any]:
+        """Return compact XML summary of how an open position has performed.
+
+        Queries trade_snapshots for profit range, duration, trend direction,
+        current indicators, and indicators at MFE peak. Floki calls this
+        when he wants to review how his trade has been trending.
+        """
+        start = time.time()
+        try:
+            try:
+                t = int(ticket)
+            except Exception:
+                self._log_tool("get_position_history", start, f"invalid ticket={ticket}")
+                return {"success": False, "reason": "invalid ticket"}
+            if t <= 0:
+                self._log_tool("get_position_history", start, f"ticket={t} invalid")
+                return {"success": False, "reason": "invalid ticket"}
+
+            import sqlite3 as _sql
+            import config as _cfg
+            from datetime import datetime as _dt
+
+            db_path = os.path.abspath(getattr(_cfg, "HISTORY_DB_PATH", "data/history.db"))
+            conn = _sql.connect(db_path, timeout=5)
+            conn.row_factory = _sql.Row
+
+            # Aggregate stats
+            agg = conn.execute(
+                "SELECT COUNT(*) as n, MIN(profit_pips) as min_p, MAX(profit_pips) as max_p, "
+                "MIN(timestamp) as first_ts, MAX(timestamp) as last_ts "
+                "FROM trade_snapshots WHERE ticket = ? AND profit_pips IS NOT NULL",
+                (t,),
+            ).fetchone()
+            n = agg["n"] if agg else 0
+            if not n:
+                conn.close()
+                self._log_tool("get_position_history", start, f"ticket={t} no snapshots")
+                return {"success": False, "reason": f"No snapshot history for ticket {t} — position may have just opened"}
+
+            min_p = float(agg["min_p"]) if agg["min_p"] is not None else 0.0
+            max_p = float(agg["max_p"]) if agg["max_p"] is not None else 0.0
+            first_ts = agg["first_ts"]
+            last_ts = agg["last_ts"]
+
+            # MFE snapshot row (for indicators at peak)
+            mfe_row = conn.execute(
+                "SELECT * FROM trade_snapshots WHERE ticket = ? AND profit_pips IS NOT NULL "
+                "ORDER BY profit_pips DESC LIMIT 1",
+                (t,),
+            ).fetchone()
+            mfe_snap = dict(mfe_row) if mfe_row else {}
+
+            # Most recent snapshot (for indicators now)
+            now_row = conn.execute(
+                "SELECT * FROM trade_snapshots WHERE ticket = ? "
+                "ORDER BY timestamp DESC LIMIT 1",
+                (t,),
+            ).fetchone()
+            now_snap = dict(now_row) if now_row else {}
+            conn.close()
+
+            current_p = float(now_snap.get("profit_pips") or 0.0)
+
+            # Duration from first to last snapshot
+            duration_str = "?"
+            try:
+                fd = _dt.fromisoformat(str(first_ts).replace("Z", "+00:00")) if first_ts else None
+                ld = _dt.fromisoformat(str(last_ts).replace("Z", "+00:00")) if last_ts else None
+                if fd and ld:
+                    mins = int((ld - fd).total_seconds() / 60)
+                    duration_str = f"{mins}m" if mins < 60 else f"{mins // 60}h{mins % 60}m"
+            except Exception:
+                pass
+
+            # Simple trend classification
+            range_p = max_p - min_p
+            if range_p < 10:
+                trend_dir = "flat"
+                trend_desc = f"Oscillating between {min_p:+.1f} and {max_p:+.1f} pips for {duration_str}. No directional progress."
+            elif current_p >= max_p * 0.8 and max_p > 0:
+                trend_dir = "climbing"
+                trend_desc = f"Near peak profit ({max_p:+.1f}). Currently {current_p:+.1f}."
+            elif current_p <= min_p * 0.8 and min_p < 0:
+                trend_dir = "losing_ground"
+                trend_desc = f"Near worst drawdown ({min_p:+.1f}). Currently {current_p:+.1f}."
+            elif max_p > 0 and current_p < max_p * 0.3:
+                trend_dir = "gave_back_gains"
+                trend_desc = f"Peaked at {max_p:+.1f} but fell back to {current_p:+.1f}. Gave back {max_p - current_p:.1f} pips."
+            else:
+                trend_dir = "mixed"
+                trend_desc = f"Range {min_p:+.1f} to {max_p:+.1f}, currently {current_p:+.1f}."
+
+            # Build XML
+            def _attr(v):
+                return "?" if v is None else str(v)
+
+            def _fmt_num(v, d=1):
+                try:
+                    return f"{float(v):.{d}f}" if v is not None else "?"
+                except Exception:
+                    return "?"
+
+            mfe_time_short = "?"
+            try:
+                _mt = str(mfe_snap.get("timestamp") or "")
+                mfe_time_short = _mt[11:16] if _mt else "?"
+            except Exception:
+                pass
+
+            lines = [
+                f'<position_history ticket="{t}" duration="{duration_str}" snapshots="{n}">',
+                f'  <profit_range min="{_fmt_num(min_p)}" max="{_fmt_num(max_p)}" current="{_fmt_num(current_p)}"/>',
+                f'  <trend direction="{trend_dir}" description="{trend_desc}"/>',
+                f'  <indicators_now rsi="{_attr(now_snap.get("rsi"))}" '
+                f'stoch_k="{_attr(now_snap.get("stochastic_k"))}" '
+                f'adx="{_attr(now_snap.get("adx"))}" '
+                f'regime="{_attr(now_snap.get("regime"))}" '
+                f'nearest_sr="{_attr(now_snap.get("nearest_sr"))}"/>',
+                f'  <indicators_at_mfe rsi="{_attr(mfe_snap.get("rsi"))}" '
+                f'stoch_k="{_attr(mfe_snap.get("stochastic_k"))}" '
+                f'adx="{_attr(mfe_snap.get("adx"))}" '
+                f'regime="{_attr(mfe_snap.get("regime"))}" '
+                f'at="{_fmt_num(mfe_snap.get("profit_pips"))}pts" '
+                f'time="{mfe_time_short}"/>',
+                "</position_history>",
+            ]
+            xml = "\n".join(lines)
+
+            self._log_tool("get_position_history", start,
+                           f"ticket={t} snapshots={n} range={min_p:+.1f}..{max_p:+.1f} trend={trend_dir}")
+            return {"success": True, "history": xml, "snapshots": n}
+
+        except Exception as e:
+            self._log_tool("get_position_history", start, f"error={e}")
+            return {"success": False, "reason": f"history_error: {e}"}
+
+    # -----------------------------------------------------------------
     # FLO-158: Rex-unique tools (not available to Floki)
     # -----------------------------------------------------------------
 
