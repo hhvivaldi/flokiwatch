@@ -271,18 +271,18 @@ def _read_sage_payload() -> Dict[str, Any]:
 
 
 def _safe_iso_timestamp(ts: Any) -> str:
+    """FLO-286: Normalize any timestamp to UTC ISO with explicit Z suffix.
+
+    All API responses send timestamps in this format. The browser then converts
+    to user local time via window.displayTime() helper (CLAUDE.md Rule 22).
+    """
     try:
         if ts is None:
             return ""
-        s = str(ts).strip()
-        if not s:
-            return ""
-        # Accept ISO strings directly
-        try:
-            datetime.fromisoformat(s.replace("Z", "+00:00"))
-            return s
-        except Exception:
-            return s
+        from tz_utils import to_utc_iso
+        if isinstance(ts, datetime):
+            return to_utc_iso(ts)
+        return to_utc_iso(str(ts))
     except Exception:
         return ""
 
@@ -696,7 +696,9 @@ def _call_gpt_trade_report(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _offline_state(reason: str, file_age_seconds: float) -> Dict[str, Any]:
-    now = datetime.now().isoformat()
+    # FLO-286: UTC + Z suffix (was naive datetime.now())
+    from tz_utils import utc_iso
+    now = utc_iso()
     return {
         "timestamp": now,
         "bot": {
@@ -913,7 +915,9 @@ def echo_api():
             except Exception:
                 alerts = []
 
-        today = datetime.now().strftime("%Y-%m-%d")
+        # FLO-286: UTC day boundary (was local — counted "today" wrong when server != UTC)
+        from tz_utils import trading_day_utc
+        today = trading_day_utc()
         today_alerts = [a for a in alerts if (a.get("timestamp") or "").startswith(today)]
         critical_today = sum(1 for a in today_alerts if a.get("classification") == "CRITICAL")
         important_today = sum(1 for a in today_alerts if a.get("classification") == "IMPORTANT")
@@ -2101,7 +2105,9 @@ def trade_report(ticket: int, force_refresh: int = 0):
             conn.close()
             return JSONResponse({"ok": False, "error": result.get("error", "gpt_failed")})
 
-        created_at = datetime.now().isoformat()
+        # FLO-286: UTC for trade_reports.created_at
+        from tz_utils import utc_iso
+        created_at = utc_iso()
         model = result.get("model")
         report_json = json.dumps(result.get("report"), ensure_ascii=False)
         conn.execute(
