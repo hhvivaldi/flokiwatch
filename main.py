@@ -4500,17 +4500,10 @@ class TradingBot:
                 pass
 
             # Self-assessment prompt — diagnostic only
-            trigger_context += (
-                "\n<self_assessment>\n"
-                "After your decision, answer briefly:\n"
-                "1. Was there any data you wanted but couldn't access?\n"
-                "2. What single piece of information would most improve your confidence?\n"
-                "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
-                "4. If you wanted chart screenshots, did you call get_chart_screenshots? If not, call it next cycle.\n"
-                "5. Did any tool calls return errors this cycle? If so, which tool and what error?\n"
-                "Include your answers in a \"data_needs\" field in your JSON response.\n"
-                "</self_assessment>\n"
-            )
+            # FLO-302: appended as-is from agent_prompts.SELF_ASSESSMENT_PROMPT
+            # to keep scanner + position modes byte-identical.
+            from agent_prompts import SELF_ASSESSMENT_PROMPT as _SAP
+            trigger_context += "\n" + _SAP
 
             # Position management mode — lighter context hint for faster cycles
             if _has_open_position:
@@ -6195,17 +6188,10 @@ class TradingBot:
                 pass
 
             # Self-assessment prompt — diagnostic only
-            trigger_context += (
-                "\n<self_assessment>\n"
-                "After your decision, answer briefly:\n"
-                "1. Was there any data you wanted but couldn't access?\n"
-                "2. What single piece of information would most improve your confidence?\n"
-                "3. Are any of the data inputs you received stale, conflicting, or unhelpful?\n"
-                "4. If you wanted chart screenshots, did you call get_chart_screenshots? If not, call it next cycle.\n"
-                "5. Did any tool calls return errors this cycle? If so, which tool and what error?\n"
-                "Include your answers in a \"data_needs\" field in your JSON response.\n"
-                "</self_assessment>\n"
-            )
+            # FLO-302: appended as-is from agent_prompts.SELF_ASSESSMENT_PROMPT
+            # to keep scanner + position modes byte-identical.
+            from agent_prompts import SELF_ASSESSMENT_PROMPT as _SAP
+            trigger_context += "\n" + _SAP
 
             tools_obj = AgentTools(
                 self,

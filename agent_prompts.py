@@ -94,12 +94,40 @@ Respond with ONLY valid JSON. Start with { end with }.
 
 Required fields: decision, confidence (0-100), reasoning (2-4 sentences), key_factors (2-5 items), concerns (0-3 items).
 
-Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup), data_needs (brief diagnostic — what data was missing, stale, or conflicting).
+Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup), data_needs (FLO-302: structured self-assessment — see <self_assessment> block in trigger_context for the required JSON schema. Object with fields: missing_data[], timeframes_skipped[], biggest_obstacle, suggestions[], tool_errors[], assessment).
 
 trade_plan: entry_strategy, entry_price, entry_rationale, stop_loss, stop_loss_rationale, take_profit, take_profit_rationale, risk_reward_ratio.
 
 Your final response must be valid JSON. No text before or after.
 </output>"""
+
+
+# FLO-302: Single source of truth for the data_needs self-assessment prompt.
+# Appended to trigger_context by main.py in both scanner and position modes.
+# Floki sees this AFTER the market context and returns the structured payload
+# in a "data_needs" JSON field. Parser in ai_agent.py (FLO-302 step 2)
+# validates + coerces + falls back to a plain-string wrap if the model regresses.
+SELF_ASSESSMENT_PROMPT = """
+<self_assessment>
+Report directly to Hermano as if writing to your manager. Answer honestly, no hedging:
+
+1. What data did you want but could not access or did not call this cycle?
+2. Of the 5 chart timeframes (D1, H4, H1, M15, M5), which did you NOT view this cycle? Would any of them have changed your decision?
+3. What is the single biggest obstacle to making a better decision right now?
+4. Do you have any suggestion to improve your tools, data, or workflow?
+5. Did any tool return an error or unexpected result?
+
+Return your answer as a structured JSON object in the "data_needs" field of your response:
+{
+  "missing_data":       [<string>, ...],        // concrete items, not prose. empty list if none.
+  "timeframes_skipped": [<"D1"|"H4"|"H1"|"M15"|"M5">, ...],
+  "biggest_obstacle":   "<string>",              // empty string if genuinely none
+  "suggestions":        [<string>, ...],
+  "tool_errors":        [<string>, ...],
+  "assessment":         "<string>"               // your own one-sentence judgment
+}
+</self_assessment>
+"""
 
 
 FAST_DECISION_PROMPT = """<identity>
