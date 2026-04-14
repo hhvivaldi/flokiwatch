@@ -175,14 +175,12 @@ class SafetyChecker:
         if not mt5_connected:
             reasons.append("MT5 is not connected")
         
-        # 2. Market open + buffer before close
+        # 2. Market open (hard gate). Close/open buffers are advisory only —
+        # surfaced to Floki as <market_warning> context blocks via
+        # get_market_close_warning(); he decides whether to trade.
         is_open, market_reason, _ = self.is_market_open()
         if not is_open:
             reasons.append(market_reason)
-        elif self.is_in_close_buffer():
-            reasons.append(f"{getattr(config, 'MARKET_CLOSE_BUFFER_MINUTES', 60)} min buffer before close — no new positions")
-        elif self.is_in_open_buffer():
-            reasons.append(f"{getattr(config, 'MARKET_OPEN_BUFFER_MINUTES', 60)} min buffer after open — no new positions")
         
         # FLO-118: Removed checks 4-10 (consecutive losses pause, active pause,
         # max positions, max daily loss, high-impact news, anti-overtrading,
@@ -401,6 +399,30 @@ class SafetyChecker:
         
         return False
     
+    def get_market_close_warning(self, now_utc: Optional[datetime] = None) -> Optional[str]:
+        """Advisory string for Floki when within MARKET_CLOSE_BUFFER_MINUTES of
+        the 21:00 UTC daily close. Distinguishes Friday (weekend close) from
+        weeknight close. Returns None outside the window. No warning after
+        open — Floki can trade immediately when the session starts.
+        """
+        if now_utc is None:
+            now_utc = datetime.utcnow()
+        if not self.is_in_close_buffer(now_utc):
+            return None
+        close_hour = getattr(config, 'MARKET_DAILY_CLOSE_HOUR', 21)
+        open_hour = getattr(config, 'MARKET_DAILY_OPEN_HOUR', 22)
+        mins_to_close = close_hour * 60 - (now_utc.hour * 60 + now_utc.minute)
+        if now_utc.weekday() == 4:
+            return (
+                f"Market closes for the weekend in ~{mins_to_close} minutes "
+                f"(Friday {close_hour:02d}:00 UTC). No trading until Sunday "
+                f"{open_hour:02d}:00 UTC."
+            )
+        return (
+            f"Market closes in ~{mins_to_close} minutes ({close_hour:02d}:00 UTC). "
+            f"Plan accordingly."
+        )
+
     def check_trading_hours(self) -> Tuple[bool, str]:
         """Backward compat wrapper — uses is_market_open()"""
         is_open, reason, _ = self.is_market_open()
@@ -515,6 +537,11 @@ def is_market_open(now_utc: Optional[datetime] = None) -> Tuple[bool, str, Optio
 def is_in_close_buffer(now_utc: Optional[datetime] = None) -> bool:
     """Wrapper for close buffer check"""
     return safety.is_in_close_buffer(now_utc)
+
+
+def get_market_close_warning(now_utc: Optional[datetime] = None) -> Optional[str]:
+    """Wrapper for close-buffer advisory string."""
+    return safety.get_market_close_warning(now_utc)
 
 
 def get_safety_status() -> dict:

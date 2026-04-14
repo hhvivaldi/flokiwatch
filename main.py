@@ -4499,6 +4499,14 @@ class TradingBot:
             except Exception:
                 pass
 
+            # Advisory-only close-window warning (buffers no longer block; Floki decides).
+            try:
+                _close_warn = safety_checks.get_market_close_warning()
+                if _close_warn:
+                    trigger_context += f"\n<market_warning>\n{_close_warn}\n</market_warning>\n"
+            except Exception:
+                pass
+
             # Self-assessment prompt — diagnostic only
             # FLO-302: appended as-is from agent_prompts.SELF_ASSESSMENT_PROMPT
             # to keep scanner + position modes byte-identical.
@@ -6206,6 +6214,14 @@ class TradingBot:
                 _trade_report_r = get_last_trade_report_summary()
                 if _trade_report_r:
                     trigger_context += f"\n{_trade_report_r}\n"
+            except Exception:
+                pass
+
+            # Advisory-only close-window warning (buffers no longer block; Floki decides).
+            try:
+                _close_warn = safety_checks.get_market_close_warning()
+                if _close_warn:
+                    trigger_context += f"\n<market_warning>\n{_close_warn}\n</market_warning>\n"
             except Exception:
                 pass
 
