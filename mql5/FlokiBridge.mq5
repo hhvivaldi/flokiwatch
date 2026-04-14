@@ -121,6 +121,7 @@ string   ScreenshotH4File      = "chart_h4.png";   // FLO-262
 string   ScreenshotH1File      = "chart_h1.png";
 string   ScreenshotM15File     = "chart_m15.png";
 string   ScreenshotM5File      = "chart_m5.png";
+string   ScreenshotM1File      = "chart_m1.png";   // FLO-304
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
@@ -1079,6 +1080,21 @@ void CheckScreenshotRequest()
          Print("Screenshot M5: XAUUSD M5 chart not found (not open in MT5)");
    }
 
+   // FLO-304: Find and capture M1 chart
+   bool m1_ok = false;
+   long m1_chart_id = FindChart(_Symbol, PERIOD_M1);
+   if(m1_chart_id > 0)
+   {
+      m1_ok = ChartScreenShot(m1_chart_id, ScreenshotM1File, reqWidth, reqHeight, ALIGN_RIGHT);
+      if(EnableLogging)
+         Print("Screenshot M1 (chart ", m1_chart_id, "): ", m1_ok ? "OK" : "FAILED");
+   }
+   else
+   {
+      if(EnableLogging)
+         Print("Screenshot M1: XAUUSD M1 chart not found (not open in MT5)");
+   }
+
    // Write screenshot_ready.json
    int wHandle = FileOpen(ScreenshotReadyFile, FILE_WRITE | FILE_TXT | FILE_ANSI);
    if(wHandle != INVALID_HANDLE)
@@ -1095,7 +1111,10 @@ void CheckScreenshotRequest()
       json += "\"m15_file\":\"" + (m15_ok ? ScreenshotM15File : "") + "\",";
       json += "\"m15_ok\":" + (m15_ok ? "true" : "false") + ",";
       json += "\"m5_file\":\"" + (m5_ok ? ScreenshotM5File : "") + "\",";
-      json += "\"m5_ok\":" + (m5_ok ? "true" : "false");
+      json += "\"m5_ok\":" + (m5_ok ? "true" : "false") + ",";
+      // FLO-304
+      json += "\"m1_file\":\"" + (m1_ok ? ScreenshotM1File : "") + "\",";
+      json += "\"m1_ok\":" + (m1_ok ? "true" : "false");
       json += "}";
       FileWriteString(wHandle, json);
       FileClose(wHandle);
@@ -1105,7 +1124,7 @@ void CheckScreenshotRequest()
    FileDelete(ScreenshotRequestFile);
 
    if(EnableLogging)
-      Print("Screenshot request processed: D1=", d1_ok, " H4=", h4_ok, " H1=", h1_ok, " M15=", m15_ok, " M5=", m5_ok);
+      Print("Screenshot request processed: D1=", d1_ok, " H4=", h4_ok, " H1=", h1_ok, " M15=", m15_ok, " M5=", m5_ok, " M1=", m1_ok);
 }
 
 //+------------------------------------------------------------------+

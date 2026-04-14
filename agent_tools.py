@@ -3501,7 +3501,7 @@ class AgentTools:
             return {"success": False, "reason": f"rex_monitor_error: {e}", "latency_ms": elapsed}
 
     # FLO-262: Available timeframes for chart screenshots
-    _CHART_TFS = ["D1", "H4", "H1", "M15", "M5"]
+    _CHART_TFS = ["D1", "H4", "H1", "M15", "M5", "M1"]  # FLO-304: added M1
 
     def get_chart_screenshots(self, timeframes: list = None) -> Dict[str, Any]:
         """Return chart screenshots for requested timeframes. Images injected by caller.

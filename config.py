@@ -430,6 +430,7 @@ CHART_H4_PNG_PATH = os.environ.get("CHART_H4_PNG_PATH", os.path.join(_MQL5_FILES
 CHART_H1_PNG_PATH = os.environ.get("CHART_H1_PNG_PATH", os.path.join(_MQL5_FILES, "chart_h1.png"))
 CHART_M15_PNG_PATH = os.environ.get("CHART_M15_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m15.png"))
 CHART_M5_PNG_PATH = os.environ.get("CHART_M5_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m5.png"))
+CHART_M1_PNG_PATH = os.environ.get("CHART_M1_PNG_PATH", os.path.join(_MQL5_FILES, "chart_m1.png"))  # FLO-304
 M5_SCREENSHOT_ENABLED = os.environ.get("M5_SCREENSHOT_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # PENDING ORDERS (FLO-263)

@@ -6646,13 +6646,14 @@ class TradingBot:
         except Exception as e:
             log.debug(f"AB_TEST | resolve error: {e}")
 
-    # FLO-262: Timeframe-to-config mapping for chart screenshots
+    # FLO-262 / FLO-304: Timeframe-to-config mapping for chart screenshots
     _CHART_TF_MAP = {
         "D1":  ("CHART_D1_PNG_PATH",  "d1_ok",  "d1_b64"),
         "H4":  ("CHART_H4_PNG_PATH",  "h4_ok",  "h4_b64"),
         "H1":  ("CHART_H1_PNG_PATH",  "h1_ok",  "h1_b64"),
         "M15": ("CHART_M15_PNG_PATH", "m15_ok", "m15_b64"),
         "M5":  ("CHART_M5_PNG_PATH",  "m5_ok",  "m5_b64"),
+        "M1":  ("CHART_M1_PNG_PATH",  "m1_ok",  "m1_b64"),  # FLO-304
     }
 
     def _request_chart_screenshots(self, timeout: float = 10.0) -> dict:
@@ -6738,7 +6739,7 @@ class TradingBot:
             v = result.get(key)
             return len(v) // 1024 if v else 0
         parts = []
-        for tf in ("d1", "h4", "h1", "m15", "m5"):
+        for tf in ("d1", "h4", "h1", "m15", "m5", "m1"):  # FLO-304
             k = f"{tf}_b64"
             parts.append(f"{tf}={'yes' if result.get(k) else 'no'} ({_kb(k)}KB)")
         log.info(f"SCREENSHOT | {' '.join(parts)} | {latency:.1f}s")

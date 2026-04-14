@@ -911,14 +911,14 @@ class AIAgent:
             },
             {
                 "name": "get_chart_screenshots",
-                "description": "View live XAU/USD chart screenshots with S/R levels, volume bars, and indicators. Available: D1, H4, H1, M15, M5. Choose timeframes for your need: M5 for position management, H4+D1 for trend analysis, H1+M15+M5 for entry analysis. Omit timeframes for all available.",
+                "description": "View live XAU/USD chart screenshots with S/R levels, volume bars, and indicators. Available: D1, H4, H1, M15, M5, M1. Choose timeframes for your need. Omit timeframes for all available.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "timeframes": {
                             "type": "array",
-                            "items": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5"]},
-                            "description": "Timeframes to capture. Examples: ['M5'], ['H4','D1'], ['H1','M15','M5']. Omit for all.",
+                            "items": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5", "M1"]},
+                            "description": "Timeframes to capture. Examples: ['M5'], ['H4','D1'], ['H1','M15','M5'], ['M1']. Omit for all.",
                         },
                     },
                     "additionalProperties": False,
@@ -1552,7 +1552,7 @@ class AIAgent:
                 data_needs = {
                     "missing_data":        _coerce_list(_dn_raw.get("missing_data")),
                     "timeframes_skipped":  [s for s in _coerce_list(_dn_raw.get("timeframes_skipped"))
-                                             if s.upper() in ("D1", "H4", "H1", "M15", "M5")],
+                                             if s.upper() in ("D1", "H4", "H1", "M15", "M5", "M1")],
                     "biggest_obstacle":    _coerce_str(_dn_raw.get("biggest_obstacle")),
                     "suggestions":         _coerce_list(_dn_raw.get("suggestions")),
                     "tool_errors":         _coerce_list(_dn_raw.get("tool_errors")),
