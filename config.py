@@ -448,11 +448,18 @@ AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) mode
 AI_AGENT_TIMEOUT = 300                    # Timeout in seconds for API calls (300s for Qwen's slower response)
 AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
-# FLO-130/FLO-247: Floki model — Qwen3.6-Plus primary, GPT-5.4 fallback
+# FLO-130 / FLO-299: Floki model — Qwen 3.6-Plus.
+# Primary: Alibaba DashScope (FLOKI_API_BASE + FLOKI_API_KEY/QWEN_API_KEY).
+# Fallback (FLO-299): OpenRouter hosting the SAME Qwen 3.6-Plus, so Floki's
+# reasoning profile is preserved when Alibaba is unavailable. Leave the
+# FLOKI_FALLBACK_* vars empty in .env to disable the fallback entirely
+# (bot falls back to the FLO-297 "Qwen unavailable" maintenance mode).
 FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "qwen3.6-plus")
 FLOKI_API_BASE = os.environ.get("FLOKI_API_BASE", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
 FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
-FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "gpt-5.4")
+FLOKI_FALLBACK_API_BASE = os.environ.get("FLOKI_FALLBACK_API_BASE", "")
+FLOKI_FALLBACK_API_KEY = os.environ.get("FLOKI_FALLBACK_API_KEY", "")
+FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "qwen/qwen3.6-plus")
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
 # ============================================================================
