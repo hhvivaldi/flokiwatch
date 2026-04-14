@@ -750,6 +750,10 @@ function renderVolBanner(volStatus, volDesc) {
 }
 
 function render(state) {
+  // FLO-298: show/hide the maintenance banner first so it's visible even
+  // if a later render step throws on partial state.
+  if (window.MaintenanceMode) window.MaintenanceMode.apply(state);
+
   const ts = state.timestamp || "—";
   el("last-update").textContent = window.displayTime ? window.displayTime(ts) : ts.replace("T", " ").slice(0, 19);
 

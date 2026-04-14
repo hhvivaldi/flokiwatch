@@ -428,6 +428,9 @@
     </div>
 
     <script src="/static/tz.js"></script>
+    <!-- FLO-298: maintenance banner (history has no state-poll loop; autopoll handles it) -->
+    <script src="/static/maintenance.js"></script>
+    <script>window.MaintenanceMode && window.MaintenanceMode.autopoll(15000);</script>
     <script src="/static/history.js"></script>
   </body>
 </html>

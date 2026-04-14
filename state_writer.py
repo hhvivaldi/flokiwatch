@@ -217,9 +217,23 @@ def write_state(bot_instance: Any) -> None:
         else:
             expected_interval = 60
 
+        # FLO-298: Maintenance mode flag. True when Floki's primary model (Qwen)
+        # is unavailable (Arrearage / billing / auth / 451). Dashboard shows a
+        # clean banner instead of technical errors; Floki's decision card is
+        # hidden. Source of truth: AIAgent._qwen_unavailable, set/cleared by
+        # ai_agent.py's request-handler (FLO-297).
+        maintenance_mode = False
+        try:
+            from ai_agent import get_agent as _get_agent
+            _ai = _get_agent()
+            maintenance_mode = bool(getattr(_ai, "_qwen_unavailable", False))
+        except Exception:
+            maintenance_mode = False
+
         state = {
             "timestamp": utc_iso(now),  # FLO-286: Z suffix, was +00:00
             "_expected_update_interval_seconds": expected_interval,
+            "maintenance_mode": maintenance_mode,  # FLO-298
             "bot": {
                 "status": bot_status,
                 "mode": getattr(bot_instance, "mode", getattr(config, "TRADING_MODE", "UNKNOWN")),

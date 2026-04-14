@@ -9,6 +9,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FLO-286: tz.js exposes window.displayTime / displayHHMM / displayAge etc. Loaded early so inline code can use it. -->
     <script src="/static/tz.js"></script>
+    <!-- FLO-298: shared maintenance banner — reads bot_state.maintenance_mode. -->
+    <script src="/static/maintenance.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
@@ -1979,7 +1981,7 @@
         <div id="main-no-position">
         <div class="main-cards-row">
           <!-- FLOKI -->
-          <div class="bc-card" id="floki-card" style="border-color:#AAFF00">
+          <div class="bc-card" id="floki-card" data-floki-hide-on-maint style="border-color:#AAFF00">
             <button type="button" class="bc-btn" data-expand-target="floki-expand" aria-expanded="false">
               <div class="bc-row1">
                 <div class="bc-avatar" id="avatar-floki" style="border-color:#AAFF00">
@@ -4025,6 +4027,12 @@
             return;
           }
 
+          // FLO-298: During maintenance, collapse consecutive "qwen_api_unavailable"
+          // WAIT entries from FLOKI into one synthetic MAINTENANCE row. We emit
+          // the marker at the position of the FIRST such event and skip the rest.
+          var maintActive = window.MaintenanceMode && window.MaintenanceMode.isActive();
+          var emittedMaintMarker = false;
+
           var html = '';
           for (var i = 0; i < list.length; i++) {
             var m = list[i];
@@ -4036,6 +4044,52 @@
             var content = (m.content || '').toString();
             var ts = fmtTime(m.timestamp);
             var meta = m.metadata || {};
+
+            // FLO-298: detect Qwen-unavailable WAIT events. Backend (FLO-297)
+            // tags these with concerns=["qwen_api_unavailable"] or reasoning
+            // "Qwen API unavailable". Collapse to a single marker.
+            var isMaintWait = false;
+            try {
+              var concerns = (meta && (meta.concerns || [])) || [];
+              if (Array.isArray(concerns)) {
+                for (var ci = 0; ci < concerns.length; ci++) {
+                  if (String(concerns[ci]).indexOf('qwen_api_unavailable') >= 0) { isMaintWait = true; break; }
+                }
+              }
+              if (!isMaintWait) {
+                if ((content || '').toLowerCase().indexOf('qwen api unavailable') >= 0) isMaintWait = true;
+                else if (meta && typeof meta.reasoning === 'string' && meta.reasoning.toLowerCase().indexOf('qwen api unavailable') >= 0) isMaintWait = true;
+              }
+            } catch (e) {}
+
+            if (isMaintWait) {
+              if (!emittedMaintMarker) {
+                html += '<div class="timeline-row" style="border-left:2px solid #fbbf24;padding:8px 10px;margin-bottom:4px;background:rgba(251,191,36,0.06)">' +
+                        '<div style="display:flex;align-items:center;gap:8px">' +
+                          '<span style="font-size:12px">\uD83D\uDEE0\uFE0F</span>' +
+                          '<span style="color:#fbbf24;font-weight:700;font-size:10px;letter-spacing:0.06em">MAINTENANCE</span>' +
+                          '<span style="color:#9ca3af;font-size:10px;font-family:\'JetBrains Mono\',monospace;margin-left:auto">' + (ts || '') + '</span>' +
+                        '</div>' +
+                        '<div style="color:#e5e7eb;font-size:11px;margin-top:4px">Floki suspended, retrying every 5 min</div>' +
+                      '</div>';
+                emittedMaintMarker = true;
+              }
+              continue; // skip the raw WAIT entry; we've (maybe) emitted the single marker
+            }
+
+            // FLO-298: when maintenance JUST ended, the first FLOKI_DECISION
+            // after a maintenance cluster gets a "RECOVERED" header. We detect
+            // the transition by: at least one maintenance entry seen earlier in
+            // this render, now a non-maintenance FLOKI decision appears.
+            if (emittedMaintMarker && !maintActive && author === 'FLOKI' &&
+                (type === 'FLOKI_DECISION' || type === 'DECISION')) {
+              html += '<div class="timeline-row" style="border-left:2px solid #4ade80;padding:6px 10px;margin-bottom:4px;background:rgba(74,222,128,0.06)">' +
+                      '<span style="font-size:12px;margin-right:6px">\u2705</span>' +
+                      '<span style="color:#4ade80;font-weight:700;font-size:10px;letter-spacing:0.06em">RECOVERED</span>' +
+                      '<span style="color:#e5e7eb;font-size:11px;margin-left:8px">Floki back online</span>' +
+                    '</div>';
+              emittedMaintMarker = false; // only emit once per transition
+            }
 
             /* Skip hidden types */
             if (author === 'FLOKI' && type === 'REX_CONSULT') continue;
@@ -4591,6 +4645,9 @@
 
         function updatePanels(messages, state) {
           try {
+            // FLO-298: show/hide maintenance banner + Floki card hiding.
+            if (window.MaintenanceMode) window.MaintenanceMode.apply(state);
+
             var marketClosed = (state && state.market && state.market.is_open === false);
             _marketClosedGlobal = marketClosed;
 
