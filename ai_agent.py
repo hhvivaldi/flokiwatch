@@ -528,6 +528,16 @@ class AIAgent:
             if not user_message:
                 user_message = "Scheduled analysis. Decide what to check and whether to act."
 
+            # FLO-303: prepend boss_notes (Hermano's directives to Floki).
+            # Empty string when no active notes — zero cost. Never raises.
+            try:
+                from boss_notes import render_block as _bn_render
+                _bn_block = _bn_render()
+                if _bn_block:
+                    user_message = _bn_block + "\n\n" + user_message
+            except Exception as _bn_e:
+                logger.debug(f"boss_notes injection skipped (ignored): {_bn_e}")
+
             response = await asyncio.wait_for(
                 self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
                 timeout=self.timeout,
@@ -1496,6 +1506,17 @@ class AIAgent:
             # Parse adjustment and close_reason
             adjustment = parsed.get("adjustment")
             close_reason = parsed.get("close_reason")
+
+            # FLO-303: acknowledged_boss_notes — stamp notes as read (non-blocking).
+            try:
+                _ack_raw = parsed.get("acknowledged_boss_notes") or []
+                if isinstance(_ack_raw, list) and _ack_raw:
+                    _ack_ids = [str(x).strip() for x in _ack_raw if str(x).strip()]
+                    if _ack_ids:
+                        from boss_notes import record_acknowledgements
+                        record_acknowledgements(_ack_ids)
+            except Exception as _bn_e:
+                logger.debug(f"boss_notes ack skipped (ignored): {_bn_e}")
 
             # FLO-302: data_needs — structured self-assessment (never affects decisions).
             # Expected dict; wraps a plain string for backward compat if the model regresses.
