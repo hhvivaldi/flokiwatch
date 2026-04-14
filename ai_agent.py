@@ -1032,16 +1032,13 @@ class AIAgent:
                 }
 
             try:
-                _use_client = self.client
-                _use_model = self.model
-                # FLO-247: fallback to GPT-5.4 if primary failed on previous iteration
-                if getattr(self, '_using_fallback', False) and self._fallback_client:
-                    _use_client = self._fallback_client
-                    _use_model = self._fallback_model
-
+                # FLO-296: Qwen-only — no model fallback. If Qwen is down,
+                # skip the cycle and wait for it to recover. Simpler + we trust
+                # Qwen's reasoning; GPT-5.4 on a different prompt contract would
+                # produce incomparable decisions.
                 def _sync_call():
                     kwargs = {
-                        "model": _use_model,
+                        "model": self.model,
                         "messages": messages,
                         "tools": openai_tools,
                         "max_completion_tokens": int(self.max_tokens),
@@ -1051,50 +1048,51 @@ class AIAgent:
                     # Only force JSON output when no tool calls are expected (avoids degrading tool use)
                     if not openai_tools:
                         kwargs["response_format"] = {"type": "json_object"}
-                    return _use_client.chat.completions.create(**kwargs)
+                    return self.client.chat.completions.create(**kwargs)
                 resp = await loop.run_in_executor(None, _sync_call)
-                self._using_fallback = False  # reset on success
             except Exception as e:
-                logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
-                # FLO-295: classify the error. Non-retryable = account/billing/auth/blocked.
-                # Retrying these just burns 42 iterations × 2–3s = ~2min of nothing.
+                # FLO-296: Qwen failure handler.
+                # Non-retryable errors (billing/auth/blocked) → abort cycle
+                # immediately with conf=0 and a specific reason. No 42-iteration
+                # burn, no fallback model.
                 _err_s = str(e).lower()
                 _non_retryable = any(k in _err_s for k in (
                     "arrearage", "overdue-payment", "access denied",
                     "insufficient_quota", "invalid_api_key", "invalid api key",
                     "unauthorized", "forbidden", "451",
                 ))
-
-                # FLO-295 FIX: the old code kept a per-iteration retry flag, so the
-                # fallback switch never fired — every new iteration reset the retry
-                # gate. Now we switch to fallback on the FIRST failure regardless
-                # (if fallback is configured), and we BREAK OUT on non-retryable
-                # errors instead of looping 42×.
-                if not getattr(self, '_using_fallback', False) and self._fallback_client:
-                    logger.warning(f"FLOKI | switching to fallback model: {self._fallback_model}")
-                    self._using_fallback = True
-                    await asyncio.sleep(1)
-                    # Retry this iteration on fallback immediately (don't waste the turn)
-                    continue
-
-                # Already on fallback (or no fallback configured) and still failing.
                 if _non_retryable:
+                    # Pick the specific reason label for the log + decision payload.
+                    if "arrearage" in _err_s or "overdue-payment" in _err_s:
+                        short_reason = "Arrearage"
+                    elif "insufficient_quota" in _err_s:
+                        short_reason = "Insufficient quota"
+                    elif "invalid_api_key" in _err_s or "invalid api key" in _err_s:
+                        short_reason = "Invalid API key"
+                    elif "unauthorized" in _err_s:
+                        short_reason = "Unauthorized"
+                    elif "forbidden" in _err_s:
+                        short_reason = "Forbidden"
+                    elif "451" in _err_s:
+                        short_reason = "451 (blocked)"
+                    else:
+                        short_reason = "non-retryable API error"
                     logger.error(
-                        f"FLOKI | non-retryable API error on fallback too — aborting cycle. "
-                        f"Hermano needs to fix the underlying account issue ({_err_s[:120]})"
+                        f"FLOKI | Qwen API unavailable ({short_reason}) — cycle suspended. "
+                        f"Floki will retry Qwen on the next scheduled cycle."
                     )
                     return {
                         "decision": "WAIT",
                         "confidence": 0,
-                        "reasoning": "api account error — check billing / auth (Qwen arrearage or OpenAI quota/auth)",
+                        "reasoning": "API unavailable — waiting for Qwen to recover",
                         "key_factors": [],
-                        "concerns": ["api_account_error"],
+                        "concerns": ["qwen_api_unavailable", short_reason.lower().replace(" ", "_")],
                         "content": json.dumps({
                             "decision": "WAIT",
                             "confidence": 0,
-                            "reasoning": "api account error",
+                            "reasoning": "API unavailable — waiting for Qwen to recover",
                             "key_factors": [],
-                            "concerns": ["api_account_error"],
+                            "concerns": ["qwen_api_unavailable"],
                         }),
                         "input_tokens": total_input_tokens,
                         "output_tokens": total_output_tokens,
@@ -1102,7 +1100,9 @@ class AIAgent:
                         "model": last_model,
                         "tool_trace": tool_trace,
                     }
-                # Transient on fallback: bounded retry with the iteration counter
+                # Transient error (5xx, timeout, connection reset): bounded
+                # retry via the outer iteration counter. Same cycle, not next.
+                logger.warning(f"FLOKI | Qwen transient error (iteration {iteration}): {e}")
                 await asyncio.sleep(2)
                 continue
 
