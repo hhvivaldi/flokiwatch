@@ -216,13 +216,18 @@ def add_note(
     expires_hours: Optional[int] = _DEFAULT_EXPIRY_HOURS,
     permanent: bool = False,
     requires_ack: bool = True,
-    ack_dismisses: bool = False,
+    ack_dismisses: bool = True,
     note_id: Optional[str] = None,
 ) -> str:
     """Append a note and persist. Returns the note id.
 
-    Helper for manual file-editing OR a future CLI wrapper. Auto-generates
-    YYYY-MM-DD-NN ids keyed off the current UTC date if none supplied.
+    Default is one-shot: the note disappears as soon as Floki acks it, so
+    `add_note("message")` with no other args Just Works for short-lived
+    directives. Pass `ack_dismisses=False` to keep a note alive after first
+    ack (e.g. a standing policy that should keep reappearing until expiry).
+
+    Auto-generates YYYY-MM-DD-NN ids keyed off the current UTC date if none
+    supplied.
     """
     data = _load()
     now = utc_now()
