@@ -1359,6 +1359,7 @@ def alert_data_needs(
     data_needs: Dict,
     ticket_summary: Optional[str] = None,
     drift: Optional[List[Dict]] = None,
+    boss_notes_summary: Optional[Dict[str, List[Dict[str, str]]]] = None,
 ) -> bool:
     """FLO-302: Send Floki's data_needs self-assessment to Hermano's Discord.
 
@@ -1369,6 +1370,10 @@ def alert_data_needs(
 
     `drift` optional list of {item, count, first_seen} for items flagged across
     multiple cycles; when non-empty a secondary DRIFT embed is sent.
+
+    FLO-305: `boss_notes_summary` optional dict with keys "acked" and "pending",
+    each a list of {"id": str, "text": str} objects. Rendered as a single
+    "Boss Notes" embed field. Omitted entirely when both lists are empty.
     """
     if not isinstance(data_needs, dict):
         log.debug(f"[alert_data_needs] ignored non-dict payload: {type(data_needs).__name__}")
@@ -1404,6 +1409,38 @@ def alert_data_needs(
     assessment = (data_needs.get("assessment") or "").strip()
     if assessment:
         fields.append({"name": "Assessment", "value": assessment[:1020], "inline": False})
+
+    # FLO-305: Boss Notes status — only renders when there's something to show.
+    if boss_notes_summary:
+        acked_items = boss_notes_summary.get("acked") or []
+        pending_items = boss_notes_summary.get("pending") or []
+
+        def _compact(items: List[Dict[str, str]]) -> str:
+            """Render '[text1, text2, text3]' — fall back to id if text is empty."""
+            if not items:
+                return ""
+            parts = []
+            for it in items:
+                txt = (it.get("text") or "").strip()
+                if txt:
+                    # Trim word-boundary if possible
+                    short = txt if len(txt) <= 40 else txt[:37].rstrip() + "..."
+                    parts.append(short)
+                else:
+                    parts.append(it.get("id", "?"))
+            return "[" + ", ".join(parts) + "]"
+
+        pieces = []
+        if acked_items:
+            pieces.append(f"acked {_compact(acked_items)}")
+        if pending_items:
+            pieces.append(f"pending {_compact(pending_items)}")
+        if pieces:
+            fields.append({
+                "name": "Boss Notes",
+                "value": " | ".join(pieces)[:1020],
+                "inline": False,
+            })
 
     color = 0x3b82f6  # blue — informational
     ok = discord_router.send_embed(

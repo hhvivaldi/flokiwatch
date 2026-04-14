@@ -115,7 +115,42 @@ def dispatch_data_needs(
     if not has_signal:
         return False
 
-    # 4. Send.
+    # 4. FLO-305: assemble boss_notes summary for Hermano's Discord view.
+    # "acked" = acknowledged IN THIS CYCLE only (sourced from boss_notes module
+    # state, because dismissed notes are removed from the JSON on ack and can't
+    # be reconstructed from file state alone).
+    # "pending" = currently-active notes that still require ack.
+    boss_summary: Optional[Dict[str, List[Dict[str, str]]]] = None
+    try:
+        from boss_notes import pop_last_cycle_acks, get_active_notes
+        acks = pop_last_cycle_acks()
+        active = get_active_notes()
+        # Build id → short_text lookup from ACTIVE notes (dismissed ones are gone;
+        # we display just their ids for the "acked" list in that case).
+        id_to_text = {
+            str(n.get("id")): str(n.get("text") or "")[:40]
+            for n in active
+        }
+        def _labels(ids: List[str]) -> List[Dict[str, str]]:
+            out = []
+            for i in ids:
+                out.append({"id": i, "text": id_to_text.get(i, "")})
+            return out
+        acked_ids = list(acks.get("acked", [])) + list(acks.get("dismissed", []))
+        pending_ids = [
+            str(n.get("id")) for n in active
+            if n.get("requires_ack", True) and not n.get("acknowledged_at")
+        ]
+        if acked_ids or pending_ids:
+            boss_summary = {
+                "acked":   _labels(acked_ids),
+                "pending": _labels(pending_ids),
+            }
+    except Exception as e:
+        log.debug(f"[dispatch_data_needs] boss_notes summary skipped: {e}")
+        boss_summary = None
+
+    # 5. Send.
     try:
         from alerts import alert_data_needs
         return alert_data_needs(
@@ -125,6 +160,7 @@ def dispatch_data_needs(
             data_needs=data_needs,
             ticket_summary=ticket_summary,
             drift=drift or None,
+            boss_notes_summary=boss_summary,
         )
     except Exception as e:
         log.debug(f"[dispatch_data_needs] send failed (ignored): {e}")

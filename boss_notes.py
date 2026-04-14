@@ -42,6 +42,21 @@ _NOTES_PATH = os.path.join(
 )
 _DEFAULT_EXPIRY_HOURS = 24
 
+# FLO-305: tiny state exporter so data_needs_dispatcher can surface
+# this-cycle ack activity (dismissed notes are removed from the file on ack,
+# so file state alone can't reconstruct which IDs were acked this cycle).
+_last_cycle_acks: Dict[str, List[str]] = {"acked": [], "dismissed": []}
+
+
+def pop_last_cycle_acks() -> Dict[str, List[str]]:
+    """Return the most recent record_acknowledgements result and clear it.
+    Safe to call when nothing happened — returns empty lists."""
+    global _last_cycle_acks
+    out = {"acked": list(_last_cycle_acks["acked"]),
+           "dismissed": list(_last_cycle_acks["dismissed"])}
+    _last_cycle_acks = {"acked": [], "dismissed": []}
+    return out
+
 
 def _load() -> Dict[str, Any]:
     try:
@@ -189,6 +204,9 @@ def record_acknowledgements(ack_ids: List[str]) -> None:
                 f"FLOKI_BOSS_ACK | acked={touched} | "
                 f"dismissed={dismissed} | pending={pending}"
             )
+        # FLO-305: stash for the dispatcher to pick up in this cycle's Discord embed.
+        global _last_cycle_acks
+        _last_cycle_acks = {"acked": touched, "dismissed": dismissed}
     except Exception as e:
         log.debug(f"boss_notes: ack recording failed (ignored): {e}")
 
