@@ -1875,7 +1875,7 @@ def journal_data():
         rows = conn.execute(
             "SELECT ticket, direction, volume, open_price, close_price, sl, tp, "
             "profit, close_reason, open_time, close_time, mfe_points, mae_points, "
-            "final_sl, breakeven_activated, decision_source "
+            "final_sl, breakeven_activated, decision_source, comment "  # FLO-301: comment for entry_type detection
             "FROM trades WHERE close_price IS NOT NULL AND profit IS NOT NULL "
             "ORDER BY close_time DESC LIMIT 30"
         ).fetchall()
@@ -1969,8 +1969,22 @@ def journal_data():
             if capture is not None and mfe is not None and mfe > 0:
                 total_capture.append(capture)
 
-            # FLO-300: opening confidence from the OPEN_* decision closest to open_time
-            open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
+            # FLO-301: detect PENDING vs MARKET from the MT5 comment column.
+            # Comment comes from execute_trade / place_pending_order — pending
+            # orders carry "Pending-BUY_LIMIT" / "Pending-SELL_STOP" / etc.,
+            # market orders carry "floki_agent" or "reconciled:Agent-*".
+            _cmt = (t.get("comment") or "")
+            entry_type = "PENDING" if ("pending" in _cmt.lower()) else "MARKET"
+
+            # FLO-300/301: opening confidence ONLY for market orders. For
+            # pending orders the fill happens hours after the decision in
+            # different market conditions, so attributing a confidence % is
+            # misleading. Frontend renders open_conf=None as "P.O." when
+            # entry_type is PENDING.
+            if entry_type == "MARKET":
+                open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
+            else:
+                open_conf = None
 
             # Load counterfactual
             cf = None
@@ -2046,7 +2060,8 @@ def journal_data():
                 "mae": mae,
                 "capture_pct": capture,          # raw numeric (kept for analysis)
                 "capture_display": capture_display,  # FLO-300: clamped/LOSS for UI
-                "open_conf": open_conf,          # FLO-300: opening confidence (0-100) or None
+                "entry_type": entry_type,        # FLO-301: "MARKET" | "PENDING"
+                "open_conf": open_conf,          # FLO-300/301: market orders only; None for pending
                 "pnl_pips": round(_pp, 1) if _pp is not None else None,
                 "adj_count": len(adjustments),
                 "adjustments": adjustments,
@@ -2058,14 +2073,18 @@ def journal_data():
 
         total_adj = adj_helped + adj_hurt + adj_neutral
 
-        # FLO-300: win rate by opening-confidence band. "Win" = pnl > 0.
-        # Bands match Hermano's spec: <50%, 50–65%, 65%+.
+        # FLO-300/301: win rate by opening-confidence band — MARKET ORDERS ONLY.
+        # Pending-order fills happen hours after the decision in potentially
+        # different market conditions, so their "open confidence" isn't
+        # comparable with market-order confidence. Bands: <50%, 50–65%, 65%+.
         bands = {
             "low":  {"min": 0,  "max": 50,  "trades": 0, "wins": 0},
             "mid":  {"min": 50, "max": 65,  "trades": 0, "wins": 0},
             "high": {"min": 65, "max": 101, "trades": 0, "wins": 0},
         }
         for t in trades:
+            if t.get("entry_type") != "MARKET":
+                continue   # FLO-301: exclude pending orders from band stats
             c = t.get("open_conf")
             if c is None:
                 continue
@@ -2079,16 +2098,34 @@ def journal_data():
             wr = round(b["wins"] / b["trades"] * 100) if b["trades"] else None
             return {"trades": b["trades"], "wins": b["wins"], "win_rate_pct": wr}
 
+        # FLO-301: entry-type win-rate comparison (market vs pending).
+        _et = {"MARKET": {"trades": 0, "wins": 0},
+               "PENDING": {"trades": 0, "wins": 0}}
+        for t in trades:
+            k = t.get("entry_type")
+            if k not in _et:
+                continue
+            _et[k]["trades"] += 1
+            if (t.get("pnl") or 0) > 0:
+                _et[k]["wins"] += 1
+        def _et_dict(e):
+            wr = round(e["wins"] / e["trades"] * 100) if e["trades"] else None
+            return {"trades": e["trades"], "wins": e["wins"], "win_rate_pct": wr}
+
         stats = {
             "avg_capture": round(sum(total_capture) / len(total_capture), 1) if total_capture else None,
             "adj_helped_pct": round(adj_helped / total_adj * 100) if total_adj > 0 else None,
             "adj_hurt_pct": round(adj_hurt / total_adj * 100) if total_adj > 0 else None,
             "total_trades": len(trades),
             "trades_with_cf": sum(1 for t in trades if t["counterfactual"]),
-            "win_rate_by_conf": {  # FLO-300
+            "win_rate_by_conf": {  # FLO-300 — market orders only (FLO-301)
                 "low":  _band_dict(bands["low"]),
                 "mid":  _band_dict(bands["mid"]),
                 "high": _band_dict(bands["high"]),
+            },
+            "win_rate_by_entry_type": {  # FLO-301
+                "market":  _et_dict(_et["MARKET"]),
+                "pending": _et_dict(_et["PENDING"]),
             },
         }
 

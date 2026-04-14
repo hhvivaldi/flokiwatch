@@ -2434,7 +2434,7 @@ class AgentTools:
             rows = conn.execute(
                 "SELECT ticket, direction, volume, open_price, close_price, sl, tp, "
                 "profit, close_reason, open_time, close_time, mfe_points, mae_points, "
-                "final_sl, breakeven_activated, decision_source "
+                "final_sl, breakeven_activated, decision_source, comment "  # FLO-301: comment for entry_type
                 "FROM trades WHERE close_price IS NOT NULL AND profit IS NOT NULL "
                 "ORDER BY close_time DESC LIMIT ?",
                 (lim * 2,),  # fetch extra to allow filtering
@@ -2509,6 +2509,7 @@ class AgentTools:
             adj_neutral = 0
             count = 0
             _conf_outcomes = []   # FLO-300: (open_conf, pnl) pairs for band stats
+            _et_outcomes = {"MARKET": [0, 0], "PENDING": [0, 0]}  # FLO-301: [trades, wins]
 
             for r in rows:
                 if count >= lim:
@@ -2545,10 +2546,22 @@ class AgentTools:
                 _capture_str = format_capture_display(capture, mfe, _pp)
                 if capture is not None and mfe is not None and mfe > 0:
                     total_capture.append(capture)
-                # FLO-300: opening confidence + track (conf, pnl) for band stats
-                _open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
-                if _open_conf is not None:
-                    _conf_outcomes.append((int(_open_conf), float(pnl or 0)))
+                # FLO-301: detect PENDING vs MARKET from MT5 comment column.
+                _cmt = (t.get("comment") or "")
+                _entry_type = "PENDING" if ("pending" in _cmt.lower()) else "MARKET"
+                _et_outcomes[_entry_type][0] += 1
+                if (pnl or 0) > 0:
+                    _et_outcomes[_entry_type][1] += 1
+
+                # FLO-300/301: opening confidence ONLY for market orders. Pending
+                # fills happen hours after the decision → attributing confidence
+                # is misleading, so open_conf=None and XML renders "P.O."
+                if _entry_type == "MARKET":
+                    _open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
+                    if _open_conf is not None:
+                        _conf_outcomes.append((int(_open_conf), float(pnl or 0)))
+                else:
+                    _open_conf = None
 
                 # Adjustments
                 adjustments = get_trade_adjustments(int(ticket))
@@ -2618,13 +2631,17 @@ class AgentTools:
                         adj_neutral += 1
 
                 # Format trade XML.
-                # FLO-300: capture uses display helper (clamped / "LOSS");
-                # open_conf is the agent's confidence at open (or "?" if no
-                # OPEN_* decision found within 10 min of open_time).
+                # FLO-300: capture uses display helper (clamped / "LOSS").
+                # FLO-301: entry_type + open_conf distinguishes pending orders
+                # ("P.O.") from market orders ("52%"). Pending-order confidence
+                # isn't comparable because the fill happens hours after decision.
                 _f = lambda v, d=2: f"{float(v):.{d}f}" if v is not None else "?"
-                _oc_str = f"{int(_open_conf)}%" if _open_conf is not None else "?"
+                if _entry_type == "PENDING":
+                    _oc_str = "P.O."
+                else:
+                    _oc_str = f"{int(_open_conf)}%" if _open_conf is not None else "?"
                 line = (
-                    f'  <trade ticket="{ticket}" dir="{direction}" '
+                    f'  <trade ticket="{ticket}" dir="{direction}" entry_type="{_entry_type}" '
                     f'session="{sess_open}->{sess_close}" '
                     f'pnl="${_f(pnl)}" mfe="{_f(mfe, 1)}pts" mae="{_f(mae, 1)}pts" '
                     f'capture="{_capture_str}" open_conf="{_oc_str}" '
@@ -2780,8 +2797,19 @@ class AgentTools:
                 header += f' avg_capture="{avg_cap}%"'
             if helped_pct is not None:
                 header += f' adj_helped="{helped_pct}%" adj_hurt="{hurt_pct}%"'
-            # FLO-300: band breakdown — only emit bands that have data, so Floki
-            # isn't misled by "0/0" slots.
+            # FLO-301: market vs pending win-rate split, so Floki can compare
+            # whether his pending orders perform better or worse than market
+            # orders. Bands below are market-only (pending have no comparable
+            # confidence value — see FLO-301 rationale).
+            def _wr_attr(tw_pair):
+                tr, wn = tw_pair
+                return f"{wn}/{tr} ({round(wn/tr*100)}%)" if tr else None
+            _mkt_wr = _wr_attr(_et_outcomes["MARKET"])
+            _pnd_wr = _wr_attr(_et_outcomes["PENDING"])
+            if _mkt_wr is not None: header += f' market_wr="{_mkt_wr}"'
+            if _pnd_wr is not None: header += f' pending_wr="{_pnd_wr}"'
+            # FLO-300: band breakdown (market orders only) — only emit bands that
+            # have data, so Floki isn't misled by "0/0" slots.
             if _lt50 is not None: header += f' wr_lt50="{_lt50}"'
             if _mid  is not None: header += f' wr_50_65="{_mid}"'
             if _ge65 is not None: header += f' wr_65_plus="{_ge65}"'

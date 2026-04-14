@@ -2423,7 +2423,7 @@
             if (stats.adj_helped_pct != null) parts.push('<span style="color:#4ade80">Adj Helped: <b>' + stats.adj_helped_pct + '%</b></span>');
             if (stats.adj_hurt_pct != null) parts.push('<span style="color:#f87171">Adj Hurt: <b>' + stats.adj_hurt_pct + '%</b></span>');
             parts.push('<span style="color:#6b7280">Trades: ' + stats.total_trades + ' (' + stats.trades_with_cf + ' with counterfactual)</span>');
-            // FLO-300: win rate by opening-confidence band
+            // FLO-300/301: win rate by opening-confidence band (market orders only)
             var wrbc = stats.win_rate_by_conf;
             var bandHtml = '';
             if (wrbc) {
@@ -2431,13 +2431,26 @@
                 if (!b || !b.trades) return '<span style="color:#4b5563">' + lbl + ': —</span>';
                 return '<span style="color:' + color + '"><b>' + lbl + ':</b> ' + b.wins + '/' + b.trades + ' (' + (b.win_rate_pct != null ? b.win_rate_pct + '%' : '?') + ')</span>';
               }
-              bandHtml = '<span style="color:#6b7280">Win rate by confidence:</span> ' +
+              bandHtml = '<span style="color:#6b7280">Win rate by confidence <span style="color:#4b5563">(market orders):</span></span> ' +
                 _fmtBand('&lt;50%',    wrbc.low,  '#f87171') + ' · ' +
                 _fmtBand('50&ndash;65%', wrbc.mid,  '#fbbf24') + ' · ' +
                 _fmtBand('65%+',        wrbc.high, '#4ade80');
             }
+            // FLO-301: entry-type split (market vs pending)
+            var etHtml = '';
+            var wrbet = stats.win_rate_by_entry_type;
+            if (wrbet) {
+              function _fmtEt(lbl, e, color) {
+                if (!e || !e.trades) return '<span style="color:#4b5563">' + lbl + ': —</span>';
+                return '<span style="color:' + color + '"><b>' + lbl + ':</b> ' + e.trades + ' trades (' + (e.win_rate_pct != null ? e.win_rate_pct + '%' : '?') + ' WR)</span>';
+              }
+              etHtml = '<span style="color:#6b7280">Entry:</span> ' +
+                _fmtEt('MARKET', wrbet.market,  '#e2e8f0') + ' <span style="color:#374151">|</span> ' +
+                _fmtEt('P.O.',   wrbet.pending, '#22d3ee');
+            }
             statsEl.innerHTML =
               '<div>' + parts.join('<span style="color:#374151"> | </span>') + '</div>' +
+              (etHtml   ? '<div style="margin-top:4px">' + etHtml   + '</div>' : '') +
               (bandHtml ? '<div style="margin-top:4px">' + bandHtml + '</div>' : '');
             // Table
             var tbody = document.getElementById('journal-tbody');
@@ -2461,13 +2474,19 @@
               if (capStr === 'LOSS') capColor = '#f87171';
               else if (capStr.indexOf('-') === 0 || capStr === '0%') capColor = '#f87171';
               else if (capStr.indexOf('+') === 0) capColor = '#4ade80';
-              // FLO-300: Conf column
-              var confStr = '—';
-              var confColor = '#6b7280';
-              if (t.open_conf != null) {
+              // FLO-300/301: Conf column. Pending orders show "P.O." in cyan
+              // (no comparable confidence — fill happens hours after decision).
+              // Market orders show confidence % with red/amber/green tiering.
+              var confStr, confColor;
+              if (t.entry_type === 'PENDING') {
+                confStr = 'P.O.';
+                confColor = '#22d3ee';
+              } else if (t.open_conf != null) {
                 var cN = Number(t.open_conf);
                 confStr = cN + '%';
                 confColor = cN >= 65 ? '#4ade80' : (cN >= 50 ? '#fbbf24' : '#f87171');
+              } else {
+                confStr = '—'; confColor = '#6b7280';
               }
               var mfeStr = '-';
               if (t.mfe != null) {
