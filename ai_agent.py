@@ -1056,17 +1056,53 @@ class AIAgent:
                 self._using_fallback = False  # reset on success
             except Exception as e:
                 logger.warning(f"FLOKI | API call failed (iteration {iteration}): {e}")
-                # Retry once on primary (Qwen) before falling back to GPT
-                _retry_key = f"_retry_iter_{iteration}"
-                if not getattr(self, '_using_fallback', False) and not getattr(self, _retry_key, False):
-                    setattr(self, _retry_key, True)
-                    logger.info(f"FLOKI | retrying iteration {iteration} on primary model")
-                    await asyncio.sleep(2)
-                    continue
-                # FLO-247: switch to fallback after retry exhausted
+                # FLO-295: classify the error. Non-retryable = account/billing/auth/blocked.
+                # Retrying these just burns 42 iterations × 2–3s = ~2min of nothing.
+                _err_s = str(e).lower()
+                _non_retryable = any(k in _err_s for k in (
+                    "arrearage", "overdue-payment", "access denied",
+                    "insufficient_quota", "invalid_api_key", "invalid api key",
+                    "unauthorized", "forbidden", "451",
+                ))
+
+                # FLO-295 FIX: the old code kept a per-iteration retry flag, so the
+                # fallback switch never fired — every new iteration reset the retry
+                # gate. Now we switch to fallback on the FIRST failure regardless
+                # (if fallback is configured), and we BREAK OUT on non-retryable
+                # errors instead of looping 42×.
                 if not getattr(self, '_using_fallback', False) and self._fallback_client:
                     logger.warning(f"FLOKI | switching to fallback model: {self._fallback_model}")
                     self._using_fallback = True
+                    await asyncio.sleep(1)
+                    # Retry this iteration on fallback immediately (don't waste the turn)
+                    continue
+
+                # Already on fallback (or no fallback configured) and still failing.
+                if _non_retryable:
+                    logger.error(
+                        f"FLOKI | non-retryable API error on fallback too — aborting cycle. "
+                        f"Hermano needs to fix the underlying account issue ({_err_s[:120]})"
+                    )
+                    return {
+                        "decision": "WAIT",
+                        "confidence": 0,
+                        "reasoning": "api account error — check billing / auth (Qwen arrearage or OpenAI quota/auth)",
+                        "key_factors": [],
+                        "concerns": ["api_account_error"],
+                        "content": json.dumps({
+                            "decision": "WAIT",
+                            "confidence": 0,
+                            "reasoning": "api account error",
+                            "key_factors": [],
+                            "concerns": ["api_account_error"],
+                        }),
+                        "input_tokens": total_input_tokens,
+                        "output_tokens": total_output_tokens,
+                        "context_tokens": _last_prompt_tokens,
+                        "model": last_model,
+                        "tool_trace": tool_trace,
+                    }
+                # Transient on fallback: bounded retry with the iteration counter
                 await asyncio.sleep(2)
                 continue
 
