@@ -32,7 +32,12 @@ from logger import log
 _HISTORY_DEPTH = 5
 _DRIFT_THRESHOLD = 3  # current cycle + >=2 prior = 3 in a row
 
-_recent_signatures: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
+# FLO-306: track BOTH not_called and unavailable independently. Drift on
+# not_called = chronic skip (Floki avoiding a tool he could use). Drift on
+# unavailable = persistent broken/missing data (real infra issue). Each
+# carries different remediation, so we surface them with separate labels.
+_recent_not_called: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
+_recent_unavailable: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
 _recent_timestamps: Deque[str] = deque(maxlen=_HISTORY_DEPTH)
 
 
@@ -46,17 +51,20 @@ def _normalize(items: Any) -> List[str]:
         return []
 
 
-def _check_drift(current_missing: Any, current_ts: str) -> List[Dict[str, Any]]:
+def _check_drift_in(
+    current_items: Any,
+    history: Deque[Set[str]],
+    current_ts: str,
+) -> List[Dict[str, Any]]:
     """Return items appearing in the current cycle AND in a contiguous run
-    of >=K-1 immediately-prior cycles.
+    of >=K-1 immediately-prior cycles within the supplied history deque.
 
     "Consecutive" is the key word: any intervening cycle without the item
     breaks the streak. Walks history newest→oldest and stops at first miss.
 
-    Must be called BEFORE pushing the current cycle's signature to history,
-    otherwise the current cycle would count twice.
+    Must be called BEFORE pushing the current cycle's signature to history.
     """
-    current_set = set(_normalize(current_missing))
+    current_set = set(_normalize(current_items))
     if not current_set:
         return []
 
@@ -64,21 +72,14 @@ def _check_drift(current_missing: Any, current_ts: str) -> List[Dict[str, Any]]:
     for item in current_set:
         count = 1  # the current cycle
         first_seen = current_ts
-        # Walk priors newest→oldest; stop at the first cycle missing this item.
-        for prev_sig, prev_ts in zip(
-            reversed(_recent_signatures), reversed(_recent_timestamps)
-        ):
+        for prev_sig, prev_ts in zip(reversed(history), reversed(_recent_timestamps)):
             if item in prev_sig:
                 count += 1
-                first_seen = prev_ts  # the earliest in the contiguous run so far
+                first_seen = prev_ts
             else:
-                break  # streak broken
+                break
         if count >= _DRIFT_THRESHOLD:
-            drifting.append({
-                "item": item,
-                "count": count,
-                "first_seen": first_seen,
-            })
+            drifting.append({"item": item, "count": count, "first_seen": first_seen})
     return drifting
 
 
@@ -98,20 +99,28 @@ def dispatch_data_needs(
     if not isinstance(data_needs, dict):
         return False
 
-    missing = data_needs.get("missing_data") or []
+    # FLO-306: split into not_called (skipped) and unavailable (broken/stale).
+    # Back-compat: legacy "missing_data" still present in old payloads → treat
+    # as not_called (matches its observed semantics under FLO-302 schema).
+    not_called = data_needs.get("not_called")
+    if not not_called:
+        not_called = data_needs.get("missing_data") or []
+    unavailable = data_needs.get("unavailable") or []
     obstacle = (data_needs.get("biggest_obstacle") or "").strip()
     suggestions = data_needs.get("suggestions") or []
     tool_errors = data_needs.get("tool_errors") or []
 
-    # 1. Drift check BEFORE appending the current cycle.
-    drift = _check_drift(missing, timestamp_utc)
+    # 1. Drift checks BEFORE appending current cycle (one per field).
+    drift_not_called = _check_drift_in(not_called, _recent_not_called, timestamp_utc)
+    drift_unavailable = _check_drift_in(unavailable, _recent_unavailable, timestamp_utc)
 
-    # 2. Advance history — every cycle, including no-signal ones.
-    _recent_signatures.append(set(_normalize(missing)))
+    # 2. Advance history (every cycle, even no-signal ones, so streaks break).
+    _recent_not_called.append(set(_normalize(not_called)))
+    _recent_unavailable.append(set(_normalize(unavailable)))
     _recent_timestamps.append(timestamp_utc)
 
-    # 3. Filter: skip silently when Floki reports no concrete items.
-    has_signal = bool(missing or obstacle or suggestions or tool_errors)
+    # 3. Filter: skip silently when no concrete items in any field.
+    has_signal = bool(not_called or unavailable or obstacle or suggestions or tool_errors)
     if not has_signal:
         return False
 
@@ -150,7 +159,14 @@ def dispatch_data_needs(
         log.debug(f"[dispatch_data_needs] boss_notes summary skipped: {e}")
         boss_summary = None
 
-    # 5. Send.
+    # 5. Send. drift_by_field tags each drift list with its source field so the
+    # Discord embed can label them clearly ("not_called drift" vs "unavailable").
+    drift_by_field = {}
+    if drift_not_called:
+        drift_by_field["not_called"] = drift_not_called
+    if drift_unavailable:
+        drift_by_field["unavailable"] = drift_unavailable
+
     try:
         from alerts import alert_data_needs
         return alert_data_needs(
@@ -159,7 +175,7 @@ def dispatch_data_needs(
             confidence=confidence,
             data_needs=data_needs,
             ticket_summary=ticket_summary,
-            drift=drift or None,
+            drift=drift_by_field or None,
             boss_notes_summary=boss_summary,
         )
     except Exception as e:
@@ -169,5 +185,6 @@ def dispatch_data_needs(
 
 def reset_state() -> None:
     """Test hook — clears drift history."""
-    _recent_signatures.clear()
+    _recent_not_called.clear()
+    _recent_unavailable.clear()
     _recent_timestamps.clear()

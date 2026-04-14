@@ -1363,13 +1363,14 @@ def alert_data_needs(
 ) -> bool:
     """FLO-302: Send Floki's data_needs self-assessment to Hermano's Discord.
 
-    `data_needs` must be the structured dict (missing_data, biggest_obstacle,
-    suggestions, tool_errors, timeframes_skipped, assessment). Caller is
-    responsible for filtering (skip "no missing data" cycles) — this function
-    sends whatever it's given.
+    `data_needs` must be the structured dict — FLO-306 schema:
+    {not_called[], unavailable[], biggest_obstacle, suggestions[], tool_errors[],
+     timeframes_skipped[], assessment}. Caller filters (skips empty cycles).
 
-    `drift` optional list of {item, count, first_seen} for items flagged across
-    multiple cycles; when non-empty a secondary DRIFT embed is sent.
+    `drift` optional dict {field_name: [{item, count, first_seen}, ...]} where
+    field_name is "not_called" or "unavailable". Each non-empty field
+    triggers a secondary DRIFT embed labeled with the field name. Legacy:
+    if a plain list is passed it's treated as a not_called drift.
 
     FLO-305: `boss_notes_summary` optional dict with keys "acked" and "pending",
     each a list of {"id": str, "text": str} objects. Rendered as a single
@@ -1389,7 +1390,17 @@ def alert_data_needs(
     desc = f"Ticket: {ticket_summary}" if ticket_summary else "Ticket: — (no position)"
 
     fields = []
-    f = _fmt_list_block("Missing data", data_needs.get("missing_data"))
+    # FLO-306: split "Missing data" → "Not called" (skipped, available) +
+    # "Unavailable" (errored / stale / doesn't exist).
+    # Back-compat: if the payload still has legacy "missing_data" without
+    # split fields, surface it under "Not called" — that matched its
+    # observed semantics.
+    _nc = data_needs.get("not_called")
+    if _nc is None:
+        _nc = data_needs.get("missing_data")
+    f = _fmt_list_block("Not called (skipped this cycle)", _nc)
+    if f: fields.append(f)
+    f = _fmt_list_block("Unavailable (errored / stale / missing)", data_needs.get("unavailable"))
     if f: fields.append(f)
 
     tfs = data_needs.get("timeframes_skipped") or []
@@ -1451,23 +1462,43 @@ def alert_data_needs(
         fields=fields or None,
     )
 
-    # Secondary DRIFT alert: same channel, separate message.
+    # Secondary DRIFT alert. FLO-306: drift is now keyed by field
+    # ("not_called" vs "unavailable"). Each field renders its own labeled
+    # group so Hermano can tell whether Floki is chronically skipping a
+    # tool (not_called) versus chronically reporting a broken one
+    # (unavailable). Legacy: if drift is a bare list, treat as not_called.
     if drift:
-        drift_fields = []
-        lines = []
-        for d in drift:
-            item = str(d.get("item", "?"))[:200]
-            n = int(d.get("count", 0))
-            first = d.get("first_seen") or "?"
-            lines.append(f"• **{item}** — {n} consecutive cycles (first: {first})")
-        drift_fields.append({"name": "Drifting items", "value": "\n".join(lines)[:1020], "inline": False})
-        discord_router.send_embed(
-            CHANNEL_DATA_NEEDS,
-            title=f"⚠️ DATA_NEEDS DRIFT — {timestamp_utc}",
-            description="Floki is naming these gaps every cycle without resolving them.",
-            color=0xfbbf24,  # amber — attention
-            fields=drift_fields,
-        )
+        if isinstance(drift, list):
+            drift = {"not_called": drift}
+        drift_fields: List[Dict[str, str]] = []
+        for field_label, items in drift.items():
+            if not items:
+                continue
+            lines = []
+            for d in items:
+                item = str(d.get("item", "?"))[:200]
+                n = int(d.get("count", 0))
+                first = d.get("first_seen") or "?"
+                lines.append(f"• **{item}** — {n} consecutive cycles (first: {first})")
+            pretty = {
+                "not_called":  "Drifting items — Not called",
+                "unavailable": "Drifting items — Unavailable",
+            }.get(field_label, f"Drifting items — {field_label}")
+            drift_fields.append({"name": pretty, "value": "\n".join(lines)[:1020], "inline": False})
+        if drift_fields:
+            # Description differentiates the two failure modes.
+            descr_parts = []
+            if drift.get("not_called"):
+                descr_parts.append("Floki keeps SKIPPING these tools every cycle.")
+            if drift.get("unavailable"):
+                descr_parts.append("These data sources are persistently UNAVAILABLE — investigate infra.")
+            discord_router.send_embed(
+                CHANNEL_DATA_NEEDS,
+                title=f"⚠️ DATA_NEEDS DRIFT — {timestamp_utc}",
+                description=" ".join(descr_parts) or "Drift detected.",
+                color=0xfbbf24,
+                fields=drift_fields,
+            )
     return ok
 
 

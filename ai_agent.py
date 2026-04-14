@@ -334,12 +334,15 @@ class AgentResult:
     invalidation: Optional[str] = None
     adjustment: Optional[Dict] = None
     close_reason: Optional[str] = None
-    # FLO-302: structured self-assessment. Expected shape:
-    #   {"missing_data": List[str], "timeframes_skipped": List[str],
+    # FLO-302 / FLO-306: structured self-assessment. Expected shape:
+    #   {"not_called": List[str],     // tools/data Floki had access to but skipped
+    #    "unavailable": List[str],    // genuinely missing/errored/stale
+    #    "timeframes_skipped": List[str],
     #    "biggest_obstacle": str, "suggestions": List[str],
     #    "tool_errors": List[str], "assessment": str}
-    # Backward compat: if the model emits a plain string, parser wraps it
-    # as {"assessment": <str>, other fields: [] or ""}.
+    # Back-compat: legacy "missing_data" key (FLO-302 schema) is wrapped into
+    # "not_called" since that was its observed semantics. Plain-string payloads
+    # get wrapped as {"assessment": <str>, other fields: [] or ""}.
     data_needs: Optional[Dict[str, Any]] = None
     rex_agreed: Optional[bool] = None  # FLO-158: kept for DB compat, always None now
     rex_reasoning: Optional[str] = None
@@ -1549,8 +1552,16 @@ class AIAgent:
                     return ""
 
             if isinstance(_dn_raw, dict):
+                # FLO-306: split into "not_called" and "unavailable" (was single
+                # "missing_data" which conflated both and confused readers).
+                # Back-compat: if the model still emits "missing_data", treat it
+                # as "not_called" — that matched its actual observed semantics.
+                _nc_raw = _dn_raw.get("not_called")
+                if _nc_raw is None:
+                    _nc_raw = _dn_raw.get("missing_data")  # legacy key
                 data_needs = {
-                    "missing_data":        _coerce_list(_dn_raw.get("missing_data")),
+                    "not_called":          _coerce_list(_nc_raw),
+                    "unavailable":         _coerce_list(_dn_raw.get("unavailable")),
                     "timeframes_skipped":  [s for s in _coerce_list(_dn_raw.get("timeframes_skipped"))
                                              if s.upper() in ("D1", "H4", "H1", "M15", "M5", "M1")],
                     "biggest_obstacle":    _coerce_str(_dn_raw.get("biggest_obstacle")),
@@ -1561,7 +1572,8 @@ class AIAgent:
             elif isinstance(_dn_raw, str) and _dn_raw.strip():
                 # Backward-compat: wrap legacy free-text as an assessment.
                 data_needs = {
-                    "missing_data": [],
+                    "not_called": [],
+                    "unavailable": [],
                     "timeframes_skipped": [],
                     "biggest_obstacle": "",
                     "suggestions": [],
@@ -1571,12 +1583,14 @@ class AIAgent:
 
             if data_needs is not None:
                 # Compact one-line log so grep stays useful.
-                _md = data_needs["missing_data"]; _tfs = data_needs["timeframes_skipped"]
+                _nc = data_needs["not_called"]; _ua = data_needs["unavailable"]
+                _tfs = data_needs["timeframes_skipped"]
                 _obs = data_needs["biggest_obstacle"]; _sugg = data_needs["suggestions"]
                 _errs = data_needs["tool_errors"]
                 logger.info(
                     "FLOKI_DATA_NEEDS | "
-                    f"missing={_md or '[]'} | "
+                    f"not_called={_nc or '[]'} | "
+                    f"unavailable={_ua or '[]'} | "
                     f"skipped_tfs={_tfs or '[]'} | "
                     f"obstacle=\"{_obs}\" | "
                     f"sugg={_sugg or '[]'} | "

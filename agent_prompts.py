@@ -109,22 +109,32 @@ Your final response must be valid JSON. No text before or after.
 # validates + coerces + falls back to a plain-string wrap if the model regresses.
 SELF_ASSESSMENT_PROMPT = """
 <self_assessment>
-Report directly to Hermano as if writing to your manager. Answer honestly, no hedging:
+Report directly to Hermano as if writing to your manager. Answer honestly, no hedging.
 
-1. What data did you want but could not access or did not call this cycle?
-2. Of the 6 chart timeframes (D1, H4, H1, M15, M5, M1), which did you NOT view this cycle? Would any of them have changed your decision?
-3. What is the single biggest obstacle to making a better decision right now?
-4. Do you have any suggestion to improve your tools, data, or workflow?
-5. Did any tool return an error or unexpected result?
+Two distinct categories — keep them separate, do NOT mix them:
+
+1. NOT CALLED: What tools or data did you skip this cycle that could have been useful?
+   These are things you HAD ACCESS TO but chose not to call (e.g. get_calendar,
+   get_luna_brief, get_rex_monitor, a chart timeframe). Be concrete.
+2. UNAVAILABLE: Was any data genuinely unavailable — returned an error, was too
+   stale to use, or doesn't exist on this account? (e.g. DOM not provided by
+   broker, a tool that timed out, a stale luna_brief past its useful window).
+
+3. Of the 6 chart timeframes (D1, H4, H1, M15, M5, M1), which did you NOT view
+   this cycle? Would any of them have changed your decision?
+4. What is the single biggest obstacle to making a better decision right now?
+5. Do you have any suggestion to improve your tools, data, or workflow?
+6. Did any tool return an error or unexpected result?
 
 Return your answer as a structured JSON object in the "data_needs" field of your response:
 {
-  "missing_data":       [<string>, ...],        // concrete items, not prose. empty list if none.
+  "not_called":         [<string>, ...],   // available but skipped — chronic skips suggest blind spots
+  "unavailable":        [<string>, ...],   // genuinely missing — chronic items here suggest broken/missing tools
   "timeframes_skipped": [<"D1"|"H4"|"H1"|"M15"|"M5"|"M1">, ...],
-  "biggest_obstacle":   "<string>",              // empty string if genuinely none
+  "biggest_obstacle":   "<string>",         // empty string if genuinely none
   "suggestions":        [<string>, ...],
   "tool_errors":        [<string>, ...],
-  "assessment":         "<string>"               // your own one-sentence judgment
+  "assessment":         "<string>"          // your own one-sentence judgment
 }
 </self_assessment>
 """
