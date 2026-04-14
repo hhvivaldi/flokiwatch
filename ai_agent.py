@@ -334,7 +334,13 @@ class AgentResult:
     invalidation: Optional[str] = None
     adjustment: Optional[Dict] = None
     close_reason: Optional[str] = None
-    data_needs: Optional[str] = None  # Diagnostic: what data Floki wanted but couldn't access
+    # FLO-302: structured self-assessment. Expected shape:
+    #   {"missing_data": List[str], "timeframes_skipped": List[str],
+    #    "biggest_obstacle": str, "suggestions": List[str],
+    #    "tool_errors": List[str], "assessment": str}
+    # Backward compat: if the model emits a plain string, parser wraps it
+    # as {"assessment": <str>, other fields: [] or ""}.
+    data_needs: Optional[Dict[str, Any]] = None
     rex_agreed: Optional[bool] = None  # FLO-158: kept for DB compat, always None now
     rex_reasoning: Optional[str] = None
     rex_insights: Optional[list] = None  # FLO-158: new insights format
@@ -1491,12 +1497,70 @@ class AIAgent:
             adjustment = parsed.get("adjustment")
             close_reason = parsed.get("close_reason")
 
-            # Diagnostic: data_needs (optional, never affects decisions)
-            data_needs = None
+            # FLO-302: data_needs — structured self-assessment (never affects decisions).
+            # Expected dict; wraps a plain string for backward compat if the model regresses.
+            data_needs: Optional[Dict[str, Any]] = None
             _dn_raw = parsed.get("data_needs")
-            if isinstance(_dn_raw, str) and _dn_raw.strip():
-                data_needs = _dn_raw.strip()[:500]
-                logger.info(f"FLOKI_DATA_NEEDS | {data_needs}")
+
+            def _coerce_list(v):
+                """Coerce to list[str], trimmed, capped at 10 items × 220 chars."""
+                if v is None: return []
+                if isinstance(v, str):
+                    v = [v]
+                if not isinstance(v, list): return []
+                out = []
+                for x in v:
+                    try:
+                        s = str(x).strip()
+                        if s:
+                            out.append(s[:220])
+                    except Exception:
+                        continue
+                    if len(out) >= 10:
+                        break
+                return out
+
+            def _coerce_str(v, cap=500):
+                if v is None: return ""
+                try:
+                    return str(v).strip()[:cap]
+                except Exception:
+                    return ""
+
+            if isinstance(_dn_raw, dict):
+                data_needs = {
+                    "missing_data":        _coerce_list(_dn_raw.get("missing_data")),
+                    "timeframes_skipped":  [s for s in _coerce_list(_dn_raw.get("timeframes_skipped"))
+                                             if s.upper() in ("D1", "H4", "H1", "M15", "M5")],
+                    "biggest_obstacle":    _coerce_str(_dn_raw.get("biggest_obstacle")),
+                    "suggestions":         _coerce_list(_dn_raw.get("suggestions")),
+                    "tool_errors":         _coerce_list(_dn_raw.get("tool_errors")),
+                    "assessment":          _coerce_str(_dn_raw.get("assessment")),
+                }
+            elif isinstance(_dn_raw, str) and _dn_raw.strip():
+                # Backward-compat: wrap legacy free-text as an assessment.
+                data_needs = {
+                    "missing_data": [],
+                    "timeframes_skipped": [],
+                    "biggest_obstacle": "",
+                    "suggestions": [],
+                    "tool_errors": [],
+                    "assessment": _coerce_str(_dn_raw, cap=500),
+                }
+
+            if data_needs is not None:
+                # Compact one-line log so grep stays useful.
+                _md = data_needs["missing_data"]; _tfs = data_needs["timeframes_skipped"]
+                _obs = data_needs["biggest_obstacle"]; _sugg = data_needs["suggestions"]
+                _errs = data_needs["tool_errors"]
+                logger.info(
+                    "FLOKI_DATA_NEEDS | "
+                    f"missing={_md or '[]'} | "
+                    f"skipped_tfs={_tfs or '[]'} | "
+                    f"obstacle=\"{_obs}\" | "
+                    f"sugg={_sugg or '[]'} | "
+                    f"errors={_errs or '[]'}"
+                )
 
             return AgentResult(
                 decision=decision,
