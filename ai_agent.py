@@ -452,9 +452,31 @@ class AIAgent:
                     self.client = OpenAI(api_key=_openai_key)
                     logger.info("AI Agent: primary client = OpenAI (no Qwen key)")
 
-                # FLO-297: Fallback model removed. Qwen-only; on Qwen failure
-                # the cycle is suspended and retried in 5 min.
+                # FLO-297: Qwen-only on failure = suspend + 5min retry.
+                # FLO-299: Optional OpenRouter fallback — same Qwen 3.6-Plus
+                # model from a different provider. When configured, a primary
+                # (Alibaba) failure tries OpenRouter once BEFORE going into
+                # maintenance mode. 15-min cooldown on primary after a
+                # successful fallback call (don't thrash).
                 self._qwen_unavailable = False
+                self._openrouter_client = None
+                self._openrouter_model = getattr(config, 'FLOKI_FALLBACK_MODEL', 'qwen/qwen3.6-plus')
+                self._alibaba_cooldown_until = 0.0   # unix ts; 0 = no cooldown
+                self._on_openrouter = False          # True while actively using fallback
+                _or_key = getattr(config, 'FLOKI_FALLBACK_API_KEY', '')
+                _or_base = getattr(config, 'FLOKI_FALLBACK_API_BASE', '')
+                if _or_key and _or_base:
+                    try:
+                        self._openrouter_client = OpenAI(
+                            api_key=_or_key, base_url=_or_base, timeout=90, max_retries=0,
+                        )
+                        logger.info(
+                            f"AI Agent: OpenRouter fallback configured "
+                            f"(base={_or_base}, model={self._openrouter_model})"
+                        )
+                    except Exception as _or_e:
+                        logger.warning(f"AI Agent: failed to init OpenRouter client: {_or_e}")
+                        self._openrouter_client = None
             except ImportError:
                 logger.error("openai package not installed. Run: pip install openai")
                 self.enabled = False
@@ -1029,28 +1051,54 @@ class AIAgent:
                     "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace,
                 }
 
+            # FLO-299: Alibaba (primary) → OpenRouter (same Qwen 3.6-Plus) → suspend.
+            # Decide which client to use this iteration:
+            #   - If Alibaba is in cooldown (15 min after last failure): use OpenRouter.
+            #   - Otherwise: try Alibaba, and on non-retryable error try OpenRouter once.
+            import time as _time_pkg
+            _now_ts = _time_pkg.time()
+            _alibaba_in_cooldown = (
+                self._openrouter_client is not None
+                and _now_ts < getattr(self, "_alibaba_cooldown_until", 0.0)
+            )
+            _primary_client = self.client
+            _primary_model = self.model
+            _primary_label = "Alibaba"
+            if _alibaba_in_cooldown:
+                _primary_client = self._openrouter_client
+                _primary_model = self._openrouter_model
+                _primary_label = "OpenRouter"
+
+            def _sync_call_on(_client, _model):
+                kwargs = {
+                    "model": _model,
+                    "messages": messages,
+                    "tools": openai_tools,
+                    "max_completion_tokens": int(self.max_tokens),
+                    "temperature": 1.0,
+                    "timeout": PER_CALL_TIMEOUT,
+                }
+                if not openai_tools:
+                    kwargs["response_format"] = {"type": "json_object"}
+                return _client.chat.completions.create(**kwargs)
+
             try:
-                # FLO-297: Qwen-only. On failure, suspend the cycle and retry
-                # every 5 minutes until Qwen responds. No other model involved.
-                def _sync_call():
-                    kwargs = {
-                        "model": self.model,
-                        "messages": messages,
-                        "tools": openai_tools,
-                        "max_completion_tokens": int(self.max_tokens),
-                        "temperature": 1.0,
-                        "timeout": PER_CALL_TIMEOUT,
-                    }
-                    # Only force JSON output when no tool calls are expected (avoids degrading tool use)
-                    if not openai_tools:
-                        kwargs["response_format"] = {"type": "json_object"}
-                    return self.client.chat.completions.create(**kwargs)
-                resp = await loop.run_in_executor(None, _sync_call)
-                # FLO-297: Qwen recovered from a prior outage — log it once
-                # and clear the flag. Next failure (if any) will log fresh.
-                if getattr(self, "_qwen_unavailable", False):
-                    logger.info("FLOKI | Qwen recovered — resuming normal operations")
+                resp = await loop.run_in_executor(None, _sync_call_on, _primary_client, _primary_model)
+                # Success bookkeeping:
+                # - If we just succeeded on Alibaba while cooldown was active,
+                #   clear cooldown and log recovery.
+                # - If we succeeded on OpenRouter but weren't on it before, log the switch.
+                if _primary_label == "Alibaba":
+                    if getattr(self, "_qwen_unavailable", False) or getattr(self, "_alibaba_cooldown_until", 0.0) > 0:
+                        logger.info("FLOKI | Alibaba recovered — switching back to primary")
                     self._qwen_unavailable = False
+                    self._alibaba_cooldown_until = 0.0
+                    self._on_openrouter = False
+                else:
+                    # We're using OpenRouter (Alibaba in cooldown). Log once per streak.
+                    if not getattr(self, "_on_openrouter", False):
+                        logger.info(f"FLOKI | Running on OpenRouter fallback (model={_primary_model})")
+                        self._on_openrouter = True
             except Exception as e:
                 _err_s = str(e).lower()
                 _non_retryable = any(k in _err_s for k in (
@@ -1058,36 +1106,68 @@ class AIAgent:
                     "insufficient_quota", "invalid_api_key", "invalid api key",
                     "unauthorized", "forbidden", "451",
                 ))
-                if _non_retryable:
-                    # Pick the specific reason label for the log.
-                    if "arrearage" in _err_s or "overdue-payment" in _err_s:
-                        short_reason = "Arrearage"
-                    elif "insufficient_quota" in _err_s:
-                        short_reason = "Insufficient quota"
-                    elif "invalid_api_key" in _err_s or "invalid api key" in _err_s:
-                        short_reason = "Invalid API key"
-                    elif "unauthorized" in _err_s:
-                        short_reason = "Unauthorized"
-                    elif "forbidden" in _err_s:
-                        short_reason = "Forbidden"
-                    elif "451" in _err_s:
-                        short_reason = "451 (blocked)"
-                    else:
-                        short_reason = "non-retryable API error"
 
-                    # FLO-297: force next check in exactly 5 minutes regardless
-                    # of open positions or progressive backoff. Write directly
-                    # to the same file set_next_check uses so the scheduler
-                    # picks it up without routing through the tool layer.
+                # Transient error (5xx, timeout, connection reset): bounded
+                # retry via the outer iteration counter. Same cycle, next iter.
+                if not _non_retryable:
+                    logger.warning(f"FLOKI | {_primary_label} transient error (iteration {iteration}): {e}")
+                    await asyncio.sleep(2)
+                    continue
+
+                # Non-retryable. Pick a human-readable reason.
+                if "arrearage" in _err_s or "overdue-payment" in _err_s:
+                    short_reason = "Arrearage"
+                elif "insufficient_quota" in _err_s:
+                    short_reason = "Insufficient quota"
+                elif "invalid_api_key" in _err_s or "invalid api key" in _err_s:
+                    short_reason = "Invalid API key"
+                elif "unauthorized" in _err_s:
+                    short_reason = "Unauthorized"
+                elif "forbidden" in _err_s:
+                    short_reason = "Forbidden"
+                elif "451" in _err_s:
+                    short_reason = "451 (blocked)"
+                else:
+                    short_reason = "non-retryable API error"
+
+                # FLO-299: if Alibaba just failed and OpenRouter is configured,
+                # cooldown Alibaba for 15 min and retry this iteration on OR.
+                _openrouter_ok = False
+                if _primary_label == "Alibaba" and self._openrouter_client is not None:
+                    logger.warning(
+                        f"FLOKI | Alibaba unavailable ({short_reason}) — switching to OpenRouter fallback"
+                    )
+                    self._alibaba_cooldown_until = _time_pkg.time() + 15 * 60
+                    try:
+                        resp = await loop.run_in_executor(
+                            None, _sync_call_on, self._openrouter_client, self._openrouter_model
+                        )
+                        _openrouter_ok = True
+                        if not getattr(self, "_on_openrouter", False):
+                            logger.info(f"FLOKI | Running on OpenRouter fallback (model={self._openrouter_model})")
+                            self._on_openrouter = True
+                    except Exception as or_e:
+                        logger.error(
+                            f"FLOKI | OpenRouter fallback also unavailable — suspending cycle ({or_e})"
+                        )
+                        short_reason = f"{short_reason} (+ OpenRouter failed)"
+
+                # If OpenRouter rescued this iteration, fall through to resp parsing.
+                if not _openrouter_ok:
+                    # Reached here because:
+                    #   (a) we were on OpenRouter already and it failed, or
+                    #   (b) Alibaba failed and OpenRouter failed too, or
+                    #   (c) OpenRouter isn't configured
+                    # Suspend with 5-min retry (FLO-297 semantics).
                     try:
                         import os as _os
                         from datetime import timedelta as _td
                         _data_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data")
                         _os.makedirs(_data_dir, exist_ok=True)
                         _next_path = _os.path.join(_data_dir, "agent_next_check.json")
-                        _now = datetime.utcnow()
+                        _now_dt = datetime.utcnow()
                         _next_payload = {
-                            "next_check_at": (_now + _td(minutes=5)).isoformat(timespec="seconds") + "Z",
+                            "next_check_at": (_now_dt + _td(minutes=5)).isoformat(timespec="seconds") + "Z",
                             "requested_minutes": 5,
                         }
                         _tmp = _next_path + ".tmp"
@@ -1101,6 +1181,7 @@ class AIAgent:
                         f"FLOKI | Qwen unavailable ({short_reason}) — suspended, retrying in 5 min"
                     )
                     self._qwen_unavailable = True
+                    self._on_openrouter = False
                     return {
                         "decision": "WAIT",
                         "confidence": 0,
@@ -1120,11 +1201,6 @@ class AIAgent:
                         "model": last_model,
                         "tool_trace": tool_trace,
                     }
-                # Transient error (5xx, timeout, connection reset): bounded
-                # retry via the outer iteration counter. Same cycle, not next.
-                logger.warning(f"FLOKI | Qwen transient error (iteration {iteration}): {e}")
-                await asyncio.sleep(2)
-                continue
 
             try:
                 usage = resp.usage
