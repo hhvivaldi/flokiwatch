@@ -452,11 +452,9 @@ class AIAgent:
                     self.client = OpenAI(api_key=_openai_key)
                     logger.info("AI Agent: primary client = OpenAI (no Qwen key)")
 
-                # Fallback client (GPT-5.4)
-                self._fallback_client = None
-                self._fallback_model = getattr(config, 'FLOKI_FALLBACK_MODEL', 'gpt-5.4')
-                if _openai_key:
-                    self._fallback_client = OpenAI(api_key=_openai_key)
+                # FLO-297: Fallback model removed. Qwen-only; on Qwen failure
+                # the cycle is suspended and retried in 5 min.
+                self._qwen_unavailable = False
             except ImportError:
                 logger.error("openai package not installed. Run: pip install openai")
                 self.enabled = False
@@ -1032,10 +1030,8 @@ class AIAgent:
                 }
 
             try:
-                # FLO-296: Qwen-only — no model fallback. If Qwen is down,
-                # skip the cycle and wait for it to recover. Simpler + we trust
-                # Qwen's reasoning; GPT-5.4 on a different prompt contract would
-                # produce incomparable decisions.
+                # FLO-297: Qwen-only. On failure, suspend the cycle and retry
+                # every 5 minutes until Qwen responds. No other model involved.
                 def _sync_call():
                     kwargs = {
                         "model": self.model,
@@ -1050,11 +1046,12 @@ class AIAgent:
                         kwargs["response_format"] = {"type": "json_object"}
                     return self.client.chat.completions.create(**kwargs)
                 resp = await loop.run_in_executor(None, _sync_call)
+                # FLO-297: Qwen recovered from a prior outage — log it once
+                # and clear the flag. Next failure (if any) will log fresh.
+                if getattr(self, "_qwen_unavailable", False):
+                    logger.info("FLOKI | Qwen recovered — resuming normal operations")
+                    self._qwen_unavailable = False
             except Exception as e:
-                # FLO-296: Qwen failure handler.
-                # Non-retryable errors (billing/auth/blocked) → abort cycle
-                # immediately with conf=0 and a specific reason. No 42-iteration
-                # burn, no fallback model.
                 _err_s = str(e).lower()
                 _non_retryable = any(k in _err_s for k in (
                     "arrearage", "overdue-payment", "access denied",
@@ -1062,7 +1059,7 @@ class AIAgent:
                     "unauthorized", "forbidden", "451",
                 ))
                 if _non_retryable:
-                    # Pick the specific reason label for the log + decision payload.
+                    # Pick the specific reason label for the log.
                     if "arrearage" in _err_s or "overdue-payment" in _err_s:
                         short_reason = "Arrearage"
                     elif "insufficient_quota" in _err_s:
@@ -1077,20 +1074,43 @@ class AIAgent:
                         short_reason = "451 (blocked)"
                     else:
                         short_reason = "non-retryable API error"
+
+                    # FLO-297: force next check in exactly 5 minutes regardless
+                    # of open positions or progressive backoff. Write directly
+                    # to the same file set_next_check uses so the scheduler
+                    # picks it up without routing through the tool layer.
+                    try:
+                        import os as _os
+                        from datetime import timedelta as _td
+                        _data_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data")
+                        _os.makedirs(_data_dir, exist_ok=True)
+                        _next_path = _os.path.join(_data_dir, "agent_next_check.json")
+                        _now = datetime.utcnow()
+                        _next_payload = {
+                            "next_check_at": (_now + _td(minutes=5)).isoformat(timespec="seconds") + "Z",
+                            "requested_minutes": 5,
+                        }
+                        _tmp = _next_path + ".tmp"
+                        with open(_tmp, "w", encoding="utf-8") as _f:
+                            json.dump(_next_payload, _f, indent=2)
+                        _os.replace(_tmp, _next_path)
+                    except Exception as _sched_err:
+                        logger.debug(f"FLOKI | next_check write failed (ignored): {_sched_err}")
+
                     logger.error(
-                        f"FLOKI | Qwen API unavailable ({short_reason}) — cycle suspended. "
-                        f"Floki will retry Qwen on the next scheduled cycle."
+                        f"FLOKI | Qwen unavailable ({short_reason}) — suspended, retrying in 5 min"
                     )
+                    self._qwen_unavailable = True
                     return {
                         "decision": "WAIT",
                         "confidence": 0,
-                        "reasoning": "API unavailable — waiting for Qwen to recover",
+                        "reasoning": "Qwen API unavailable",
                         "key_factors": [],
                         "concerns": ["qwen_api_unavailable", short_reason.lower().replace(" ", "_")],
                         "content": json.dumps({
                             "decision": "WAIT",
                             "confidence": 0,
-                            "reasoning": "API unavailable — waiting for Qwen to recover",
+                            "reasoning": "Qwen API unavailable",
                             "key_factors": [],
                             "concerns": ["qwen_api_unavailable"],
                         }),
