@@ -24,6 +24,7 @@ CHANNEL_MONTHLY = "monthly"
 CHANNEL_BACKTEST = "backtest"
 CHANNEL_ERRORS = "errors"
 CHANNEL_CHANGELOG = "changelog"
+CHANNEL_DATA_NEEDS = "data_needs"  # FLO-302: Floki's structured self-assessment → Hermano
 
 WEBHOOK_ENV_KEYS = {
     CHANNEL_SIGNALS: "DISCORD_WEBHOOK_SIGNALS",
@@ -37,6 +38,7 @@ WEBHOOK_ENV_KEYS = {
     CHANNEL_BACKTEST: "DISCORD_WEBHOOK_BACKTEST",
     CHANNEL_ERRORS: "DISCORD_WEBHOOK_ERRORS",
     CHANNEL_CHANGELOG: "DISCORD_WEBHOOK_CHANGELOG",
+    CHANNEL_DATA_NEEDS: "DISCORD_WEBHOOK_DATA_NEEDS",  # FLO-302
 }
 
 ERROR_RATE_LIMIT_SECONDS = 60
@@ -1333,6 +1335,103 @@ def test_alerts():
     print(f"   Result: {'✅ OK' if result else '❌ Failed'}")
     
     print("\n✅ Test complete!")
+
+
+# ============================================================================
+# FLO-302: data_needs — Floki's structured self-assessment to Hermano
+# ============================================================================
+
+def _fmt_list_block(title: str, items: Optional[List[str]], bullet: str = "•") -> Optional[Dict]:
+    """Render a non-empty list as a Discord embed field. Returns None if empty."""
+    if not items:
+        return None
+    body = "\n".join(f"{bullet} {str(x)[:220]}" for x in items if str(x).strip())
+    if not body.strip():
+        return None
+    # Discord field value cap is 1024 chars
+    return {"name": title, "value": body[:1020], "inline": False}
+
+
+def alert_data_needs(
+    timestamp_utc: str,
+    decision: Optional[str],
+    confidence: Optional[int],
+    data_needs: Dict,
+    ticket_summary: Optional[str] = None,
+    drift: Optional[List[Dict]] = None,
+) -> bool:
+    """FLO-302: Send Floki's data_needs self-assessment to Hermano's Discord.
+
+    `data_needs` must be the structured dict (missing_data, biggest_obstacle,
+    suggestions, tool_errors, timeframes_skipped, assessment). Caller is
+    responsible for filtering (skip "no missing data" cycles) — this function
+    sends whatever it's given.
+
+    `drift` optional list of {item, count, first_seen} for items flagged across
+    multiple cycles; when non-empty a secondary DRIFT embed is sent.
+    """
+    if not isinstance(data_needs, dict):
+        log.debug(f"[alert_data_needs] ignored non-dict payload: {type(data_needs).__name__}")
+        return False
+
+    # Header line
+    dec_part = (decision or "?")
+    if confidence is not None:
+        dec_part += f" ({confidence}%)"
+    title = f"🔍 DATA_NEEDS — {timestamp_utc} — {dec_part}"
+
+    # Description: ticket context, one line.
+    desc = f"Ticket: {ticket_summary}" if ticket_summary else "Ticket: — (no position)"
+
+    fields = []
+    f = _fmt_list_block("Missing data", data_needs.get("missing_data"))
+    if f: fields.append(f)
+
+    tfs = data_needs.get("timeframes_skipped") or []
+    if tfs:
+        fields.append({"name": "Skipped timeframes", "value": ", ".join(str(t) for t in tfs)[:1020], "inline": True})
+
+    obstacle = (data_needs.get("biggest_obstacle") or "").strip()
+    if obstacle:
+        fields.append({"name": "Biggest obstacle", "value": obstacle[:1020], "inline": False})
+
+    f = _fmt_list_block("Suggestions", data_needs.get("suggestions"))
+    if f: fields.append(f)
+
+    f = _fmt_list_block("Tool errors", data_needs.get("tool_errors"))
+    if f: fields.append(f)
+
+    assessment = (data_needs.get("assessment") or "").strip()
+    if assessment:
+        fields.append({"name": "Assessment", "value": assessment[:1020], "inline": False})
+
+    color = 0x3b82f6  # blue — informational
+    ok = discord_router.send_embed(
+        CHANNEL_DATA_NEEDS,
+        title=title,
+        description=desc,
+        color=color,
+        fields=fields or None,
+    )
+
+    # Secondary DRIFT alert: same channel, separate message.
+    if drift:
+        drift_fields = []
+        lines = []
+        for d in drift:
+            item = str(d.get("item", "?"))[:200]
+            n = int(d.get("count", 0))
+            first = d.get("first_seen") or "?"
+            lines.append(f"• **{item}** — {n} consecutive cycles (first: {first})")
+        drift_fields.append({"name": "Drifting items", "value": "\n".join(lines)[:1020], "inline": False})
+        discord_router.send_embed(
+            CHANNEL_DATA_NEEDS,
+            title=f"⚠️ DATA_NEEDS DRIFT — {timestamp_utc}",
+            description="Floki is naming these gaps every cycle without resolving them.",
+            color=0xfbbf24,  # amber — attention
+            fields=drift_fields,
+        )
+    return ok
 
 
 if __name__ == "__main__":
