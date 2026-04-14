@@ -2439,7 +2439,43 @@ class AgentTools:
                 "ORDER BY close_time DESC LIMIT ?",
                 (lim * 2,),  # fetch extra to allow filtering
             ).fetchall()
+
+            # FLO-300: pull OPEN_* decisions once so we can attach opening
+            # confidence to each trade below without N extra DB roundtrips.
+            try:
+                _open_decisions = conn.execute(
+                    "SELECT timestamp, agent_decision, agent_confidence "
+                    "FROM agent_proactive_analyses "
+                    "WHERE agent_decision IN ('OPEN_BUY', 'OPEN_SELL') "
+                    "ORDER BY timestamp ASC"
+                ).fetchall()
+            except Exception:
+                _open_decisions = []
             conn.close()
+
+            from datetime import datetime as _dt
+            def _find_open_conf(direction, open_time_iso):
+                if not direction or not open_time_iso:
+                    return None
+                want = "OPEN_BUY" if str(direction).upper() == "BUY" else "OPEN_SELL"
+                try:
+                    t_target = _dt.fromisoformat(str(open_time_iso).rstrip("Z").split(".")[0])
+                except Exception:
+                    return None
+                best = None; best_delta = None
+                for d in _open_decisions:
+                    if d["agent_decision"] != want:
+                        continue
+                    try:
+                        t_dec = _dt.fromisoformat(str(d["timestamp"]).rstrip("Z").split(".")[0])
+                    except Exception:
+                        continue
+                    delta = abs((t_target - t_dec).total_seconds())
+                    if delta > 600:
+                        continue
+                    if best_delta is None or delta < best_delta:
+                        best_delta = delta; best = d["agent_confidence"]
+                return best
 
             # Session helper (same as sage_auditor corrected logic)
             _offset = int(getattr(_cfg, "MT5_SERVER_UTC_OFFSET", 2) or 2)
@@ -2472,6 +2508,7 @@ class AgentTools:
             adj_hurt = 0
             adj_neutral = 0
             count = 0
+            _conf_outcomes = []   # FLO-300: (open_conf, pnl) pairs for band stats
 
             for r in rows:
                 if count >= lim:
@@ -2495,15 +2532,23 @@ class AgentTools:
                 orig_sl = t.get("sl")
 
                 # Capture rate — FLO-290: pips/pips (was dollars/pips bug).
-                from capture import compute_capture_pct
+                # FLO-300: display helper clamps extremes and shows "LOSS" for
+                # noise-floor-small-MFE losses (previously rendered as "-6100%").
+                from capture import compute_capture_pct, pnl_pips as _pnl_pips, format_capture_display
                 capture = compute_capture_pct(
                     direction=t.get("direction"),
                     entry_price=t.get("open_price"),
                     close_price=t.get("close_price"),
                     mfe_points=mfe,
                 )
+                _pp = _pnl_pips(t.get("direction"), t.get("open_price"), t.get("close_price"))
+                _capture_str = format_capture_display(capture, mfe, _pp)
                 if capture is not None and mfe is not None and mfe > 0:
                     total_capture.append(capture)
+                # FLO-300: opening confidence + track (conf, pnl) for band stats
+                _open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
+                if _open_conf is not None:
+                    _conf_outcomes.append((int(_open_conf), float(pnl or 0)))
 
                 # Adjustments
                 adjustments = get_trade_adjustments(int(ticket))
@@ -2572,13 +2617,17 @@ class AgentTools:
                         verdict = "NEUTRAL"
                         adj_neutral += 1
 
-                # Format trade XML
+                # Format trade XML.
+                # FLO-300: capture uses display helper (clamped / "LOSS");
+                # open_conf is the agent's confidence at open (or "?" if no
+                # OPEN_* decision found within 10 min of open_time).
                 _f = lambda v, d=2: f"{float(v):.{d}f}" if v is not None else "?"
+                _oc_str = f"{int(_open_conf)}%" if _open_conf is not None else "?"
                 line = (
                     f'  <trade ticket="{ticket}" dir="{direction}" '
                     f'session="{sess_open}->{sess_close}" '
                     f'pnl="${_f(pnl)}" mfe="{_f(mfe, 1)}pts" mae="{_f(mae, 1)}pts" '
-                    f'capture="{("?" if capture is None else (f"{capture:.0f}%" if float(capture).is_integer() else f"{capture}%"))}" '
+                    f'capture="{_capture_str}" open_conf="{_oc_str}" '
                     f'entry="{_f(t.get("open_price"))}" orig_sl="{_f(orig_sl)}" '
                     f'final_sl="{_f(final_sl)}" tp="{_f(t.get("tp"))}" '
                     f'close="{_f(t.get("close_price"))}" type="{t.get("close_reason", "?")}" '
@@ -2710,11 +2759,32 @@ class AgentTools:
             helped_pct = round(adj_helped / total_adj_trades * 100) if total_adj_trades > 0 else None
             hurt_pct = round(adj_hurt / total_adj_trades * 100) if total_adj_trades > 0 else None
 
+            # FLO-300: win-rate-by-confidence-band summary for Floki to learn from.
+            # Bands: <50, 50-65, 65+. "Win" = pnl > 0.
+            _bands = {"lt50": [0,50,0,0], "mid": [50,65,0,0], "ge65": [65,101,0,0]}
+            for _c, _p in _conf_outcomes:
+                for _b in _bands.values():
+                    if _b[0] <= _c < _b[1]:
+                        _b[2] += 1           # trades
+                        if _p > 0: _b[3] += 1  # wins
+                        break
+            def _band_attr(b):
+                if not b[2]: return None
+                return f"{b[3]}/{b[2]} ({round(b[3]/b[2]*100)}%)"
+            _lt50 = _band_attr(_bands["lt50"])
+            _mid  = _band_attr(_bands["mid"])
+            _ge65 = _band_attr(_bands["ge65"])
+
             header = f'<trade_journal count="{count}"'
             if avg_cap is not None:
                 header += f' avg_capture="{avg_cap}%"'
             if helped_pct is not None:
                 header += f' adj_helped="{helped_pct}%" adj_hurt="{hurt_pct}%"'
+            # FLO-300: band breakdown — only emit bands that have data, so Floki
+            # isn't misled by "0/0" slots.
+            if _lt50 is not None: header += f' wr_lt50="{_lt50}"'
+            if _mid  is not None: header += f' wr_50_65="{_mid}"'
+            if _ge65 is not None: header += f' wr_65_plus="{_ge65}"'
             header += ">"
 
             xml = header + "\n" + "\n".join(trades_xml) + "\n</trade_journal>"

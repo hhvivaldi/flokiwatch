@@ -2367,6 +2367,7 @@
                   <th style="padding:4px 6px">P&amp;L</th>
                   <th style="padding:4px 6px">MFE</th>
                   <th style="padding:4px 6px">Capture</th>
+                  <th style="padding:4px 6px" title="Confidence at open">Conf</th>
                   <th style="padding:4px 6px">#Adj</th>
                   <th style="padding:4px 6px">Verdict</th>
                 </tr>
@@ -2422,7 +2423,22 @@
             if (stats.adj_helped_pct != null) parts.push('<span style="color:#4ade80">Adj Helped: <b>' + stats.adj_helped_pct + '%</b></span>');
             if (stats.adj_hurt_pct != null) parts.push('<span style="color:#f87171">Adj Hurt: <b>' + stats.adj_hurt_pct + '%</b></span>');
             parts.push('<span style="color:#6b7280">Trades: ' + stats.total_trades + ' (' + stats.trades_with_cf + ' with counterfactual)</span>');
-            statsEl.innerHTML = parts.join('<span style="color:#374151"> | </span>');
+            // FLO-300: win rate by opening-confidence band
+            var wrbc = stats.win_rate_by_conf;
+            var bandHtml = '';
+            if (wrbc) {
+              function _fmtBand(lbl, b, color) {
+                if (!b || !b.trades) return '<span style="color:#4b5563">' + lbl + ': —</span>';
+                return '<span style="color:' + color + '"><b>' + lbl + ':</b> ' + b.wins + '/' + b.trades + ' (' + (b.win_rate_pct != null ? b.win_rate_pct + '%' : '?') + ')</span>';
+              }
+              bandHtml = '<span style="color:#6b7280">Win rate by confidence:</span> ' +
+                _fmtBand('&lt;50%',    wrbc.low,  '#f87171') + ' · ' +
+                _fmtBand('50&ndash;65%', wrbc.mid,  '#fbbf24') + ' · ' +
+                _fmtBand('65%+',        wrbc.high, '#4ade80');
+            }
+            statsEl.innerHTML =
+              '<div>' + parts.join('<span style="color:#374151"> | </span>') + '</div>' +
+              (bandHtml ? '<div style="margin-top:4px">' + bandHtml + '</div>' : '');
             // Table
             var tbody = document.getElementById('journal-tbody');
             if (!trades.length) { document.getElementById('journal-empty').style.display='block'; return; }
@@ -2430,10 +2446,29 @@
             trades.forEach(function(t){
               var pnlColor = t.pnl >= 0 ? '#4ade80' : '#f87171';
               var dirColor = t.direction === 'BUY' ? '#4ade80' : '#f87171';
-              // FLO-288: integer-only when it's a whole number (0.0 → "0%", 45.3 → "45.3%")
-              var capStr = t.capture_pct != null
-                ? (Number.isInteger(t.capture_pct) ? t.capture_pct + '%' : t.capture_pct.toFixed(1) + '%')
-                : '-';
+              // FLO-300: prefer server-rendered display ("LOSS" / clamped / ±N%). Fall back
+              // to old numeric rendering only if the field is missing (old API cache).
+              var capStr;
+              if (typeof t.capture_display === 'string' && t.capture_display.length) {
+                capStr = t.capture_display;
+              } else if (t.capture_pct != null) {
+                capStr = Number.isInteger(t.capture_pct) ? t.capture_pct + '%' : t.capture_pct.toFixed(1) + '%';
+              } else {
+                capStr = '-';
+              }
+              // Color Capture: "LOSS" = red; band-clamped shows its sign color.
+              var capColor = '#e2e8f0';
+              if (capStr === 'LOSS') capColor = '#f87171';
+              else if (capStr.indexOf('-') === 0 || capStr === '0%') capColor = '#f87171';
+              else if (capStr.indexOf('+') === 0) capColor = '#4ade80';
+              // FLO-300: Conf column
+              var confStr = '—';
+              var confColor = '#6b7280';
+              if (t.open_conf != null) {
+                var cN = Number(t.open_conf);
+                confStr = cN + '%';
+                confColor = cN >= 65 ? '#4ade80' : (cN >= 50 ? '#fbbf24' : '#f87171');
+              }
               var mfeStr = '-';
               if (t.mfe != null) {
                 var mfeN = Number(t.mfe);
@@ -2451,7 +2486,8 @@
                 '<td style="padding:4px 6px;color:#9ca3af">' + t.session_open + (t.session_open !== t.session_close ? '->'+t.session_close : '') + '</td>' +
                 '<td style="padding:4px 6px;color:'+pnlColor+';font-weight:600">$' + Number(t.pnl).toFixed(2) + '</td>' +
                 '<td style="padding:4px 6px;color:#e2e8f0">' + mfeStr + '</td>' +
-                '<td style="padding:4px 6px;color:#e2e8f0">' + capStr + '</td>' +
+                '<td style="padding:4px 6px;color:' + capColor + '">' + capStr + '</td>' +
+                '<td style="padding:4px 6px;color:' + confColor + ';text-align:center;font-weight:700">' + confStr + '</td>' +
                 '<td style="padding:4px 6px;color:#9ca3af;text-align:center">' + t.adj_count + '</td>' +
                 '<td style="padding:4px 6px">' + verdictHtml + '</td>' +
                 '</tr>';

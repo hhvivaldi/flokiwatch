@@ -1885,7 +1885,46 @@ def journal_data():
             "SELECT ticket, timestamp, old_sl, new_sl, old_tp, new_tp, source "
             "FROM trade_adjustments ORDER BY timestamp ASC"
         ).fetchall()
+
+        # FLO-300: Load OPEN_* decisions so we can attach the opening confidence
+        # to each trade. Pulled once and indexed by (direction, timestamp) so the
+        # per-trade match is O(n) without repeated DB roundtrips.
+        try:
+            open_rows = conn.execute(
+                "SELECT timestamp, agent_decision, agent_confidence "
+                "FROM agent_proactive_analyses "
+                "WHERE agent_decision IN ('OPEN_BUY', 'OPEN_SELL') "
+                "ORDER BY timestamp ASC"
+            ).fetchall()
+        except Exception:
+            open_rows = []
         conn.close()
+
+        def _find_open_conf(direction, open_time_iso):
+            """Closest OPEN_{direction} decision within 10 min of open_time."""
+            if not direction or not open_time_iso:
+                return None
+            want = "OPEN_BUY" if str(direction).upper() == "BUY" else "OPEN_SELL"
+            try:
+                t_target = datetime.fromisoformat(open_time_iso.rstrip("Z").split(".")[0])
+            except Exception:
+                return None
+            best = None
+            best_delta = None
+            for d in open_rows:
+                if d["agent_decision"] != want:
+                    continue
+                try:
+                    t_dec = datetime.fromisoformat(str(d["timestamp"]).rstrip("Z").split(".")[0])
+                except Exception:
+                    continue
+                delta = abs((t_target - t_dec).total_seconds())
+                if delta > 600:  # 10 min window
+                    continue
+                if best_delta is None or delta < best_delta:
+                    best_delta = delta
+                    best = d["agent_confidence"]
+            return best
 
         # Index adjustments by ticket
         adj_by_ticket = {}
@@ -1916,15 +1955,22 @@ def journal_data():
                 orig_sl = adjustments[0].get("old_sl") or orig_sl
 
             # FLO-290: capture = pips/pips (was dollars/pips — unit mismatch).
-            from capture import compute_capture_pct
+            # FLO-300: add display-friendly capture that clamps [−100%, 500%]
+            # and substitutes "LOSS" when MFE is noise-floor small.
+            from capture import compute_capture_pct, pnl_pips, format_capture_display
             capture = compute_capture_pct(
                 direction=t.get("direction"),
                 entry_price=t.get("open_price"),
                 close_price=t.get("close_price"),
                 mfe_points=mfe,
             )
+            _pp = pnl_pips(t.get("direction"), t.get("open_price"), t.get("close_price"))
+            capture_display = format_capture_display(capture, mfe, _pp)
             if capture is not None and mfe is not None and mfe > 0:
                 total_capture.append(capture)
+
+            # FLO-300: opening confidence from the OPEN_* decision closest to open_time
+            open_conf = _find_open_conf(t.get("direction"), t.get("open_time"))
 
             # Load counterfactual
             cf = None
@@ -1998,7 +2044,10 @@ def journal_data():
                 "close_reason": t.get("close_reason"),
                 "mfe": mfe,
                 "mae": mae,
-                "capture_pct": capture,
+                "capture_pct": capture,          # raw numeric (kept for analysis)
+                "capture_display": capture_display,  # FLO-300: clamped/LOSS for UI
+                "open_conf": open_conf,          # FLO-300: opening confidence (0-100) or None
+                "pnl_pips": round(_pp, 1) if _pp is not None else None,
                 "adj_count": len(adjustments),
                 "adjustments": adjustments,
                 "verdict": verdict,
@@ -2008,12 +2057,39 @@ def journal_data():
             })
 
         total_adj = adj_helped + adj_hurt + adj_neutral
+
+        # FLO-300: win rate by opening-confidence band. "Win" = pnl > 0.
+        # Bands match Hermano's spec: <50%, 50–65%, 65%+.
+        bands = {
+            "low":  {"min": 0,  "max": 50,  "trades": 0, "wins": 0},
+            "mid":  {"min": 50, "max": 65,  "trades": 0, "wins": 0},
+            "high": {"min": 65, "max": 101, "trades": 0, "wins": 0},
+        }
+        for t in trades:
+            c = t.get("open_conf")
+            if c is None:
+                continue
+            for b in bands.values():
+                if b["min"] <= c < b["max"]:
+                    b["trades"] += 1
+                    if (t.get("pnl") or 0) > 0:
+                        b["wins"] += 1
+                    break
+        def _band_dict(b):
+            wr = round(b["wins"] / b["trades"] * 100) if b["trades"] else None
+            return {"trades": b["trades"], "wins": b["wins"], "win_rate_pct": wr}
+
         stats = {
             "avg_capture": round(sum(total_capture) / len(total_capture), 1) if total_capture else None,
             "adj_helped_pct": round(adj_helped / total_adj * 100) if total_adj > 0 else None,
             "adj_hurt_pct": round(adj_hurt / total_adj * 100) if total_adj > 0 else None,
             "total_trades": len(trades),
             "trades_with_cf": sum(1 for t in trades if t["counterfactual"]),
+            "win_rate_by_conf": {  # FLO-300
+                "low":  _band_dict(bands["low"]),
+                "mid":  _band_dict(bands["mid"]),
+                "high": _band_dict(bands["high"]),
+            },
         }
 
         return JSONResponse({"trades": trades, "stats": stats})
