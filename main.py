@@ -4972,6 +4972,28 @@ class TradingBot:
                 except Exception:
                     pass
 
+                # FLO-302 step 4: dispatch to Discord (filtered + drift-tracked).
+                # Fire-and-forget — never block the state update.
+                try:
+                    from data_needs_dispatcher import dispatch_data_needs as _ddn
+                    _ticket_summary = None
+                    try:
+                        _pos = executor.get_open_positions() if self.executes_trades else []
+                        if _pos:
+                            _p = _pos[0]
+                            _ticket_summary = f"#{_p.ticket} {_p.direction} {_p.open_price}"
+                    except Exception:
+                        pass
+                    _ddn(
+                        _dn if isinstance(_dn, dict) else None,
+                        decision=agent_result.decision,
+                        confidence=agent_result.confidence,
+                        ticket_summary=_ticket_summary,
+                        timestamp_utc=utc_iso(),
+                    )
+                except Exception as _e:
+                    log.debug(f"data_needs dispatch error (ignored): {_e}")
+
                 self.last_analysis["proactive_analysis"] = proactive_payload
         except Exception as e:
             log.debug(f"{trigger_type} | state update error (ignored): {e}")
@@ -6295,6 +6317,26 @@ class TradingBot:
             _dn = getattr(agent_result, "data_needs", None)
             if _dn:
                 _ad["data_needs"] = _dn
+            # FLO-302 step 4: dispatch (fast-decision path).
+            try:
+                from data_needs_dispatcher import dispatch_data_needs as _ddn
+                _ticket_summary = None
+                try:
+                    _pos = executor.get_open_positions() if self.executes_trades else []
+                    if _pos:
+                        _p = _pos[0]
+                        _ticket_summary = f"#{_p.ticket} {_p.direction} {_p.open_price}"
+                except Exception:
+                    pass
+                _ddn(
+                    _dn if isinstance(_dn, dict) else None,
+                    decision=agent_result.decision,
+                    confidence=agent_result.confidence,
+                    ticket_summary=_ticket_summary,
+                    timestamp_utc=utc_iso(),
+                )
+            except Exception as _e:
+                log.debug(f"data_needs dispatch error (ignored): {_e}")
             self.last_analysis["agent_decision"] = _ad
     
     def _check_heartbeat(self) -> None:

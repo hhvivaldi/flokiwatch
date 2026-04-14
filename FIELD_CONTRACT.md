@@ -87,7 +87,7 @@
 | `last_analysis.hold_forced` | bool | `main.py` → `state_writer.py` | `render()` → `#goldcon-blocked` |
 | `last_analysis.original_decision` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
 | `last_analysis.hold_reason` | string \| null | `main.py` → `state_writer.py` | `render()` → blocked display |
-| `last_analysis.data_needs` | string \| null | `ai_agent.py` → `main.py` → `state_writer.py` | Diagnostic only — Floki's self-assessment of missing/stale/conflicting data |
+| `last_analysis.data_needs` | object \| null | `ai_agent.py` → `main.py` → `state_writer.py` | FLO-302: Floki's structured self-assessment. Shape: `{missing_data: string[], timeframes_skipped: string[] (D1\|H4\|H1\|M15\|M5), biggest_obstacle: string, suggestions: string[], tool_errors: string[], assessment: string}`. Legacy string payloads still accepted by the parser and wrapped as `{assessment: <str>, others empty}`. Also mirrored to the Discord `#data_needs` channel when any of missing_data/biggest_obstacle/suggestions/tool_errors is non-empty; items appearing in 3+ consecutive cycles trigger a drift warning in the same channel. Never affects decisions. |
 
 ### `last_analysis.simba` Object (Simba Watcher)
 
