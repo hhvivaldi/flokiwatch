@@ -15,6 +15,7 @@ FALLBACK BEHAVIOR:
 import json
 import os
 from datetime import datetime, timedelta
+from tz_utils import utc_iso, utc_now, trading_day_utc  # FLO-309
 from typing import Dict, Optional, List, Any
 from dataclasses import dataclass, field, asdict
 
@@ -140,9 +141,10 @@ def write_sage_insights(recommendations: List[Any], trade_count: int, report_dat
         mem_path = os.path.join(data_dir, os.path.basename(SESSION_MEMORY_FILE))
         os.makedirs(data_dir, exist_ok=True)
 
-        now = datetime.now()
-        today = now.date().isoformat()
-
+        # FLO-309: session boundary was local midnight; now trading_day_utc
+        # (UTC midnight) to match the rest of the project's day calculations.
+        # Side effect: session reset shifts by +2h for CEST users — intentional.
+        today = trading_day_utc()
         payload: Dict[str, Any] = {
             "session_date": today,
             "thesis": "",
@@ -316,7 +318,7 @@ def write_memory(memory: AgentMemory) -> bool:
         Never raises exceptions.
     """
     try:
-        memory.last_updated = datetime.utcnow().isoformat() + "Z"
+        memory.last_updated = utc_iso()  # FLO-309
         
         payload = {
             "version": memory.version,
@@ -378,7 +380,7 @@ def clear_active_reject(memory: AgentMemory, reason: str = "invalidated") -> Age
     if memory.active_reject:
         # Add to history before clearing
         history_entry = memory.active_reject.to_dict()
-        history_entry["cleared_at"] = datetime.utcnow().isoformat() + "Z"
+        history_entry["cleared_at"] = utc_iso()  # FLO-309
         history_entry["cleared_reason"] = reason
         memory.history.append(history_entry)
         
@@ -437,7 +439,7 @@ def save_reject(
         
         # Create new active REJECT
         memory.active_reject = ActiveReject(
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utc_iso(),  # FLO-309
             brain_signal=brain_signal,
             brain_score=brain_score,
             market_view=MarketView(
@@ -493,13 +495,14 @@ def _parse_invalidation(invalidation_str: str) -> Invalidation:
         "D1": 1440,
     }
     minutes = timeframe_minutes.get(timeframe, 60) * count
-    expires_at = datetime.utcnow() + timedelta(minutes=minutes)
-    
+    # FLO-309: utc_now() is aware; to_utc_iso normalizes and stamps Z.
+    from tz_utils import to_utc_iso
+    expires_at = utc_now() + timedelta(minutes=minutes)
     return Invalidation(
         type="candles",
         timeframe=timeframe,
         count=count,
-        expires_at=expires_at.isoformat() + "Z",
+        expires_at=to_utc_iso(expires_at),
     )
 
 

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import config
 from logger import log
-from tz_utils import trading_day_utc  # FLO-286 canonical "today" boundary
+from tz_utils import trading_day_utc, utc_iso  # FLO-286 / FLO-309
 
 
 POPULATION_B_MIN_TICKET = 8
@@ -20,7 +20,9 @@ FLOKI_SOURCE_FILTER = "decision_source IN ('floki_agent', 'agent_floki')"
 
 
 def _utc_now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    # FLO-309: delegate to tz_utils canonical. Kept as a thin wrapper so
+    # existing callers don't need to change.
+    return utc_iso()
 
 
 def _safe_int(v: Any, default: int = 0) -> int:

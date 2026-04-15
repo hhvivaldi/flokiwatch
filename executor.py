@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
+from tz_utils import utc_now  # FLO-309: local→UTC cleanup
 import config
 
 # FLO-96: MT5 server time offset (shared helper, same as main.py)
@@ -1250,7 +1251,10 @@ class MT5Executor:
             'commission': 0,
             'swap': 0,
             'reason': estimated_reason,
-            'close_time': datetime.now(),
+            # FLO-309: was datetime.now() — main.py:489 passes .isoformat() to
+            # record_trade_close, so local time would land in history.db
+            # close_time stamped as UTC. Use aware UTC instead.
+            'close_time': utc_now(),
             'estimated': True,
             'pending': True,
             'outcome': outcome,

@@ -4,6 +4,7 @@ Checks conditions before executing trades
 """
 
 from datetime import datetime, timedelta, timezone
+from tz_utils import utc_iso  # FLO-309
 from typing import Tuple, List, Optional
 import json
 import logging
@@ -48,7 +49,7 @@ class SafetyChecker:
                     for k, v in self.last_trade_time.items()
                 },
                 "last_close_type": dict(self.last_close_type),
-                "saved_at": datetime.now().isoformat(),
+                "saved_at": utc_iso(),  # FLO-309: was datetime.now() = local naive
             }
             tmp_path = SAFETY_STATE_FILE + ".tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:

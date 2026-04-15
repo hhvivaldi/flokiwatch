@@ -11,6 +11,7 @@ Score:
 
 import requests
 from datetime import datetime, timedelta
+from tz_utils import utc_iso  # FLO-309
 import json
 import os
 import re
@@ -811,7 +812,7 @@ def save_news_history(result):
     history = load_news_history()
     
     entry = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": utc_iso(),  # FLO-309: was datetime.now() = local
         "score": result["score"],
         "interpretation": result["interpretation"],
         "news_count": result["news_count"],

@@ -16,6 +16,7 @@ import json
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from tz_utils import utc_iso  # FLO-309
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -505,7 +506,7 @@ def save_model_artifacts(model, scaler, feature_columns, metrics):
             'f1': float(metrics['f1']),
             'auc': float(metrics['auc']),
         },
-        'trained_at': datetime.now().isoformat(),
+        'trained_at': utc_iso(),  # FLO-309: was datetime.now() = local
     }
     
     config_path = os.path.join(MODELS_DIR, 'model_config.json')

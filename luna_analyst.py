@@ -15,6 +15,7 @@ import os
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -1239,7 +1240,7 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         bias_confidence = 3
 
     return LunaAnalysisResult(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=utc_iso(),  # FLO-309: Z suffix per Rule 22
         environment=environment,
         risk_level=risk_level,
         directional_bias=directional_bias,
@@ -1409,7 +1410,7 @@ def _compute_risk_level(environment: str, macro: Dict[str, Any],
 def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
                         calendar_events: List[Dict]) -> LunaAnalysisResult:
     """Produce a Luna analysis using deterministic rules (FALLBACK — no AI)."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_iso()  # FLO-309
 
     pattern_result = _detect_patterns(macro, echo_alerts)
     patterns = pattern_result["detected"]
@@ -1767,7 +1768,7 @@ def run_luna_analysis() -> LunaAnalysisResult:
     except Exception as e:
         log.error(f"LUNA: analysis failed — {e}")
         return LunaAnalysisResult(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=utc_iso(),  # FLO-309: Z suffix per Rule 22
             environment="SAFE",
             risk_level=3,
             directional_bias="NEUTRAL",

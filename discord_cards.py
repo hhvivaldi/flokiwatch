@@ -8,6 +8,7 @@ Every Discord message uses embeds — no plain text.
 import os
 import requests
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from typing import Any, Dict, List, Optional
 
 from logger import log
@@ -106,7 +107,7 @@ def send_card(
             "author": {"name": author_name},
             "title": title[:256],
             "footer": {"text": footer or _utc_footer()},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_iso(),  # FLO-309
         }
         if description:
             embed["description"] = description[:4096]

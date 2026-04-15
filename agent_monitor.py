@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
+from tz_utils import utc_iso  # FLO-309
 
 
 class AgentMonitor:
@@ -204,7 +205,7 @@ class AgentMonitor:
                     alerts.append({"id": str(c["id"]), "type": c["type"], "level": float(c["level"])})
             alert_payload = {
                 "version": 1,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": utc_iso(),
                 "alerts": alerts,
             }
             _pa_path = config.PRICE_ALERTS_JSON_PATH
@@ -704,7 +705,7 @@ class AgentMonitor:
                         log.info(f"SIMBA | Rex monitor CRITICAL ({_rex.get('finding_count', 0)} findings) — requesting Floki wake")
                         # Update debounce timestamp
                         try:
-                            _rex["last_critical_wake_at"] = datetime.now(timezone.utc).isoformat()
+                            _rex["last_critical_wake_at"] = utc_iso()  # FLO-309
                             _tmp = _rex_path + ".tmp"
                             with open(_tmp, "w", encoding="utf-8") as _wf:
                                 _rj.dump(_rex, _wf, indent=2, ensure_ascii=False, default=str)
@@ -1081,7 +1082,7 @@ class AgentMonitor:
                         _orig_count = len(_pa.get("alerts", []))
                         _pa["alerts"] = [a for a in _pa.get("alerts", []) if str(a.get("id", "")) not in _fired_set]
                         if len(_pa["alerts"]) < _orig_count:
-                            _pa["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                            _pa["timestamp"] = utc_iso()
                             _tmp = _pa_path + ".tmp"
                             with open(_tmp, "w", encoding="utf-8") as _paf2:
                                 json.dump(_pa, _paf2, ensure_ascii=False, indent=2)

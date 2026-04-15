@@ -1012,7 +1012,7 @@ class AgentTools:
                             _ea_alerts.append({"id": str(c["id"]), "type": c["type"], "level": float(c["level"])})
                 _ea_payload = {
                     "version": 1,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": utc_iso(),  # FLO-309
                     "alerts": _ea_alerts,
                 }
                 _ea_path = _cfg_ea.PRICE_ALERTS_JSON_PATH
@@ -2278,12 +2278,15 @@ class AgentTools:
                 return {"empty": True}
 
             try:
-                now = datetime.now()
-                today = now.date().isoformat()
+                # FLO-309: session boundary uses UTC midnight via
+                # trading_day_utc (was local midnight from datetime.now()).
+                # For CEST users that shifts the rollover ~2h earlier.
+                from tz_utils import trading_day_utc as _tday
+                today = _tday()
                 if str(payload.get("session_date") or "") != today:
                     payload["session_date"] = today
                     payload["notes"] = []
-                    payload["last_updated"] = now.isoformat(timespec="seconds")
+                    payload["last_updated"] = utc_iso()
             except Exception:
                 pass
 
@@ -3208,9 +3211,9 @@ class AgentTools:
             mem_path = os.path.join(data_dir, "agent_session_memory.json")
             os.makedirs(data_dir, exist_ok=True)
 
-            now = datetime.now()
-            today = now.date().isoformat()
-
+            # FLO-309: session boundary → trading_day_utc (UTC midnight).
+            from tz_utils import trading_day_utc as _tday
+            today = _tday()
             payload: Dict[str, Any] = {
                 "session_date": today,
                 "thesis": thesis_s,
@@ -3218,7 +3221,7 @@ class AgentTools:
                 "wins_today": 0,
                 "losses_today": 0,
                 "notes": [],
-                "last_updated": now.isoformat(timespec="seconds"),
+                "last_updated": utc_iso(),
             }
 
             if os.path.exists(mem_path):
@@ -3716,7 +3719,7 @@ class AgentTools:
                     entries = []
 
             entries.append({
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": utc_iso(),  # FLO-309
                 "category": cat_s,
                 "entry": entry_s,
             })

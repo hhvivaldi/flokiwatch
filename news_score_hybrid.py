@@ -359,10 +359,10 @@ def get_rss_headlines(max_headlines=20, max_age_hours=24):
                         timestamp_str = parsed_date.isoformat()
                     else:
                         age_hours = 0
-                        timestamp_str = datetime.now().isoformat()
+                        timestamp_str = utc_iso()  # FLO-309
                 else:
                     age_hours = 0
-                    timestamp_str = datetime.now().isoformat()
+                    timestamp_str = utc_iso()  # FLO-309
                 
                 headlines.append({
                     "title": title_text,
@@ -493,10 +493,10 @@ def get_direct_rss_headlines(max_headlines=30, max_age_hours=None):
                         timestamp_str = parsed_date.isoformat()
                     else:
                         age_hours = 0
-                        timestamp_str = datetime.now().isoformat()
+                        timestamp_str = utc_iso()  # FLO-309
                 else:
                     age_hours = 0
-                    timestamp_str = datetime.now().isoformat()
+                    timestamp_str = utc_iso()  # FLO-309
 
                 headlines.append({
                     "title": title_text,
@@ -1495,7 +1495,7 @@ def calculate_news_score_hybrid():
     return {
         "score": final_score,
         "interpretation": interpretation,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": utc_iso(),  # FLO-309
         "components": {
             "headlines": {
                 "score": headlines_data["score"],

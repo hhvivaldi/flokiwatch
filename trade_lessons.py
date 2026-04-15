@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from typing import Any, Dict, List, Optional
 
 from logger import log
@@ -87,7 +88,7 @@ def save_trade_conditions(
         snapshot = {
             "ticket": int(ticket),
             "direction": str(direction).upper(),
-            "open_time": datetime.now(timezone.utc).isoformat(),
+            "open_time": utc_iso(),  # FLO-309: Z suffix per Rule 22
             "conditions_at_open": conditions,
         }
 
@@ -221,7 +222,7 @@ def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional
             existing["avg_pnl"] = round(
                 (prev_avg * prev_total + profit) / existing["occurrences"], 2
             )
-            existing["last_occurrence"] = datetime.now(timezone.utc).isoformat()
+            existing["last_occurrence"] = utc_iso()  # FLO-309
             existing["lesson"] = _generate_lesson_text(
                 bucket_key, existing["wins"], existing["losses"], existing["avg_pnl"]
             )
@@ -233,7 +234,7 @@ def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional
                 "wins": 1 if is_win else 0,
                 "losses": 0 if is_win else 1,
                 "avg_pnl": round(profit, 2),
-                "last_occurrence": datetime.now(timezone.utc).isoformat(),
+                "last_occurrence": utc_iso(),  # FLO-309
                 "lesson": _generate_lesson_text(
                     bucket_key, 1 if is_win else 0, 0 if is_win else 1, profit
                 ),

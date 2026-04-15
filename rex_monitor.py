@@ -12,6 +12,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -305,7 +306,7 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
     alert_level = _classify_alert_level(findings)
 
     scan_ms = int((time.time() - t0) * 1000)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_iso()  # FLO-309
 
     # Build raw data snapshot
     raw_data = {

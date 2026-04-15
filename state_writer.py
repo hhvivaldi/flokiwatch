@@ -389,11 +389,10 @@ def write_state(bot_instance: Any) -> None:
         try:
             _debate = getattr(bot_instance, "_last_debate_result", None)
             if isinstance(_debate, dict):
-                from datetime import datetime as _dt_deb
                 _deb_out = {
                     "status": _debate.get("status", "DISABLED"),
                     "skip_reason": _debate.get("skip_reason"),
-                    "timestamp": _dt_deb.utcnow().isoformat(timespec="seconds") + "Z",
+                    "timestamp": utc_iso(),  # FLO-309
                 }
                 if _debate.get("status") == "INJECTED":
                     _deb_out["rex_bull"] = _debate.get("rex_bull", {})
@@ -420,10 +419,9 @@ def write_state(bot_instance: Any) -> None:
         try:
             _verdict = getattr(bot_instance, "_last_verdict_result", None)
             if isinstance(_verdict, dict):
-                from datetime import datetime as _dt_verd
                 _v_out = {
                     "status": _verdict.get("status", "DISABLED"),
-                    "timestamp": _dt_verd.utcnow().isoformat(timespec="seconds") + "Z",
+                    "timestamp": utc_iso(),  # FLO-309
                 }
                 if _verdict.get("status") == "OK":
                     for _vk in ("winner", "reasoning", "recommendation", "entry", "sl",

@@ -12,6 +12,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -280,7 +281,7 @@ def run_deep_search() -> Optional[Dict[str, Any]]:
 
         # Build cache payload
         result = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_iso(),  # FLO-309
             "analyst_consensus": parsed.get("analyst_consensus", "NEUTRAL"),
             "key_insight": parsed.get("key_insight", ""),
             "price_targets": parsed.get("price_targets", {}),

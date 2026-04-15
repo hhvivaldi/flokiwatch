@@ -3944,7 +3944,7 @@ class TradingBot:
                     try:
                         _v = _verdict_result if (_verdict_result and _verdict_result.get("status") == "OK") else None
                         _verdict_save = {
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "timestamp": utc_iso(),  # FLO-309
                             "winner": _v["winner"] if _v else None,
                             "recommendation": _v["recommendation"] if _v else None,
                             "conviction": _v["conviction"] if _v else None,
@@ -6540,7 +6540,7 @@ class TradingBot:
             # Build entry
             _entry = {
                 "id": int(time.time()),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": utc_iso(),  # FLO-309
                 "price_at_decision": float(_price) if isinstance(_price, (int, float)) else None,
                 "test_a": {
                     "model": getattr(agent_result, 'model', None) or getattr(config, 'FLOKI_MODEL', '?'),

@@ -8,6 +8,7 @@ news/macro data, positions, and session context.
 import json
 import os
 from datetime import datetime, timezone
+from tz_utils import utc_iso  # FLO-309
 from typing import Dict, List, Optional, Any
 
 from logger import log
@@ -1304,7 +1305,7 @@ def build_data_package(
         nearest_resistance = _compute_nearest_sr(formatted_sr_zones, side="above")
         
         package = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_iso(),  # FLO-309: Z suffix per Rule 22
             "current_price": _format_current_price(current_price),
             "h1_candles": _format_candles(h1_candles, limit=50),
             "m5_candles": _format_candles(m5_candles, limit=10),
@@ -1388,7 +1389,7 @@ def build_proactive_data_package(
             mtf_trend = None
 
         package = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_iso(),  # FLO-309: Z suffix per Rule 22
             "current_price": _format_current_price(current_price),
             "h1_candles": _format_candles(h1_candles, limit=50),
             "m5_candles": _format_candles(m5_candles, limit=10),
@@ -1526,7 +1527,7 @@ def build_proactive_data_package(
     except Exception as e:
         logger.error(f"Error building proactive data package: {e}")
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_iso(),  # FLO-309: Z suffix per Rule 22
             "current_price": _format_current_price(current_price),
             "error": "Partial proactive package - some components failed to load",
         }
@@ -2204,7 +2205,7 @@ def _format_regime_context(regime_data: Optional[Dict]) -> Dict:
 def _minimal_package(brain_result: Any, current_price: Dict) -> Dict:
     """Create minimal package when full build fails"""
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": utc_iso(),  # FLO-309: Z suffix per Rule 22
         "current_price": _format_current_price(current_price),
         "brain_analysis": _format_brain_result(brain_result),
         "error": "Partial data package - some components failed to load",

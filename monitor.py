@@ -4,6 +4,7 @@ Automatically manages open positions (breakeven, trailing stop, etc)
 """
 
 from datetime import datetime, timedelta
+from tz_utils import utc_iso  # FLO-309
 from typing import List, Optional, Tuple
 import config
 from logger import log
@@ -86,7 +87,7 @@ class PositionMonitor:
     def _append_agent_monitor_event(self, event: str, ticket: int, details: str = "") -> None:
         try:
             payload = {
-                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "timestamp": utc_iso(),  # FLO-309
                 "event": str(event or "").strip(),
                 "ticket": int(ticket),
                 "details": str(details or "").strip(),
