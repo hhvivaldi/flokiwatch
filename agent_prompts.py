@@ -92,9 +92,9 @@ Example: If you decide "waiting for pullback to 4735 support for long entry", pl
 <output>
 Respond with ONLY valid JSON. Start with { end with }.
 
-Required fields: decision, confidence (0-100), reasoning (2-4 sentences), key_factors (2-5 items), concerns (0-3 items).
+Required fields: decision, confidence (0-100), reasoning (2-4 sentences), key_factors (2-5 items), concerns (0-3 items), plan_tools (FLO-310: list of tools you planned to call this cycle — see <pre_decision_plan> block).
 
-Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup), data_needs (FLO-302: structured self-assessment — see <self_assessment> block in trigger_context for the required JSON schema. Object with fields: missing_data[], timeframes_skipped[], biggest_obstacle, suggestions[], tool_errors[], assessment).
+Optional: session_notes (1-3 sentences for your next call), trade_plan (for OPEN), adjustment (for ADJUST), close_reason (for CLOSE), entry_conditions (for WAIT with forming setup), data_needs (FLO-302/310: structured retrospective — see <self_assessment> block for the required JSON schema).
 
 trade_plan: entry_strategy, entry_price, entry_rationale, stop_loss, stop_loss_rationale, take_profit, take_profit_rationale, risk_reward_ratio.
 
@@ -102,40 +102,46 @@ Your final response must be valid JSON. No text before or after.
 </output>"""
 
 
-# FLO-302: Single source of truth for the data_needs self-assessment prompt.
-# Appended to trigger_context by main.py in both scanner and position modes.
-# Floki sees this AFTER the market context and returns the structured payload
-# in a "data_needs" JSON field. Parser in ai_agent.py (FLO-302 step 2)
-# validates + coerces + falls back to a plain-string wrap if the model regresses.
+# FLO-310: Pre-decision planning prompt — injected near the TOP of
+# trigger_context (after boss_notes, before market data). Replaces the old
+# post-hoc-only self-assessment as the primary planning signal. The cycle
+# flow is now: PLAN (pre-data) → GATHER → DECIDE → brief RETROSPECTIVE.
+PRE_DECISION_PLAN_PROMPT = """
+<pre_decision_plan>
+Before you call any tools, briefly think about what would inform a good decision THIS cycle — the market state, your current position (if any), and what the last cycle left you uncertain about. Then name the tools you intend to call.
+
+Return this as a `plan_tools` field in your JSON response. Example:
+  "plan_tools": ["get_chart_screenshots", "get_luna_brief", "get_sr_zones", "get_indicators"]
+
+This is a plan, not a contract. Three rules:
+  1. You are not required to call every tool you list. If mid-cycle the situation clarifies and a planned tool becomes unnecessary, skip it — just note the reason in `reasoning`.
+  2. You are not limited to tools you listed. If new evidence reveals a gap, call the tool you need.
+  3. There is no enforcement. The purpose is to make you consider what matters BEFORE gathering, not after. Think first, call second.
+
+If you cannot form a plan yet (e.g. you need a glance at price first), a short plan like ["get_current_price", "<decide rest after price check>"] is valid.
+</pre_decision_plan>
+"""
+
+
+# FLO-302 / FLO-310: Retrospective self-assessment — appended AFTER market
+# data so Floki can compare planned tools (above) against what he actually
+# called. Lighter than the pre-FLO-310 prompt (dropped the redundant
+# timeframes_skipped / tool_errors fields that duplicated not_called /
+# unavailable). Parser in ai_agent.py validates + coerces + falls back
+# defensively if the model regresses.
 SELF_ASSESSMENT_PROMPT = """
 <self_assessment>
-Report directly to Hermano as if writing to your manager. Answer honestly, no hedging.
-
-Two distinct categories — keep them separate, do NOT mix them:
-
-1. NOT CALLED: What tools or data did you skip this cycle that could have been useful?
-   These are things you HAD ACCESS TO but chose not to call (e.g. get_calendar,
-   get_luna_brief, get_rex_monitor, a chart timeframe). Be concrete.
-2. UNAVAILABLE: Was any data genuinely unavailable — returned an error, was too
-   stale to use, or doesn't exist on this account? (e.g. DOM not provided by
-   broker, a tool that timed out, a stale luna_brief past its useful window).
-
-3. Of the 6 chart timeframes (D1, H4, H1, M15, M5, M1), which did you NOT view
-   this cycle? Would any of them have changed your decision?
-4. What is the single biggest obstacle to making a better decision right now?
-5. Do you have any suggestion to improve your tools, data, or workflow?
-6. Did any tool return an error or unexpected result?
-
-Return your answer as a structured JSON object in the "data_needs" field of your response:
+Brief retrospective for Hermano. Compare your actual tool calls against `plan_tools` from the top of this cycle. Return a structured `data_needs` JSON object:
 {
-  "not_called":         [<string>, ...],   // available but skipped — chronic skips suggest blind spots
-  "unavailable":        [<string>, ...],   // genuinely missing — chronic items here suggest broken/missing tools
-  "timeframes_skipped": [<"D1"|"H4"|"H1"|"M15"|"M5"|"M1">, ...],
-  "biggest_obstacle":   "<string>",         // empty string if genuinely none
-  "suggestions":        [<string>, ...],
-  "tool_errors":        [<string>, ...],
-  "assessment":         "<string>"          // your own one-sentence judgment
+  "followed_plan":     "yes" | "yes_with_changes" | "no",    // honest read
+  "not_called":        [<string>, ...],   // tools from plan_tools you skipped — one short reason each in `reasoning`
+  "unavailable":       [<string>, ...],   // errored / too stale / doesn't exist on this account
+  "biggest_obstacle":  "<string>",         // single biggest blocker to a better decision right now ("" if none)
+  "suggestions":       [<string>, ...],    // up to 2 concrete workflow/tool improvements
+  "assessment":        "<string>"          // one sentence — did you have what you needed?
 }
+
+If followed_plan is "yes_with_changes" or "no", the reason belongs in your `reasoning` field, not here.
 </self_assessment>
 """
 

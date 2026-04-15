@@ -344,6 +344,10 @@ class AgentResult:
     # "not_called" since that was its observed semantics. Plain-string payloads
     # get wrapped as {"assessment": <str>, other fields: [] or ""}.
     data_needs: Optional[Dict[str, Any]] = None
+    # FLO-310: pre-decision tool plan. Simple list of tool names Floki
+    # intended to call this cycle. Advisory only — nothing enforces that his
+    # actual tool_trace matches this list.
+    plan_tools: Optional[List[str]] = None
     rex_agreed: Optional[bool] = None  # FLO-158: kept for DB compat, always None now
     rex_reasoning: Optional[str] = None
     rex_insights: Optional[list] = None  # FLO-158: new insights format
@@ -372,6 +376,8 @@ class AgentResult:
         }
         if self.data_needs:
             result["data_needs"] = self.data_needs
+        if self.plan_tools is not None:
+            result["plan_tools"] = self.plan_tools  # FLO-310
         try:
             tool_trace = getattr(self, "tool_trace", None)
             if tool_trace is not None:
@@ -540,6 +546,16 @@ class AIAgent:
                     user_message = _bn_block + "\n\n" + user_message
             except Exception as _bn_e:
                 logger.debug(f"boss_notes injection skipped (ignored): {_bn_e}")
+
+            # FLO-310: prepend pre-decision planning prompt — AFTER boss_notes,
+            # BEFORE market data. Applies to every Floki entry path (scanner,
+            # position-mode, reactive) because they all come through decide().
+            # Plan is advisory; no enforcement downstream.
+            try:
+                from agent_prompts import PRE_DECISION_PLAN_PROMPT as _PDP
+                user_message = _PDP.strip() + "\n\n" + user_message
+            except Exception as _pdp_e:
+                logger.debug(f"pre_decision_plan injection skipped (ignored): {_pdp_e}")
 
             response = await asyncio.wait_for(
                 self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
@@ -1551,6 +1567,13 @@ class AIAgent:
                 except Exception:
                     return ""
 
+            def _coerce_followed_plan(v):
+                """FLO-310: constrain to the three allowed values; empty otherwise."""
+                s = _coerce_str(v).lower()
+                if s in ("yes", "yes_with_changes", "no"):
+                    return s
+                return ""
+
             if isinstance(_dn_raw, dict):
                 # FLO-306: split into "not_called" and "unavailable" (was single
                 # "missing_data" which conflated both and confused readers).
@@ -1560,6 +1583,7 @@ class AIAgent:
                 if _nc_raw is None:
                     _nc_raw = _dn_raw.get("missing_data")  # legacy key
                 data_needs = {
+                    "followed_plan":       _coerce_followed_plan(_dn_raw.get("followed_plan")),  # FLO-310
                     "not_called":          _coerce_list(_nc_raw),
                     "unavailable":         _coerce_list(_dn_raw.get("unavailable")),
                     "timeframes_skipped":  [s for s in _coerce_list(_dn_raw.get("timeframes_skipped"))
@@ -1572,6 +1596,7 @@ class AIAgent:
             elif isinstance(_dn_raw, str) and _dn_raw.strip():
                 # Backward-compat: wrap legacy free-text as an assessment.
                 data_needs = {
+                    "followed_plan": "",
                     "not_called": [],
                     "unavailable": [],
                     "timeframes_skipped": [],
@@ -1587,8 +1612,10 @@ class AIAgent:
                 _tfs = data_needs["timeframes_skipped"]
                 _obs = data_needs["biggest_obstacle"]; _sugg = data_needs["suggestions"]
                 _errs = data_needs["tool_errors"]
+                _fp = data_needs.get("followed_plan") or "?"  # FLO-310
                 logger.info(
                     "FLOKI_DATA_NEEDS | "
+                    f"followed_plan={_fp} | "
                     f"not_called={_nc or '[]'} | "
                     f"unavailable={_ua or '[]'} | "
                     f"skipped_tfs={_tfs or '[]'} | "
@@ -1620,6 +1647,7 @@ class AIAgent:
                 adjustment=adjustment,
                 close_reason=close_reason,
                 data_needs=data_needs,
+                plan_tools=_coerce_list(parsed.get("plan_tools")),  # FLO-310
             )
 
         except json.JSONDecodeError as e:

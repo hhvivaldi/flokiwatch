@@ -1390,6 +1390,16 @@ def alert_data_needs(
     desc = f"Ticket: {ticket_summary}" if ticket_summary else "Ticket: — (no position)"
 
     fields = []
+
+    # FLO-310: plan-vs-action summary at the top.
+    _fp = (data_needs.get("followed_plan") or "").strip().lower()
+    if _fp:
+        _fp_label = {
+            "yes": "✅ yes",
+            "yes_with_changes": "➖ yes (with changes)",
+            "no": "❌ no",
+        }.get(_fp, _fp)
+        fields.append({"name": "Followed plan", "value": _fp_label, "inline": True})
     # FLO-306: split "Missing data" → "Not called" (skipped, available) +
     # "Unavailable" (errored / stale / doesn't exist).
     # Back-compat: if the payload still has legacy "missing_data" without
