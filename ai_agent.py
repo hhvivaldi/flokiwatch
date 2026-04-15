@@ -328,7 +328,7 @@ class AgentResult:
     output_tokens: int = 0
     latency_ms: int = 0
     error: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=utc_now)  # FLO-311: aware UTC
     market_view: Optional[Dict] = None
     conditions_to_approve: Optional[List[str]] = None
     invalidation: Optional[str] = None
@@ -368,7 +368,7 @@ class AgentResult:
             "output_tokens": self.output_tokens,
             "latency_ms": self.latency_ms,
             "error": self.error,
-            "timestamp": self.timestamp.isoformat(),
+            "timestamp": utc_iso(self.timestamp),  # FLO-311: Z-suffix per Rule 22
         }
         if self.data_needs:
             result["data_needs"] = self.data_needs
