@@ -1070,14 +1070,23 @@ def _build_luna_user_prompt(macro: Dict[str, Any], echo_alerts: List[Dict],
 
 def _analyze_with_gemini(macro: Dict[str, Any], echo_alerts: List[Dict],
                          calendar_events: List[Dict]) -> Optional[Dict[str, Any]]:
-    """FLO-294: Gemini Flash secondary path. Same prompt + JSON contract as MiMo."""
+    """FLO-294: Gemini Flash secondary path. Same prompt + JSON contract as MiMo.
+
+    FLO-322: raised max_output_tokens from 1024 → 4096. Gemini 3 Flash is a
+    reasoning model that spends "thinking" tokens before output; 1024 was
+    being fully consumed by 900-1700 thinking tokens, leaving the actual
+    response truncated at ~40 chars (finish_reason=MAX_TOKENS). Live test
+    with 1024 produced 39 output chars and failed parse; 4096 produced 578
+    and parsed all 12 expected Luna keys cleanly. Echo worked because it
+    uses the helper's default 2048 with a much smaller system prompt.
+    """
     from mimo_fallback import call_gemini_json
     user_prompt = _build_luna_user_prompt(macro, echo_alerts, calendar_events)
     parsed = call_gemini_json(
         system=LUNA_SYSTEM_PROMPT,
         user_text=user_prompt,
         agent="luna",
-        max_output_tokens=1024,
+        max_output_tokens=4096,
     )
     if parsed is None or not isinstance(parsed, dict):
         return None

@@ -3643,7 +3643,15 @@ class AgentTools:
             return {"success": False, "reason": f"No screenshots available for {requested}"}
 
         parts = [f"{tf}({kb}KB)" for tf, kb in available.items()]
-        self._log_tool("get_chart_screenshots", start, f"returning {' '.join(parts)}")
+        # FLO-322: surface REQUESTED TFs in the log line too, not just the
+        # returned ones. Makes "which TFs did Floki ask for" queryable from
+        # log grep even when tool_trace isn't available. Tool_trace already
+        # captures the full input args dict in the 'input' field.
+        req_str = ",".join(requested) if requested else "all"
+        self._log_tool(
+            "get_chart_screenshots", start,
+            f"requested={req_str} | returning {' '.join(parts)}"
+        )
 
         result = {"success": True, "timeframes": list(available.keys())}
         for tf in available:
