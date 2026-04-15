@@ -3563,7 +3563,32 @@ class TradingBot:
                 pass
 
             trigger_context = f"{trigger_type} snapshot at {snapshot_time_iso}. Session: {get_session_name(datetime.utcnow().hour)}. "
-            if isinstance(trigger_data, dict) and trigger_data:
+            # FLO-321: for SIMBA_WAKE, render condition details in a readable
+            # line so Floki doesn't have to re-investigate what "c2" was.
+            # Fallback to the generic dict-dump for other trigger types or
+            # when details are missing.
+            if trigger_type == "SIMBA_WAKE" and isinstance(trigger_data, dict):
+                _details = trigger_data.get("triggered_details") or []
+                _cur = trigger_data.get("current_price")
+                _cur_str = f"{_cur}" if _cur is not None else "n/a"
+                if _details:
+                    _parts = []
+                    for _d in _details:
+                        _parts.append(
+                            f"condition {_d.get('id')} — {_d.get('type')} {_d.get('level')}"
+                            + (f" ({_d.get('description')})" if _d.get("description") else "")
+                        )
+                    trigger_context += (
+                        f"Simba wake: {'; '.join(_parts)} (current price: {_cur_str}). "
+                    )
+                elif trigger_data.get("expired"):
+                    trigger_context += f"Simba wake: max_sleep expired (current price: {_cur_str}). "
+                elif trigger_data.get("rex_critical"):
+                    trigger_context += f"Simba wake: Rex monitor CRITICAL finding (current price: {_cur_str}). "
+                else:
+                    # Edge case — wake fired but we have no details at all
+                    trigger_context += f"Simba wake fired (current price: {_cur_str}). Trigger data: {trigger_data}. "
+            elif isinstance(trigger_data, dict) and trigger_data:
                 trigger_context += f"Trigger data: {trigger_data}. "
             trigger_context += "Investigate using tools and respond with final decision JSON."
 

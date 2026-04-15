@@ -1096,9 +1096,43 @@ class AgentMonitor:
         try:
             df = getattr(bot, "_last_df", None)
             snapshot_time_iso = datetime.utcnow().isoformat()
+
+            # FLO-321: enrich trigger_data with condition details so Floki
+            # sees WHAT c2 actually was, not just the ID. Lookup each
+            # triggered id in the loaded wake_conditions; attach type/level/
+            # description as triggered_details. Also snapshot current bid/ask
+            # so the distance from the threshold is visible without a tool call.
+            triggered_details = []
+            try:
+                _conds = wake_conditions.get("conditions") or []
+                _by_id = {str(c.get("id", "")): c for c in _conds if isinstance(c, dict)}
+                for _tid in (triggered_ids or []):
+                    _c = _by_id.get(str(_tid))
+                    if _c:
+                        triggered_details.append({
+                            "id": str(_tid),
+                            "type": _c.get("type"),
+                            "level": _c.get("level"),
+                            "description": _c.get("description") or "",
+                        })
+            except Exception:
+                triggered_details = []
+
+            current_price = None
+            try:
+                import MetaTrader5 as _mt5
+                _tk = _mt5.symbol_info_tick("XAUUSD")
+                if _tk and _tk.bid and _tk.ask:
+                    current_price = round((float(_tk.bid) + float(_tk.ask)) / 2.0, 2)
+            except Exception:
+                current_price = None
+
             trigger_data = {
                 "expired": bool(expired),
                 "triggered": triggered_ids,
+                "triggered_details": triggered_details,  # FLO-321
+                "current_price": current_price,          # FLO-321
+                "rex_critical": bool(rex_critical_wake),
                 "simba": simba_result,
             }
             _ = df
