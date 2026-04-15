@@ -1540,6 +1540,61 @@ class AgentTools:
             self._log_tool("get_sr_zones", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_volume_profile(
+        self,
+        window_hours: float = 1.0,
+        bucket_size_points: float = 1.0,
+        top_n_nodes: int = 5,
+    ) -> Dict[str, Any]:
+        """FLO-319: Volume profile aggregated from M1/M5/M15 tick_volume.
+
+        Returns POC, value area, top HVNs, low-volume gaps, current price
+        context. Cached with 60s TTL so multiple calls in a single Brain
+        cycle don't recompute.
+        """
+        start = time.time()
+        try:
+            cache_key = (
+                round(float(window_hours), 2),
+                round(float(bucket_size_points), 2),
+                int(top_n_nodes),
+            )
+            # 60s TTL cache — covers one Brain cycle + slack for slow cycles
+            cache = getattr(self._bot, "_volume_profile_cache", None)
+            if not isinstance(cache, dict):
+                cache = {}
+            entry = cache.get(cache_key)
+            if entry and (time.time() - entry["t"]) < 60:
+                self._log_tool(
+                    "get_volume_profile", start,
+                    f"cached | hours={window_hours} bucket={bucket_size_points}"
+                )
+                return {"success": True, "profile": entry["v"], "cached": True}
+
+            from volume_profile import compute_volume_profile
+            profile = compute_volume_profile(
+                symbol="XAUUSD",
+                window_hours=float(window_hours),
+                bucket_size_points=float(bucket_size_points),
+                top_n_nodes=int(top_n_nodes),
+            )
+            if profile is None:
+                self._log_tool("get_volume_profile", start, "compute_failed")
+                return {"success": False, "reason": "compute_failed (no bars / MT5 error)"}
+
+            cache[cache_key] = {"t": time.time(), "v": profile}
+            self._bot._volume_profile_cache = cache
+            poc_p = profile["poc"]["price"]
+            self._log_tool(
+                "get_volume_profile", start,
+                f"hours={window_hours} bars={profile['bars_used']} poc={poc_p} "
+                f"nodes={len(profile['top_nodes'])} gaps={len(profile['low_volume_gaps'])}"
+            )
+            return {"success": True, "profile": profile, "cached": False}
+        except Exception as e:
+            self._log_tool("get_volume_profile", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_fibonacci_levels(self) -> Dict[str, Any]:
         start = time.time()
         try:

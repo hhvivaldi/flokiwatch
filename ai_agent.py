@@ -682,6 +682,19 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_volume_profile",
+                "description": "Return a volume profile for XAU/USD over a time window — aggregates M1/M5/M15 tick_volume into price buckets. Response includes: POC (point of control, the highest-volume price bucket), value_area (price range containing 70% of total volume, expanded outward from POC), top N HVNs (high-volume nodes) with their volume %, low-volume gaps (contiguous regions where price moves fast), and current price context (distance to nearest HVN, whether inside value area). Use for confluence with S/R zones — a level that's also an HVN is stronger than a level without volume backing. Windows: <=4h uses M1 bars, <=24h M5, longer M15 (hard cap 168h). Cached 60s so multiple calls in one cycle are cheap.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "window_hours": {"type": "number", "description": "Lookback window in hours (default 1.0, max 168)."},
+                        "bucket_size_points": {"type": "number", "description": "Price bucket size in XAU points (1 point = 10 pips, default 1.0)."},
+                        "top_n_nodes": {"type": "integer", "description": "Number of highest-volume nodes to return (default 5)."},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "get_pivot_points",
                 "description": "Get daily Classic and Fibonacci Pivot Points (R3/R2/R1/PP/S1/S2/S3) from previous D1 candle",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
