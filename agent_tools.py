@@ -1400,8 +1400,13 @@ class AgentTools:
                             "confluence": z.confluence if z.confluence else [],
                             "strength": z.strength,
                             "is_confluence": len(z.confluence) > 1,
+                            "volume": int(getattr(z, "volume", 0)),            # FLO-312
+                            "volume_bucket": getattr(z, "volume_bucket", "—"),   # FLO-312
                         })
-                    self._log_tool("get_sr_zones", start, f"tf={tf} zones={len(zones)}")
+                    _h = sum(1 for z in zones if z.get("volume_bucket") == "HIGH")
+                    _l = sum(1 for z in zones if z.get("volume_bucket") == "LOW")
+                    self._log_tool("get_sr_zones", start,
+                                   f"tf={tf} zones={len(zones)} vol_H/L={_h}/{_l}")
                     # Fall through to enrichment below
                     # (skip the merged-zones path)
                 else:

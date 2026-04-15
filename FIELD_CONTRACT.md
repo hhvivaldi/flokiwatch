@@ -193,6 +193,8 @@
 | `intel_feed.confirmations` | array | `main.py` | `renderIntelFeed()` → `#intel-tags` |
 | `intel_feed.alerts` | array | `main.py` | `renderIntelFeed()` → `#intel-tags` |
 | `intel_feed.sr_zones` | array | `main.py` | `renderIntelFeed()` → `#intel-sr-zones` |
+| `intel_feed.sr_zones[*].volume` | int | `main.py` (FLO-312) | aggregate `tick_volume` across candles overlapping the zone |
+| `intel_feed.sr_zones[*].volume_bucket` | string (`HIGH`/`MEDIUM`/`LOW`/`—`) | `main.py` (FLO-312) | percentile classification vs other zones in same pool |
 | `intel_feed.candlestick_patterns` | object \| null | `main.py` | `renderIntelFeed()` → `#intel-patterns` |
 
 ### `market_context` Object (FLO-122)

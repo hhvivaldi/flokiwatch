@@ -6792,6 +6792,8 @@ class TradingBot:
                     "strength": z.strength,
                     "position": "above" if z.midpoint > cp else "below",
                     "flip_phase": flip_phase,
+                    "volume": int(getattr(z, "volume", 0)),           # FLO-312
+                    "volume_bucket": getattr(z, "volume_bucket", "—"),  # FLO-312
                 })
 
             payload = {
@@ -6848,6 +6850,8 @@ class TradingBot:
                         "position": "above" if z.midpoint > cp else "below",
                         "flip_phase": flip_phase,
                         "is_confluence": len(z.confluence) > 1,
+                        "volume": int(getattr(z, "volume", 0)),           # FLO-312
+                        "volume_bucket": getattr(z, "volume_bucket", "—"),  # FLO-312
                     })
 
                 payload = {

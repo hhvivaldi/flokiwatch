@@ -30,6 +30,13 @@ class SRZone:
     strength: str             # "weak" (1-2), "moderate" (3), "strong" (4+)
     swing_points: List[float] = field(default_factory=list)  # Raw swing prices in this cluster
     confluence: List[str] = field(default_factory=list)       # Multi-TF origin e.g. ["H1", "H4"] or ["H4", "D1"]
+    # FLO-312: tick-volume aggregated across every candle whose range
+    # overlaps the zone (any touch, including drive-throughs — a different
+    # criterion from `touches` which requires a reversal). Bucket is
+    # assigned in a post-pass over the surviving zones and represents the
+    # zone's position in the final merged pool, not within its origin TF.
+    volume: int = 0
+    volume_bucket: str = "—"  # "HIGH" | "MEDIUM" | "LOW" | "—" (unclassified)
 
 
 @dataclass
@@ -221,6 +228,46 @@ def _count_touches(cluster: dict, highs: np.ndarray, lows: np.ndarray,
 # MAIN DETECTION
 # ============================================================================
 
+def _aggregate_zone_volume(cluster: dict, highs: np.ndarray, lows: np.ndarray,
+                           volumes: np.ndarray, tolerance_pips: float = 30.0) -> int:
+    """FLO-312: sum tick_volume over every candle whose range overlaps the zone.
+
+    Different criterion from `_count_touches`: any overlap counts (including
+    drive-through candles). Measures total conviction while price spent time
+    at this level, not just reversal volume.
+    """
+    zone_low = cluster['low'] - tolerance_pips * PIP_SIZE
+    zone_high = cluster['high'] + tolerance_pips * PIP_SIZE
+    total = 0
+    n = min(len(highs), len(lows), len(volumes))
+    for i in range(n):
+        if lows[i] <= zone_high and highs[i] >= zone_low:
+            total += int(volumes[i])
+    return total
+
+
+def _assign_volume_buckets(zones: List["SRZone"]) -> None:
+    """FLO-312: percentile-based bucket assignment over the supplied zone list.
+
+    Top third by volume → HIGH, bottom third → LOW, middle → MEDIUM.
+    Fewer than 3 zones: leave as "—" (unclassified). Mutates in place.
+    Per-final-pool: callers pass the merged list they want compared against.
+    """
+    if not zones or len(zones) < 3:
+        return
+    vols = sorted(z.volume for z in zones)
+    n = len(vols)
+    low_cut = vols[n // 3]          # bottom ~33%
+    high_cut = vols[(2 * n) // 3]   # top ~33% boundary
+    for z in zones:
+        if z.volume <= low_cut:
+            z.volume_bucket = "LOW"
+        elif z.volume >= high_cut:
+            z.volume_bucket = "HIGH"
+        else:
+            z.volume_bucket = "MEDIUM"
+
+
 def detect_zones(df: pd.DataFrame, timeframe: str = "H1",
                  merge_pips: float = 80.0, max_age_bars: int = 200,
                  min_touches: int = 2, lookback: int = 200,
@@ -253,6 +300,13 @@ def detect_zones(df: pd.DataFrame, timeframe: str = "H1",
     lows = df_slice['low'].values.astype(float)
     closes = df_slice['close'].values.astype(float)
     opens = df_slice['open'].values.astype(float)
+    # FLO-312: tick_volume for zone-overlap aggregation. Graceful fallback
+    # to zeros if the column is missing so callers passing stripped-down
+    # DataFrames never raise — zones just get volume=0, bucket="—".
+    if 'tick_volume' in df_slice.columns:
+        volumes = df_slice['tick_volume'].values.astype(np.int64)
+    else:
+        volumes = np.zeros(n, dtype=np.int64)
 
     # Find swing points
     swing_highs = _find_swing_highs(highs, order=fractal_order)
@@ -291,6 +345,11 @@ def detect_zones(df: pd.DataFrame, timeframe: str = "H1",
         else:
             strength = "weak"
 
+        # FLO-312: aggregate tick_volume across every candle overlapping the
+        # zone (any range overlap — includes drive-throughs). Separate loop
+        # from _count_touches by design — different semantics.
+        vol = _aggregate_zone_volume(cluster, highs, lows, volumes)
+
         zone = SRZone(
             price_low=round(cluster['low'], 2),
             price_high=round(cluster['high'], 2),
@@ -301,11 +360,16 @@ def detect_zones(df: pd.DataFrame, timeframe: str = "H1",
             last_touch_bar=last_touch_from_end,
             strength=strength,
             swing_points=[round(p, 2) for p in cluster['prices']],
+            volume=int(vol),
         )
         zones.append(zone)
 
     # Sort by midpoint
     zones.sort(key=lambda z: z.midpoint)
+    # FLO-312: assign HIGH/MEDIUM/LOW buckets within this TF's survivors.
+    # detect_zones_triple / detect_zones_per_tf re-bucket after merge so the
+    # final comparison is against the pool Floki actually sees.
+    _assign_volume_buckets(zones)
 
     return zones
 
@@ -331,6 +395,9 @@ def _merge_lower_into_higher(lower_zones: List[SRZone], higher_zones: List[SRZon
             if abs(lz.midpoint - hz.midpoint) <= merge_dist:
                 # Higher TF absorbs lower TF zone — accumulate touches for multi-TF confirmation
                 hz.touches += lz.touches
+                # FLO-312: absorb the lower TF's volume too — total conviction
+                # at this price level across both TFs.
+                hz.volume += lz.volume
                 # Track confluence: add lower TF label if not already present
                 if lz.timeframe not in hz.confluence:
                     hz.confluence.append(lz.timeframe)
@@ -432,6 +499,9 @@ def detect_zones_triple(df_h1: pd.DataFrame, df_h4: pd.DataFrame,
     # Combine all
     combined = d1_zones + surviving_h4 + surviving_h1
     combined.sort(key=lambda z: z.midpoint)
+    # FLO-312: re-bucket after merge so percentiles reflect the final pool
+    # Floki actually sees (not the per-TF pools computed inside detect_zones).
+    _assign_volume_buckets(combined)
     return combined
 
 

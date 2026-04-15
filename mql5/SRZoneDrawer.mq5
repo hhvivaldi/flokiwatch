@@ -127,6 +127,10 @@ void ReadAndDraw()
       string strength   = ExtractStringField(z, "strength");
       string position   = ExtractStringField(z, "position");
       string flip_phase = ExtractStringField(z, "flip_phase");
+      // FLO-312: volume enrichment — tag rendered only when bucket is
+      // HIGH or LOW (MEDIUM is the default, omit to keep labels short).
+      long   zone_volume  = (long)ExtractNumberField(z, "volume");
+      string volume_bucket = ExtractStringField(z, "volume_bucket");
 
       // FLO-262: Check is_confluence field (boolean in per-TF JSON)
       bool is_confluence = false;
@@ -200,6 +204,25 @@ void ReadAndDraw()
       string mtf_tag = has_mtf ? " CONF" : "";
       string price_str = IntegerToString((int)MathRound(price));
       string label_text = price_str + " | " + timeframe + mtf_tag + " " + type_short + phase_tag + " " + IntegerToString(touches) + "T";
+
+      // FLO-312: append compact volume tag only when the bucket is an extreme
+      // (HIGH / LOW). MEDIUM and "—" are silent to keep labels compact on
+      // busy charts. Compact format: <1000 raw, <100k as "1.2K"/"12K",
+      // >=100k as "125K", >=1M as "1.2M".
+      if(volume_bucket == "HIGH" || volume_bucket == "LOW")
+        {
+         string vol_str;
+         if(zone_volume < 1000)
+            vol_str = IntegerToString((int)zone_volume);
+         else if(zone_volume < 100000)
+            vol_str = DoubleToString(zone_volume / 1000.0, 1) + "K";
+         else if(zone_volume < 1000000)
+            vol_str = IntegerToString((int)(zone_volume / 1000)) + "K";
+         else
+            vol_str = DoubleToString(zone_volume / 1000000.0, 1) + "M";
+         string bucket_tag = (volume_bucket == "HIGH") ? "HI" : "LO";
+         label_text = label_text + " | " + vol_str + " " + bucket_tag;
+        }
 
       // Draw text label at right edge of chart
       string label_name = ObjectPrefix + "LABEL_" + IntegerToString(i);

@@ -1933,6 +1933,8 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
             timeframe = zone.timeframe
             strength = zone.strength
             confluence = getattr(zone, "confluence", [])
+            volume = int(getattr(zone, "volume", 0))                # FLO-312
+            volume_bucket = getattr(zone, "volume_bucket", "—")       # FLO-312
         else:
             midpoint = zone.get("midpoint", zone.get("price", 0))
             zone_type = zone.get("zone_type", "UNKNOWN")
@@ -1940,9 +1942,11 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
             timeframe = zone.get("timeframe", "H1")
             strength = zone.get("strength", "weak")
             confluence = zone.get("confluence", [])
-        
+            volume = int(zone.get("volume", 0))                     # FLO-312
+            volume_bucket = zone.get("volume_bucket", "—")            # FLO-312
+
         dist_pips = abs(midpoint - current_price) / PIP_SIZE
-        
+
         formatted = {
             "price": _safe_round(midpoint, 2),
             "zone_type": zone_type,
@@ -1952,6 +1956,8 @@ def _format_sr_zones(sr_zones: List, current_price: float, max_zones: int = 8) -
             "dist_pips": _safe_round(dist_pips, 0),
             "position": "above" if midpoint > current_price else "below",
             "confluence": confluence if confluence else [],
+            "volume": volume,                  # FLO-312
+            "volume_bucket": volume_bucket,    # FLO-312
         }
         
         if midpoint > current_price:
