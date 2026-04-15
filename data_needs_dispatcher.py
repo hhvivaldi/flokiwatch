@@ -36,8 +36,11 @@ _DRIFT_THRESHOLD = 3  # current cycle + >=2 prior = 3 in a row
 # not_called = chronic skip (Floki avoiding a tool he could use). Drift on
 # unavailable = persistent broken/missing data (real infra issue). Each
 # carries different remediation, so we surface them with separate labels.
+# FLO-315: also track feature_requests — repeated asks for the same
+# capability = genuine need we should consider building.
 _recent_not_called: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
 _recent_unavailable: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
+_recent_feature_requests: Deque[Set[str]] = deque(maxlen=_HISTORY_DEPTH)
 _recent_timestamps: Deque[str] = deque(maxlen=_HISTORY_DEPTH)
 
 
@@ -107,20 +110,33 @@ def dispatch_data_needs(
         not_called = data_needs.get("missing_data") or []
     unavailable = data_needs.get("unavailable") or []
     obstacle = (data_needs.get("biggest_obstacle") or "").strip()
-    suggestions = data_needs.get("suggestions") or []
     tool_errors = data_needs.get("tool_errors") or []
+    # FLO-315: suggestions split. feature_requests participates in dispatch
+    # filter + drift detection; self_critique does NOT trigger dispatch alone
+    # (it fires nearly every cycle and would re-create the FLO-302 noise
+    # problem). Legacy "suggestions" key routes into feature_requests.
+    feature_requests = data_needs.get("feature_requests")
+    if not feature_requests:
+        feature_requests = data_needs.get("suggestions") or []
 
-    # 1. Drift checks BEFORE appending current cycle (one per field).
+    # 1. Drift checks BEFORE appending current cycle (one per tracked field).
     drift_not_called = _check_drift_in(not_called, _recent_not_called, timestamp_utc)
     drift_unavailable = _check_drift_in(unavailable, _recent_unavailable, timestamp_utc)
+    drift_feature_requests = _check_drift_in(
+        feature_requests, _recent_feature_requests, timestamp_utc
+    )
 
     # 2. Advance history (every cycle, even no-signal ones, so streaks break).
     _recent_not_called.append(set(_normalize(not_called)))
     _recent_unavailable.append(set(_normalize(unavailable)))
+    _recent_feature_requests.append(set(_normalize(feature_requests)))
     _recent_timestamps.append(timestamp_utc)
 
-    # 3. Filter: skip silently when no concrete items in any field.
-    has_signal = bool(not_called or unavailable or obstacle or suggestions or tool_errors)
+    # 3. Filter: skip silently when no concrete items in any dispatch-worthy
+    # field. self_critique is intentionally excluded — it's every-cycle noise.
+    has_signal = bool(
+        not_called or unavailable or obstacle or feature_requests or tool_errors
+    )
     if not has_signal:
         return False
 
@@ -166,6 +182,8 @@ def dispatch_data_needs(
         drift_by_field["not_called"] = drift_not_called
     if drift_unavailable:
         drift_by_field["unavailable"] = drift_unavailable
+    if drift_feature_requests:
+        drift_by_field["feature_requests"] = drift_feature_requests  # FLO-315
 
     try:
         from alerts import alert_data_needs
@@ -187,4 +205,5 @@ def reset_state() -> None:
     """Test hook — clears drift history."""
     _recent_not_called.clear()
     _recent_unavailable.clear()
+    _recent_feature_requests.clear()  # FLO-315
     _recent_timestamps.clear()

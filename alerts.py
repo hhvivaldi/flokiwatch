@@ -1363,14 +1363,16 @@ def alert_data_needs(
 ) -> bool:
     """FLO-302: Send Floki's data_needs self-assessment to Hermano's Discord.
 
-    `data_needs` must be the structured dict — FLO-306 schema:
-    {not_called[], unavailable[], biggest_obstacle, suggestions[], tool_errors[],
-     timeframes_skipped[], assessment}. Caller filters (skips empty cycles).
+    `data_needs` must be the structured dict — FLO-315 schema:
+    {followed_plan, not_called[], unavailable[], biggest_obstacle,
+     self_critique, feature_requests[], tool_errors[], timeframes_skipped[],
+     assessment}. Caller filters (skips empty cycles — self_critique alone
+     does NOT count as signal; feature_requests DOES).
 
     `drift` optional dict {field_name: [{item, count, first_seen}, ...]} where
-    field_name is "not_called" or "unavailable". Each non-empty field
-    triggers a secondary DRIFT embed labeled with the field name. Legacy:
-    if a plain list is passed it's treated as a not_called drift.
+    field_name is "not_called", "unavailable", or "feature_requests". Each
+    non-empty field triggers a secondary DRIFT embed labeled with the field
+    name. Legacy: if a plain list is passed it's treated as not_called.
 
     FLO-305: `boss_notes_summary` optional dict with keys "acked" and "pending",
     each a list of {"id": str, "text": str} objects. Rendered as a single
@@ -1421,7 +1423,18 @@ def alert_data_needs(
     if obstacle:
         fields.append({"name": "Biggest obstacle", "value": obstacle[:1020], "inline": False})
 
-    f = _fmt_list_block("Suggestions", data_needs.get("suggestions"))
+    # FLO-315: suggestions → self_critique (process reflection, string) +
+    # feature_requests (new-capability asks, list). Back-compat: if the
+    # payload still carries only legacy "suggestions", route it into
+    # feature_requests so Hermano doesn't lose visibility mid-migration.
+    critique = (data_needs.get("self_critique") or "").strip()
+    if critique:
+        fields.append({"name": "Self-critique", "value": critique[:1020], "inline": False})
+
+    freq = data_needs.get("feature_requests")
+    if not freq:
+        freq = data_needs.get("suggestions")  # legacy fallback
+    f = _fmt_list_block("Feature requests", freq)
     if f: fields.append(f)
 
     f = _fmt_list_block("Tool errors", data_needs.get("tool_errors"))

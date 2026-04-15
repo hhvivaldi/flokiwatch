@@ -133,13 +133,20 @@ SELF_ASSESSMENT_PROMPT = """
 <self_assessment>
 Brief retrospective for Hermano. Compare your actual tool calls against `plan_tools` from the top of this cycle. Return a structured `data_needs` JSON object:
 {
-  "followed_plan":     "yes" | "yes_with_changes" | "no",    // honest read
+  "followed_plan":     "yes" | "yes_with_changes" | "no",
   "not_called":        [<string>, ...],   // tools from plan_tools you skipped — one short reason each in `reasoning`
   "unavailable":       [<string>, ...],   // errored / too stale / doesn't exist on this account
   "biggest_obstacle":  "<string>",         // single biggest blocker to a better decision right now ("" if none)
-  "suggestions":       [<string>, ...],    // up to 2 concrete workflow/tool improvements
+  "self_critique":     "<string>",         // one sentence — what would you do differently THIS cycle? Tools you should have called earlier or in a different order. "" if genuinely nothing to critique.
+  "feature_requests":  [<string>, ...],    // things that DON'T EXIST YET — tools, data sources, or capabilities that would help you make better decisions. NOT process tweaks on existing tools. Up to 2.
   "assessment":        "<string>"          // one sentence — did you have what you needed?
 }
+
+Key distinction — this is the point of the split:
+- `self_critique` is about how YOU used the tools you already have.
+  Example: "Should have called get_chart_screenshots before adjusting SL at the key level."
+- `feature_requests` is about things we'd need to BUILD that don't exist yet.
+  Example: ["Volume profile by price level", "Real-time order flow imbalance"]
 
 If followed_plan is "yes_with_changes" or "no", the reason belongs in your `reasoning` field, not here.
 </self_assessment>

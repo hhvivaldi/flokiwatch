@@ -1582,6 +1582,13 @@ class AIAgent:
                 _nc_raw = _dn_raw.get("not_called")
                 if _nc_raw is None:
                     _nc_raw = _dn_raw.get("missing_data")  # legacy key
+                # FLO-315: suggestions split into self_critique (string,
+                # process reflection) + feature_requests (list, genuinely
+                # new capability asks). Legacy "suggestions" payloads route
+                # into feature_requests preserving data across the migration.
+                _fr_raw = _dn_raw.get("feature_requests")
+                if _fr_raw is None:
+                    _fr_raw = _dn_raw.get("suggestions")  # back-compat fallback
                 data_needs = {
                     "followed_plan":       _coerce_followed_plan(_dn_raw.get("followed_plan")),  # FLO-310
                     "not_called":          _coerce_list(_nc_raw),
@@ -1589,7 +1596,8 @@ class AIAgent:
                     "timeframes_skipped":  [s for s in _coerce_list(_dn_raw.get("timeframes_skipped"))
                                              if s.upper() in ("D1", "H4", "H1", "M15", "M5", "M1")],
                     "biggest_obstacle":    _coerce_str(_dn_raw.get("biggest_obstacle")),
-                    "suggestions":         _coerce_list(_dn_raw.get("suggestions")),
+                    "self_critique":       _coerce_str(_dn_raw.get("self_critique"), cap=220),  # FLO-315
+                    "feature_requests":    _coerce_list(_fr_raw)[:2],                            # FLO-315: cap 2
                     "tool_errors":         _coerce_list(_dn_raw.get("tool_errors")),
                     "assessment":          _coerce_str(_dn_raw.get("assessment")),
                 }
@@ -1601,7 +1609,8 @@ class AIAgent:
                     "unavailable": [],
                     "timeframes_skipped": [],
                     "biggest_obstacle": "",
-                    "suggestions": [],
+                    "self_critique": "",       # FLO-315
+                    "feature_requests": [],    # FLO-315
                     "tool_errors": [],
                     "assessment": _coerce_str(_dn_raw, cap=500),
                 }
@@ -1610,9 +1619,12 @@ class AIAgent:
                 # Compact one-line log so grep stays useful.
                 _nc = data_needs["not_called"]; _ua = data_needs["unavailable"]
                 _tfs = data_needs["timeframes_skipped"]
-                _obs = data_needs["biggest_obstacle"]; _sugg = data_needs["suggestions"]
+                _obs = data_needs["biggest_obstacle"]
                 _errs = data_needs["tool_errors"]
                 _fp = data_needs.get("followed_plan") or "?"  # FLO-310
+                # FLO-315: split old "sugg" into critique (process) + feat_req (new-build asks).
+                _crit = data_needs.get("self_critique") or ""
+                _freq = data_needs.get("feature_requests") or []
                 logger.info(
                     "FLOKI_DATA_NEEDS | "
                     f"followed_plan={_fp} | "
@@ -1620,7 +1632,8 @@ class AIAgent:
                     f"unavailable={_ua or '[]'} | "
                     f"skipped_tfs={_tfs or '[]'} | "
                     f"obstacle=\"{_obs}\" | "
-                    f"sugg={_sugg or '[]'} | "
+                    f"critique=\"{_crit}\" | "
+                    f"feat_req={_freq or '[]'} | "
                     f"errors={_errs or '[]'}"
                 )
 
