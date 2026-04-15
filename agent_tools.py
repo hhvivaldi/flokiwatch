@@ -3466,7 +3466,7 @@ class AgentTools:
                     from datetime import datetime, timezone
                     scan_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     age_minutes = round((datetime.now(timezone.utc) - scan_time).total_seconds() / 60, 1)
-                    stale = age_minutes > 30
+                    stale = age_minutes > 60  # FLO-313: 2× interval (was 30 = 1× interval)
                 except Exception:
                     pass
 

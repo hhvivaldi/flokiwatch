@@ -250,7 +250,15 @@ def _save_monitor(payload: Dict[str, Any]) -> None:
 
 
 def load_rex_monitor() -> Optional[Dict[str, Any]]:
-    """Load latest Rex monitor scan. Returns None if unavailable or stale (>30 min)."""
+    """Load latest Rex monitor scan. Returns None if unavailable or stale
+    (>60 min — 2× the 30-min scan interval, FLO-313).
+
+    Rationale: the scheduler runs scans every REX_MONITOR_INTERVAL (1800s).
+    When a scan runs even 1s late, a threshold equal to the interval opens
+    a window where the previous scan is already "stale" and the new one
+    hasn't been written yet. 2× interval gives a cushion for jittery scan
+    timing without masking a truly dead backend (a 60+ min gap is real).
+    """
     try:
         if not MONITOR_FILE.exists():
             return None
@@ -264,7 +272,7 @@ def load_rex_monitor() -> Optional[Dict[str, Any]]:
                 if scan_time.tzinfo is None:
                     scan_time = scan_time.replace(tzinfo=timezone.utc)
                 age = datetime.now(timezone.utc) - scan_time
-                if age.total_seconds() > 1800:
+                if age.total_seconds() > 3600:  # FLO-313: was 1800
                     return None
             except (ValueError, TypeError):
                 pass
