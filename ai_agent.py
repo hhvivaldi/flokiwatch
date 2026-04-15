@@ -1505,12 +1505,29 @@ class AIAgent:
                 raise json.JSONDecodeError("No JSON object found in response", content, 0)
 
             parsed = json.loads(json_str)
-            
+
+            # FLO-323: detect incomplete responses — if the model emitted a
+            # valid JSON with plan_tools and/or ack fields but no `decision`
+            # field, it stopped early after writing only its pre-decision
+            # plan. The default-to-WAIT path silently shows WAIT 50% in
+            # Discord and trade room, which looks identical to a real WAIT
+            # but is actually a skipped cycle. Flag it loudly so Hermano
+            # sees the pattern in logs + data_needs embed.
+            _response_incomplete = "decision" not in parsed
+
             # Validate required fields
             decision = parsed.get("decision", "WAIT")
             if decision not in [d.value for d in AgentDecision]:
                 logger.warning(f"Invalid decision '{decision}', defaulting to WAIT")
                 decision = "WAIT"
+            if _response_incomplete:
+                logger.warning(
+                    "AGENT_INCOMPLETE_RESPONSE | JSON parsed but missing `decision` "
+                    f"field (fields present: {sorted(parsed.keys())}). "
+                    "Likely FLO-310 early-stop — Floki emitted plan_tools / "
+                    "acknowledged_boss_notes and returned without completing "
+                    "the cycle. Defaulting to WAIT — surfaced in data_needs."
+                )
             
             # Parse v1.3 REJECT fields if present
             market_view = parsed.get("market_view")
@@ -1565,8 +1582,20 @@ class AIAgent:
 
             # FLO-302: data_needs — structured self-assessment (never affects decisions).
             # Expected dict; wraps a plain string for backward compat if the model regresses.
+            # FLO-323: when response is incomplete (decision missing), synthesize
+            # a data_needs payload with the obstacle set so the Discord
+            # dispatcher's has_signal check surfaces the event to Hermano.
             data_needs: Optional[Dict[str, Any]] = None
             _dn_raw = parsed.get("data_needs")
+            if _response_incomplete and _dn_raw is None:
+                _dn_raw = {
+                    "biggest_obstacle": (
+                        "AGENT_INCOMPLETE_RESPONSE — emitted plan_tools/ack but no "
+                        f"decision. Fields present: {sorted(parsed.keys())}. "
+                        "Cycle defaulted to WAIT 50%."
+                    ),
+                    "tool_errors": ["incomplete_response"],
+                }
 
             def _coerce_list(v):
                 """Coerce to list[str], trimmed, capped at 10 items × 220 chars."""

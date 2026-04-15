@@ -111,15 +111,17 @@ PRE_DECISION_PLAN_PROMPT = """
 <pre_decision_plan>
 Before you call any tools, briefly think about what would inform a good decision THIS cycle — the market state, your current position (if any), and what the last cycle left you uncertain about. Then name the tools you intend to call.
 
-Return this as a `plan_tools` field in your JSON response. Example:
+`plan_tools` is the FIRST field of your response, not the whole response. After you emit it, continue the cycle: call the tools, then return your full decision JSON (decision, confidence, reasoning, key_factors, concerns, plus any decision-specific fields). A response with only `plan_tools` is incomplete and will be flagged.
+
+Example plan:
   "plan_tools": ["get_chart_screenshots", "get_luna_brief", "get_sr_zones", "get_indicators"]
 
-This is a plan, not a contract. Three rules:
+Three rules on the plan itself:
   1. You are not required to call every tool you list. If mid-cycle the situation clarifies and a planned tool becomes unnecessary, skip it — just note the reason in `reasoning`.
   2. You are not limited to tools you listed. If new evidence reveals a gap, call the tool you need.
-  3. There is no enforcement. The purpose is to make you consider what matters BEFORE gathering, not after. Think first, call second.
+  3. There is no enforcement on WHICH tools you call. The purpose is to make you consider what matters BEFORE gathering, not after. Think first, call second.
 
-If you cannot form a plan yet (e.g. you need a glance at price first), a short plan like ["get_current_price", "<decide rest after price check>"] is valid.
+Even if your plan is short (e.g. you only need to glance at price), you still complete the cycle by calling that one tool and emitting the full decision JSON.
 </pre_decision_plan>
 """
 
