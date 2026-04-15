@@ -4516,17 +4516,21 @@ class TradingBot:
 
             # Position management mode — lighter context hint for faster cycles
             if _has_open_position:
+                # FLO-314: removed Essential whitelist + DoNotCall blocklist.
+                # Prior prompt trained Floki to treat "Essential tools: {7 names}"
+                # as an implicit whitelist, causing him to skip non-forbidden
+                # tools (luna/rex/calendar) in position cycles at 0.02/cycle vs
+                # 0.59-0.75/cycle in scanner mode — a 30× drop. New text states
+                # explicitly that all tools remain available and keeps only a
+                # neutral latency note so Floki is informed, not instructed.
                 trigger_context = (
                     "<position_mode>\n"
-                    "You have an open position. Your ONLY job is managing it.\n"
-                    "Call all tools you need in ONE batch — do not call them one at a time.\n"
-                    "Essential tools: get_open_positions, get_current_price, get_indicators, get_sr_zones, get_candles, read_session_memory, get_echo_alerts.\n"
-                    "Do NOT call: get_trade_lessons, get_trade_patterns, get_fibonacci_levels, get_market_context, debate_with_rex.\n"
-                    "Decide: HOLD_TRADE, ADJUST_TRADE, or CLOSE_TRADE.\n"
-                    "Be fast and decisive.\n"
+                    "You have an open position. Decide: HOLD_TRADE, ADJUST_TRADE, or CLOSE_TRADE.\n\n"
+                    "All tools remain available — call what the situation needs.\n\n"
+                    "Latency note: every tool call is time with your position exposed. If you need several tools, call them in one batch (parallel) rather than sequentially.\n"
                     "</position_mode>\n\n"
                 ) + trigger_context
-                log.info("FLOKI | position_mode=ON — lighter context for faster management")
+                log.info("FLOKI | position_mode=ON — all tools available, latency note injected")
 
             tools_obj = AgentTools(
                 self,
