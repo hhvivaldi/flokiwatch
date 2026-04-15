@@ -764,6 +764,18 @@ def record_trade_open(
     try:
         conn = _get_connection()
         try:
+            # FLO-308: purge any stale ticket=0 placeholder before inserting a
+            # new one. The trades table has `ticket INTEGER UNIQUE`, and the
+            # old INSERT OR IGNORE silently dropped the second ticket=0 row —
+            # so an expired/cancelled pending order's placeholder would
+            # permanently block new placements and their fills could not be
+            # reconciled back into the DB (cost us the +$56.26 trade on
+            # 2026-04-15). Placeholder rows are, by definition, unfilled; a
+            # new pending being placed means any older placeholder is stale.
+            if ticket == 0:
+                conn.execute(
+                    "DELETE FROM trades WHERE ticket = 0 AND close_price IS NULL"
+                )
             conn.execute(
                 """INSERT OR IGNORE INTO trades
                    (ticket, direction, volume, open_price, sl, tp, open_time, comment, decision_source)

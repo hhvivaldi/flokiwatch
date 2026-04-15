@@ -76,6 +76,37 @@ def format_capture_display(
     return f"{sign}{clamped:.1f}%"
 
 
+def is_capture_includable_in_average(
+    raw_capture_pct: Optional[float],
+    mfe_points: Optional[float],
+    pnl_pips_value: Optional[float],
+) -> bool:
+    """FLO-308: aggregate filter for capture %.
+
+    Mirrors the "LOSS" substitution in format_capture_display(): a losing
+    trade with noise-floor MFE has a mathematically valid but absurd raw
+    capture (e.g. MFE=1.1p, pnl=-239p → -21763.6%). Letting one such outlier
+    into the average destroys the stat (cost us the -1670.2% avg on
+    2026-04-15). Exclude from the mean anything the UI already renders as
+    LOSS or "—".
+    """
+    if raw_capture_pct is None or mfe_points is None:
+        return False
+    try:
+        mfe = float(mfe_points)
+    except (TypeError, ValueError):
+        return False
+    if mfe <= 0:
+        return False
+    if (
+        pnl_pips_value is not None
+        and pnl_pips_value < 0
+        and abs(mfe) < _NOISE_FLOOR_PIPS
+    ):
+        return False
+    return True
+
+
 def compute_capture_pct(
     direction: Optional[str],
     entry_price: Optional[float],

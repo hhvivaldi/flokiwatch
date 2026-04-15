@@ -1957,7 +1957,12 @@ def journal_data():
             # FLO-290: capture = pips/pips (was dollars/pips — unit mismatch).
             # FLO-300: add display-friendly capture that clamps [−100%, 500%]
             # and substitutes "LOSS" when MFE is noise-floor small.
-            from capture import compute_capture_pct, pnl_pips, format_capture_display
+            from capture import (
+                compute_capture_pct,
+                pnl_pips,
+                format_capture_display,
+                is_capture_includable_in_average,
+            )
             capture = compute_capture_pct(
                 direction=t.get("direction"),
                 entry_price=t.get("open_price"),
@@ -1966,7 +1971,10 @@ def journal_data():
             )
             _pp = pnl_pips(t.get("direction"), t.get("open_price"), t.get("close_price"))
             capture_display = format_capture_display(capture, mfe, _pp)
-            if capture is not None and mfe is not None and mfe > 0:
+            # FLO-308: share the noise-floor filter with the display helper so
+            # the aggregate matches what the UI shows — trades rendered as
+            # "LOSS" never contribute their absurd raw % to the average.
+            if is_capture_includable_in_average(capture, mfe, _pp):
                 total_capture.append(capture)
 
             # FLO-301: detect PENDING vs MARKET from the MT5 comment column.
