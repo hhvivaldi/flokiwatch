@@ -537,8 +537,39 @@ class AIAgent:
             if not user_message:
                 user_message = "Scheduled analysis. Decide what to check and whether to act."
 
-            # FLO-303: prepend boss_notes (Hermano's directives to Floki).
-            # Empty string when no active notes — zero cost. Never raises.
+            # FLO-325: final message layout (top → bottom) Floki reads:
+            #   [boss_notes]          — Hermano's directives, highest priority
+            #   [lessons_learned]     — Floki's accumulated process memory
+            #   [pre_decision_plan]   — cycle-scoped planning prompt
+            #   [trigger_context]     — market data, regime, position, etc.
+            #
+            # Each block prepends to user_message, so to produce that final
+            # order the prepends run in REVERSE: pre_decision_plan first
+            # (ends up just above market data), then lessons_learned, then
+            # boss_notes last (ends up on top).
+            #
+            # FIX NOTE: FLO-310 originally prepended PDP AFTER boss_notes,
+            # which inverted intent — PDP ended up above boss_notes. This
+            # commit also corrects that ordering.
+
+            # FLO-310: pre-decision planning (last to be read, just above market)
+            try:
+                from agent_prompts import PRE_DECISION_PLAN_PROMPT as _PDP
+                user_message = _PDP.strip() + "\n\n" + user_message
+            except Exception as _pdp_e:
+                logger.debug(f"pre_decision_plan injection skipped (ignored): {_pdp_e}")
+
+            # FLO-325: lessons_learned (Floki's permanent process memory)
+            try:
+                from floki_lessons import render_block as _fl_render
+                _fl_block = _fl_render()
+                if _fl_block:
+                    user_message = _fl_block + "\n\n" + user_message
+            except Exception as _fl_e:
+                logger.debug(f"floki_lessons injection skipped (ignored): {_fl_e}")
+
+            # FLO-303: boss_notes (Hermano's directives — prepended last so
+            # they land at the top of the user message).
             try:
                 from boss_notes import render_block as _bn_render
                 _bn_block = _bn_render()
@@ -546,16 +577,6 @@ class AIAgent:
                     user_message = _bn_block + "\n\n" + user_message
             except Exception as _bn_e:
                 logger.debug(f"boss_notes injection skipped (ignored): {_bn_e}")
-
-            # FLO-310: prepend pre-decision planning prompt — AFTER boss_notes,
-            # BEFORE market data. Applies to every Floki entry path (scanner,
-            # position-mode, reactive) because they all come through decide().
-            # Plan is advisory; no enforcement downstream.
-            try:
-                from agent_prompts import PRE_DECISION_PLAN_PROMPT as _PDP
-                user_message = _PDP.strip() + "\n\n" + user_message
-            except Exception as _pdp_e:
-                logger.debug(f"pre_decision_plan injection skipped (ignored): {_pdp_e}")
 
             response = await asyncio.wait_for(
                 self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
@@ -850,6 +871,40 @@ class AIAgent:
                 "name": "get_trade_lessons",
                 "description": "Read dynamic lessons from your past trades. Shows AVOID patterns (setups that keep losing) and PREFERRED patterns (setups that keep winning). Call BEFORE opening any trade.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "save_lesson",
+                "description": "Save a PERMANENT process learning to your lessons file. Different from session_memory (which resets daily) and from get_trade_lessons (which is auto-populated by outcome buckets). Use this when you notice something about YOUR decision process that's worth remembering across restarts: timing mistakes, tool-usage gaps, regime-specific insights you want to keep. If the lesson text already exists, it gets bumped to newest (id preserved). FIFO cap 50 — oldest auto-drops on add. Keep lesson text to 1-2 sentences, max 400 chars.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "The lesson text (1-2 sentences)."},
+                        "context": {
+                            "type": "object",
+                            "description": "Optional context. Omit fields you don't want to set.",
+                            "properties": {
+                                "regime": {"type": "string", "description": "Market regime when applicable (RANGING, TRENDING_BULLISH, etc.)"},
+                                "session": {"type": "string", "description": "Session (ASIAN, LONDON, NY, OFF_HOURS)"},
+                                "related_ticket": {"type": "integer", "description": "Ticket number if lesson is tied to a specific trade"},
+                            },
+                            "additionalProperties": False,
+                        },
+                    },
+                    "required": ["text"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "forget_lesson",
+                "description": "Remove a lesson by id from your lessons file. Use when a lesson is no longer relevant (market structure changed, strategy evolved).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "lesson_id": {"type": "integer", "description": "The id shown next to the lesson in the <lessons_learned> block."},
+                    },
+                    "required": ["lesson_id"],
+                    "additionalProperties": False,
+                },
             },
             {
                 "name": "get_recent_reflexions",

@@ -2447,6 +2447,39 @@ class AgentTools:
             self._log_tool("get_trade_patterns", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def save_lesson(self, text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """FLO-325: Append a permanent lesson to floki_lessons.json.
+
+        Lessons survive restarts and day rollovers. Different from
+        session_memory (daily) and get_trade_lessons (bucket outcomes).
+        If text matches an existing lesson, its position is bumped to
+        newest and its id is reused. FIFO cap 50.
+        """
+        start = time.time()
+        try:
+            from floki_lessons import save_lesson as _save
+            lid = _save(str(text or ""), context if isinstance(context, dict) else None)
+            if lid is None:
+                self._log_tool("save_lesson", start, "empty_text_or_save_failed")
+                return {"success": False, "reason": "empty_text_or_save_failed"}
+            self._log_tool("save_lesson", start, f"id={lid}")
+            return {"success": True, "id": lid}
+        except Exception as e:
+            self._log_tool("save_lesson", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
+    def forget_lesson(self, lesson_id: int) -> Dict[str, Any]:
+        """FLO-325: Remove a lesson by id from floki_lessons.json."""
+        start = time.time()
+        try:
+            from floki_lessons import forget_lesson as _forget
+            ok = _forget(int(lesson_id))
+            self._log_tool("forget_lesson", start, f"id={lesson_id} removed={ok}")
+            return {"success": True, "removed": bool(ok)}
+        except Exception as e:
+            self._log_tool("forget_lesson", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_trade_lessons(self) -> Dict[str, Any]:
         """Return dynamic lessons from past trades (FLO-63)."""
         start = time.time()
