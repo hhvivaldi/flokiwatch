@@ -1786,6 +1786,24 @@ def live_readiness():
                     return "min"
                 return "below"
 
+        # FLO-318: dynamic Win Rate thresholds based on Avg Win/Loss ratio.
+        # A fixed 50% floor is wrong for a system with R/R > 1: the
+        # mathematical breakeven WR is 1/(1+ratio). With ratio=1.8 that's
+        # 35.7%, so a 50% floor misclassifies a profitable edge as "below
+        # minimum". Compute thresholds from the current ratio and surface
+        # them on the card so the number is auditable (the frontend already
+        # renders m.min and m.ideal — no JS change needed).
+        _wl_ratio = float(all_metrics.get("avg_win_loss") or 0)
+        # Fallback to the old fixed 50/55 only when the ratio is degenerate
+        # (no data / no losses yet / suspiciously extreme). 0 < ratio < 10
+        # is the band where the formula is meaningful.
+        if 0 < _wl_ratio < 10:
+            _breakeven = 1.0 / (1.0 + _wl_ratio) * 100.0  # percentage
+            _wr_min = round(_breakeven + 5.0, 1)
+            _wr_ideal = round(_breakeven + 12.0, 1)
+        else:
+            _wr_min, _wr_ideal = 50.0, 55.0
+
         metrics = {
             "profit_factor": {
                 "value": all_metrics["profit_factor"],
@@ -1795,8 +1813,8 @@ def live_readiness():
             },
             "win_rate": {
                 "value": all_metrics["win_rate"],
-                "min": 50, "ideal": 55,
-                "level": _level(all_metrics["win_rate"], 50, 55),
+                "min": _wr_min, "ideal": _wr_ideal,
+                "level": _level(all_metrics["win_rate"], _wr_min, _wr_ideal),
                 "trend": _trend(last_7d["win_rate"], prev_7d["win_rate"]),
             },
             "avg_win_loss": {

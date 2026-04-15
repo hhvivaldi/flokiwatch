@@ -424,7 +424,7 @@ Data source: `data/market_context_cache.json` (written by `agent_tools.get_marke
 | `criteria_met` | int | computed | 0-6 metrics at or above minimum |
 | `criteria_total` | int | const 6 | Total metrics evaluated |
 | `metrics.profit_factor` | object | `trades` table | `{value, min: 1.2, ideal: 1.5, level, trend}` |
-| `metrics.win_rate` | object | `trades` table | `{value (%), min: 50, ideal: 55, level, trend}` |
+| `metrics.win_rate` | object | `trades` table | `{value (%), min, ideal, level, trend}`. FLO-318: `min` and `ideal` are **dynamic** — computed from `avg_win_loss` ratio. Formula: `breakeven_wr = 1 / (1 + ratio) × 100`; `min = breakeven_wr + 5%`; `ideal = breakeven_wr + 12%`. Fallback to fixed 50/55 when ratio is degenerate (≤0 or ≥10). Rationale: a fixed 50% floor misclassifies a profitable R/R=1.8 system as below-minimum (actual math breakeven ≈36%). The computed thresholds are rendered on the card so the value is auditable — frontend already reads `min` and `ideal` from the response. |
 | `metrics.avg_win_loss` | object | `trades` table | `{value (x), min: 1.5, ideal: 2.0, level, trend}` |
 | `metrics.trades` | object | `trades` table | `{value (count), min: 50, ideal: 100, level, trend}` |
 | `metrics.max_drawdown` | object | computed from trades | `{value (%), min: 10, ideal: 5, level, trend, higher_is_better: false}` |
