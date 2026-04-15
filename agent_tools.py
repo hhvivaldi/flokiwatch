@@ -3551,8 +3551,17 @@ class AgentTools:
     # ================================================================
 
     def place_pending_order(self, order_type: str, price: float, sl: float, tp: float,
-                            expiry_minutes: int = 60, reason: str = "") -> Dict[str, Any]:
-        """Place a pending order (BUY_LIMIT/SELL_LIMIT/BUY_STOP/SELL_STOP)."""
+                            expiry_minutes: int = 60, reason: str = "",
+                            override_duplicate: bool = False) -> Dict[str, Any]:
+        """Place a pending order (BUY_LIMIT/SELL_LIMIT/BUY_STOP/SELL_STOP).
+
+        FLO-316: refuses placement when an existing pending order of the SAME
+        type sits within 50 pips of the requested price, unless
+        override_duplicate=True. Match is on type + price only — lot size and
+        SL/TP are ignored because different lots/stops at the same level can
+        be intentional scaling. Opposite-direction pendings at the same price
+        are valid brackets and never trigger the warning.
+        """
         start = time.time()
         import config
 
@@ -3570,6 +3579,61 @@ class AgentTools:
             price_f, sl_f, tp_f = float(price), float(sl), float(tp)
         except Exception:
             return {"success": False, "reason": "Invalid price/sl/tp"}
+
+        # FLO-316: duplicate pending order detection. Pre-flight check BEFORE
+        # the safety/sizing/MT5 path, so we don't waste any work when Floki
+        # is about to stack a second identical order on an existing one.
+        # Always runs — override_duplicate just decides whether a match
+        # refuses placement (False) or logs an audit notice and proceeds (True).
+        dup_found = None
+        try:
+            existing = self._executor.get_pending_orders() or []
+            DUPLICATE_PIP_WINDOW = 50.0  # XAU pip = 0.1 → 5.0 price units
+            window = DUPLICATE_PIP_WINDOW * 0.1
+            for o in existing:
+                if str(o.get("type") or "").upper() == ot:
+                    try:
+                        ep = float(o.get("price"))
+                    except Exception:
+                        continue
+                    if abs(ep - price_f) <= window:
+                        dup_found = o
+                        break
+        except Exception:
+            # Fire-and-forget — never block a legitimate placement on a
+            # check that itself errored. Same philosophy as other
+            # defensive reads throughout this module.
+            dup_found = None
+
+        if dup_found and not override_duplicate:
+            diff_pips = round(abs(float(dup_found["price"]) - price_f) / 0.1, 1)
+            msg = (
+                f"You already have a pending {ot} @ {dup_found['price']} "
+                f"(ticket #{dup_found['ticket']}). Requested {ot} @ {price_f} "
+                f"is {diff_pips} pips away. If intentional (e.g., "
+                f"bracket sizing), re-call with override_duplicate=true."
+            )
+            self._log_tool(
+                "place_pending_order", start,
+                f"DUPLICATE_DETECTED | existing #{dup_found['ticket']} @ {dup_found['price']} | requested @ {price_f}"
+            )
+            return {
+                "success": False,
+                "reason": "duplicate_pending_order",
+                "existing_ticket": dup_found["ticket"],
+                "existing_price": dup_found["price"],
+                "existing_type": ot,
+                "requested_price": price_f,
+                "price_diff_pips": diff_pips,
+                "warning": msg,
+            }
+        if dup_found and override_duplicate:
+            # Audit trail — Floki explicitly overrode the warning. Useful
+            # for post-hoc review of intentional bracket stacking.
+            log.info(
+                f"PENDING_ORDER | DUPLICATE_OVERRIDE | placing {ot} @ {price_f} "
+                f"alongside existing #{dup_found['ticket']} @ {dup_found['price']}"
+            )
 
         dir_s = "BUY" if "BUY" in ot else "SELL"
         sl_pips = abs(price_f - sl_f) / 0.1

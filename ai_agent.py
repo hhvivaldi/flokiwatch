@@ -946,7 +946,7 @@ class AIAgent:
             # FLO-263: Pending orders
             {
                 "name": "place_pending_order",
-                "description": "Place a pending order at a specific price level. BUY_LIMIT=buy at support (below current price), SELL_LIMIT=sell at resistance (above current price), BUY_STOP=buy on breakout (above current price), SELL_STOP=sell on breakdown (below current price). When one fills, all others cancel automatically. Use instead of waiting for price to arrive.",
+                "description": "Place a pending order at a specific price level. BUY_LIMIT=buy at support (below current price), SELL_LIMIT=sell at resistance (above current price), BUY_STOP=buy on breakout (above current price), SELL_STOP=sell on breakdown (below current price). When one fills, all others cancel automatically. Use instead of waiting for price to arrive. Refuses placement if an existing pending order of the same TYPE sits within 50 pips of your requested price (duplicate guard) — the response includes the existing ticket and a 'warning' field. If the duplicate is intentional (e.g., bracket sizing at the same level), re-call with override_duplicate=true.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -956,6 +956,7 @@ class AIAgent:
                         "tp": {"type": "number", "description": "Take profit price"},
                         "expiry_minutes": {"type": "integer", "description": "How long the order stays pending (default 60)"},
                         "reason": {"type": "string", "description": "Why this order"},
+                        "override_duplicate": {"type": "boolean", "description": "Set true to bypass the duplicate-order check when stacking alongside an existing pending of the same type within 50 pips is intentional. Default false."},
                     },
                     "required": ["order_type", "price", "sl", "tp"],
                     "additionalProperties": False,
