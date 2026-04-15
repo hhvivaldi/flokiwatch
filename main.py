@@ -3166,8 +3166,9 @@ class TradingBot:
                     os.makedirs(data_dir, exist_ok=True)
                     mem_path = os.path.join(data_dir, "agent_session_memory.json")
 
-                    now = datetime.now()
-                    today = now.date().isoformat()
+                    # FLO-309 regression fix: was datetime.now() → local time
+                    # stored as session_date + stamped on last_updated fields.
+                    today = trading_day_utc()
                     msg = f"FAST_AGENT {action}{ttxt}. {details}".strip()
 
                     payload = {
@@ -3177,7 +3178,7 @@ class TradingBot:
                         "wins_today": 0,
                         "losses_today": 0,
                         "notes": [],
-                        "last_updated": now.isoformat(timespec="seconds"),
+                        "last_updated": utc_iso(),
                     }
 
                     if os.path.exists(mem_path):
@@ -3204,13 +3205,13 @@ class TradingBot:
                             "wins_today": 0,
                             "losses_today": 0,
                             "notes": preserved_sage_notes,
-                            "last_updated": now.isoformat(timespec="seconds"),
+                            "last_updated": utc_iso(),  # FLO-309 regression fix
                         }
 
                     if not isinstance(payload.get("notes"), list):
                         payload["notes"] = []
                     if msg:
-                        payload["notes"].append({"time": now.strftime("%H:%M"), "note": msg})
+                        payload["notes"].append({"time": utc_now().strftime("%H:%M"), "note": msg})  # FLO-309
 
                         # Keep max 20 notes, protect Sage notes from truncation.
                         # Strategy: keep all notes where source == 'sage', truncate only non-sage notes to last 19.
@@ -3228,7 +3229,7 @@ class TradingBot:
                             payload["notes"] = payload["notes"][-20:]
                         except Exception:
                             payload["notes"] = payload["notes"][-20:]
-                    payload["last_updated"] = now.isoformat(timespec="seconds")
+                    payload["last_updated"] = utc_iso()  # FLO-309 regression fix
 
                     with open(mem_path, "w", encoding="utf-8") as f:
                         json.dump(payload, f, ensure_ascii=False, indent=2)

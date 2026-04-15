@@ -152,7 +152,7 @@ def write_sage_insights(recommendations: List[Any], trade_count: int, report_dat
             "wins_today": 0,
             "losses_today": 0,
             "notes": [],
-            "last_updated": now.isoformat(timespec="seconds"),
+            "last_updated": utc_iso(),  # FLO-309 regression fix
         }
 
         if os.path.exists(mem_path):
@@ -208,10 +208,10 @@ def write_sage_insights(recommendations: List[Any], trade_count: int, report_dat
         )
 
         payload["notes"].append(
-            {"time": now.strftime("%H:%M"), "note": note_text, "source": "sage"}
+            {"time": utc_now().strftime("%H:%M"), "note": note_text, "source": "sage"}  # FLO-309 fix
         )
 
-        payload["last_updated"] = now.isoformat(timespec="seconds")
+        payload["last_updated"] = utc_iso()  # FLO-309 regression fix
 
         return _atomic_write_json(mem_path, payload)
     except Exception as e:

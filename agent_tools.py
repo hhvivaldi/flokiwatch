@@ -2,7 +2,7 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
-from tz_utils import utc_iso  # FLO-286
+from tz_utils import utc_iso, utc_now  # FLO-286 / FLO-309
 from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
@@ -3254,7 +3254,7 @@ class AgentTools:
                     "wins_today": 0,
                     "losses_today": 0,
                     "notes": preserved_sage_notes,
-                    "last_updated": now.isoformat(timespec="seconds"),
+                    "last_updated": utc_iso(),  # FLO-309 regression fix
                 }
 
             if thesis_s:
@@ -3313,7 +3313,7 @@ class AgentTools:
                 except Exception:
                     pass
 
-                payload["notes"].append({"time": now.strftime("%H:%M"), "note": note_s})
+                payload["notes"].append({"time": utc_now().strftime("%H:%M"), "note": note_s})  # FLO-309 regression fix
 
                 # FLO-241: Cap at 8 notes (was 20). Protect Sage notes.
                 try:
@@ -3326,7 +3326,7 @@ class AgentTools:
                 except Exception:
                     payload["notes"] = payload["notes"][-8:]
 
-            payload["last_updated"] = now.isoformat(timespec="seconds")
+            payload["last_updated"] = utc_iso()  # FLO-309 regression fix
 
             try:
                 with open(mem_path, "w", encoding="utf-8") as f:
