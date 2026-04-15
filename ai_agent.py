@@ -1080,6 +1080,7 @@ class AIAgent:
         tool_calls_count = 0
         tool_trace: List[Dict[str, Any]] = []
         had_execution_followup = False
+        had_incomplete_followup = False  # FLO-324: retry once on missing `decision` field
 
         system_prompt = ""
         try:
@@ -1358,6 +1359,35 @@ class AIAgent:
                         _parsed_decision = str(_parsed_json.get("decision", "")).upper()
                     except (json.JSONDecodeError, TypeError, AttributeError):
                         _parsed_decision = ""
+
+                    # FLO-324: incomplete-response retry. Fires when JSON parsed
+                    # cleanly but lacks `decision` field (plan_tools/ack-only
+                    # emissions from FLO-310 early-stop). One retry; if the
+                    # second turn also emits no decision, the parser's
+                    # existing default-to-WAIT path handles it (FLO-323
+                    # detection still surfaces it in data_needs). Separate
+                    # one-shot guard from had_execution_followup so both
+                    # followup types can fire in the same cycle.
+                    if (
+                        not had_incomplete_followup
+                        and _parsed_json is not None
+                        and "decision" not in _parsed_json
+                    ):
+                        _fields_present = sorted(_parsed_json.keys())
+                        _followup_msg = (
+                            "Your previous response was incomplete — you emitted "
+                            f"{_fields_present} but no `decision` field. Complete the cycle "
+                            "now: call the tools from your plan, then return the FULL decision "
+                            "JSON with decision, confidence, reasoning, key_factors, concerns "
+                            "(plus any decision-specific fields like trade_plan)."
+                        )
+                        had_incomplete_followup = True
+                        messages.append({"role": "user", "content": _followup_msg})
+                        logger.info(
+                            f"FLOKI_FOLLOWUP | incomplete_response | fields={_fields_present} | "
+                            f"injecting retry turn (tools_used={tool_calls_count}/{int(self.max_tool_calls)})"
+                        )
+                        continue
 
                     _needs_execute = _parsed_decision in ("OPEN_BUY", "OPEN_SELL") and "execute_trade" not in _trace_names
                     _needs_close = _parsed_decision == "CLOSE_TRADE" and "close_trade" not in _trace_names
