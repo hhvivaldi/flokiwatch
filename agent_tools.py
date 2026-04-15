@@ -1595,6 +1595,56 @@ class AgentTools:
             self._log_tool("get_volume_profile", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_tick_pressure(
+        self,
+        window_seconds: int = 300,
+        recent_seconds: int = 30,
+    ) -> Dict[str, Any]:
+        """FLO-320: Directional tick-pressure proxy (NOT true order flow).
+
+        Capital Point publishes a quote stream — no buy/sell flags, no
+        trade volume. This tool computes the classic mid-price tick rule
+        over a rolling window as a directional-pressure proxy. The
+        response includes a 'note' field reminding Floki this is a proxy.
+
+        Cached 20s (ticks change fast — tighter TTL than volume profile).
+        """
+        start = time.time()
+        try:
+            cache_key = (int(window_seconds), int(recent_seconds))
+            cache = getattr(self._bot, "_tick_pressure_cache", None)
+            if not isinstance(cache, dict):
+                cache = {}
+            entry = cache.get(cache_key)
+            if entry and (time.time() - entry["t"]) < 20:
+                self._log_tool(
+                    "get_tick_pressure", start,
+                    f"cached | window={window_seconds}s"
+                )
+                return {"success": True, "pressure": entry["v"], "cached": True}
+
+            from tick_pressure import compute_tick_pressure
+            pressure = compute_tick_pressure(
+                symbol="XAUUSD",
+                window_seconds=int(window_seconds),
+                recent_seconds=int(recent_seconds),
+            )
+            if pressure is None:
+                self._log_tool("get_tick_pressure", start, "compute_failed")
+                return {"success": False, "reason": "compute_failed (no ticks / MT5 error)"}
+
+            cache[cache_key] = {"t": time.time(), "v": pressure}
+            self._bot._tick_pressure_cache = cache
+            self._log_tool(
+                "get_tick_pressure", start,
+                f"window={window_seconds}s ticks={pressure['total_ticks']} "
+                f"uptick_ratio={pressure['uptick_ratio']} recent={pressure['recent_pressure']}"
+            )
+            return {"success": True, "pressure": pressure, "cached": False}
+        except Exception as e:
+            self._log_tool("get_tick_pressure", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_fibonacci_levels(self) -> Dict[str, Any]:
         start = time.time()
         try:

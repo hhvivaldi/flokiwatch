@@ -682,6 +682,18 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_tick_pressure",
+                "description": "Return a directional-pressure PROXY for XAU/USD based on the mid-price tick rule over a rolling window. IMPORTANT — THIS IS NOT TRUE ORDER FLOW: Capital Point does not publish buy/sell-initiated trade flags or per-tick volume, so true buy-minus-sell delta is not available on this broker. What this computes: classify each tick as uptick (mid moved up), downtick (mid moved down), or flat (carries previous direction). Response includes uptick_ratio, net_delta = upticks − downticks, intensity (ticks/sec), and a short-window 'recent_pressure' label (BUY/SELL/NEUTRAL). Use as a directional-aggression hint, not as a substitute for real order flow. The response always carries a 'note' field reminding you of the proxy caveat.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "window_seconds": {"type": "integer", "description": "Rolling window length in seconds (default 300 = 5 min, min 30, max 3600)."},
+                        "recent_seconds": {"type": "integer", "description": "Short-window length for 'recent_pressure' sub-signal (default 30)."},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "get_volume_profile",
                 "description": "Return a volume profile for XAU/USD over a time window — aggregates M1/M5/M15 tick_volume into price buckets. Response includes: POC (point of control, the highest-volume price bucket), value_area (price range containing 70% of total volume, expanded outward from POC), top N HVNs (high-volume nodes) with their volume %, low-volume gaps (contiguous regions where price moves fast), and current price context (distance to nearest HVN, whether inside value area). Use for confluence with S/R zones — a level that's also an HVN is stronger than a level without volume backing. Windows: <=4h uses M1 bars, <=24h M5, longer M15 (hard cap 168h). Cached 60s so multiple calls in one cycle are cheap.",
                 "input_schema": {
