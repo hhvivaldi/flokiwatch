@@ -837,6 +837,37 @@ def update_trade_open_price(
         log.debug(f"db_writer: failed to update trade open price: {e}")
 
 
+def purge_unfilled_placeholders() -> int:
+    """FLO-317: delete stale ticket=0 placeholder rows (close_price IS NULL).
+
+    The FLO-308 pre-INSERT purge handles the case where a new pending order
+    is being placed and an old placeholder is in the way. This sibling
+    handles the cancel path: when Floki cancels a pending order, its
+    placeholder is stale by definition — the order will never fill, so the
+    row will never be matched to a real ticket. Purging avoids orphan
+    rows accumulating in the trades table until the next placement.
+
+    Aggressive scope (all ticket=0 rows with no close) matches the FLO-308
+    pattern. If a sibling pending is still live, its placeholder will be
+    recreated on its next fill event via reconciliation (same path that
+    recovered trade 1592474728). Returns count deleted.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            cur = conn.execute(
+                "DELETE FROM trades WHERE ticket = 0 AND close_price IS NULL"
+            )
+            n = cur.rowcount
+            conn.commit()
+            return int(n) if n is not None else 0
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug(f"db_writer: purge_unfilled_placeholders failed: {e}")
+        return 0
+
+
 def record_trade_close(
     ticket: int,
     close_price: Optional[float],

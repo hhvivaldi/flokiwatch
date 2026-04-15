@@ -3710,15 +3710,37 @@ class AgentTools:
             return {"success": False, "reason": res.get("error", "placement failed")}
 
     def cancel_pending_order(self, ticket: int = None, cancel_all: bool = False) -> Dict[str, Any]:
-        """Cancel a pending order by ticket, or cancel all pending orders."""
+        """Cancel a pending order by ticket, or cancel all pending orders.
+
+        FLO-317: after a successful cancel, purges the associated ticket=0
+        placeholder row(s) in the trades table. Otherwise cancelled orders
+        leave stale rows until the next place_pending_order call triggers
+        the FLO-308 pre-INSERT purge.
+        """
         start = time.time()
         if cancel_all:
             res = self._executor.cancel_all_pending()
+            if res.get("success"):
+                try:
+                    from db_writer import purge_unfilled_placeholders
+                    _n = purge_unfilled_placeholders()
+                    if _n > 0:
+                        log.info(f"PENDING_CANCEL | cancel_all purged {_n} ticket=0 placeholder(s)")
+                except Exception:
+                    pass
             self._log_tool("cancel_pending_order", start, f"cancel_all | cancelled={res.get('cancelled', 0)}")
             return res
         if not ticket:
             return {"success": False, "reason": "ticket required (or cancel_all=true)"}
         res = self._executor.cancel_pending_order(int(ticket))
+        if res.get("success"):
+            try:
+                from db_writer import purge_unfilled_placeholders
+                _n = purge_unfilled_placeholders()
+                if _n > 0:
+                    log.info(f"PENDING_CANCEL | ticket={ticket} purged {_n} ticket=0 placeholder(s)")
+            except Exception:
+                pass
         self._log_tool("cancel_pending_order", start, f"ticket={ticket} | success={res.get('success')}")
         return res
 

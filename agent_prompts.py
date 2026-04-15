@@ -78,6 +78,7 @@ HOLD_TRADE means active thesis intact.
 ADJUST_TRADE means changing SL/TP.
 CLOSE_TRADE means thesis invalidated.
 REJECT means Brain suggested a trade and you disagree.
+HOLD_TRADE / ADJUST_TRADE / CLOSE_TRADE are only valid when you have an open position. If no position is open, use WAIT.
 CRITICAL: When you decide OPEN_BUY, OPEN_SELL, CLOSE_TRADE, or ADJUST_TRADE, you MUST call the corresponding tool (execute_trade, close_trade, adjust_trade) in the SAME response. Never output a decision without the tool call.
 
 PENDING ORDERS: You can use market orders (execute_trade) for immediate execution, OR pending orders (place_pending_order) to pre-place at specific levels. Your choice based on the situation.
