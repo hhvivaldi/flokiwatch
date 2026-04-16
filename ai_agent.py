@@ -476,6 +476,12 @@ class AIAgent:
                 self._qwen_unavailable = False
                 self._openrouter_client = None
                 self._openrouter_model = getattr(config, 'FLOKI_FALLBACK_MODEL', 'qwen/qwen3.6-plus')
+                from urllib.parse import urlparse as _up
+                def _lbl(_b):
+                    _h = (_up(_b or "").hostname or "").lower()
+                    return "OpenRouter" if "openrouter.ai" in _h else ("Alibaba" if "dashscope" in _h else (_h or "primary"))
+                self._primary_label = _lbl(getattr(config, 'FLOKI_API_BASE', ''))
+                self._fallback_label = _lbl(getattr(config, 'FLOKI_FALLBACK_API_BASE', ''))
                 self._alibaba_cooldown_until = 0.0   # unix ts; 0 = no cooldown
                 self._on_openrouter = False          # True while actively using fallback
                 _or_key = getattr(config, 'FLOKI_FALLBACK_API_KEY', '')
@@ -486,7 +492,7 @@ class AIAgent:
                             api_key=_or_key, base_url=_or_base, timeout=90, max_retries=0,
                         )
                         logger.info(
-                            f"AI Agent: OpenRouter fallback configured "
+                            f"AI Agent: {self._fallback_label} fallback configured "
                             f"(base={_or_base}, model={self._openrouter_model})"
                         )
                     except Exception as _or_e:
@@ -1213,11 +1219,11 @@ class AIAgent:
             )
             _primary_client = self.client
             _primary_model = self.model
-            _primary_label = "Alibaba"
+            _primary_label = self._primary_label
             if _alibaba_in_cooldown:
                 _primary_client = self._openrouter_client
                 _primary_model = self._openrouter_model
-                _primary_label = "OpenRouter"
+                _primary_label = self._fallback_label
 
             def _sync_call_on(_client, _model):
                 kwargs = {
@@ -1238,16 +1244,16 @@ class AIAgent:
                 # - If we just succeeded on Alibaba while cooldown was active,
                 #   clear cooldown and log recovery.
                 # - If we succeeded on OpenRouter but weren't on it before, log the switch.
-                if _primary_label == "Alibaba":
+                if not _alibaba_in_cooldown:
                     if getattr(self, "_qwen_unavailable", False) or getattr(self, "_alibaba_cooldown_until", 0.0) > 0:
-                        logger.info("FLOKI | Alibaba recovered — switching back to primary")
+                        logger.info(f"FLOKI | {self._primary_label} recovered — switching back to primary")
                     self._qwen_unavailable = False
                     self._alibaba_cooldown_until = 0.0
                     self._on_openrouter = False
                 else:
                     # We're using OpenRouter (Alibaba in cooldown). Log once per streak.
                     if not getattr(self, "_on_openrouter", False):
-                        logger.info(f"FLOKI | Running on OpenRouter fallback (model={_primary_model})")
+                        logger.info(f"FLOKI | Running on {self._fallback_label} fallback (model={_primary_model})")
                         self._on_openrouter = True
             except Exception as e:
                 _err_s = str(e).lower()
@@ -1283,9 +1289,9 @@ class AIAgent:
                 # FLO-299: if Alibaba just failed and OpenRouter is configured,
                 # cooldown Alibaba for 15 min and retry this iteration on OR.
                 _openrouter_ok = False
-                if _primary_label == "Alibaba" and self._openrouter_client is not None:
+                if not _alibaba_in_cooldown and self._openrouter_client is not None:
                     logger.warning(
-                        f"FLOKI | Alibaba unavailable ({short_reason}) — switching to OpenRouter fallback"
+                        f"FLOKI | {self._primary_label} unavailable ({short_reason}) — switching to {self._fallback_label} fallback"
                     )
                     self._alibaba_cooldown_until = _time_pkg.time() + 15 * 60
                     try:
@@ -1294,13 +1300,13 @@ class AIAgent:
                         )
                         _openrouter_ok = True
                         if not getattr(self, "_on_openrouter", False):
-                            logger.info(f"FLOKI | Running on OpenRouter fallback (model={self._openrouter_model})")
+                            logger.info(f"FLOKI | Running on {self._fallback_label} fallback (model={self._openrouter_model})")
                             self._on_openrouter = True
                     except Exception as or_e:
                         logger.error(
-                            f"FLOKI | OpenRouter fallback also unavailable — suspending cycle ({or_e})"
+                            f"FLOKI | {self._fallback_label} fallback also unavailable — suspending cycle ({or_e})"
                         )
-                        short_reason = f"{short_reason} (+ OpenRouter failed)"
+                        short_reason = f"{short_reason} (+ {self._fallback_label} failed)"
 
                 # If OpenRouter rescued this iteration, fall through to resp parsing.
                 if not _openrouter_ok:
@@ -1550,13 +1556,17 @@ class AIAgent:
 
         if "```json" in content:
             try:
-                return content.split("```json", 1)[1].split("```", 1)[0].strip() or None
+                _cand = content.split("```json", 1)[1].split("```", 1)[0].strip()
+                if _cand:
+                    return _cand
             except Exception:
                 pass
 
         if "```" in content:
             try:
-                return content.split("```", 1)[1].split("```", 1)[0].strip() or None
+                _cand = content.split("```", 1)[1].split("```", 1)[0].strip()
+                if _cand:
+                    return _cand
             except Exception:
                 pass
 
