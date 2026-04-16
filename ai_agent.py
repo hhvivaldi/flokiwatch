@@ -1027,6 +1027,16 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_market_regime",
+                "description": "Local XAU/USD regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence, and a hint on how to trade it. Distinct from Luna's macro regime (risk_on/risk_off) — this is the price-action regime classifier.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_chart_patterns",
+                "description": "Algorithmic H4 pattern detection: double top/bottom, head & shoulders, failed breakouts, rising and falling wedges, channels. Reads the last 30 H4 bars. Returns list of patterns with type, bias (bullish/bearish/neutral), price level, and description. Complements what you see on chart screenshots — this is deterministic swing-point math.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "get_rex_monitor",
                 "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns alert_level (QUIET/NORMAL/ELEVATED/CRITICAL) and findings.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},

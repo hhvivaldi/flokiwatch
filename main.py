@@ -89,6 +89,14 @@ from floki_position_manager import (
 # NEWS CACHE (avoid excessive requests)
 # ============================================================================
 
+
+class _AutoContextSkip(Exception):
+    """FLO-290 commit 5: internal sentinel — raised when AUTO_CONTEXT_MODE
+    skips an auto-injection block. Caught by the surrounding try/except so
+    the block's existing error-recovery path handles the skip uniformly."""
+    pass
+
+
 class NewsCache:
     """Cache for news score"""
     
@@ -4034,8 +4042,11 @@ class TradingBot:
                 log.info("REX_DEBATE | SKIPPED — position open, RM only for entry decisions")
 
             # FLO-139: Inject market regime into trigger_context
+            # FLO-290 commit 5: gated on AUTO_CONTEXT_MODE. Floki fetches via
+            # get_market_regime tool when mode="minimal".
             try:
-                _regime = getattr(self, "_last_regime_context", None)
+                _auto_full = getattr(config, "AUTO_CONTEXT_MODE", "full") == "full"
+                _regime = getattr(self, "_last_regime_context", None) if _auto_full else None
                 if _regime and isinstance(_regime, dict) and _regime.get("regime"):
                     _r = _regime
                     _rn = _r["regime"]
@@ -4086,7 +4097,12 @@ class TradingBot:
                 pass
 
             # FLO-164 Evolution: Rich market structure + candle data
+            # FLO-290 commit 5: gated on AUTO_CONTEXT_MODE. When mode="minimal",
+            # Floki fetches the same data via get_candles, get_indicators,
+            # get_sr_zones, get_fibonacci_levels, and get_chart_patterns.
             try:
+                if getattr(config, "AUTO_CONTEXT_MODE", "full") != "full":
+                    raise _AutoContextSkip()
                 import MetaTrader5 as _mt5_ms
                 import numpy as _np_ms
                 from datetime import datetime as _dt_ms
@@ -6275,8 +6291,11 @@ class TradingBot:
                 pass
 
             # FLO-139: Inject market regime into reactive trigger_context (same as proactive)
+            # FLO-290 commit 5: gated on AUTO_CONTEXT_MODE. Floki fetches via
+            # get_market_regime tool when mode="minimal".
             try:
-                _regime = getattr(self, "_last_regime_context", None)
+                _auto_full = getattr(config, "AUTO_CONTEXT_MODE", "full") == "full"
+                _regime = getattr(self, "_last_regime_context", None) if _auto_full else None
                 if _regime and isinstance(_regime, dict) and _regime.get("regime"):
                     _r = _regime
                     _evidence_str = ", ".join(_r.get("evidence", [])[:5])

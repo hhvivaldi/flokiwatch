@@ -357,6 +357,16 @@ SR_ZONE_MERGE_PIPS_M5 = 20                 # M5 zones: tightest (scalping-grade)
 # FLO-290 commit 4: M1 tick-by-tick zones
 SR_LOOKBACK_M1 = 300                       # M1 bars to analyze (~5 hours — enough for one session)
 SR_ZONE_MERGE_PIPS_M1 = 10                 # M1 zones: 1-pip merges (match M1 noise floor)
+
+# FLO-290 commit 5: auto-context injection mode for Floki.
+# "minimal" — default; strip <market_structure>, <market_regime>, H4/D1 candle
+#             blocks from trigger_context. Floki fetches via get_candles,
+#             get_indicators, get_sr_zones, get_market_regime, get_chart_patterns.
+# "full"    — legacy behavior; auto-inject those blocks every cycle. Rollback
+#             path if commit 5 regresses Floki's decision quality.
+# Safety / continuity blocks (since_last_cycle, post-trade report,
+# market_warning, self-assessment) are always injected regardless of mode.
+AUTO_CONTEXT_MODE = "minimal"
 SR_FRACTAL_ORDER = 2                       # Fractal order (2 = 5-bar pattern)
 SR_TOUCH_TOLERANCE_PIPS = 30              # Tolerance for touch detection
 SR_CONFLUENCE_TOLERANCE_PIPS = 5            # FLO-262: ±5 pips for cross-TF confluence detection

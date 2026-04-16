@@ -3635,6 +3635,139 @@ class AgentTools:
     # Luna Macro Analyst brief
     # ---------------------------------------------------------------------
 
+    def get_market_regime(self) -> Dict[str, Any]:
+        """
+        FLO-290 commit 5: Local regime detector state.
+
+        Reads data/regime_state.json (populated by regime_detector.py) and
+        the in-memory _last_regime_context cached on the running bot. Returns
+        the same fields the old <market_regime> auto-context block carried:
+        regime, confidence, duration, stability, ADX, evidence, transition.
+
+        This is the LOCAL XAU/USD regime (BREAKOUT_IMMINENT, TRANSITIONAL,
+        QUIET, TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE). Distinct
+        from Luna's macro regime (risk_on/risk_off/crisis) available via
+        get_luna_brief.
+        """
+        start = time.time()
+        try:
+            import json
+            import os
+
+            regime_ctx: Dict[str, Any] = {}
+            _lrc = getattr(self._bot, "_last_regime_context", None)
+            if isinstance(_lrc, dict):
+                regime_ctx = dict(_lrc)
+
+            history: list = []
+            try:
+                path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "regime_state.json")
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8") as f:
+                        raw = json.load(f) or {}
+                    history = raw.get("history", []) or []
+                    if not regime_ctx.get("regime") and raw.get("regime"):
+                        regime_ctx["regime"] = raw.get("regime")
+                    regime_ctx.setdefault("change_ts", raw.get("change_ts"))
+            except Exception:
+                pass
+
+            if not regime_ctx.get("regime"):
+                self._log_tool("get_market_regime", start, "empty")
+                return {"success": True, "regime": None, "reason": "no_regime_state_yet"}
+
+            regime_changes_24h = 0
+            try:
+                cutoff = time.time() - 86400
+                regime_changes_24h = sum(1 for h in history if (h.get("ts") or 0) >= cutoff)
+            except Exception:
+                pass
+
+            _rn = regime_ctx.get("regime")
+            hint_map = {
+                "TRENDING_BULL": "Trending up. Buy dips, not tops. Counter-trend trades fail here.",
+                "TRENDING_BEAR": "Trending down. Sell rallies, not bottoms. Counter-trend trades fail here.",
+                "RANGING": "No trend. Trade the range edges. Breakouts often fail.",
+                "VOLATILE": "High volatility. Wider stops or stay flat. Chop can invalidate theses fast.",
+                "BREAKOUT_IMMINENT": "Volatility compressing. Wait for confirmed break before entering.",
+                "TRANSITIONAL": "Regime is changing. Previous pattern may no longer hold.",
+                "QUIET": "Very low activity. Thin volume. Moves may be unreliable.",
+            }
+
+            payload = {
+                "success": True,
+                "regime": _rn,
+                "confidence": regime_ctx.get("confidence", "moderate"),
+                "duration_display": regime_ctx.get("duration_display", regime_ctx.get("duration", "?")),
+                "previous_regime": regime_ctx.get("previous_regime", "?"),
+                "stability": regime_ctx.get("stability", "?"),
+                "regime_changes_24h": regime_changes_24h,
+                "adx_current": regime_ctx.get("adx_current"),
+                "atr_current": regime_ctx.get("atr_current"),
+                "atr_ratio": regime_ctx.get("atr_ratio"),
+                "transition": regime_ctx.get("transition"),
+                "evidence": (regime_ctx.get("evidence") or [])[:5],
+                "hint": hint_map.get(_rn, ""),
+            }
+            self._log_tool(
+                "get_market_regime",
+                start,
+                f"regime={_rn} stability={payload['stability']} changes24h={regime_changes_24h}",
+            )
+            return payload
+        except Exception as e:
+            self._log_tool("get_market_regime", start, f"error={e}")
+            return {"success": False, "reason": f"market_regime_error: {e}"}
+
+    def get_chart_patterns(self) -> Dict[str, Any]:
+        """
+        FLO-290 commit 5: Algorithmic H4 pattern detection.
+
+        Detects double top/bottom, head & shoulders, failed breakouts, rising
+        and falling wedges, channels from the last 30 H4 bars. Same logic
+        that previously injected into <market_structure>.PATTERNS — now
+        Floki-queryable.
+
+        Returns a list of pattern dicts with type, bias, price level, and a
+        human-readable description.
+        """
+        start = time.time()
+        try:
+            import MetaTrader5 as _mt5
+            from pattern_detector import detect_patterns
+
+            bars = _mt5.copy_rates_from_pos("XAUUSD", _mt5.TIMEFRAME_H4, 0, 30)
+            current_price: Optional[float] = None
+            try:
+                tick = _mt5.symbol_info_tick("XAUUSD")
+                if tick is not None:
+                    current_price = float(getattr(tick, "last", 0) or getattr(tick, "bid", 0) or 0)
+            except Exception:
+                pass
+            if not current_price:
+                current_price = float(getattr(self._bot, "last_known_price", 0) or 0)
+            if not current_price:
+                self._log_tool("get_chart_patterns", start, "no_price")
+                return {"success": False, "reason": "price_unavailable"}
+
+            patterns = detect_patterns(bars, current_price)
+            self._log_tool(
+                "get_chart_patterns",
+                start,
+                f"patterns={len(patterns)} price={round(current_price, 2)}",
+            )
+            return {
+                "success": True,
+                "timeframe": "H4",
+                "bars_analyzed": 30,
+                "current_price": round(float(current_price), 2),
+                "count": len(patterns),
+                "patterns": patterns,
+            }
+        except Exception as e:
+            self._log_tool("get_chart_patterns", start, f"error={e}")
+            return {"success": False, "reason": f"chart_patterns_error: {e}"}
+
     def get_luna_brief(self) -> Dict[str, Any]:
         """Read the latest Luna macro analysis brief."""
         start = time.time()
