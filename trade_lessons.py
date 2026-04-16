@@ -209,7 +209,20 @@ def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional
                 existing = lesson
                 break
 
+        # FLO-327: dedup guard. Without this, extract_trade_lesson incremented
+        # on every call — and the close-handler path is re-entered by
+        # reconciliation loops, inflating the real count by 2-3×. Confirmed
+        # via log forensics: ticket #1581152281 hit the counter 3 times, and
+        # the AVOID classification on `SELL | RSI WEAK | NY | CAUTION` only
+        # existed because 2 real trades were counted as 6.
+        _ticket_int = int(ticket)
         if existing:
+            seen = existing.setdefault("processed_tickets", [])
+            if _ticket_int in seen:
+                log.debug(f"LESSONS | #{_ticket_int} → {bucket_key} | already processed, skipping (FLO-327 dedup)")
+                return existing
+            seen.append(_ticket_int)
+
             existing["occurrences"] = existing.get("occurrences", 0) + 1
             if is_win:
                 existing["wins"] = existing.get("wins", 0) + 1
@@ -234,6 +247,7 @@ def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional
                 "wins": 1 if is_win else 0,
                 "losses": 0 if is_win else 1,
                 "avg_pnl": round(profit, 2),
+                "processed_tickets": [_ticket_int],  # FLO-327
                 "last_occurrence": utc_iso(),  # FLO-309
                 "lesson": _generate_lesson_text(
                     bucket_key, 1 if is_win else 0, 0 if is_win else 1, profit
