@@ -75,6 +75,15 @@ PAUSE_AFTER_LOSSES_HOURS = 24  # Hours of pause after consecutive losses
 # Smart Pyramid: allow 2nd position in same direction ONLY if 1st is in profit
 PYRAMID_MIN_PROFIT_PERCENT = 0.3  # Minimum profit (%) on existing position to allow reinforcement
 
+# FLO-328: Trade-lessons era filter. get_relevant_lessons() aggregates only
+# from trades whose `system_version` tag matches one of these SHAs.
+# See CLAUDE.md "Trade Lessons Era Management" for when to append vs reset.
+# Reset rationale for the FLO-327/328 line: pre-327 trades were taken under
+# materially different systems (different AI model, broken capture formula,
+# pre-planning prompt, fewer tools) — contaminating current Qwen lessons.
+LESSONS_CURRENT_ERA_SHAS = ["1205fd4"]  # FLO-327 dedup + rebuild (era start)
+LESSONS_WINDOW_DAYS = 30                # Rolling window for lessons aggregation
+
 # XAU/USD market hours (UTC)
 # Gold trades: Sunday 22:00 UTC → Friday 21:00 UTC
 # Daily pause: 21:00-22:00 UTC (Mon-Thu)

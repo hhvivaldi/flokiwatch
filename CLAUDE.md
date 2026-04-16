@@ -132,6 +132,108 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 - Home: `C:\Users\Hermano\OneDrive\Desktop\XAUUSD` | Remote: `C:\Users\hvivaldi\Desktop\DevOPS\flokiwatch`
 - Keys: `OPENAI_API_KEY` (Floki/Rex), `LUNA_API_KEY` (Echo/Luna), `GEMINI_API_KEY` (Sage), `FCS_API_KEY`
 
+## Trade Lessons Era Management (FLO-328)
+
+`data/trade_conditions/*.json` files each carry a `system_version` field
+(short git SHA, set automatically at trade open). `get_relevant_lessons()`
+computes lessons on-read with two filters applied to every trade:
+`open_time` within `config.LESSONS_WINDOW_DAYS` (default 30), AND
+`system_version` ∈ `config.LESSONS_CURRENT_ERA_SHAS`. Both must pass.
+
+**When shipping a change that could affect Floki's decisions** — prompt
+edits, position_mode rewrites, tool-catalog additions/removals, parser
+changes, output-schema changes, fundamental pillar-weight shifts — decide:
+
+- **Append** the new commit SHA to `LESSONS_CURRENT_ERA_SHAS`. Old
+  lessons still apply. Use for most commits: bugfixes, observability,
+  additive tools, minor prompt tweaks.
+- **Reset** the list to `[new_sha]` only. Old trades stop contributing.
+  Lessons rebuild over 3–5 days. Use for major inflections: AI-model
+  swaps, position_mode vocabulary changes, tool-access rule changes,
+  decision-label schema changes.
+
+Examples (for future reference):
+- *append*: FLO-312 volume enrichment, FLO-319 get_volume_profile
+- *reset*: FLO-327 era-start (different Qwen-era system vs prior setup)
+
+Legacy trades (pre-FLO-327) are tagged `system_version: "pre_FLO-327"`
+and are excluded by default. To re-include them for one-off analysis:
+`LESSONS_CURRENT_ERA_SHAS = ["<current>", "pre_FLO-327"]`.
+
+`trade_lessons.json` is retained as an audit log (written by
+`extract_trade_lesson` on every trade close) but is no longer the source
+of truth for Floki's lessons — the on-read aggregation from
+`trade_conditions/` + `history.db` is canonical.
+
 ## Ticket Convention
 
 FLO-NNN format. Commits: `fix: FLO-XXX — description` or `feat: FLO-XXX — description`. Tracked in Linear (Floki Watch team). Known open issues: FLO-96 (timezone audit — mostly done: calendar/executor/sage fixed, remaining: verify all DB timestamps), FLO-140 (P1 backlog), FLO-146 (dead VIX feature — 16 files still reference VIX).
+
+## General Coding Principles
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+### 1. Think Before Coding
+
+Don't assume. Don't hide confusion. Surface tradeoffs.
+
+Before implementing:
+
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+
+Minimum code that solves the problem. Nothing speculative.
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+Touch only what you must. Clean up only your own mess.
+
+When editing existing code:
+
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+
+When your changes create orphans:
+
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

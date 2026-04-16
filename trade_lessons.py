@@ -11,7 +11,8 @@ All extraction is DETERMINISTIC Python — no AI calls.
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+import subprocess
+from datetime import datetime, timedelta, timezone
 from tz_utils import utc_iso  # FLO-309
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,29 @@ from logger import log
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 CONDITIONS_DIR = os.path.join(DATA_DIR, "trade_conditions")
 LESSONS_FILE = os.path.join(DATA_DIR, "trade_lessons.json")
+
+# FLO-328: git SHA for system_version tagging. Cached after first lookup.
+_CURRENT_SHA_CACHE: Optional[str] = None
+
+
+def _current_sha() -> str:
+    """Return current git HEAD short SHA. Cached. 'unknown' on failure."""
+    global _CURRENT_SHA_CACHE
+    if _CURRENT_SHA_CACHE is not None:
+        return _CURRENT_SHA_CACHE
+    try:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            capture_output=True, text=True, timeout=5, cwd=repo_dir,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            _CURRENT_SHA_CACHE = result.stdout.strip()
+            return _CURRENT_SHA_CACHE
+    except Exception:
+        pass
+    _CURRENT_SHA_CACHE = "unknown"
+    return _CURRENT_SHA_CACHE
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +113,7 @@ def save_trade_conditions(
             "ticket": int(ticket),
             "direction": str(direction).upper(),
             "open_time": utc_iso(),  # FLO-309: Z suffix per Rule 22
+            "system_version": _current_sha(),  # FLO-328: era tag for lessons filter
             "conditions_at_open": conditions,
         }
 
@@ -276,26 +301,145 @@ def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional
 # Query lessons (for get_trade_lessons tool)
 # ---------------------------------------------------------------------------
 
-def get_relevant_lessons(min_occurrences: int = 3, limit: int = 10) -> List[Dict[str, Any]]:
+def get_relevant_lessons(
+    min_occurrences: int = 3,
+    limit: int = 10,
+    window_days: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """FLO-328: Compute lessons fresh from trade_conditions/ + history.db.
+
+    Previously read from trade_lessons.json (persistent aggregated state),
+    which had two problems: duplicate-counting corruption (FLO-327) and
+    no mechanism to expire stale system-era data. This implementation:
+
+      - aggregates in-memory on every call (trivial: ~50ms for 100 files)
+      - applies TWO filters per trade before it contributes to a bucket:
+          age  ≤ config.LESSONS_WINDOW_DAYS (default 30)
+          era  snapshot.system_version ∈ config.LESSONS_CURRENT_ERA_SHAS
+        Both filters must pass.
+      - sorts AVOID > PREFERRED > NEUTRAL, returns top `limit`
+      - returns [] when no trades qualify yet (era boundary or cold start)
+
+    trade_lessons.json still gets written by extract_trade_lesson() but is
+    now an audit log — no longer the source of truth for this function.
     """
-    Return top lessons sorted by relevance:
-    - AVOID lessons first (< 30% win rate)
-    - PREFERRED lessons second (> 70% win rate)
-    - Only lessons with min_occurrences+ trades
-    """
-    lessons = _load_lessons()
+    try:
+        import config as _cfg
+    except Exception:
+        _cfg = None
+    era_list = list(getattr(_cfg, "LESSONS_CURRENT_ERA_SHAS", []))
+    if not era_list:
+        return []
 
-    # Filter by minimum occurrences
-    meaningful = [l for l in lessons if l.get("occurrences", 0) >= min_occurrences]
+    win_days = int(window_days if window_days is not None
+                   else getattr(_cfg, "LESSONS_WINDOW_DAYS", 30) or 30)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=win_days)
 
-    # Sort: AVOID first, then PREFERRED, then NEUTRAL
-    def sort_key(l):
-        text = l.get("lesson", "")
-        if text.startswith("AVOID"):
-            return (0, -l.get("occurrences", 0))
-        if text.startswith("PREFERRED"):
-            return (1, -l.get("occurrences", 0))
-        return (2, -l.get("occurrences", 0))
+    if not os.path.exists(CONDITIONS_DIR):
+        return []
 
-    meaningful.sort(key=sort_key)
-    return meaningful[:limit]
+    db_path = os.path.join(DATA_DIR, "history.db")
+    if not os.path.exists(db_path):
+        return []
+
+    conn = sqlite3.connect(db_path, timeout=5)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Pre-fetch all profits in one query to avoid N db hits
+        profits: Dict[int, Optional[float]] = {}
+        try:
+            for row in conn.execute(
+                "SELECT ticket, profit FROM trades WHERE profit IS NOT NULL"
+            ).fetchall():
+                profits[int(row["ticket"])] = float(row["profit"])
+        except Exception:
+            pass
+
+        buckets: Dict[str, Dict[str, Any]] = {}
+        processed = skipped_era = skipped_age = skipped_noprofit = 0
+
+        for fn in os.listdir(CONDITIONS_DIR):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(CONDITIONS_DIR, fn), "r", encoding="utf-8") as f:
+                    snap = json.load(f)
+            except Exception:
+                continue
+
+            # Era filter
+            sv = snap.get("system_version")
+            if sv not in era_list:
+                skipped_era += 1
+                continue
+
+            # Age filter — parse open_time (stored as UTC ISO per FLO-309)
+            try:
+                ot_str = str(snap.get("open_time") or "").replace("Z", "+00:00")
+                ot_dt = datetime.fromisoformat(ot_str)
+                if ot_dt.tzinfo is None:
+                    ot_dt = ot_dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if ot_dt < cutoff:
+                skipped_age += 1
+                continue
+
+            ticket = snap.get("ticket")
+            if ticket is None or int(ticket) == 0:
+                continue
+            profit = profits.get(int(ticket))
+            if profit is None:
+                skipped_noprofit += 1
+                continue
+
+            is_win = profit > 0
+            direction = snap.get("direction", "UNKNOWN")
+            conds = snap.get("conditions_at_open", {}) or {}
+            key = _build_bucket_key(direction, conds)
+
+            b = buckets.setdefault(key, {
+                "bucket": key, "occurrences": 0,
+                "wins": 0, "losses": 0, "pnl_sum": 0.0,
+                "last_occurrence": snap.get("open_time"),
+            })
+            b["occurrences"] += 1
+            if is_win: b["wins"] += 1
+            else:      b["losses"] += 1
+            b["pnl_sum"] += profit
+            cur_last = str(b["last_occurrence"] or "")
+            if str(snap.get("open_time") or "") > cur_last:
+                b["last_occurrence"] = snap.get("open_time")
+            processed += 1
+    finally:
+        conn.close()
+
+    log.debug(
+        f"LESSONS_AGG | era={era_list} window={win_days}d | "
+        f"processed={processed} skip_era={skipped_era} skip_age={skipped_age} skip_noprofit={skipped_noprofit}"
+    )
+
+    out: List[Dict[str, Any]] = []
+    for key, b in buckets.items():
+        if b["occurrences"] < min_occurrences:
+            continue
+        avg = round(b["pnl_sum"] / b["occurrences"], 2)
+        out.append({
+            "bucket": key,
+            "occurrences": b["occurrences"],
+            "wins": b["wins"],
+            "losses": b["losses"],
+            "avg_pnl": avg,
+            "last_occurrence": b["last_occurrence"],
+            "lesson": _generate_lesson_text(key, b["wins"], b["losses"], avg),
+        })
+
+    def _sort_key(l):
+        t = l.get("lesson", "")
+        if t.startswith("AVOID"):    return (0, -l["occurrences"])
+        if t.startswith("PREFERRED"): return (1, -l["occurrences"])
+        return (2, -l["occurrences"])
+
+    out.sort(key=_sort_key)
+    return out[:limit]
