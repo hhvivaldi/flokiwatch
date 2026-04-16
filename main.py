@@ -3573,14 +3573,31 @@ class TradingBot:
                 _cur_str = f"{_cur}" if _cur is not None else "n/a"
                 if _details:
                     _parts = []
+                    _had_desc = False
                     for _d in _details:
+                        _desc = _d.get("description") or ""
+                        if _desc: _had_desc = True
                         _parts.append(
                             f"condition {_d.get('id')} — {_d.get('type')} {_d.get('level')}"
-                            + (f" ({_d.get('description')})" if _d.get("description") else "")
+                            + (f" ({_desc})" if _desc else "")
                         )
                     trigger_context += (
                         f"Simba wake: {'; '.join(_parts)} (current price: {_cur_str}). "
                     )
+                    # FLO-331: the description text in parentheses was authored by
+                    # Floki when he set the condition. FLO-321's passthrough echoes
+                    # it back here verbatim — useful for context, but it can tighten
+                    # a self-anchoring loop (e.g., reading your own "support test"
+                    # framing as authoritative direction when the break may actually
+                    # be a fake). Nudge Floki to re-verify against current data.
+                    if _had_desc:
+                        trigger_context += (
+                            "(Descriptions above are YOUR prior interpretation when "
+                            "setting the condition. Verify they still hold against "
+                            "current market data — a broken level can flip S/R or "
+                            "fail as a fake breakout. Check volume, momentum, and "
+                            "regime before acting.) "
+                        )
                 elif trigger_data.get("expired"):
                     trigger_context += f"Simba wake: max_sleep expired (current price: {_cur_str}). "
                 elif trigger_data.get("rex_critical"):
