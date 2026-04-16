@@ -185,6 +185,79 @@ class PositionMonitor:
                                         },
                                         author="MONITOR",
                                     )
+
+                                    # FLO-329: populate trade_conditions for pending fills.
+                                    # save_trade_conditions() is normally called from
+                                    # agent_tools.execute_trade, but pending orders fill
+                                    # through this monitor path — no save, no lesson
+                                    # entry, no bucket. The lessons system under
+                                    # FLO-328's era/window filter was always going to
+                                    # be near-empty because most of Floki's entries
+                                    # are pending-order fills.
+                                    try:
+                                        import os as _os, json as _json
+                                        from datetime import datetime as _dt
+                                        from trade_lessons import save_trade_conditions
+
+                                        _conds: dict = {}
+                                        # indicators + regime from bot_state.json
+                                        try:
+                                            _bs_path = _os.path.join(
+                                                _os.path.dirname(_os.path.abspath(__file__)),
+                                                "data", "bot_state.json",
+                                            )
+                                            with open(_bs_path, "r", encoding="utf-8") as _bsf:
+                                                _bs = _json.load(_bsf)
+                                            _h1 = ((_bs.get("multi_tf_indicators") or {}).get("H1") or {})
+                                            def _val(x):
+                                                # Tolerate dict-with-value OR scalar
+                                                if isinstance(x, dict):
+                                                    return x.get("value")
+                                                return x
+                                            _conds["rsi_h1"] = _val(_h1.get("rsi"))
+                                            _conds["macd_h1"] = _val(_h1.get("macd"))
+                                            _conds["adx_h1"] = _val(_h1.get("adx"))
+                                            _conds["atr_h1"] = _val(_h1.get("atr"))
+                                            _ema50 = _val(_h1.get("ema50"))
+                                            if _ema50 and _fill_price:
+                                                _conds["ema50_distance_pct"] = round(
+                                                    ((float(_fill_price) - float(_ema50)) / float(_ema50)) * 100, 2
+                                                )
+                                            _mr = _bs.get("market_regime") or {}
+                                            if isinstance(_mr, dict) and _mr.get("regime"):
+                                                _conds["regime"] = _mr["regime"]
+                                        except Exception:
+                                            pass
+                                        # luna snapshot
+                                        try:
+                                            from luna_analyst import load_luna_brief
+                                            _lb = load_luna_brief() or {}
+                                            _conds["luna_environment"] = _lb.get("environment")
+                                            _conds["luna_risk_level"] = _lb.get("risk_level")
+                                            _conds["luna_bias"] = _lb.get("directional_bias")
+                                        except Exception:
+                                            pass
+                                        # session + utc_hour
+                                        try:
+                                            _utc_h = _dt.utcnow().hour
+                                            _conds["utc_hour"] = _utc_h
+                                            if 0 <= _utc_h < 8:      _conds["session"] = "ASIAN"
+                                            elif 8 <= _utc_h < 14:    _conds["session"] = "LONDON"
+                                            else:                     _conds["session"] = "NY"
+                                        except Exception:
+                                            pass
+                                        _conds.setdefault("volume_h1", None)
+                                        _conds.setdefault("confidence", None)
+                                        _conds.setdefault("rex_agreed", None)
+
+                                        save_trade_conditions(int(_np_ticket), _fill_dir, _conds)
+                                        log.info(
+                                            f"PENDING_FILL | trade_conditions saved for #{_np_ticket} "
+                                            f"(rsi={_conds.get('rsi_h1')}, session={_conds.get('session')}, "
+                                            f"luna={_conds.get('luna_environment')})"
+                                        )
+                                    except Exception as _cond_err:
+                                        log.debug(f"PENDING_FILL | save_trade_conditions skipped: {_cond_err}")
                                     # Discord alert (only sent if DISCORD_WEBHOOK_TRADES is configured)
                                     try:
                                         alert_pending_fill(
