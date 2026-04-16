@@ -688,11 +688,11 @@ class AIAgent:
             },
             {
                 "name": "get_sr_zones",
-                "description": "Get S/R zones with confluence. Optional timeframe: get_sr_zones(timeframe='D1') for D1 zones only, 'H4' for H4, 'H1' for H1. Omit for all (mixed TFs). Confluence zones are marked when levels align within 5 pips across timeframes.",
+                "description": "Get S/R zones with confluence. Optional timeframe: 'D1'/'H4' for macro zones, 'H1' for the working frame, 'M15'/'M5' for intraday/scalping zones (tighter merge radius, shorter lookback window). Omit for all (mixed TFs). Confluence zones are marked when levels align within 5 pips across timeframes — a D1 zone that also lines up with an M5 level is the strongest possible signal.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "timeframe": {"type": "string", "enum": ["D1", "H4", "H1"], "description": "Filter zones by timeframe. Omit for all."},
+                        "timeframe": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5"], "description": "Filter zones by timeframe. Omit for all."},
                     },
                     "additionalProperties": False,
                 },

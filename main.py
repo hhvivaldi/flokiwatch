@@ -5311,6 +5311,9 @@ class TradingBot:
             h1_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, config.SR_LOOKBACK_H1 + 50)
             h4_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H4, 0, config.SR_LOOKBACK_H4 + 50)
             d1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_D1, 0, config.SR_LOOKBACK_D1 + 20)
+            # FLO-290 commit 3: fetch M15/M5 for intraday/scalping zones
+            m15_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M15, 0, config.SR_LOOKBACK_M15 + 50)
+            m5_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, config.SR_LOOKBACK_M5 + 50)
             df_h1_sr = None
             if h1_rates_sr is not None and len(h1_rates_sr) > 0:
                 df_h1_sr = pd.DataFrame(h1_rates_sr)
@@ -5323,6 +5326,15 @@ class TradingBot:
             if d1_rates is not None and len(d1_rates) > 0:
                 df_d1 = pd.DataFrame(d1_rates)
                 df_d1['datetime'] = pd.to_datetime(df_d1['time'], unit='s')
+            # FLO-290 commit 3
+            df_m15 = None
+            if m15_rates_sr is not None and len(m15_rates_sr) > 0:
+                df_m15 = pd.DataFrame(m15_rates_sr)
+                df_m15['datetime'] = pd.to_datetime(df_m15['time'], unit='s')
+            df_m5 = None
+            if m5_rates_sr is not None and len(m5_rates_sr) > 0:
+                df_m5 = pd.DataFrame(m5_rates_sr)
+                df_m5['datetime'] = pd.to_datetime(df_m5['time'], unit='s')
             # Use dedicated H1 if available, fall back to main df
             df_h1_for_sr = df_h1_sr if df_h1_sr is not None else df
             if df_h4 is not None:
@@ -5376,14 +5388,19 @@ class TradingBot:
                     from support_resistance import detect_zones_per_tf
                     per_tf = detect_zones_per_tf(
                         df_h1_for_sr, df_h4, df_d1=df_d1,
+                        df_m15=df_m15, df_m5=df_m5,
                         merge_pips=config.SR_ZONE_MERGE_PIPS,
                         merge_pips_d1=config.SR_ZONE_MERGE_PIPS_D1,
+                        merge_pips_m15=config.SR_ZONE_MERGE_PIPS_M15,
+                        merge_pips_m5=config.SR_ZONE_MERGE_PIPS_M5,
                         confluence_pips=getattr(config, 'SR_CONFLUENCE_TOLERANCE_PIPS', 5),
                         max_age_bars=config.SR_ZONE_MAX_AGE_BARS,
                         min_touches=config.SR_MIN_TOUCHES,
                         lookback_h1=config.SR_LOOKBACK_H1,
                         lookback_h4=config.SR_LOOKBACK_H4,
                         lookback_d1=config.SR_LOOKBACK_D1,
+                        lookback_m15=config.SR_LOOKBACK_M15,
+                        lookback_m5=config.SR_LOOKBACK_M5,
                     )
                     self._last_sr_zones_per_tf = per_tf
                     self._write_sr_zones_per_tf_json(current_price, per_tf)
@@ -6872,7 +6889,8 @@ class TradingBot:
                 return
             base_dir = os.path.dirname(base_path)
 
-            tf_max_zones = {"D1": 8, "H4": 12, "H1": 8}
+            # FLO-290 commit 3: M15/M5 intraday zones (matching H1's 8-cap)
+            tf_max_zones = {"D1": 8, "H4": 12, "H1": 8, "M15": 8, "M5": 8}
 
             for tf, zones in per_tf.items():
                 max_z = tf_max_zones.get(tf, 8)
@@ -6915,7 +6933,9 @@ class TradingBot:
             d1_n = len(per_tf.get("D1", []))
             h4_n = len(per_tf.get("H4", []))
             h1_n = len(per_tf.get("H1", []))
-            log.info(f"   S/R per-TF JSON: D1={d1_n} H4={h4_n} H1={h1_n} written")
+            m15_n = len(per_tf.get("M15", []))
+            m5_n = len(per_tf.get("M5", []))
+            log.info(f"   S/R per-TF JSON: D1={d1_n} H4={h4_n} H1={h1_n} M15={m15_n} M5={m5_n} written")
         except Exception as e:
             log.debug(f"   S/R per-TF JSON error (non-blocking): {e}")
 

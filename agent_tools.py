@@ -1386,7 +1386,7 @@ class AgentTools:
         try:
             # FLO-262: If timeframe specified, use per-TF zones
             tf = (timeframe or "").strip().upper()
-            if tf and tf in ("D1", "H4", "H1"):
+            if tf and tf in ("D1", "H4", "H1", "M15", "M5"):
                 per_tf = getattr(self._bot, '_last_sr_zones_per_tf', None)
                 if per_tf and isinstance(per_tf, dict) and tf in per_tf:
                     tf_zones = per_tf[tf]

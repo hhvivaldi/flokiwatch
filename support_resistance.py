@@ -527,14 +527,20 @@ def detect_zones_per_tf(
     df_h1: pd.DataFrame,
     df_h4: pd.DataFrame,
     df_d1: pd.DataFrame = None,
+    df_m15: pd.DataFrame = None,
+    df_m5: pd.DataFrame = None,
     merge_pips: float = 80.0,
     merge_pips_d1: float = 150.0,
+    merge_pips_m15: float = 40.0,
+    merge_pips_m5: float = 20.0,
     confluence_pips: float = 5.0,
     max_age_bars: int = 500,
     min_touches: int = 2,
     lookback_h1: int = 200,
     lookback_h4: int = 540,
     lookback_d1: int = 130,
+    lookback_m15: int = 200,
+    lookback_m5: int = 250,
 ) -> Dict[str, List[SRZone]]:
     """Detect zones independently per TF with tight cross-TF confluence labeling.
 
@@ -542,9 +548,14 @@ def detect_zones_per_tf(
     into higher TF), this keeps each TF's zones independent and applies a tight
     confluence check (±confluence_pips) to label matching zones across TFs.
 
+    FLO-290 commit 3: M15 and M5 TFs added for intraday/scalping zones. They
+    participate in the same confluence pass as D1/H4/H1 — a D1 zone that also
+    aligns with a clean M5 level gets flagged with both labels.
+
     Returns:
-        Dict with keys "D1", "H4", "H1", each containing a list of SRZone objects.
-        Zones that align within ±confluence_pips across TFs get confluence labels.
+        Dict with keys "D1", "H4", "H1", "M15", "M5", each containing a list of
+        SRZone objects. M15/M5 keys are always present; lists may be empty if
+        the corresponding DataFrame wasn't supplied or is too short.
     """
     # Detect independently (no merging)
     h1_zones = detect_zones(df_h1, timeframe="H1", merge_pips=merge_pips,
@@ -558,11 +569,23 @@ def detect_zones_per_tf(
         d1_zones = detect_zones(df_d1, timeframe="D1", merge_pips=merge_pips_d1,
                                 max_age_bars=max_age_bars, min_touches=min_touches,
                                 lookback=lookback_d1)
+    m15_zones = []
+    if df_m15 is not None and len(df_m15) >= max(30, lookback_m15 // 2):
+        m15_zones = detect_zones(df_m15, timeframe="M15", merge_pips=merge_pips_m15,
+                                 max_age_bars=max_age_bars, min_touches=min_touches,
+                                 lookback=lookback_m15)
+    m5_zones = []
+    if df_m5 is not None and len(df_m5) >= max(30, lookback_m5 // 2):
+        m5_zones = detect_zones(df_m5, timeframe="M5", merge_pips=merge_pips_m5,
+                                max_age_bars=max_age_bars, min_touches=min_touches,
+                                lookback=lookback_m5)
 
-    # Cross-TF confluence: ±confluence_pips tight matching
-    _label_confluence(d1_zones, h4_zones, h1_zones, confluence_pips)
+    # Cross-TF confluence: ±confluence_pips tight matching across all 5 TFs
+    _label_confluence(d1_zones, h4_zones, h1_zones, confluence_pips,
+                      m15_zones=m15_zones, m5_zones=m5_zones)
 
-    return {"D1": d1_zones, "H4": h4_zones, "H1": h1_zones}
+    return {"D1": d1_zones, "H4": h4_zones, "H1": h1_zones,
+            "M15": m15_zones, "M5": m5_zones}
 
 
 def _label_confluence(
@@ -570,16 +593,28 @@ def _label_confluence(
     h4_zones: List[SRZone],
     h1_zones: List[SRZone],
     tolerance_pips: float,
+    m15_zones: List[SRZone] = None,
+    m5_zones: List[SRZone] = None,
 ) -> None:
     """Label zones that align within ±tolerance_pips across timeframes.
 
     Modifies zones in-place: sets confluence field and upgrades strength.
     Does NOT merge or absorb — zones stay independent.
+
+    FLO-290 commit 3: M15/M5 participate as optional additional TFs. When
+    passed, they're pairwise-compared against D1/H4/H1 AND each other. A D1
+    zone can end up labeled "confluence: [D1, H4, H1, M15, M5]" if all 5 TFs
+    happen to have a zone within ±tolerance_pips of the same price.
     """
     tol = tolerance_pips * PIP_SIZE
 
-    # Compare every pair of TF lists
+    # Compare every pair of TF lists. Order matters only for the labeling
+    # readability (D1 first makes the labels most-significant-first).
     tf_lists = [("D1", d1_zones), ("H4", h4_zones), ("H1", h1_zones)]
+    if m15_zones:
+        tf_lists.append(("M15", m15_zones))
+    if m5_zones:
+        tf_lists.append(("M5", m5_zones))
 
     for i in range(len(tf_lists)):
         for j in range(i + 1, len(tf_lists)):

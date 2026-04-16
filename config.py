@@ -349,6 +349,11 @@ SR_MIN_TOUCHES = 2                         # Minimum touches to qualify as a zon
 SR_LOOKBACK_H1 = 200                       # H1 bars to analyze (~8 trading days)
 SR_LOOKBACK_H4 = 540                       # H4 bars to analyze (~3 months)
 SR_LOOKBACK_D1 = 130                       # D1 bars to analyze (~6 months)
+# FLO-290 commit 3: M15/M5 intraday/scalping zones
+SR_LOOKBACK_M15 = 200                      # M15 bars to analyze (~2 trading days)
+SR_LOOKBACK_M5 = 250                       # M5 bars to analyze (~20 hours)
+SR_ZONE_MERGE_PIPS_M15 = 40                # M15 zones: tighter than H1 (intraday micro-structure)
+SR_ZONE_MERGE_PIPS_M5 = 20                 # M5 zones: tightest (scalping-grade)
 SR_FRACTAL_ORDER = 2                       # Fractal order (2 = 5-bar pattern)
 SR_TOUCH_TOLERANCE_PIPS = 30              # Tolerance for touch detection
 SR_CONFLUENCE_TOLERANCE_PIPS = 5            # FLO-262: ±5 pips for cross-TF confluence detection
