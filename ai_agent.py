@@ -732,6 +732,17 @@ class AIAgent:
                 "description": "Get daily Classic and Fibonacci Pivot Points (R3/R2/R1/PP/S1/S2/S3) from previous D1 candle",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
+            {
+                "name": "get_session_context",
+                "description": "FLO-332: How does the current session compare to normal for this session? For the current session (ASIAN 22:00-08:00 UTC / LONDON 08:00-14:00 UTC / NY 14:00-22:00 UTC), compares current volume and range against the last N same sessions — normalized to 'typical at the same elapsed minutes into the session' so mid-session comparisons are fair. Response includes: session name, session_elapsed_min, volume (current vs typical + z_score + percentile + classification), range_pts (same), win_rate_session (session-level win rate from your trade history; returns n_insufficient if <10 trades), overall_classification (below_normal / normal / above_normal / extreme). Use this when you want to know if current conditions are unusual for the session — e.g. 'is London chopping more than usual?' or 'is Asian volume dead?'. Cached 60s.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "window_sessions": {"type": "integer", "description": "Number of historical same sessions to compare against (default 20, max 40)."},
+                    },
+                    "additionalProperties": False,
+                },
+            },
             # get_headlines: always available (get_macro removed FLO-156)
             *self._macro_tools_if_needed(),
             {

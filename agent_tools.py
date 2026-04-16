@@ -1645,6 +1645,53 @@ class AgentTools:
             self._log_tool("get_tick_pressure", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    def get_session_context(
+        self,
+        window_sessions: int = 20,
+    ) -> Dict[str, Any]:
+        """FLO-332: Session-specific market context.
+
+        Answers "how does the current session compare to normal for this session?"
+        by comparing current volume + range against the last N same sessions,
+        normalized to "typical at the same elapsed minutes into the session".
+        Cached 60s.
+        """
+        start = time.time()
+        try:
+            cache_key = int(window_sessions)
+            cache = getattr(self._bot, "_session_context_cache", None)
+            if not isinstance(cache, dict):
+                cache = {}
+            entry = cache.get(cache_key)
+            if entry and (time.time() - entry["t"]) < 60:
+                self._log_tool(
+                    "get_session_context", start,
+                    f"cached | window={window_sessions}"
+                )
+                return {"success": True, "context": entry["v"], "cached": True}
+
+            from session_context import compute_session_context
+            ctx = compute_session_context(
+                symbol="XAUUSD",
+                window_sessions=int(window_sessions),
+            )
+            if ctx is None:
+                self._log_tool("get_session_context", start, "compute_failed")
+                return {"success": False, "reason": "compute_failed (no bars / MT5 error)"}
+
+            cache[cache_key] = {"t": time.time(), "v": ctx}
+            self._bot._session_context_cache = cache
+            self._log_tool(
+                "get_session_context", start,
+                f"session={ctx['session']} elapsed={ctx['session_elapsed_min']}m "
+                f"vol={ctx['volume']['classification']} range={ctx['range_pts']['classification']} "
+                f"overall={ctx['overall_classification']} n_hist={ctx['n_historical_sessions']}"
+            )
+            return {"success": True, "context": ctx, "cached": False}
+        except Exception as e:
+            self._log_tool("get_session_context", start, f"error={e}")
+            return {"success": False, "reason": "tool_error"}
+
     def get_fibonacci_levels(self) -> Dict[str, Any]:
         start = time.time()
         try:
