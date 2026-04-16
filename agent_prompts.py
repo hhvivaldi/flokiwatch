@@ -152,6 +152,8 @@ Key distinction — this is the point of the split:
   Example: ["Volume profile by price level", "Real-time order flow imbalance"]
 
 If followed_plan is "yes_with_changes" or "no", the reason belongs in your `reasoning` field, not here.
+
+If your self_critique identifies a pattern worth remembering across restarts (not a one-off cycle observation), save_lesson is available to preserve it. Trivial cycle-specific notes stay in self_critique only; durable process learnings can go to both.
 </self_assessment>
 """
 
