@@ -273,7 +273,17 @@ def _format_price_2dp(value: Any) -> str:
 
 
 def _compute_fibonacci_from_h1(h1_candles: List[Dict]) -> Optional[Dict[str, Any]]:
-    if not h1_candles or len(h1_candles) < 2:
+    """Legacy single-TF Fib compute. Accepts _format_candles output (o/h/l/c keys)."""
+    return _compute_fibonacci_from_candles(h1_candles)
+
+
+def _compute_fibonacci_from_candles(candles: List[Dict]) -> Optional[Dict[str, Any]]:
+    """FLO-290 commit 4: generalized Fib compute that bridges both candle key
+    formats — _format_candles (o/h/l/c) used by the flat h1_candles key, AND
+    _rates_to_candles (open/high/low/close) used by the nested dp["candles"]
+    Brain cache. Returns None when candles are empty or malformed.
+    """
+    if not candles or len(candles) < 2:
         return None
 
     swing_high = None
@@ -281,10 +291,16 @@ def _compute_fibonacci_from_h1(h1_candles: List[Dict]) -> Optional[Dict[str, Any
     idx_high = -1
     idx_low = -1
 
-    for i, c in enumerate(h1_candles):
+    for i, c in enumerate(candles):
         try:
-            hi = float(c.get("h"))
-            lo = float(c.get("l"))
+            # Bridge: try both key formats ("h"/"l" short form first — it's cheaper
+            # because flat prompt candles use it; fall back to "high"/"low" long form).
+            hi_raw = c.get("h") if "h" in c else c.get("high")
+            lo_raw = c.get("l") if "l" in c else c.get("low")
+            if hi_raw is None or lo_raw is None:
+                continue
+            hi = float(hi_raw)
+            lo = float(lo_raw)
         except Exception:
             continue
 
@@ -543,7 +559,29 @@ def format_proactive_xml(data_package: Dict) -> str:
     d1 = dp.get("d1_candles", []) or []
     m5 = dp.get("m5_candles", []) or []
 
-    fib = _compute_fibonacci_from_h1(h1)
+    # FLO-290 commit 4: per-TF Fibonacci via the nested Brain candles cache.
+    # Brain populates dp["candles"] = {"M1":[...], "M5":[...], ...} with raw
+    # MT5 rates (keys: open/high/low/close). The existing flat keys above
+    # (h1_candles/m5_candles) use _format_candles output (keys: o/h/l/c).
+    # We bridge both formats in _compute_fibonacci_from_candles so the
+    # per-TF Fib dict can be built without changing build_data_package's
+    # signature or call topology.
+    fib = _compute_fibonacci_from_h1(h1)  # flat H1 data — existing consumers (line ~904 XML block)
+    if not isinstance(fib, dict):
+        fib = {}
+    try:
+        _nested = dp.get("candles") or {}
+        if isinstance(_nested, dict):
+            for _tf in ("M1", "M5", "M15", "H1", "H4", "D1"):
+                _bars = _nested.get(_tf)
+                if not isinstance(_bars, list) or not _bars:
+                    continue
+                _tf_fib = _compute_fibonacci_from_candles(_bars)
+                if _tf_fib:
+                    fib[_tf] = _tf_fib
+    except Exception:
+        pass
+
     swings = _compute_swing_points_h1(h1, n=3, max_points=5)
 
     current_bid = None

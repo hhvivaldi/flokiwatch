@@ -529,10 +529,12 @@ def detect_zones_per_tf(
     df_d1: pd.DataFrame = None,
     df_m15: pd.DataFrame = None,
     df_m5: pd.DataFrame = None,
+    df_m1: pd.DataFrame = None,
     merge_pips: float = 80.0,
     merge_pips_d1: float = 150.0,
     merge_pips_m15: float = 40.0,
     merge_pips_m5: float = 20.0,
+    merge_pips_m1: float = 10.0,
     confluence_pips: float = 5.0,
     max_age_bars: int = 500,
     min_touches: int = 2,
@@ -541,6 +543,7 @@ def detect_zones_per_tf(
     lookback_d1: int = 130,
     lookback_m15: int = 200,
     lookback_m5: int = 250,
+    lookback_m1: int = 300,
 ) -> Dict[str, List[SRZone]]:
     """Detect zones independently per TF with tight cross-TF confluence labeling.
 
@@ -579,13 +582,18 @@ def detect_zones_per_tf(
         m5_zones = detect_zones(df_m5, timeframe="M5", merge_pips=merge_pips_m5,
                                 max_age_bars=max_age_bars, min_touches=min_touches,
                                 lookback=lookback_m5)
+    m1_zones = []
+    if df_m1 is not None and len(df_m1) >= max(30, lookback_m1 // 2):
+        m1_zones = detect_zones(df_m1, timeframe="M1", merge_pips=merge_pips_m1,
+                                max_age_bars=max_age_bars, min_touches=min_touches,
+                                lookback=lookback_m1)
 
-    # Cross-TF confluence: ±confluence_pips tight matching across all 5 TFs
+    # Cross-TF confluence: ±confluence_pips tight matching across all 6 TFs
     _label_confluence(d1_zones, h4_zones, h1_zones, confluence_pips,
-                      m15_zones=m15_zones, m5_zones=m5_zones)
+                      m15_zones=m15_zones, m5_zones=m5_zones, m1_zones=m1_zones)
 
     return {"D1": d1_zones, "H4": h4_zones, "H1": h1_zones,
-            "M15": m15_zones, "M5": m5_zones}
+            "M15": m15_zones, "M5": m5_zones, "M1": m1_zones}
 
 
 def _label_confluence(
@@ -595,6 +603,7 @@ def _label_confluence(
     tolerance_pips: float,
     m15_zones: List[SRZone] = None,
     m5_zones: List[SRZone] = None,
+    m1_zones: List[SRZone] = None,
 ) -> None:
     """Label zones that align within ±tolerance_pips across timeframes.
 
@@ -615,6 +624,8 @@ def _label_confluence(
         tf_lists.append(("M15", m15_zones))
     if m5_zones:
         tf_lists.append(("M5", m5_zones))
+    if m1_zones:
+        tf_lists.append(("M1", m1_zones))
 
     for i in range(len(tf_lists)):
         for j in range(i + 1, len(tf_lists)):

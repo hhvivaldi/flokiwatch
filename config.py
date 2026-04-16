@@ -354,6 +354,9 @@ SR_LOOKBACK_M15 = 200                      # M15 bars to analyze (~2 trading day
 SR_LOOKBACK_M5 = 250                       # M5 bars to analyze (~20 hours)
 SR_ZONE_MERGE_PIPS_M15 = 40                # M15 zones: tighter than H1 (intraday micro-structure)
 SR_ZONE_MERGE_PIPS_M5 = 20                 # M5 zones: tightest (scalping-grade)
+# FLO-290 commit 4: M1 tick-by-tick zones
+SR_LOOKBACK_M1 = 300                       # M1 bars to analyze (~5 hours — enough for one session)
+SR_ZONE_MERGE_PIPS_M1 = 10                 # M1 zones: 1-pip merges (match M1 noise floor)
 SR_FRACTAL_ORDER = 2                       # Fractal order (2 = 5-bar pattern)
 SR_TOUCH_TOLERANCE_PIPS = 30              # Tolerance for touch detection
 SR_CONFLUENCE_TOLERANCE_PIPS = 5            # FLO-262: ±5 pips for cross-TF confluence detection

@@ -32,6 +32,7 @@ int OnInit()
 
    // FLO-262: Select JSON file based on chart timeframe
    // FLO-290 commit 3: dedicated M15/M5 zone files (intraday/scalping)
+   // FLO-290 commit 4: dedicated M1 zone file (tick-by-tick)
    ENUM_TIMEFRAMES tf = Period();
    if(tf == PERIOD_D1 || tf == PERIOD_W1 || tf == PERIOD_MN1)
       ActiveFileName = "sr_zones_d1.json";
@@ -41,8 +42,10 @@ int OnInit()
       ActiveFileName = "sr_zones_m15.json";
    else if(tf == PERIOD_M5)
       ActiveFileName = "sr_zones_m5.json";
+   else if(tf == PERIOD_M1)
+      ActiveFileName = "sr_zones_m1.json";
    else
-      ActiveFileName = "sr_zones_h1.json";  // H1 and M1 fall back to H1 zones (M1 lands in FLO-290 commit 4)
+      ActiveFileName = "sr_zones_h1.json";  // H1 fallback
 
    // Fallback: if per-TF file doesn't exist, use legacy merged file
    if(!FileIsExist(ActiveFileName))
@@ -274,7 +277,7 @@ datetime GetRightEdgeTime()
 string ReadJSONFile()
   {
    // FLO-262: Re-check if per-TF file appeared (bot may have started writing after EA init)
-   // FLO-290 commit 3: include M15/M5 preferred-file check
+   // FLO-290 commit 3+4: M15/M5/M1 preferred-file checks
    ENUM_TIMEFRAMES tf = Period();
    string preferred = "";
    if(tf == PERIOD_D1 || tf == PERIOD_W1 || tf == PERIOD_MN1)
@@ -285,6 +288,8 @@ string ReadJSONFile()
       preferred = "sr_zones_m15.json";
    else if(tf == PERIOD_M5)
       preferred = "sr_zones_m5.json";
+   else if(tf == PERIOD_M1)
+      preferred = "sr_zones_m1.json";
    else
       preferred = "sr_zones_h1.json";
    if(FileIsExist(preferred))

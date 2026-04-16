@@ -670,7 +670,7 @@ class AIAgent:
             },
             {
                 "name": "get_candles",
-                "description": "Get cached OHLCV candles for a timeframe. Supported: M5, H1, H4, D1. Max count: 50.",
+                "description": "Get cached OHLCV candles for a timeframe. Supported: M1, M5, M15, H1, H4, D1. Max count: 50. Per-candle indicators (RSI, MACD, Bollinger, EMAs) are also included.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -683,8 +683,14 @@ class AIAgent:
             },
             {
                 "name": "get_indicators",
-                "description": "Get cached indicator snapshot (RSI, MACD, EMA200, ATR, ADX, Bollinger)",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                "description": "Get cached indicator snapshot (RSI, MACD, EMAs, ATR, ADX, Bollinger, Stochastic). Omit timeframe for the flat H1 snapshot (legacy). Pass timeframe='M1'/'M5'/'M15'/'H1'/'H4'/'D1' for real per-TF indicators — e.g. is RSI oversold on M1 while H1 is neutral?",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string", "enum": ["M1", "M5", "M15", "H1", "H4", "D1"], "description": "Optional. Omit for flat H1 snapshot; pass a TF for that TF's indicators."},
+                    },
+                    "additionalProperties": False,
+                },
             },
             {
                 "name": "get_sr_zones",
@@ -692,15 +698,21 @@ class AIAgent:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "timeframe": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5"], "description": "Filter zones by timeframe. Omit for all."},
+                        "timeframe": {"type": "string", "enum": ["D1", "H4", "H1", "M15", "M5", "M1"], "description": "Filter zones by timeframe. Omit for all."},
                     },
                     "additionalProperties": False,
                 },
             },
             {
                 "name": "get_fibonacci_levels",
-                "description": "Get cached Fibonacci levels and swing high/low",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                "description": "Get Fibonacci retracement levels + swing high/low. Omit timeframe for all populated TFs. Pass timeframe='M1'/'M5'/'M15'/'H1'/'H4'/'D1' for a specific TF's Fib levels. Each level is a list of {pct, price} — standard retracements at 23.6/38.2/50.0/61.8/78.6.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string", "enum": ["M1", "M5", "M15", "H1", "H4", "D1"], "description": "Optional. Omit for all TFs; pass a TF for that TF's Fib levels only."},
+                    },
+                    "additionalProperties": False,
+                },
             },
             {
                 "name": "get_tick_pressure",
@@ -1398,8 +1410,8 @@ class AIAgent:
                         _ci = getattr(tools, '_chart_images', {}) or {}
                         _requested_tfs = result.get("timeframes", [])
                         _img_blocks = [{"type": "text", "text": "Chart screenshots attached. Analyze candle patterns, S/R interactions, volume bars, and momentum visually:"}]
-                        _tf_labels = {"D1": "Daily", "H4": "4-Hour", "H1": "1-Hour", "M15": "15-Min", "M5": "5-Min"}
-                        for _tf in ["D1", "H4", "H1", "M15", "M5"]:
+                        _tf_labels = {"D1": "Daily", "H4": "4-Hour", "H1": "1-Hour", "M15": "15-Min", "M5": "5-Min", "M1": "1-Min"}
+                        for _tf in ["D1", "H4", "H1", "M15", "M5", "M1"]:
                             _b64_key = f"{_tf.lower()}_b64"
                             if _tf in _requested_tfs and _ci.get(_b64_key):
                                 _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci[_b64_key]}", "detail": "high"}})

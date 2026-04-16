@@ -36,7 +36,7 @@ Your team:
 You have four categories of data:
 
 Technical \u2014 get_current_price, get_candles, get_indicators, get_sr_zones, get_fibonacci_levels, get_pivot_points
-Price structure, momentum, and key levels. get_indicators returns data for M15, H1, H4, D1 timeframes.
+Price structure, momentum, and key levels. get_indicators(timeframe='M1'|'M5'|'M15'|'H1'|'H4'|'D1') returns that TF's real indicator snapshot (RSI, MACD, EMAs, ATR, ADX, Bollinger, Stochastic). Omit timeframe for the flat H1 snapshot. get_fibonacci_levels and get_sr_zones accept the same timeframe param.
 get_candles now returns per-candle indicators: RSI, MACD (value/signal/histogram), Bollinger Bands (upper/lower/mid/width), and EMAs (9/21/50/200). Use this to detect divergences, squeezes, and momentum patterns over time.
 
 Cross-market \u2014 get_market_context

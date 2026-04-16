@@ -1092,11 +1092,11 @@ class AgentTools:
         start = time.time()
         try:
             tf = str(timeframe or "").upper().strip()
-            _TF_ALIASES = {"4H": "H4", "1H": "H1", "1D": "D1", "15M": "M15", "5M": "M5", "30M": "M30"}
+            _TF_ALIASES = {"4H": "H4", "1H": "H1", "1D": "D1", "15M": "M15", "5M": "M5", "30M": "M30", "1M": "M1"}
             tf = _TF_ALIASES.get(tf, tf)
-            if tf not in ("M5", "M15", "M30", "H1", "H4", "D1"):
+            if tf not in ("M1", "M5", "M15", "M30", "H1", "H4", "D1"):
                 self._log_fail("get_candles", start, "unsupported timeframe")
-                return {"success": False, "reason": f"unsupported timeframe '{tf}'. Use: M5, M15, H1, H4, D1"}
+                return {"success": False, "reason": f"unsupported timeframe '{tf}'. Use: M1, M5, M15, H1, H4, D1"}
 
             try:
                 c = int(count)
@@ -1226,13 +1226,30 @@ class AgentTools:
             self._log_tool("get_candles", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
-    def get_indicators(self) -> Dict[str, Any]:
+    def get_indicators(self, timeframe: str = "") -> Dict[str, Any]:
         start = time.time()
         try:
             dp = self._last_agent_data()
             if not dp:
                 self._log_no_cache("get_indicators", start)
                 return self._no_cache()
+
+            # FLO-290 commit 4: when a timeframe param is supplied, route through
+            # the per-TF multi_tf_indicators dict (populated by central Brain at
+            # main.py:1968, now covering M1/M5/M15/H1/H4/D1). When no param is
+            # given, preserve the legacy flat-H1 path so the 5 HIGH-risk consumers
+            # that read dp["indicators"] flat (agent_monitor, rex _get_data_value,
+            # get_pivot_points enrichment, _get_full_mtf_signals, etc.) don't break.
+            tf = (timeframe or "").strip().upper()
+            if tf and tf in ("M1", "M5", "M15", "H1", "H4", "D1"):
+                mtf = dp.get("multi_tf_indicators") or {}
+                if isinstance(mtf, dict) and tf in mtf:
+                    tf_ind = mtf[tf]
+                    if isinstance(tf_ind, dict) and tf_ind:
+                        self._log_tool("get_indicators", start, f"tf={tf}")
+                        return {"timeframe": tf, **tf_ind}
+                self._log_tool("get_indicators", start, f"tf={tf} not in multi_tf_indicators, falling back")
+                # fall through to flat path
 
             ind = dp.get("indicators")
             if not isinstance(ind, dict) or not ind:
@@ -1386,7 +1403,7 @@ class AgentTools:
         try:
             # FLO-262: If timeframe specified, use per-TF zones
             tf = (timeframe or "").strip().upper()
-            if tf and tf in ("D1", "H4", "H1", "M15", "M5"):
+            if tf and tf in ("D1", "H4", "H1", "M15", "M5", "M1"):
                 per_tf = getattr(self._bot, '_last_sr_zones_per_tf', None)
                 if per_tf and isinstance(per_tf, dict) and tf in per_tf:
                     tf_zones = per_tf[tf]
@@ -1692,7 +1709,20 @@ class AgentTools:
             self._log_tool("get_session_context", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
-    def get_fibonacci_levels(self) -> Dict[str, Any]:
+    def get_fibonacci_levels(self, timeframe: str = "") -> Dict[str, Any]:
+        """FLO-290 commit 4: fixes long-standing dead-code path.
+
+        Before: the per-TF branch required `levels` to be a dict, but
+        _compute_fibonacci_from_h1 returns `levels` as a LIST of {pct, price}
+        dicts. Result: tool was returning no-data since deployment. Also, no
+        per-TF Fib data was ever populated upstream — the H1/H4/D1 branch
+        never matched.
+
+        Now: upstream agent_data_builder populates fib["M1"]/fib["M5"]/.../fib["D1"]
+        via _compute_fibonacci_from_candles. Tool returns per-TF slice (or all
+        TFs if no timeframe param given). levels passed through as list — tool
+        no longer discriminates against the real shape.
+        """
         start = time.time()
         try:
             dp = self._last_agent_data()
@@ -1705,44 +1735,52 @@ class AgentTools:
                 self._log_no_cache("get_fibonacci_levels", start)
                 return self._no_cache()
 
-            # Multi-timeframe structure expected:
-            # {"H1": {"swing_high":..., "swing_low":..., "levels": {...}}, "H4": {...}, "D1": {...}}
-            # Only available timeframes are included.
-            if any(tf in fib for tf in ("H1", "H4", "D1")):
-                out = {}
-                for tf in ("H1", "H4", "D1"):
-                    v = fib.get(tf)
-                    if not isinstance(v, dict) or not v:
-                        continue
-                    levels = v.get("levels")
-                    if not isinstance(levels, dict) or not levels:
-                        continue
-                    out[tf] = {
-                        "levels": levels,
-                        "swing_high": v.get("swing_high"),
-                        "swing_low": v.get("swing_low"),
-                    }
-                if not out:
-                    self._log_no_cache("get_fibonacci_levels", start)
-                    return self._no_cache()
+            SUPPORTED = ("M1", "M5", "M15", "H1", "H4", "D1")
+
+            def _pack(tf_key, v):
+                if not isinstance(v, dict):
+                    return None
+                return {
+                    "swing_high": v.get("swing_high"),
+                    "swing_low": v.get("swing_low"),
+                    "direction": v.get("direction"),
+                    "levels": v.get("levels"),  # list of {pct, price} — no longer dropped
+                }
+
+            tf_arg = (timeframe or "").strip().upper()
+            if tf_arg and tf_arg in SUPPORTED:
+                packed = _pack(tf_arg, fib.get(tf_arg))
+                if packed and packed["levels"]:
+                    self._log_tool("get_fibonacci_levels", start, f"tf={tf_arg}")
+                    return {tf_arg: packed}
+                self._log_no_cache("get_fibonacci_levels", start, f"tf={tf_arg} no data")
+                return self._no_cache()
+
+            # No param: return every populated TF
+            out = {}
+            for tf in SUPPORTED:
+                packed = _pack(tf, fib.get(tf))
+                if packed and packed["levels"]:
+                    out[tf] = packed
+            if out:
                 self._log_tool("get_fibonacci_levels", start, f"tfs={','.join(out.keys())}")
                 return out
 
-            # Backward-compatible: single timeframe structure
-            levels = fib.get("levels") if isinstance(fib.get("levels"), dict) else fib.get("levels")
-            if not isinstance(levels, dict) or not levels:
-                self._log_no_cache("get_fibonacci_levels", start)
-                return self._no_cache()
-
-            out = {
-                "H1": {
-                    "levels": levels,
-                    "swing_high": fib.get("swing_high"),
-                    "swing_low": fib.get("swing_low"),
+            # Last-resort flat-H1 fallback (pre-FLO-290 data shape)
+            flat_levels = fib.get("levels")
+            if flat_levels:
+                self._log_tool("get_fibonacci_levels", start, "tfs=H1 (flat fallback)")
+                return {
+                    "H1": {
+                        "swing_high": fib.get("swing_high"),
+                        "swing_low": fib.get("swing_low"),
+                        "direction": fib.get("direction"),
+                        "levels": flat_levels,
+                    }
                 }
-            }
-            self._log_tool("get_fibonacci_levels", start, "tfs=H1")
-            return out
+
+            self._log_no_cache("get_fibonacci_levels", start)
+            return self._no_cache()
         except Exception as e:
             self._log_tool("get_fibonacci_levels", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}

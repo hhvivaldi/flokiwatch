@@ -1899,6 +1899,17 @@ class TradingBot:
                             if m5_list:
                                 candles_cache["M5"] = m5_list
 
+                        # FLO-290 commit 4: M1 candles for tick-by-tick read + per-TF Fib/indicators
+                        try:
+                            have_m1 = isinstance(candles_cache.get("M1"), list) and bool(candles_cache.get("M1"))
+                        except Exception:
+                            have_m1 = False
+                        if not have_m1:
+                            m1_rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M1, 0, 60)
+                            m1_list = _rates_to_candles(m1_rates)
+                            if m1_list:
+                                candles_cache["M1"] = m1_list
+
                         # FLO-221: Fetch M15 candles for multi-TF indicators
                         try:
                             have_m15 = isinstance(candles_cache.get("M15"), list) and bool(candles_cache.get("M15"))
@@ -1965,7 +1976,9 @@ class TradingBot:
                         _mtf_t0 = time.time()
                         multi_tf = {}
                         _all_candles = dp.get("candles") or {}
-                        for _tf in ["M15", "H1", "H4", "D1"]:
+                        # FLO-290 commit 4: M1/M5 added — real per-TF indicators for all 6 TFs.
+                        # This is what get_indicators(timeframe=X) will route through.
+                        for _tf in ["M1", "M5", "M15", "H1", "H4", "D1"]:
                             _tf_candles = _all_candles.get(_tf)
                             if isinstance(_tf_candles, list) and len(_tf_candles) >= 14:
                                 multi_tf[_tf] = compute_indicators_from_candles(_tf_candles)
@@ -5314,6 +5327,8 @@ class TradingBot:
             # FLO-290 commit 3: fetch M15/M5 for intraday/scalping zones
             m15_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M15, 0, config.SR_LOOKBACK_M15 + 50)
             m5_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, config.SR_LOOKBACK_M5 + 50)
+            # FLO-290 commit 4: fetch M1 for tick-by-tick zones
+            m1_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M1, 0, config.SR_LOOKBACK_M1 + 50)
             df_h1_sr = None
             if h1_rates_sr is not None and len(h1_rates_sr) > 0:
                 df_h1_sr = pd.DataFrame(h1_rates_sr)
@@ -5335,6 +5350,11 @@ class TradingBot:
             if m5_rates_sr is not None and len(m5_rates_sr) > 0:
                 df_m5 = pd.DataFrame(m5_rates_sr)
                 df_m5['datetime'] = pd.to_datetime(df_m5['time'], unit='s')
+            # FLO-290 commit 4
+            df_m1 = None
+            if m1_rates_sr is not None and len(m1_rates_sr) > 0:
+                df_m1 = pd.DataFrame(m1_rates_sr)
+                df_m1['datetime'] = pd.to_datetime(df_m1['time'], unit='s')
             # Use dedicated H1 if available, fall back to main df
             df_h1_for_sr = df_h1_sr if df_h1_sr is not None else df
             if df_h4 is not None:
@@ -5388,11 +5408,12 @@ class TradingBot:
                     from support_resistance import detect_zones_per_tf
                     per_tf = detect_zones_per_tf(
                         df_h1_for_sr, df_h4, df_d1=df_d1,
-                        df_m15=df_m15, df_m5=df_m5,
+                        df_m15=df_m15, df_m5=df_m5, df_m1=df_m1,
                         merge_pips=config.SR_ZONE_MERGE_PIPS,
                         merge_pips_d1=config.SR_ZONE_MERGE_PIPS_D1,
                         merge_pips_m15=config.SR_ZONE_MERGE_PIPS_M15,
                         merge_pips_m5=config.SR_ZONE_MERGE_PIPS_M5,
+                        merge_pips_m1=config.SR_ZONE_MERGE_PIPS_M1,
                         confluence_pips=getattr(config, 'SR_CONFLUENCE_TOLERANCE_PIPS', 5),
                         max_age_bars=config.SR_ZONE_MAX_AGE_BARS,
                         min_touches=config.SR_MIN_TOUCHES,
@@ -5401,6 +5422,7 @@ class TradingBot:
                         lookback_d1=config.SR_LOOKBACK_D1,
                         lookback_m15=config.SR_LOOKBACK_M15,
                         lookback_m5=config.SR_LOOKBACK_M5,
+                        lookback_m1=config.SR_LOOKBACK_M1,
                     )
                     self._last_sr_zones_per_tf = per_tf
                     self._write_sr_zones_per_tf_json(current_price, per_tf)
@@ -6889,8 +6911,8 @@ class TradingBot:
                 return
             base_dir = os.path.dirname(base_path)
 
-            # FLO-290 commit 3: M15/M5 intraday zones (matching H1's 8-cap)
-            tf_max_zones = {"D1": 8, "H4": 12, "H1": 8, "M15": 8, "M5": 8}
+            # FLO-290 commit 3+4: M15/M5/M1 intraday zones (matching H1's 8-cap)
+            tf_max_zones = {"D1": 8, "H4": 12, "H1": 8, "M15": 8, "M5": 8, "M1": 8}
 
             for tf, zones in per_tf.items():
                 max_z = tf_max_zones.get(tf, 8)
@@ -6935,7 +6957,8 @@ class TradingBot:
             h1_n = len(per_tf.get("H1", []))
             m15_n = len(per_tf.get("M15", []))
             m5_n = len(per_tf.get("M5", []))
-            log.info(f"   S/R per-TF JSON: D1={d1_n} H4={h4_n} H1={h1_n} M15={m15_n} M5={m5_n} written")
+            m1_n = len(per_tf.get("M1", []))
+            log.info(f"   S/R per-TF JSON: D1={d1_n} H4={h4_n} H1={h1_n} M15={m15_n} M5={m5_n} M1={m1_n} written")
         except Exception as e:
             log.debug(f"   S/R per-TF JSON error (non-blocking): {e}")
 
