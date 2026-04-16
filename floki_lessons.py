@@ -185,6 +185,9 @@ def _sanitize_context(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     session = ctx.get("session")
     if isinstance(session, str) and session.strip():
         out["session"] = session.strip()[:20]
+    source = ctx.get("source")
+    if isinstance(source, str) and source.strip():
+        out["source"] = source.strip()[:40]
     rt = ctx.get("related_ticket")
     if rt is not None:
         try:
@@ -219,6 +222,7 @@ def render_block() -> str:
         ts = str(l.get("timestamp") or "")[:10]  # YYYY-MM-DD only
         ctx = l.get("context") or {}
         ctx_bits = []
+        if ctx.get("source"): ctx_bits.append(f"from {ctx['source']}")
         if ctx.get("regime"): ctx_bits.append(str(ctx["regime"]))
         if ctx.get("session"): ctx_bits.append(str(ctx["session"]))
         if ctx.get("related_ticket"): ctx_bits.append(f"#{ctx['related_ticket']}")
