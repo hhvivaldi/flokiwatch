@@ -1034,12 +1034,12 @@ class AIAgent:
             },
             {
                 "name": "get_market_regime",
-                "description": "Local XAU/USD regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence, and a hint on how to trade it. Distinct from Luna's macro regime (risk_on/risk_off) — this is the price-action regime classifier.",
+                "description": "Local XAU/USD price-action regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence list, descriptive state hint, and related_tools list when applicable. Returns a compact delta response {changed: false, regime, since} when regime+confidence are unchanged since the last call this run. Distinct from Luna's macro regime (risk_on/risk_off) — use get_luna_brief for that.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
                 "name": "get_chart_patterns",
-                "description": "Algorithmic H4 pattern detection: double top/bottom, head & shoulders, failed breakouts, rising and falling wedges, channels. Reads the last 30 H4 bars. Returns list of patterns with type, bias (bullish/bearish/neutral), price level, and description. Complements what you see on chart screenshots — this is deterministic swing-point math.",
+                "description": "Detects 7 chart patterns computationally from the last 30 H4 bars: double_top, double_bottom, head_and_shoulders, failed_breakout, rising_wedge, falling_wedge, channel. Returns each detected pattern's type, bias (bullish/bearish/neutral), key price level, and a short description. Most informative in RANGING and BREAKOUT_IMMINENT regimes where these patterns typically form. Different from get_chart_screenshots: this tool runs algorithmic swing-point math (pattern either detected or not), while screenshots let you visually interpret the same bars.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {

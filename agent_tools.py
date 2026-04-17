@@ -3718,6 +3718,7 @@ class AgentTools:
                 "atr_ratio": regime_ctx.get("atr_ratio"),
                 "transition": regime_ctx.get("transition"),
                 "evidence": (regime_ctx.get("evidence") or [])[:5],
+                "related_tools": ["get_chart_patterns"] if _rn in ("RANGING", "BREAKOUT_IMMINENT") else [],
                 "hint": hint_map.get(_rn, ""),
             }
             self._last_regime_key = _current_key
