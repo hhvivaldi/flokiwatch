@@ -487,8 +487,44 @@ class AgentMonitor:
                     if not isinstance(conds, list) or not conds:
                         continue
 
-                    trig = self._evaluate_watch_conditions_for_position(pos, conds, scanner_data)
+                    trig = self._evaluate_watch_conditions_for_position(pos, conds, scanner_data, ticket=t)
                     if trig:
+                        # FLO-301: compound conditions with action=close/adjust_sl execute
+                        # directly (not via the SIMBA_WATCH wake path). Wake Floki after.
+                        _action = str(trig.get("action") or "wake").strip().lower()
+                        if _action in ("close", "adjust_sl"):
+                            _cur_price = self._safe_float(
+                                pos.get("current_price") if isinstance(pos, dict) else getattr(pos, "current_price", None)
+                            )
+                            _pnl = self._safe_float(
+                                pos.get("profit") if isinstance(pos, dict) else getattr(pos, "profit", None)
+                            )
+                            exec_result = self._execute_simba_action(t, trig, pos, _cur_price, _pnl)
+                            # Mark fired_at to prevent re-execution on next tick.
+                            try:
+                                store2 = self._load_watch_conditions()
+                                ent2 = store2.get(str(t))
+                                if isinstance(ent2, dict):
+                                    for cond2 in ent2.get("conditions", []) or []:
+                                        if cond2 is trig or (
+                                            isinstance(cond2, dict)
+                                            and cond2.get("all_of") == trig.get("all_of")
+                                            and cond2.get("action") == trig.get("action")
+                                            and cond2.get("description") == trig.get("description")
+                                        ):
+                                            cond2["fired_at"] = utc_iso()
+                                            cond2["fired_result"] = {
+                                                "success": exec_result.get("success"),
+                                                "reason": exec_result.get("reason"),
+                                            }
+                                    store2[str(t)] = ent2
+                                    self._save_watch_conditions(store2)
+                            except Exception:
+                                pass
+                            # Wake Floki immediately with execution summary.
+                            self._wake_floki_after_execution(exec_result, trig)
+                            continue  # proceed to next ticket — don't trigger SIMBA_WATCH wake
+                        # action == "wake" — fall through to existing SIMBA_WATCH flow
                         watch_trigger = trig
                         watch_ticket = t
                         watch_payload = payload if isinstance(payload, dict) else None
@@ -1559,6 +1595,7 @@ class AgentMonitor:
         pos: Any,
         conditions: List[Dict[str, Any]],
         scanner_data: Dict[str, Any],
+        ticket: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         # `pos` may be PositionInfo or dict depending on executor.
         current_price = None
@@ -1590,19 +1627,202 @@ class AgentMonitor:
         # FLO-172: inject indicators so indicator_threshold can read RSI/MACD/ADX
         indicators = scanner_data.get("indicators") if isinstance(scanner_data.get("indicators"), dict) else {}
 
+        # FLO-301: MFE tracking — update max_pnl for this ticket so mfe_drawdown can fire.
+        mfe_pnl = None
+        if ticket is not None and pnl_dollars is not None:
+            try:
+                store = self._load_watch_conditions()
+                ent = store.get(str(int(ticket)))
+                if isinstance(ent, dict):
+                    prev_mfe = self._safe_float(ent.get("mfe_pnl"))
+                    if prev_mfe is None or float(pnl_dollars) > float(prev_mfe):
+                        ent["mfe_pnl"] = float(pnl_dollars)
+                        store[str(int(ticket))] = ent
+                        self._save_watch_conditions(store)
+                    mfe_pnl = self._safe_float(ent.get("mfe_pnl"))
+            except Exception:
+                mfe_pnl = None
+
         ctx = {
             "current_price": current_price,
             "pnl_dollars": pnl_dollars,
             "macro": macro,
             "indicators": indicators,
+            "mfe_pnl": mfe_pnl,
         }
         for c in conditions or []:
             if not isinstance(c, dict):
                 continue
+            # FLO-301: compound 'all_of' evaluator with action dispatch + fire-once guard.
+            if isinstance(c.get("all_of"), list) and c.get("all_of"):
+                if c.get("fired_at"):
+                    continue  # already executed — do not re-evaluate
+                all_met = True
+                for sub in c["all_of"]:
+                    if not isinstance(sub, dict):
+                        all_met = False
+                        break
+                    ok_sub, _ = self._is_simba_condition_met(sub, ctx, source="watch_compound")
+                    if not ok_sub:
+                        all_met = False
+                        break
+                if all_met:
+                    return c
+                continue
+            # Legacy single-condition path (action defaults to "wake")
             ok, _ = self._is_simba_condition_met(c, ctx, source="watch")
             if ok:
                 return c
         return None
+
+    def _execute_simba_action(
+        self,
+        ticket: int,
+        triggered_cond: Dict[str, Any],
+        pos: Any,
+        current_price: Optional[float],
+        pnl_dollars: Optional[float],
+    ) -> Dict[str, Any]:
+        """FLO-301: execute a compound-condition action (close or adjust_sl) and
+        return a result dict. Caller persists fired_at on success and triggers
+        Floki wake via _wake_floki_after_execution."""
+        action = str(triggered_cond.get("action") or "wake").strip().lower()
+        desc = str(triggered_cond.get("description") or "").strip()
+        result: Dict[str, Any] = {
+            "action": action,
+            "success": False,
+            "ticket": int(ticket),
+            "description": desc,
+            "price_at_trigger": current_price,
+            "pnl_at_trigger": pnl_dollars,
+        }
+
+        try:
+            from executor import executor as _exec
+        except Exception as e:
+            result["reason"] = f"executor_import_failed: {e}"
+            return result
+
+        # Direction for guard + reporting
+        direction = None
+        try:
+            if isinstance(pos, dict):
+                direction = pos.get("direction")
+            else:
+                direction = getattr(pos, "direction", None)
+        except Exception:
+            direction = None
+        dir_s = str(direction or "").upper()
+
+        if action == "close":
+            try:
+                res = _exec.close_position(int(ticket))
+                ok = bool(getattr(res, "success", False))
+                result["success"] = ok
+                if ok:
+                    result["close_price"] = self._safe_float(getattr(res, "price", None))
+                    result["realized_profit"] = self._safe_float(getattr(res, "profit", None))
+                    try:
+                        log.info(
+                            f"SIMBA_EXIT | ticket=#{ticket} | action=close | "
+                            f"price={result.get('close_price')} | pnl=${result.get('realized_profit')} | "
+                            f"reason={desc}"
+                        )
+                    except Exception:
+                        pass
+                else:
+                    result["reason"] = str(getattr(res, "error_message", "close_failed"))
+            except Exception as e:
+                result["reason"] = f"close_exception: {e}"
+            return result
+
+        if action == "adjust_sl":
+            new_sl = self._safe_float(triggered_cond.get("sl_value"))
+            if new_sl is None:
+                result["reason"] = "sl_value_missing"
+                return result
+
+            try:
+                if isinstance(pos, dict):
+                    old_sl = self._safe_float(pos.get("sl"))
+                else:
+                    old_sl = self._safe_float(getattr(pos, "sl", None))
+            except Exception:
+                old_sl = None
+
+            # SL-widening guard: new SL must be TIGHTER than current SL.
+            # BUY SL is below entry; tightening means moving UP (new > old).
+            # SELL SL is above entry; tightening means moving DOWN (new < old).
+            if old_sl is not None and dir_s in ("BUY", "SELL"):
+                tightening_ok = (dir_s == "BUY" and float(new_sl) > float(old_sl)) or (
+                    dir_s == "SELL" and float(new_sl) < float(old_sl)
+                )
+                if not tightening_ok:
+                    result["reason"] = f"sl_not_tightening (old={old_sl} new={new_sl} dir={dir_s})"
+                    try:
+                        log.warning(
+                            f"SIMBA_EXIT | ticket=#{ticket} | action=adjust_sl REJECTED | {result['reason']}"
+                        )
+                    except Exception:
+                        pass
+                    return result
+
+            try:
+                res = _exec.modify_position(int(ticket), new_sl=float(new_sl))
+                ok = bool(getattr(res, "success", False))
+                result["success"] = ok
+                result["new_sl"] = float(new_sl)
+                result["old_sl"] = old_sl
+                if ok:
+                    try:
+                        log.info(
+                            f"SIMBA_EXIT | ticket=#{ticket} | action=adjust_sl | "
+                            f"sl: {old_sl} -> {new_sl} | reason={desc}"
+                        )
+                    except Exception:
+                        pass
+                else:
+                    result["reason"] = str(getattr(res, "error_message", "modify_failed"))
+            except Exception as e:
+                result["reason"] = f"modify_exception: {e}"
+            return result
+
+        result["reason"] = f"unknown_action: {action}"
+        return result
+
+    def _wake_floki_after_execution(self, exec_result: Dict[str, Any], triggered_cond: Dict[str, Any]) -> None:
+        """FLO-301: fire SIMBA_EXIT_EXECUTED trigger so Floki evaluates market
+        context and decides next steps. Non-blocking — errors swallowed."""
+        try:
+            bot = getattr(self, "bot", None)
+            if bot is None:
+                return
+            trigger_data = {
+                "ticket": exec_result.get("ticket"),
+                "action": exec_result.get("action"),
+                "success": exec_result.get("success"),
+                "description": exec_result.get("description"),
+                "price_at_trigger": exec_result.get("price_at_trigger"),
+                "pnl_at_trigger": exec_result.get("pnl_at_trigger"),
+                "close_price": exec_result.get("close_price"),
+                "realized_profit": exec_result.get("realized_profit"),
+                "new_sl": exec_result.get("new_sl"),
+                "old_sl": exec_result.get("old_sl"),
+                "reason": exec_result.get("reason"),
+                "conditions_met": triggered_cond.get("all_of", []),
+            }
+            try:
+                bot.agent_proactive_out_of_cycle(
+                    trigger_type="SIMBA_EXIT_EXECUTED",
+                    trigger_data=trigger_data,
+                )
+            except Exception as e:
+                try:
+                    log.warning(f"SIMBA_EXIT | wake_failed: {e}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _is_simba_condition_met(self, cond: Dict[str, Any], ctx: Dict[str, Any], source: str) -> Tuple[bool, Optional[str]]:
         ctype = str(cond.get("type") or "").strip()
@@ -1643,6 +1863,57 @@ class AgentMonitor:
                 if thr is None or pnl is None:
                     return False, None
                 return float(pnl) < float(thr), None
+
+            # FLO-301: pnl_above — fires when profit crosses above a threshold (in dollars).
+            if ctype == "pnl_above":
+                thr = self._safe_float(cond.get("level"))
+                if thr is None:
+                    thr = self._safe_float(cond.get("value"))
+                pnl = self._safe_float(ctx.get("pnl_dollars"))
+                if thr is None or pnl is None:
+                    return False, None
+                return float(pnl) >= float(thr), None
+
+            # FLO-301: bb_position — fires when Bollinger Band position matches.
+            # Reads flat bb_position (0.0-1.0) from scanner_data indicators. Values:
+            #   "above_upper" (bb_position > 1.0), "below_lower" (< 0.0),
+            #   "upper_band" (>= 0.8), "lower_band" (<= 0.2), "middle" (0.3-0.7).
+            if ctype == "bb_position":
+                want = str(cond.get("value") or "").strip().lower()
+                if want not in ("above_upper", "below_lower", "upper_band", "lower_band", "middle"):
+                    return False, None
+                indicators = ctx.get("indicators") if isinstance(ctx.get("indicators"), dict) else {}
+                bbp = self._safe_float(indicators.get("bb_position"))
+                if bbp is None:
+                    # Try nested bollinger.position_pct fallback
+                    boll = indicators.get("bollinger") if isinstance(indicators.get("bollinger"), dict) else {}
+                    bbp = self._safe_float(boll.get("position_pct"))
+                if bbp is None:
+                    return False, None
+                if want == "above_upper":
+                    return float(bbp) > 1.0, None
+                if want == "below_lower":
+                    return float(bbp) < 0.0, None
+                if want == "upper_band":
+                    return float(bbp) >= 0.8, None
+                if want == "lower_band":
+                    return float(bbp) <= 0.2, None
+                if want == "middle":
+                    return 0.3 <= float(bbp) <= 0.7, None
+                return False, None
+
+            # FLO-301: mfe_drawdown — fires when current PnL drops pct% from peak.
+            # Requires ctx["mfe_pnl"] (tracked by _evaluate_watch_conditions_for_position).
+            if ctype == "mfe_drawdown":
+                pct = self._safe_float(cond.get("pct"))
+                mfe = self._safe_float(ctx.get("mfe_pnl"))
+                pnl = self._safe_float(ctx.get("pnl_dollars"))
+                if pct is None or mfe is None or pnl is None:
+                    return False, None
+                if float(mfe) <= 0:
+                    return False, None  # No positive MFE yet — drawdown undefined
+                drawdown_pct = (float(mfe) - float(pnl)) / float(mfe) * 100.0
+                return drawdown_pct >= float(pct), None
 
             if ctype == "indicator_threshold":
                 ind = str(cond.get("indicator") or "").strip().lower()
