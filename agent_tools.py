@@ -1965,7 +1965,27 @@ class AgentTools:
                     continue
 
             self._log_tool("get_open_positions", start, f"count={len(out_positions)}")
-            return {"positions": out_positions, "count": len(out_positions)}
+            result = {"positions": out_positions, "count": len(out_positions)}
+
+            # FLO-292: Detect duplicate positions (same direction/entry/SL/TP) —
+            # likely artifact of EA/direct-API race condition that FLO-291 guards against.
+            dup_groups: Dict[tuple, List[int]] = {}
+            for p in out_positions:
+                key = (
+                    p["direction"].upper(),
+                    round(p["entry"], 1),
+                    round(p.get("sl", 0), 0),
+                    round(p.get("tp", 0), 0),
+                )
+                dup_groups.setdefault(key, []).append(p["ticket"])
+            duplicates = [tks for tks in dup_groups.values() if len(tks) >= 2]
+            if duplicates:
+                result["duplicate_suspected"] = duplicates
+                result["duplicate_hint"] = (
+                    "Multiple positions share direction/entry/SL/TP — possible "
+                    "race-condition duplicate. Consider closing one and investigating."
+                )
+            return result
         except Exception as e:
             self._log_tool("get_open_positions", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}

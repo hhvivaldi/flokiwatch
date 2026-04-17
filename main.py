@@ -766,7 +766,35 @@ class TradingBot:
                 f"Trades today: {new_trades} (W:{new_wins} L:{new_losses}) | "
                 f"PnL today: ${new_pnl:+.2f}"
             )
-            
+
+            # FLO-292: Scan for duplicate positions — same direction/entry/SL/TP
+            # indicates a likely EA/API race artifact (FLO-291 guards against this).
+            try:
+                _live_positions = executor.get_open_positions() or []
+                _dup_groups = {}
+                for p in _live_positions:
+                    key = (
+                        str(getattr(p, "direction", "")).upper(),
+                        round(float(getattr(p, "open_price", 0)), 1),
+                        round(float(getattr(p, "sl", 0)), 0),
+                        round(float(getattr(p, "tp", 0)), 0),
+                    )
+                    _dup_groups.setdefault(key, []).append(int(getattr(p, "ticket", 0)))
+                _dups = [tks for tks in _dup_groups.values() if len(tks) >= 2]
+                if _dups:
+                    log.warning(f"DUPLICATE_POSITIONS | detected: {_dups} (same direction/entry/SL/TP)")
+                    try:
+                        alert_error(
+                            "Duplicate Positions Detected (FLO-292)",
+                            f"{len(_dups)} duplicate group(s) found during reconciliation: {_dups}. "
+                            f"Possible EA/API race artifact. Investigate and close one side if confirmed.",
+                            severity="warning",
+                        )
+                    except Exception:
+                        pass
+            except Exception as e_dup:
+                log.debug(f"FLO-292 dup-scan error (non-blocking): {e_dup}")
+
         except Exception as e:
             log.warning(f"Reconciliation failed (non-blocking): {e}")
 
