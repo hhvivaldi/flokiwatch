@@ -149,6 +149,48 @@
 | `pending_orders[].tp` | float | `executor.py` | Dashboard |
 | `pending_orders[].volume` | float | `executor.py` | Dashboard |
 
+### `data/agent_watch_conditions.json` (FLO-301 Simba Compound Conditions)
+
+Simba monitors these conditions every 30s for open positions. Written by `agent_tools.set_watch_conditions`; read and evaluated by `agent_monitor._evaluate_watch_conditions_for_position`.
+
+**File shape:** `{ "<ticket>": { ...entry... }, ... }`
+
+| Field | Type | Writer | Reader | Notes |
+|-------|------|--------|--------|-------|
+| `<ticket>.updated_at` | string (ISO UTC) | `agent_tools.py` | `agent_monitor.py` | Last Floki call to set_watch_conditions. |
+| `<ticket>.conditions` | array | `agent_tools.py` | `agent_monitor.py` | List of condition entries (legacy single OR compound). |
+| `<ticket>.mfe_pnl` | float \| null | `agent_monitor.py` | `agent_monitor.py` | Max profit seen (dollars). Updated every eval tick when pnl grows. Preserved across re-sets by Floki. Feeds `mfe_drawdown` condition type. |
+
+**Legacy single condition entry (action = wake, implicit):**
+| Field | Type | Values |
+|-------|------|--------|
+| `type` | string | `price_touch`, `pnl_threshold`, `pnl_below`, `pnl_above`, `indicator_threshold`, `bb_position`, `mfe_drawdown` |
+| `level` \| `value` \| `pct` | float | Type-specific threshold |
+| `description` | string | Floki-authored note |
+
+**Compound entry (FLO-301, `all_of` wrapper with explicit action):**
+| Field | Type | Values | Notes |
+|-------|------|--------|-------|
+| `all_of` | array of leaf conditions | | All must be true for action to fire |
+| `action` | string | `"wake"` \| `"close"` \| `"adjust_sl"` | Simba behavior when all_of met |
+| `description` | string | Floki's rule description | |
+| `sl_value` | float | Required when `action="adjust_sl"` | Target SL price. SL-widening guard applies. |
+| `fired_at` | string (ISO UTC) \| null | Set by agent_monitor on execution | Prevents re-fire. Persisted. |
+| `fired_result` | dict \| absent | `{success, reason}` | Written alongside `fired_at` on execution |
+
+**Condition types (leaves, used in both legacy and all_of):**
+| Type | Fields | Fires when |
+|------|--------|------------|
+| `price_touch` | `level` (+ optional `tolerance`) | \|price − level\| ≤ tolerance (default 5 pips) |
+| `pnl_threshold` | `value` ($) | pnl ≥ value (if positive) or pnl ≤ value (if negative) |
+| `pnl_below` | `value` ($) | pnl < value |
+| `pnl_above` | `level` ($) | pnl ≥ level |
+| `indicator_threshold` | `indicator` (rsi\|macd_histogram\|adx\|vix), `direction` (above\|below), `level` | Current indicator ≷ level |
+| `bb_position` | `value` (above_upper\|below_lower\|upper_band\|lower_band\|middle) | Indicator `bb_position` matches (**Phase 2 plumbing pending — see FLO-302**) |
+| `mfe_drawdown` | `pct` (0-100) | (mfe_pnl − pnl) / mfe_pnl × 100 ≥ pct. Requires mfe_pnl > 0. |
+
+**Trigger registration:** when a compound `action=close` or `action=adjust_sl` fires, `agent_monitor` calls `executor.close_position` / `executor.modify_position`, then `bot.agent_proactive_out_of_cycle(trigger_type="SIMBA_EXIT_EXECUTED", trigger_data=...)`. `main.py:337` accepts this trigger; `main.py:3618` renders a `<simba_execution>` block in trigger_context so Floki sees the execution report and decides next steps.
+
 ### `/api/rex-monitor` Endpoint (FLO-214 Rex Proactive Monitor)
 
 | Field | Type | Writer | Reader |
