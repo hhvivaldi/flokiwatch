@@ -81,7 +81,14 @@ PYRAMID_MIN_PROFIT_PERCENT = 0.3  # Minimum profit (%) on existing position to a
 # Reset rationale for the FLO-327/328 line: pre-327 trades were taken under
 # materially different systems (different AI model, broken capture formula,
 # pre-planning prompt, fewer tools) — contaminating current Qwen lessons.
-LESSONS_CURRENT_ERA_SHAS = ["1205fd4", "4f0981c"]  # + FLO-298 data-quality prompt (4f0981c)
+LESSONS_CURRENT_ERA_SHAS = [
+    "1205fd4",
+    "4f0981c",   # FLO-298 data-quality prompt
+    "68fa3d3",   # FLO-299 1/5 — main.py trigger_context autonomy cleanup
+    "6844820",   # FLO-299 2/5 — agent_prompts.py neutralization
+    "4a271e0",   # FLO-299 3/5 — truncation markers + suggestion removal
+    "6458e5a",   # FLO-299 4/5 — SL auto-clamp visibility
+]
 LESSONS_WINDOW_DAYS = 30                # Rolling window for lessons aggregation
 
 # XAU/USD market hours (UTC)
