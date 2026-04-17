@@ -301,6 +301,21 @@ class MT5Executor:
                     )
 
                     if ok:
+                        # FLO-291: Capture our signal_id for the pre-fallthrough gate below.
+                        # Read back the signal file we just wrote — EA hasn't consumed it yet
+                        # (~1s polling gap minimum). Used later to match against EA's
+                        # last_signal_id to detect late EA fills before direct OrderSend.
+                        current_signal_id = None
+                        try:
+                            from ea_bridge import get_signal_file_path
+                            _sig_path = get_signal_file_path()
+                            if os.path.exists(_sig_path):
+                                with open(_sig_path, 'r', encoding='utf-8') as _sf:
+                                    import json as _json_sig
+                                    current_signal_id = _json_sig.load(_sf).get('signal_id')
+                        except Exception as e_sig_cap:
+                            log.debug(f"EA_BRIDGE | FLO-291 signal_id capture failed (non-blocking): {e_sig_cap}")
+
                         # Poll EA status for real ticket instead of returning 0.
                         # The EA processes signals within seconds; poll up to 10s.
                         real_ticket = 0
@@ -393,6 +408,56 @@ class MT5Executor:
                                                     break
                                 except Exception as e_final:
                                     log.warning(f"EA_BRIDGE | Final pre-fallthrough MT5 check failed: {e_final}")
+
+                                # FLO-291: Signal-ID gate — final defense against duplicate execution.
+                                # If the EA has ack'd our signal_id as success but MT5 hasn't surfaced
+                                # the position yet, fallthrough would create a second order. Check the
+                                # EA's last_signal_id against the signal_id we captured post-write,
+                                # and if it matches with a success result, poll MT5 for up to 2s.
+                                if real_ticket == 0 and current_signal_id:
+                                    try:
+                                        _ack = read_ea_status(stale_threshold_seconds=5)
+                                        if _ack and _ack.last_signal_id == current_signal_id:
+                                            _res_lc = (_ack.last_signal_result or "").lower()
+                                            _ea_success = any(k in _res_lc for k in (
+                                                "ok", "ticket", "opened", "success", "filled"
+                                            ))
+                                            if _ea_success:
+                                                log.warning(
+                                                    f"EA_BRIDGE | FLO-291 gate: EA ack'd signal_id "
+                                                    f"{current_signal_id} as success "
+                                                    f"({_ack.last_signal_result!r}) — polling MT5 2s "
+                                                    f"for late fill before fallthrough"
+                                                )
+                                                for _wait in range(10):
+                                                    _time.sleep(0.2)
+                                                    _late = mt5.positions_get(symbol=self.symbol)
+                                                    if _late:
+                                                        for p in _late:
+                                                            if p.magic == self.magic and p.ticket not in mt5_pre_tickets:
+                                                                _dm = (
+                                                                    (p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                                                    or (p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL")
+                                                                )
+                                                                if _dm:
+                                                                    real_ticket = p.ticket
+                                                                    log.warning(
+                                                                        f"EA_BRIDGE | FLO-291 gate caught late EA fill "
+                                                                        f"(signal_id={current_signal_id}, ticket=#{p.ticket}, "
+                                                                        f"+{(_wait + 1) * 200}ms wait) — skipping direct API"
+                                                                    )
+                                                                    alert_error(
+                                                                        "Duplicate Order Prevented (FLO-291)",
+                                                                        f"EA ack'd signal_id {current_signal_id} as success. "
+                                                                        f"Fallthrough was about to fire. Ticket #{p.ticket} found "
+                                                                        f"after {(_wait + 1) * 200}ms extra wait — fallthrough cancelled.",
+                                                                        severity="warning",
+                                                                    )
+                                                                    break
+                                                        if real_ticket > 0:
+                                                            break
+                                    except Exception as e_sig_gate:
+                                        log.warning(f"EA_BRIDGE | FLO-291 signal_id gate error (non-blocking): {e_sig_gate}")
                         except Exception as e_poll:
                             log.warning(f"EA_BRIDGE | Ticket poll error (non-blocking): {e_poll}")
                             # FLO-197: Re-run phantom check after exception — position
