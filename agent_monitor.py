@@ -715,7 +715,25 @@ class AgentMonitor:
         except Exception:
             pass
 
-        raw_wake = bool(expired or triggered_ids or rex_critical_wake)
+        # FLO-293 Part 3: M15 explosive candle wake (in-memory 30-min debounce)
+        m15_explosive_wake = False
+        try:
+            regime_ctx = getattr(self.bot, "_last_regime_context", None) if self.bot else None
+            if isinstance(regime_ctx, dict):
+                m15 = regime_ctx.get("m15_explosive")
+                if isinstance(m15, dict) and (m15.get("age_min") or 99) <= 2:
+                    last_wake = getattr(self, "_last_m15_explosive_wake_ts", 0.0)
+                    if now_ts - last_wake >= 1800:
+                        m15_explosive_wake = True
+                        self._last_m15_explosive_wake_ts = now_ts
+                        log.info(
+                            f"SIMBA | M15 explosive ({m15.get('direction')}, "
+                            f"age={m15.get('age_min')}m) — requesting Floki wake"
+                        )
+        except Exception:
+            pass
+
+        raw_wake = bool(expired or triggered_ids or rex_critical_wake or m15_explosive_wake)
 
         # FLO-229: Per-condition cooldown — only block conditions that were
         # the trigger reason for the previous wake. Unseen conditions bypass.
@@ -729,6 +747,8 @@ class AgentMonitor:
                     in_cooldown = True
             elif rex_critical_wake:
                 pass  # rex critical always bypasses cooldown
+            elif m15_explosive_wake:
+                pass  # M15 explosive always bypasses cooldown
             else:
                 in_cooldown = True  # expired re-trigger during cooldown
 

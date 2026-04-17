@@ -743,6 +743,9 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `market_regime.atr_ratio` | float | `state_writer.py` | `#regime-card-atr` (Trade Room) |
 | `market_regime.transition` | string | `state_writer.py` | `#regime-card-transition` (Trade Room) |
 | `market_regime.src` | string (`fast` \| `ADX`) | `state_writer.py` | `#ctx-regime-detail` + `#cc-regime-detail` (Trade Room) |
+| `market_regime.h4_volume_bias` | object or null `{bias: "BULLISH"\|"BEARISH"\|"NEUTRAL", age_min, confidence}` | `regime_detector.py` | `get_market_regime` tool (agent-facing) |
+| `market_regime.macro_divergence` | object or null `{signal, bias, confidence, age_min, detail}` | `macro_divergence_detector.py` via `main.py._compute_macro_divergence` | `get_market_regime` tool (agent-facing) |
+| `market_regime.m15_explosive` | object or null `{direction: "bull"\|"bear", age_min}` | `regime_detector.py` | `get_market_regime` tool (agent-facing) + `agent_monitor.py` (Simba wake) |
 
 ### `multi_tf_indicators` Object in `bot_state.json` (FLO-221)
 
