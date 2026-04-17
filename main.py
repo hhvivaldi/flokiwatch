@@ -5197,7 +5197,28 @@ class TradingBot:
                         )
         except Exception as e:
             log.warning(f"PROACTIVE_H1 | Agent execution error (ignored): {e}")
-    
+
+    def _compute_macro_divergence(self) -> None:
+        """FLO-293 Part 3: Cross-asset S24/S25 signal, cached to self._last_macro_divergence."""
+        try:
+            import MetaTrader5 as _mt5
+            import time as _time
+            from macro_divergence_detector import detect_macro_divergence
+            for _s in ("UST10Y_M6", "DXY_M6", "XAUUSD"):
+                _mt5.symbol_select(_s, True)
+            ust = _mt5.copy_rates_from_pos("UST10Y_M6", _mt5.TIMEFRAME_M15, 0, 10)
+            dxy = _mt5.copy_rates_from_pos("DXY_M6", _mt5.TIMEFRAME_M15, 0, 10)
+            xau_m5 = _mt5.copy_rates_from_pos("XAUUSD", _mt5.TIMEFRAME_M5, 0, 15)
+            self._last_macro_divergence = detect_macro_divergence(ust, dxy, xau_m5, _time.time())
+            if self._last_macro_divergence:
+                md = self._last_macro_divergence
+                log.info(
+                    f"MACRO_DIV | {md['signal']} | {md['bias']} | "
+                    f"conf={md['confidence']} | age={md['age_min']}m | {md['detail']}"
+                )
+        except Exception as e:
+            log.debug(f"MACRO_DIV | detection error (ignored): {e}")
+
     def _brain_analysis(self, df):
         """
         Analysis via Central Brain.
@@ -5821,6 +5842,7 @@ class TradingBot:
                 f"{regime_result['duration_display']} | {regime_result['stability']} | "
                 f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')} | src={_regime_src}"
             )
+            self._compute_macro_divergence()
         except Exception as e:
             log.warning(f"REGIME | detection error: {e}")
 
@@ -6222,6 +6244,7 @@ class TradingBot:
                 f"{regime_result['duration_display']} | {regime_result['stability']} | "
                 f"ADX={regime_result.get('adx')} | ATR_ratio={regime_result.get('atr_ratio')}"
             )
+            self._compute_macro_divergence()
         except Exception as e:
             log.debug(f"Error in regime detection: {e}")
         
