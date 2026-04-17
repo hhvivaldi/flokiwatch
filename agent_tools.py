@@ -3684,7 +3684,14 @@ class AgentTools:
                 pass
 
             _rn = regime_ctx.get("regime")
-            _current_key = (_rn, regime_ctx.get("confidence", "moderate"))
+            _h4_bias = (regime_ctx.get("h4_volume_bias") or {}).get("bias")
+            _macro_div = getattr(self._bot, "_last_macro_divergence", None)
+            _current_key = (
+                _rn,
+                regime_ctx.get("confidence", "moderate"),
+                _h4_bias,
+                (_macro_div or {}).get("signal"),
+            )
             if _current_key == getattr(self, "_last_regime_key", None) and _rn is not None:
                 compact = {
                     "success": True,
@@ -3720,6 +3727,9 @@ class AgentTools:
                 "evidence": (regime_ctx.get("evidence") or [])[:5],
                 "related_tools": ["get_chart_patterns"] if _rn in ("RANGING", "BREAKOUT_IMMINENT") else [],
                 "hint": hint_map.get(_rn, ""),
+                "h4_volume_bias": regime_ctx.get("h4_volume_bias"),
+                "macro_divergence": _macro_div,
+                "m15_explosive": regime_ctx.get("m15_explosive"),
             }
             self._last_regime_key = _current_key
             self._log_tool(
