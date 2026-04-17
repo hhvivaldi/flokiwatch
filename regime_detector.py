@@ -28,6 +28,10 @@ _breakout_imminent_until: Optional[float] = None  # hysteresis: persist for 5 mi
 _bb_squeeze_bars: int = 0  # consecutive bars in BB squeeze
 _volume_history: List[float] = []  # last 5 volume_ratio values
 
+# FLO-293 Part 3: Most recent supplementary signals (computed each cycle)
+_last_h4_volume_bias: Optional[Dict[str, Any]] = None
+_last_m15_explosive: Optional[Dict[str, Any]] = None
+
 _STATE_PATH = None  # set lazily
 
 
@@ -84,6 +88,96 @@ def _save_regime_state() -> None:
         log.debug(f"REGIME | state save failed (ignored): {e}")
 
 
+def _broker_offset_s() -> int:
+    """Broker time offset in seconds (FLO-96). Positive = broker ahead of UTC."""
+    try:
+        import MetaTrader5 as mt5
+        tick = mt5.symbol_info_tick("XAUUSD")
+        if tick and tick.time:
+            return int(tick.time) - int(time.time())
+    except Exception:
+        pass
+    return 0
+
+
+def _compute_h4_volume_bias() -> Optional[Dict[str, Any]]:
+    """FLO-293 S9: H4 volume expansion + directional close -> bias (180d conf 70)."""
+    try:
+        import MetaTrader5 as mt5
+        import numpy as np
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_H4, 0, 25)
+        if rates is None or len(rates) < 21:
+            return None
+        highs = np.asarray([r["high"] for r in rates], dtype=float)
+        lows = np.asarray([r["low"] for r in rates], dtype=float)
+        closes = np.asarray([r["close"] for r in rates], dtype=float)
+        vols = np.asarray([float(r["tick_volume"]) for r in rates], dtype=float)
+        vol_avg20 = vols[-21:-1].mean()
+        rng = highs[-1] - lows[-1]
+        if vol_avg20 <= 0 or rng <= 0:
+            return None
+        cir = (closes[-1] - lows[-1]) / rng
+        bias = "NEUTRAL"
+        if vols[-1] > 1.5 * vol_avg20:
+            if cir >= 0.6:
+                bias = "BULLISH"
+            elif cir <= 0.4:
+                bias = "BEARISH"
+        offset_s = _broker_offset_s()
+        bar_ts_utc = int(rates[-1]["time"]) - offset_s
+        return {
+            "bias": bias,
+            "age_min": max(0, int((time.time() - bar_ts_utc) / 60)),
+            "confidence": 70,
+        }
+    except Exception:
+        return None
+
+
+def _compute_m15_explosive() -> Optional[Dict[str, Any]]:
+    """FLO-293 S5: M15 range > 2x M15 ATR(14). Checks latest and prior bar."""
+    try:
+        import MetaTrader5 as mt5
+        import numpy as np
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, 16)
+        if rates is None or len(rates) < 15:
+            return None
+        highs = np.asarray([r["high"] for r in rates], dtype=float)
+        lows = np.asarray([r["low"] for r in rates], dtype=float)
+        closes = np.asarray([r["close"] for r in rates], dtype=float)
+        opens = np.asarray([r["open"] for r in rates], dtype=float)
+        tr = np.maximum.reduce([
+            highs[1:] - lows[1:],
+            np.abs(highs[1:] - closes[:-1]),
+            np.abs(lows[1:] - closes[:-1]),
+        ])
+        if len(tr) < 14:
+            return None
+        atr = float(tr[0])
+        for i in range(1, len(tr)):
+            atr = (atr * 13 + float(tr[i])) / 14
+        if atr <= 0:
+            return None
+        offset_s = _broker_offset_s()
+        for offset in (-1, -2):
+            rng = highs[offset] - lows[offset]
+            if rng > 2 * atr:
+                if closes[offset] > opens[offset]:
+                    direction = "bull"
+                elif closes[offset] < opens[offset]:
+                    direction = "bear"
+                else:
+                    continue
+                bar_ts_utc = int(rates[offset]["time"]) - offset_s
+                return {
+                    "direction": direction,
+                    "age_min": max(0, int((time.time() - bar_ts_utc) / 60)),
+                }
+        return None
+    except Exception:
+        return None
+
+
 def detect_market_regime(
     tech_data: Dict[str, Any],
     momentum_data: Dict[str, Any],
@@ -118,6 +212,11 @@ def detect_market_regime(
 
     _load_regime_state()  # FLO-144: restore from disk on first call
     now = time.time()
+
+    # FLO-293 Part 3: compute supplementary signals once per cycle
+    global _last_h4_volume_bias, _last_m15_explosive
+    _last_h4_volume_bias = _compute_h4_volume_bias()
+    _last_m15_explosive = _compute_m15_explosive()
 
     # -----------------------------------------------------------------------
     # Extract indicators (safe defaults)
@@ -627,6 +726,8 @@ def _build_result(
         "atr_ratio": round(atr_ratio, 2),
         "adx": round(adx, 1) if adx else None,
         "bollinger_width_vs_avg": round(bb_width, 2) if bb_width else None,
+        "h4_volume_bias": _last_h4_volume_bias,
+        "m15_explosive": _last_m15_explosive,
     }
 
 
