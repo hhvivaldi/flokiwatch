@@ -32,6 +32,9 @@ _volume_history: List[float] = []  # last 5 volume_ratio values
 _last_h4_volume_bias: Optional[Dict[str, Any]] = None
 _last_m15_explosive: Optional[Dict[str, Any]] = None
 
+# FLO-298 fix 5: regime-price divergence — stashed per-call for _build_result to read
+_last_h1_candles_for_divergence: Optional[list] = None
+
 _STATE_PATH = None  # set lazily
 
 
@@ -134,6 +137,69 @@ def _compute_h4_volume_bias() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _compute_regime_price_divergence(
+    regime: str, h1_candles: Optional[list]
+) -> Optional[Dict[str, Any]]:
+    """FLO-298 fix 5: Detect when current H1 price action disagrees with the
+    regime label. Regime classifier can trail reversals by 25-60 min; this
+    gives Floki the raw fact that price and label have diverged.
+
+    Fires when:
+      - regime == "TRENDING_BEARISH" and last 3 H1 closes are strictly ascending
+      - regime == "TRENDING_BULLISH" and last 3 H1 closes are strictly descending
+
+    Other regimes (RANGING, BREAKOUT_IMMINENT, VOLATILE, QUIET, TRANSITIONAL)
+    are not directional, so no divergence check applies.
+    """
+    try:
+        if regime not in ("TRENDING_BEARISH", "TRENDING_BULLISH"):
+            return None
+        if not h1_candles or len(h1_candles) < 4:
+            return None
+        # Use last 4 closed H1 bars -> 3 transitions
+        closes = [float(c.get("close", 0) or 0) for c in h1_candles[-4:]]
+        if any(c <= 0 for c in closes):
+            return None
+        up_trans = sum(1 for i in range(1, 4) if closes[i] > closes[i - 1])
+        down_trans = sum(1 for i in range(1, 4) if closes[i] < closes[i - 1])
+
+        price_direction = None
+        if up_trans == 3:
+            price_direction = "bullish"
+        elif down_trans == 3:
+            price_direction = "bearish"
+        else:
+            return None
+
+        if regime == "TRENDING_BEARISH" and price_direction == "bullish":
+            return {
+                "detected": True,
+                "price_direction": "bullish",
+                "regime_label": regime,
+                "conflicting_bars": 3,
+                "detail": (
+                    f"3 consecutive H1 higher closes "
+                    f"({closes[0]:.2f} -> {closes[-1]:.2f}) "
+                    f"while regime label is TRENDING_BEARISH"
+                ),
+            }
+        if regime == "TRENDING_BULLISH" and price_direction == "bearish":
+            return {
+                "detected": True,
+                "price_direction": "bearish",
+                "regime_label": regime,
+                "conflicting_bars": 3,
+                "detail": (
+                    f"3 consecutive H1 lower closes "
+                    f"({closes[0]:.2f} -> {closes[-1]:.2f}) "
+                    f"while regime label is TRENDING_BULLISH"
+                ),
+            }
+        return None
+    except Exception:
+        return None
+
+
 def _compute_m15_explosive() -> Optional[Dict[str, Any]]:
     """FLO-293 S5: M15 range > 2x M15 ATR(14). Checks latest and prior bar."""
     try:
@@ -214,9 +280,11 @@ def detect_market_regime(
     now = time.time()
 
     # FLO-293 Part 3: compute supplementary signals once per cycle
-    global _last_h4_volume_bias, _last_m15_explosive
+    global _last_h4_volume_bias, _last_m15_explosive, _last_h1_candles_for_divergence
     _last_h4_volume_bias = _compute_h4_volume_bias()
     _last_m15_explosive = _compute_m15_explosive()
+    # FLO-298 fix 5: stash h1_candles for _build_result to compute divergence
+    _last_h1_candles_for_divergence = h1_candles
 
     # -----------------------------------------------------------------------
     # Extract indicators (safe defaults)
@@ -728,6 +796,9 @@ def _build_result(
         "bollinger_width_vs_avg": round(bb_width, 2) if bb_width else None,
         "h4_volume_bias": _last_h4_volume_bias,
         "m15_explosive": _last_m15_explosive,
+        "regime_price_divergence": _compute_regime_price_divergence(
+            regime, _last_h1_candles_for_divergence
+        ),
     }
 
 

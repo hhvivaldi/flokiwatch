@@ -3718,11 +3718,14 @@ class AgentTools:
             _rn = regime_ctx.get("regime")
             _h4_bias = (regime_ctx.get("h4_volume_bias") or {}).get("bias")
             _macro_div = getattr(self._bot, "_last_macro_divergence", None)
+            _rpd = regime_ctx.get("regime_price_divergence")
+            _rpd_key = (_rpd or {}).get("price_direction") if _rpd else None
             _current_key = (
                 _rn,
                 regime_ctx.get("confidence", "moderate"),
                 _h4_bias,
                 (_macro_div or {}).get("signal"),
+                _rpd_key,
             )
             if _current_key == getattr(self, "_last_regime_key", None) and _rn is not None:
                 compact = {
@@ -3734,9 +3737,12 @@ class AgentTools:
                 self._log_tool("get_market_regime", start, f"regime={_rn} delta=unchanged")
                 return compact
 
+            # FLO-298: hint_map keys must match the regime-name strings emitted
+            # by regime_detector (TRENDING_BULLISH/BEARISH, not TRENDING_BULL/BEAR).
+            # The prior keys produced an empty base hint for the two trending regimes.
             hint_map = {
-                "TRENDING_BULL": "Directional bias upward. Momentum indicators aligned to the upside over the regime duration.",
-                "TRENDING_BEAR": "Directional bias downward. Momentum indicators aligned to the downside over the regime duration.",
+                "TRENDING_BULLISH": "Directional bias upward. Momentum indicators aligned to the upside over the regime duration.",
+                "TRENDING_BEARISH": "Directional bias downward. Momentum indicators aligned to the downside over the regime duration.",
                 "RANGING": "No sustained directional bias detected. Price oscillating within a band.",
                 "VOLATILE": "Elevated ATR relative to recent baseline. Candle ranges expanded.",
                 "BREAKOUT_IMMINENT": "ATR compressed relative to recent baseline. Range contracting over the regime duration.",
@@ -3774,6 +3780,7 @@ class AgentTools:
                 "h4_volume_bias": regime_ctx.get("h4_volume_bias"),
                 "macro_divergence": _macro_div,
                 "m15_explosive": regime_ctx.get("m15_explosive"),
+                "regime_price_divergence": _rpd,
             }
             self._last_regime_key = _current_key
             self._log_tool(

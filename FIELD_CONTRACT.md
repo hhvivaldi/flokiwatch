@@ -746,6 +746,7 @@ Data source: `regime_detector.py` via `state_writer.py`. Computed every Brain cy
 | `market_regime.h4_volume_bias` | object or null `{bias: "BULLISH"\|"BEARISH"\|"NEUTRAL", age_min, confidence}` | `regime_detector.py` | `get_market_regime` tool (agent-facing) |
 | `market_regime.macro_divergence` | object or null `{signal, bias, confidence, age_min, detail}` | `macro_divergence_detector.py` via `main.py._compute_macro_divergence` | `get_market_regime` tool (agent-facing) |
 | `market_regime.m15_explosive` | object or null `{direction: "bull"\|"bear", age_min}` | `regime_detector.py` | `get_market_regime` tool (agent-facing) + `agent_monitor.py` (Simba wake) |
+| `market_regime.regime_price_divergence` | object or null `{detected: true, price_direction, regime_label, conflicting_bars, detail}` | `regime_detector.py` | `get_market_regime` tool (agent-facing). Fires when last 3 H1 closes disagree with TRENDING regime label — regime classifier can lag reversals 25-60min. |
 
 ### `multi_tf_indicators` Object in `bot_state.json` (FLO-221)
 
