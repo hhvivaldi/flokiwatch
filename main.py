@@ -4066,7 +4066,10 @@ class TradingBot:
                     _trans = _r.get("transition") or f"Transitioned from {_prev}"
                     _ev = _r.get("evidence", [])
                     if _ev:
-                        _evidence_str = ", ".join(str(e) for e in _ev[:5])
+                        # FLO-299 #3: surface truncation.
+                        _ev_total = len(_ev)
+                        _ev_suffix = f" [showing 5 of {_ev_total}]" if _ev_total > 5 else ""
+                        _evidence_str = ", ".join(str(e) for e in _ev[:5]) + _ev_suffix
                     else:
                         _evidence_str = {
                             "RANGING": f"ADX {_adx_val or '?'}, low directional conviction, price between support and resistance",
@@ -4553,7 +4556,12 @@ class TradingBot:
                                     if key not in seen_pat:
                                         seen_pat.add(key)
                                         unique_pats.append(d)
-                                patterns_block = "\nPATTERNS: " + ". ".join(unique_pats[:6])
+                                # FLO-299 #2: surface truncation — Floki knows the
+                                # pattern list was capped.
+                                _pat_total = len(unique_pats)
+                                _pat_shown = min(6, _pat_total)
+                                _pat_suffix = f" [showing {_pat_shown} of {_pat_total}]" if _pat_total > 6 else ""
+                                patterns_block = f"\nPATTERNS{_pat_suffix}: " + ". ".join(unique_pats[:6])
                     except Exception:
                         pass
 
@@ -6332,7 +6340,10 @@ class TradingBot:
                 _regime = getattr(self, "_last_regime_context", None) if _auto_full else None
                 if _regime and isinstance(_regime, dict) and _regime.get("regime"):
                     _r = _regime
-                    _evidence_str = ", ".join(_r.get("evidence", [])[:5])
+                    # FLO-299 #3: surface truncation on reactive path.
+                    _ev_r = _r.get("evidence", []) or []
+                    _ev_r_suffix = f" [showing 5 of {len(_ev_r)}]" if len(_ev_r) > 5 else ""
+                    _evidence_str = ", ".join(str(e) for e in _ev_r[:5]) + _ev_r_suffix
                     trigger_context += (
                         f"\n<market_regime>\n"
                         f"Current: {_r['regime']} ({_r.get('confidence', '?')} confidence)\n"

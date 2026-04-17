@@ -563,7 +563,17 @@ class AgentTools:
                 if (now - float(last_non_trade_rex)) < 3600:
                     elapsed = int(now - float(last_non_trade_rex))
                     self._log_tool("debate_with_rex", start, f"skipped | WAIT/HOLD rate limit ({elapsed}s since last)")
-                    return {"success": True, "insights": [], "risk_flags": [], "reason": "rate_limited_non_trade"}
+                    # FLO-299 #14: surface rate-limit status so Floki knows Rex
+                    # was muted (not silent about the market) this cycle.
+                    return {
+                        "success": True,
+                        "insights": [],
+                        "risk_flags": [],
+                        "reason": "rate_limited_non_trade",
+                        "rate_limited": True,
+                        "seconds_since_last": elapsed,
+                        "retry_after_seconds": max(0, 3600 - elapsed),
+                    }
                 setattr(self, "_rex_last_non_trade_ts", now)
 
             last_ts = getattr(self, "_rex_debate_last_ts", None)
@@ -771,13 +781,23 @@ class AgentTools:
             insights = rex.get("insights") or []
             risk_flags = rex.get("risk_flags") or []
             # Build summary text from insights + risk_flags
+            # FLO-299 #15: surface truncation in the reasoning string.
+            _ins_total = len(insights)
+            _flag_total = len(risk_flags)
+            _ins_shown = min(3, _ins_total)
+            _flag_shown = min(3, _flag_total)
             reasoning_parts = []
             for ins in insights[:3]:
                 if isinstance(ins, dict):
                     reasoning_parts.append(f"[{ins.get('type','NOTE')}] {ins.get('observation','')}")
             for flag in risk_flags[:3]:
                 reasoning_parts.append(f"[FLAG] {flag}")
-            reasoning = "; ".join(reasoning_parts) if reasoning_parts else str(rex.get("raw", ""))[:200]
+            _prefix = ""
+            if _ins_total > 3 or _flag_total > 3:
+                _prefix = f"[showing {_ins_shown} of {_ins_total} insights, {_flag_shown} of {_flag_total} flags] "
+            _raw = str(rex.get("raw", ""))
+            _reasoning_truncated = len(_raw) > 200
+            reasoning = (_prefix + "; ".join(reasoning_parts)) if reasoning_parts else (_raw[:200] + (" [raw truncated]" if _reasoning_truncated else ""))
 
             try:
                 from db_writer import record_agent_event
@@ -1476,7 +1496,21 @@ class AgentTools:
                             below.append(z)
                     above.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
                     below.sort(key=lambda z: abs((z.get("price") or z.get("midpoint", 0)) - price))
+                    # FLO-299 #16: capture pre-cap totals so Floki can see the
+                    # full S/R picture (how many zones existed above/below).
+                    _total_above = len(above)
+                    _total_below = len(below)
                     zones = above[:4] + below[:4]
+                    try:
+                        self._last_sr_meta = {
+                            "total_zones": raw_count,
+                            "total_above": _total_above,
+                            "total_below": _total_below,
+                            "showing_above": min(4, _total_above),
+                            "showing_below": min(4, _total_below),
+                        }
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
@@ -1564,7 +1598,18 @@ class AgentTools:
                 pass
 
             self._log_tool("get_sr_zones", start, f"zones={len(zones)} (raw={raw_count})")
-            return {"zones": zones}
+            # FLO-299 #16: include truncation metadata so Floki knows how many
+            # zones existed before the 4-above/4-below cap.
+            _meta = getattr(self, "_last_sr_meta", None) or {}
+            _resp = {"zones": zones, "total_zones": raw_count, "showing": len(zones)}
+            if _meta:
+                _resp["split"] = {
+                    "showing_above": _meta.get("showing_above"),
+                    "total_above": _meta.get("total_above"),
+                    "showing_below": _meta.get("showing_below"),
+                    "total_below": _meta.get("total_below"),
+                }
+            return _resp
         except Exception as e:
             self._log_tool("get_sr_zones", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
@@ -1839,8 +1884,15 @@ class AgentTools:
                 self._log_no_cache("get_headlines", start)
                 return self._no_cache()
 
-            out = {"headlines": headlines[:10], "count": min(len(headlines), 10)}
-            self._log_tool("get_headlines", start, f"count={out['count']}")
+            # FLO-299 #17: surface total headline count so Floki knows how many
+            # he's not seeing.
+            out = {
+                "headlines": headlines[:10],
+                "count": min(len(headlines), 10),
+                "total_headlines": len(headlines),
+                "showing": min(len(headlines), 10),
+            }
+            self._log_tool("get_headlines", start, f"count={out['count']} total={out['total_headlines']}")
             return out
         except Exception as e:
             self._log_tool("get_headlines", start, f"error={e}")
@@ -2208,10 +2260,11 @@ class AgentTools:
             if not getattr(res, "success", False):
                 reason = getattr(res, "error_message", None) or "execution failed"
                 self._log_tool("execute_trade", start, f"{dir_s} | success=false | {reason}")
+                # FLO-299 #18: removed "Consider place_pending_order" suggestion —
+                # error fact only; Floki decides the remedy.
                 return {
                     "success": False,
                     "reason": str(reason),
-                    "suggestion": "Price may have moved. Consider place_pending_order at your target level instead of retrying market order.",
                 }
 
             fill_price = self._safe_float(getattr(res, "price", None))
@@ -2221,10 +2274,11 @@ class AgentTools:
             if not ticket or (isinstance(ticket, (int, float)) and int(ticket) <= 0):
                 reason = getattr(res, "error_message", None) or "ticket_not_resolved"
                 self._log_tool("execute_trade", start, f"{dir_s} | REJECTED | ticket={ticket} ({reason})")
+                # FLO-299 #18: removed "Consider place_pending_order" suggestion —
+                # error fact only; Floki decides the remedy.
                 return {
                     "success": False,
                     "reason": str(reason),
-                    "suggestion": "Execution failed. Consider place_pending_order at your target level instead of retrying.",
                 }
 
             # FLO-63: Save trade conditions snapshot at open time
