@@ -205,20 +205,69 @@ def _classify_findings(
     return findings
 
 
-def _classify_alert_level(findings: List[Dict[str, Any]]) -> str:
-    """Classify alert level from findings list."""
+def _classify_alert_level(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Classify alert level + context + hint from findings list.
+
+    FLO-298 fix 2: alert_level alone conflated decorrelation (follow price) with
+    directional risk (reversal watch) with transition (unstable regime). The
+    context + hint disambiguate so Floki can weight the alert appropriately.
+
+    Returns dict: {level, context, hint}
+      level:    OK | NORMAL | ELEVATED | CRITICAL  (unchanged semantics)
+      context:  None, or one of: decorrelation | directional_risk | transition,
+                or "mixed: <a> + <b>" when multiple HIGH-type findings coexist.
+      hint:     None, or a one-line guidance string explaining how to weight.
+    """
     high_sources = set()
+    high_types = set()
     for f in findings:
         if f.get("severity") == "HIGH":
             high_sources.add(f.get("source", ""))
+            high_types.add(f.get("type", ""))
 
     if len(high_sources) >= 2:
-        return "CRITICAL"
-    if high_sources:
-        return "ELEVATED"
-    if findings:
-        return "NORMAL"
-    return "QUIET"
+        level = "CRITICAL"
+    elif high_sources:
+        level = "ELEVATED"
+    elif findings:
+        level = "NORMAL"
+    else:
+        level = "OK"
+
+    type_to_ctx = {
+        "CORRELATION_BREAK": "decorrelation",
+        "DIVERGENCE": "directional_risk",
+        "REGIME_CHANGE": "transition",
+    }
+    hint_for = {
+        "decorrelation": (
+            "Macro signals decoupled from price. Use price action and volume, "
+            "not correlation-based bias. This is NOT a do-not-trade signal."
+        ),
+        "directional_risk": (
+            "Divergence detected — reversal watch. Be cautious on continuation "
+            "trades; tight stops or wait for confirmation."
+        ),
+        "transition": (
+            "Regime transition in progress. Breakout plays risky until the new "
+            "regime stabilizes; wait for confirmation or scale in."
+        ),
+    }
+
+    context = None
+    hint = None
+    if level in ("ELEVATED", "CRITICAL"):
+        active = sorted({type_to_ctx[t] for t in high_types if t in type_to_ctx})
+        if len(active) == 1:
+            context = active[0]
+            hint = hint_for.get(context)
+        elif len(active) >= 2:
+            context = "mixed: " + " + ".join(active)
+            hint = "Multiple active risks: " + "; ".join(
+                f"[{c}] {hint_for[c]}" for c in active if c in hint_for
+            )
+
+    return {"level": level, "context": context, "hint": hint}
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +360,8 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
 
     # Classify findings
     findings = _classify_findings(divergences, correlations, regime, performance, prev_regime)
-    alert_level = _classify_alert_level(findings)
+    _alert = _classify_alert_level(findings)
+    alert_level = _alert["level"]
 
     scan_ms = int((time.time() - t0) * 1000)
     now_iso = utc_iso()  # FLO-309
@@ -337,6 +387,8 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
         "findings": findings,
         "finding_count": len(findings),
         "alert_level": alert_level,
+        "alert_context": _alert["context"],
+        "alert_hint": _alert["hint"],
         "raw_data": raw_data,
         "last_critical_wake_at": last_critical_wake_at,
     }
@@ -347,6 +399,7 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
     log.info(
         f"REX_MONITOR | scan complete | {scan_ms}ms | "
         f"findings={len(findings)} (HIGH={high_count}) | alert={alert_level}"
+        + (f" ctx={_alert['context']}" if _alert['context'] else "")
     )
 
     return payload
