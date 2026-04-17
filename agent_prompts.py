@@ -94,7 +94,9 @@ Example: If you decide "waiting for pullback to 4735 support for long entry", pl
 </decisions>
 
 <output>
-Respond with ONLY valid JSON. Start with { end with }.
+FLO-295 PRIMARY CHANNEL: end every cycle by calling the `submit_decision` tool with your decision fields. The tool call IS your cycle output — do NOT also write JSON in message content. The tool's parameter schema matches the fields described below; populate the conditional nested objects (trade_plan, adjustment, close_reason, entry_conditions) only when your decision type requires them. data_needs is expected every cycle.
+
+FALLBACK — if the tool call cannot fire for any reason, emit the JSON directly in message content. Respond with ONLY valid JSON. Start with { end with }.
 
 Required fields: decision, confidence (0-100), reasoning (2-4 sentences), key_factors (2-5 items), concerns (0-3 items), plan_tools (FLO-310: list of tools you planned to call this cycle — see <pre_decision_plan> block).
 

@@ -403,6 +403,93 @@ class AgentResult:
         return result
 
 
+# FLO-295: Floki's structured decision channel. Calling this tool IS the
+# cycle output — replaces writing decision JSON in message.content. Schema
+# mirrors the fields consumed by _parse_response; appended to the end of
+# the tools list (preserves prompt-caching prefix on providers that cache).
+# Fallback: if the tool call fails or the model writes content JSON, the
+# existing _parse_response path handles it unchanged.
+SUBMIT_DECISION_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "submit_decision",
+        "description": (
+            "Submit your final trading decision for this cycle. Calling this tool IS your cycle output — "
+            "it replaces writing JSON in message content. Call this as your LAST action after gathering "
+            "all data via other tools. Populate conditional fields (trade_plan, adjustment, close_reason, "
+            "entry_conditions) only when the decision type requires them. data_needs is expected every cycle."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "decision": {
+                    "type": "string",
+                    "enum": ["WAIT", "OPEN_BUY", "OPEN_SELL", "HOLD_TRADE", "ADJUST_TRADE", "CLOSE_TRADE", "DEFER_TO_BRAIN"],
+                    "description": "The cycle's decision label.",
+                },
+                "confidence": {"type": "integer", "minimum": 0, "maximum": 100, "description": "0-100 confidence in the decision."},
+                "reasoning": {"type": "string", "description": "2-4 sentences explaining the decision."},
+                "key_factors": {"type": "array", "items": {"type": "string"}, "maxItems": 10, "description": "2-5 evidence items supporting the decision."},
+                "concerns": {"type": "array", "items": {"type": "string"}, "maxItems": 10, "description": "0-3 risks or invalidation triggers."},
+                "session_notes": {"type": "string", "description": "1-3 sentences to carry forward to next cycle."},
+                "plan_tools": {"type": "array", "items": {"type": "string"}, "description": "Tools you plan to call next cycle (FLO-310 retrospective)."},
+                "acknowledged_boss_notes": {"type": "array", "items": {"type": "string"}, "description": "Boss note IDs you processed this cycle (FLO-303)."},
+                "trade_plan": {
+                    "type": "object",
+                    "description": "Required when decision is OPEN_BUY or OPEN_SELL.",
+                    "properties": {
+                        "entry_strategy": {"type": "string"},
+                        "entry_price": {"type": "number"},
+                        "entry_rationale": {"type": "string"},
+                        "stop_loss": {"type": "number"},
+                        "stop_loss_rationale": {"type": "string"},
+                        "take_profit": {"type": "number"},
+                        "take_profit_rationale": {"type": "string"},
+                        "risk_reward_ratio": {"type": "number"},
+                        "management_mode": {"type": "string", "enum": ["ea_managed", "agent_monitored"]},
+                    },
+                },
+                "adjustment": {
+                    "type": "object",
+                    "description": "Required when decision is ADJUST_TRADE.",
+                    "properties": {
+                        "ticket": {"type": "integer"},
+                        "new_sl": {"type": "number"},
+                        "new_tp": {"type": "number"},
+                        "reason": {"type": "string"},
+                    },
+                },
+                "close_reason": {"type": "string", "description": "Required when decision is CLOSE_TRADE."},
+                "entry_conditions": {
+                    "type": "object",
+                    "description": "Optional when decision is WAIT with a forming setup.",
+                    "properties": {"bullish": {"type": "string"}, "bearish": {"type": "string"}},
+                },
+                "data_needs": {
+                    "type": "object",
+                    "description": "Structured self-assessment (FLO-302/310). Populate every cycle.",
+                    "properties": {
+                        "followed_plan": {"type": "string", "enum": ["yes", "partial", "no"]},
+                        "not_called": {"type": "array", "items": {"type": "string"}},
+                        "unavailable": {"type": "array", "items": {"type": "string"}},
+                        "biggest_obstacle": {"type": "string"},
+                        "self_critique": {"type": "string"},
+                        "feature_requests": {"type": "array", "items": {"type": "string"}},
+                        "assessment": {"type": "string"},
+                    },
+                },
+                "set_next_check": {
+                    "type": "object",
+                    "description": "Schedule next analysis cycle.",
+                    "properties": {"minutes": {"type": "integer", "minimum": 1, "maximum": 60}},
+                },
+            },
+            "required": ["decision", "confidence", "reasoning"],
+        },
+    },
+}
+
+
 class AIAgent:
     """
     AI Agent that makes trading decisions using Claude.
@@ -1134,6 +1221,7 @@ class AIAgent:
                 })
             except Exception:
                 continue
+        tools.append(copy.deepcopy(SUBMIT_DECISION_TOOL))
         return tools
 
     def _execute_tool(self, tools: Any, name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -1393,6 +1481,42 @@ class AIAgent:
             )
 
             if msg.tool_calls:
+                # FLO-295: submit_decision is a terminator — intercept before dispatch.
+                # If present in this batch, extract its args, drop any parallel calls,
+                # and return via synthetic-content path so _parse_response handles it
+                # unchanged (same coercion for tool channel and content channel).
+                _submit_tc = next(
+                    (tc for tc in msg.tool_calls if tc.function.name == "submit_decision"),
+                    None,
+                )
+                if _submit_tc is not None:
+                    _submit_args_json = _submit_tc.function.arguments or "{}"
+                    _other_names = [tc.function.name for tc in msg.tool_calls if tc.function.name != "submit_decision"]
+                    if _other_names:
+                        logger.warning(f"FLOKI_BATCH_WITH_SUBMIT | dropping parallel calls: {_other_names}")
+                    _fields_populated = 0
+                    _decision_label = "?"
+                    _conf_val = "?"
+                    try:
+                        _parsed_args = json.loads(_submit_args_json)
+                        _fields_populated = sum(1 for v in _parsed_args.values() if v not in (None, "", [], {}))
+                        _decision_label = _parsed_args.get("decision", "?")
+                        _conf_val = _parsed_args.get("confidence", "?")
+                    except Exception as _pe:
+                        logger.warning(f"FLOKI | submit_decision args JSON parse failed: {_pe} — falling through to content parser")
+                    logger.info(
+                        f"FLOKI | decision_channel=tool | decision={_decision_label} conf={_conf_val} "
+                        f"fields_populated={_fields_populated} | tools_called={tool_calls_count}"
+                    )
+                    return {
+                        "content": _submit_args_json,
+                        "input_tokens": total_input_tokens,
+                        "output_tokens": total_output_tokens,
+                        "context_tokens": _last_prompt_tokens,
+                        "model": last_model,
+                        "tool_trace": tool_trace,
+                    }
+
                 # Check if we have budget for ALL tool calls in this batch
                 remaining_budget = int(self.max_tool_calls) - tool_calls_count
                 calls_to_process = msg.tool_calls[:remaining_budget] if remaining_budget < len(msg.tool_calls) else msg.tool_calls
@@ -1533,6 +1657,7 @@ class AIAgent:
                     f"FLOKI | model={last_model} | ctx={_last_prompt_tokens} | sum_in={total_input_tokens} | out={total_output_tokens} | "
                     f"cost=${_cost_total:.4f} | tools_called={tool_calls_count} | latency={_latency}ms"
                 )
+                logger.info(f"FLOKI | decision_channel=content | content_len={len(text_out.strip())}")
                 return {"content": text_out.strip(), "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace}
 
             logger.warning(f"FLOKI | empty response at iteration {iteration}, finish={finish}")
