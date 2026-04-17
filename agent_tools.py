@@ -3744,6 +3744,18 @@ class AgentTools:
                 "QUIET": "Below-average volume and ATR. Narrow candle ranges.",
             }
 
+            # FLO-298 fix 3: high regime turnover => classifier reacting to noise;
+            # append context so Floki weights price action over regime labels.
+            _hint = hint_map.get(_rn, "")
+            if regime_changes_24h > 15:
+                _hint = (
+                    (_hint + " ") if _hint else ""
+                ) + (
+                    f"High regime turnover ({regime_changes_24h} changes/24h) — "
+                    "classifier is reacting to noise; price action and volume are "
+                    "more reliable than regime labels in this environment."
+                )
+
             payload = {
                 "success": True,
                 "regime": _rn,
@@ -3758,7 +3770,7 @@ class AgentTools:
                 "transition": regime_ctx.get("transition"),
                 "evidence": (regime_ctx.get("evidence") or [])[:5],
                 "related_tools": ["get_chart_patterns"] if _rn in ("RANGING", "BREAKOUT_IMMINENT") else [],
-                "hint": hint_map.get(_rn, ""),
+                "hint": _hint,
                 "h4_volume_bias": regime_ctx.get("h4_volume_bias"),
                 "macro_divergence": _macro_div,
                 "m15_explosive": regime_ctx.get("m15_explosive"),
