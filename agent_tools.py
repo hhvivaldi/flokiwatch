@@ -3684,6 +3684,17 @@ class AgentTools:
                 pass
 
             _rn = regime_ctx.get("regime")
+            _current_key = (_rn, regime_ctx.get("confidence", "moderate"))
+            if _current_key == getattr(self, "_last_regime_key", None) and _rn is not None:
+                compact = {
+                    "success": True,
+                    "changed": False,
+                    "regime": _rn,
+                    "since": regime_ctx.get("duration_display", regime_ctx.get("duration", "?")),
+                }
+                self._log_tool("get_market_regime", start, f"regime={_rn} delta=unchanged")
+                return compact
+
             hint_map = {
                 "TRENDING_BULL": "Directional bias upward. Momentum indicators aligned to the upside over the regime duration.",
                 "TRENDING_BEAR": "Directional bias downward. Momentum indicators aligned to the downside over the regime duration.",
@@ -3709,6 +3720,7 @@ class AgentTools:
                 "evidence": (regime_ctx.get("evidence") or [])[:5],
                 "hint": hint_map.get(_rn, ""),
             }
+            self._last_regime_key = _current_key
             self._log_tool(
                 "get_market_regime",
                 start,
