@@ -3685,13 +3685,13 @@ class AgentTools:
 
             _rn = regime_ctx.get("regime")
             hint_map = {
-                "TRENDING_BULL": "Trending up. Buy dips, not tops. Counter-trend trades fail here.",
-                "TRENDING_BEAR": "Trending down. Sell rallies, not bottoms. Counter-trend trades fail here.",
-                "RANGING": "No trend. Trade the range edges. Breakouts often fail.",
-                "VOLATILE": "High volatility. Wider stops or stay flat. Chop can invalidate theses fast.",
-                "BREAKOUT_IMMINENT": "Volatility compressing. Wait for confirmed break before entering.",
-                "TRANSITIONAL": "Regime is changing. Previous pattern may no longer hold.",
-                "QUIET": "Very low activity. Thin volume. Moves may be unreliable.",
+                "TRENDING_BULL": "Directional bias upward. Momentum indicators aligned to the upside over the regime duration.",
+                "TRENDING_BEAR": "Directional bias downward. Momentum indicators aligned to the downside over the regime duration.",
+                "RANGING": "No sustained directional bias detected. Price oscillating within a band.",
+                "VOLATILE": "Elevated ATR relative to recent baseline. Candle ranges expanded.",
+                "BREAKOUT_IMMINENT": "ATR compressed relative to recent baseline. Range contracting over the regime duration.",
+                "TRANSITIONAL": "Regime classification unstable. Indicators crossing thresholds between states.",
+                "QUIET": "Below-average volume and ATR. Narrow candle ranges.",
             }
 
             payload = {
