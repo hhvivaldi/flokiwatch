@@ -1874,18 +1874,45 @@ class AgentMonitor:
                     return False, None
                 return float(pnl) >= float(thr), None
 
-            # FLO-301: bb_position — fires when Bollinger Band position matches.
-            # Reads flat bb_position (0.0-1.0) from scanner_data indicators. Values:
-            #   "above_upper" (bb_position > 1.0), "below_lower" (< 0.0),
-            #   "upper_band" (>= 0.8), "lower_band" (<= 0.2), "middle" (0.3-0.7).
+            # FLO-301 + FLO-302: bb_position evaluator handles both shapes in the
+            # indicator pipeline today.
+            #   Shape A (categorical, current brain output): "banda_superior",
+            #     "banda_inferior", "meio" — Portuguese labels from
+            #     technical_analyzer.py:1064-1068. Maps to upper_band/
+            #     lower_band/middle directly.
+            #   Shape B (numeric 0.0-1.0, future pipeline): allows above_upper
+            #     (>1.0) and below_lower (<0.0) precise breach detection.
+            # above_upper/below_lower silently no-fire today until numeric
+            # plumbing lands (FLO-302).
             if ctype == "bb_position":
                 want = str(cond.get("value") or "").strip().lower()
                 if want not in ("above_upper", "below_lower", "upper_band", "lower_band", "middle"):
                     return False, None
                 indicators = ctx.get("indicators") if isinstance(ctx.get("indicators"), dict) else {}
-                bbp = self._safe_float(indicators.get("bb_position"))
+                raw = indicators.get("bb_position")
+                # Shape A: categorical string
+                if isinstance(raw, str):
+                    label = raw.strip().lower()
+                    _CAT_MAP = {
+                        "banda_superior": "upper_band",
+                        "banda_inferior": "lower_band",
+                        "meio": "middle",
+                        # English aliases in case technical_analyzer is ever localized
+                        "upper_band": "upper_band",
+                        "lower_band": "lower_band",
+                        "middle": "middle",
+                    }
+                    current_region = _CAT_MAP.get(label)
+                    if current_region is None:
+                        return False, None
+                    # Precise breach values (above_upper/below_lower) require
+                    # numeric data — not resolvable from categorical. Silent no-fire.
+                    if want in ("above_upper", "below_lower"):
+                        return False, None
+                    return current_region == want, None
+                # Shape B: numeric 0-1 position_pct
+                bbp = self._safe_float(raw)
                 if bbp is None:
-                    # Try nested bollinger.position_pct fallback
                     boll = indicators.get("bollinger") if isinstance(indicators.get("bollinger"), dict) else {}
                     bbp = self._safe_float(boll.get("position_pct"))
                 if bbp is None:

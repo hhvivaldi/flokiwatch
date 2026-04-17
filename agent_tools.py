@@ -986,7 +986,25 @@ class AgentTools:
                 return {"success": False, "reason": "persist failed"}
 
             self._log_tool("set_watch_conditions", start, f"ticket={t} count={len(cleaned)}")
-            return {"success": True, "ticket": t, "count": len(cleaned)}
+            resp: Dict[str, Any] = {"success": True, "ticket": t, "count": len(cleaned)}
+            # FLO-302: warn Floki when bb_position is set to values that require
+            # numeric indicator plumbing not yet available. above_upper/below_lower
+            # will silently no-fire today; upper_band/lower_band/middle work.
+            def _uses_numeric_bb(c: Dict[str, Any]) -> bool:
+                if c.get("type") == "bb_position" and str(c.get("value", "")).lower() in ("above_upper", "below_lower"):
+                    return True
+                for sub in c.get("all_of", []) or []:
+                    if isinstance(sub, dict) and sub.get("type") == "bb_position" and str(sub.get("value", "")).lower() in ("above_upper", "below_lower"):
+                        return True
+                return False
+            if any(_uses_numeric_bb(c) for c in cleaned):
+                resp["warnings"] = [
+                    "bb_position values 'above_upper' and 'below_lower' require numeric "
+                    "BB position data not yet in the indicator pipeline — these will NOT fire "
+                    "at runtime (FLO-302 pending). Use 'upper_band' / 'lower_band' / 'middle' "
+                    "which map to the current categorical bb_position field."
+                ]
+            return resp
         except Exception as e:
             self._log_tool("set_watch_conditions", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
