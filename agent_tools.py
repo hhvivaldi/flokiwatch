@@ -3957,6 +3957,8 @@ class AgentTools:
             # Return summary (not full raw_data — Floki doesn't need it)
             summary = {
                 "alert_level": monitor.get("alert_level", "QUIET"),
+                "alert_context": monitor.get("alert_context"),  # FLO-300: was dropped (FLO-298 Fix 2 half-wire)
+                "alert_hint": monitor.get("alert_hint"),        # FLO-300: was dropped (FLO-298 Fix 2 half-wire)
                 "finding_count": monitor.get("finding_count", 0),
                 "findings": monitor.get("findings", []),
                 "timestamp": ts,
