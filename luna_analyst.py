@@ -213,7 +213,10 @@ class LunaAnalysisResult:
     bias_confidence: int      # 1-10
     key_factors: List[str] = field(default_factory=list)
     patterns_detected: List[str] = field(default_factory=list)
-    pattern_details: Dict[str, str] = field(default_factory=dict)
+    # FLO-298 fix 1: pattern_details is {name: {text, first_seen, age_minutes}}
+    # on disk. Typed as Dict[str, Any] to accommodate both forms during transition
+    # (producer code emits strings; _save_brief enriches to nested dict before write).
+    pattern_details: Dict[str, Any] = field(default_factory=dict)
     market_regime: str = "mixed"
     summary: str = ""
     next_events: List[Dict[str, str]] = field(default_factory=list)
@@ -1579,9 +1582,69 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
 # Persistence
 # ---------------------------------------------------------------------------
 
+def _enrich_pattern_details_with_age(result: LunaAnalysisResult) -> None:
+    """FLO-298 fix 1: Enrich pattern_details with first_seen + age_minutes.
+
+    Reads the previous brief to carry forward first_seen for patterns that
+    persist; sets first_seen = now for new patterns. Converts the
+    Dict[str, str] shape produced by _detect_patterns into
+    Dict[str, {text, first_seen, age_minutes}] in place on the result.
+    """
+    try:
+        # Load previous brief's pattern_details if available
+        prev_details: Dict[str, Any] = {}
+        try:
+            if BRIEF_FILE.exists():
+                prev = json.loads(BRIEF_FILE.read_text(encoding="utf-8"))
+                if isinstance(prev, dict):
+                    prev_details = prev.get("pattern_details") or {}
+        except Exception:
+            prev_details = {}
+
+        now_dt = datetime.now(timezone.utc)
+
+        enriched: Dict[str, Dict[str, Any]] = {}
+        for name in result.patterns_detected:
+            raw = result.pattern_details.get(name)
+            # Accept either legacy string or already-enriched dict from producer
+            if isinstance(raw, dict):
+                text = str(raw.get("text") or "")
+            else:
+                text = str(raw or "")
+
+            # Carry forward first_seen if this pattern was in the previous brief
+            first_seen_iso = None
+            prev_entry = prev_details.get(name)
+            if isinstance(prev_entry, dict):
+                first_seen_iso = prev_entry.get("first_seen")
+            # If prev was a legacy string, we don't know when — treat as fresh
+            if not first_seen_iso:
+                first_seen_iso = now_dt.isoformat().replace("+00:00", "Z")
+
+            # Compute age in minutes
+            try:
+                fs = datetime.fromisoformat(first_seen_iso.replace("Z", "+00:00"))
+                if fs.tzinfo is None:
+                    fs = fs.replace(tzinfo=timezone.utc)
+                age_minutes = max(0, int((now_dt - fs).total_seconds() // 60))
+            except Exception:
+                age_minutes = 0
+
+            enriched[name] = {
+                "text": text,
+                "first_seen": first_seen_iso,
+                "age_minutes": age_minutes,
+            }
+
+        result.pattern_details = enriched
+    except Exception as e:
+        log.debug(f"LUNA: pattern age enrichment failed (non-blocking): {e}")
+
+
 def _save_brief(result: LunaAnalysisResult) -> None:
     """Save Luna analysis result to data/luna_brief.json (atomic write)."""
     try:
+        _enrich_pattern_details_with_age(result)  # FLO-298 fix 1
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         brief_path = str(BRIEF_FILE)
         tmp_path = brief_path + ".tmp"
