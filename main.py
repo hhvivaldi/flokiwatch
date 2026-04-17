@@ -3620,32 +3620,17 @@ class TradingBot:
                 _cur = trigger_data.get("current_price")
                 _cur_str = f"{_cur}" if _cur is not None else "n/a"
                 if _details:
-                    _parts = []
-                    _had_desc = False
-                    for _d in _details:
-                        _desc = _d.get("description") or ""
-                        if _desc: _had_desc = True
-                        _parts.append(
-                            f"condition {_d.get('id')} — {_d.get('type')} {_d.get('level')}"
-                            + (f" ({_desc})" if _desc else "")
-                        )
+                    # FLO-299: description echo removed. Floki-authored text
+                    # replayed verbatim at wake-time was a self-anchoring loop
+                    # (reading your own prior interpretation as authoritative).
+                    # Emit only the objective condition fields — id, type, level.
+                    _parts = [
+                        f"condition {_d.get('id')} — {_d.get('type')} {_d.get('level')}"
+                        for _d in _details
+                    ]
                     trigger_context += (
                         f"Simba wake: {'; '.join(_parts)} (current price: {_cur_str}). "
                     )
-                    # FLO-331: the description text in parentheses was authored by
-                    # Floki when he set the condition. FLO-321's passthrough echoes
-                    # it back here verbatim — useful for context, but it can tighten
-                    # a self-anchoring loop (e.g., reading your own "support test"
-                    # framing as authoritative direction when the break may actually
-                    # be a fake). Nudge Floki to re-verify against current data.
-                    if _had_desc:
-                        trigger_context += (
-                            "(Descriptions above are YOUR prior interpretation when "
-                            "setting the condition. Verify they still hold against "
-                            "current market data — a broken level can flip S/R or "
-                            "fail as a fake breakout. Check volume, momentum, and "
-                            "regime before acting.) "
-                        )
                 elif trigger_data.get("expired"):
                     trigger_context += f"Simba wake: max_sleep expired (current price: {_cur_str}). "
                 elif trigger_data.get("rex_critical"):
@@ -3727,15 +3712,8 @@ class TradingBot:
                             if _ad: lines.append(f"ADX: {_ad}")
                             _md = _delta("macd_hist", ".2f")
                             if _md:
-                                try:
-                                    _mold = float(_prev_snap.get("macd_hist", 0))
-                                    _mnew = float(_cur_snap.get("macd_hist", 0))
-                                    if abs(_mnew) > abs(_mold):
-                                        _md += " expanding"
-                                    else:
-                                        _md += " contracting"
-                                except Exception:
-                                    pass
+                                # FLO-299: raw delta only — no "expanding"/"contracting"
+                                # interpretive labels. Floki reads the numbers.
                                 lines.append(f"MACD_HIST: {_md}")
 
                             _vr = _cur_snap.get("volume_ratio")
@@ -4099,14 +4077,16 @@ class TradingBot:
                             "TRANSITIONAL": f"Regime shifting, ADX {_adx_val or '?'}, mixed signals",
                             "QUIET": f"Very low volume and ATR, ADX {_adx_val or '?'}",
                         }.get(_rn, f"ADX {_adx_val or '?'}")
+                    # FLO-299: neutral state definitions only — no trade advice,
+                    # no risk commentary, no directional guidance.
                     _regime_ctx = {
-                        "RANGING": "RANGING means price oscillates between support and resistance with no clear direction. False breakouts are common. Support and resistance levels are the key reference points.",
-                        "TRENDING_BULLISH": "TRENDING BULLISH means price is in a sustained uptrend. Pullbacks to support are opportunities. Selling tops is risky.",
-                        "TRENDING_BEARISH": "TRENDING BEARISH means price is in a sustained downtrend. Buying dips is risky. The trend is your friend until it changes.",
-                        "BREAKOUT_IMMINENT": "BREAKOUT IMMINENT means volatility is compressing. A large move is likely soon. Wait for confirmation before acting.",
-                        "VOLATILE": "VOLATILE means large erratic swings. Risk is elevated. Stops may get hit by noise.",
-                        "TRANSITIONAL": "TRANSITIONAL means the regime is changing. The previous pattern may no longer hold. Wait for the new regime to establish.",
-                        "QUIET": "QUIET means very low activity. Volume is thin. Moves may be unreliable.",
+                        "RANGING": "RANGING: price oscillating between support and resistance; no directional bias.",
+                        "TRENDING_BULLISH": "TRENDING BULLISH: price above EMA50 with bullish EMA alignment; sustained uptrend structure.",
+                        "TRENDING_BEARISH": "TRENDING BEARISH: price below EMA50 with bearish EMA alignment; sustained downtrend structure.",
+                        "BREAKOUT_IMMINENT": "BREAKOUT IMMINENT: volatility contracting; ATR compressing; range tightening.",
+                        "VOLATILE": "VOLATILE: large price swings; ATR elevated vs baseline.",
+                        "TRANSITIONAL": "TRANSITIONAL: regime label changed recently; prior regime no longer classified.",
+                        "QUIET": "QUIET: low activity; thin volume; small candles; ATR below baseline.",
                     }.get(_rn, "")
                     _regime_block = (
                         f"\n<market_regime>\n"
@@ -4659,9 +4639,14 @@ class TradingBot:
             except Exception as _ss_e:
                 log.warning(f"SCREENSHOT | error: {_ss_e}")
 
-            # Store pre-captured images on tools_obj for get_chart_screenshots tool
+            # Store pre-captured images on tools_obj for get_chart_screenshots tool.
+            # FLO-299: surface status in trigger_context so Floki knows whether
+            # a call to get_chart_screenshots returns cached frames or fetches fresh.
             if chart_images:
                 tools_obj._chart_images = chart_images
+                trigger_context += "\n<chart_status>pre-captured this cycle — get_chart_screenshots returns cached frames.</chart_status>\n"
+            else:
+                trigger_context += "\n<chart_status>not pre-captured this cycle — get_chart_screenshots will fetch on demand.</chart_status>\n"
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -6175,17 +6160,15 @@ class TradingBot:
                 prev_vol = prev.get("volume_ratio", 1.0) or 1.0
                 volume_change_pct = ((current_volume_ratio - prev_vol) / prev_vol) * 100 if prev_vol else 0
                 
-                # Detect significant events
+                # FLO-299: signed numeric deltas only — no "up/down", "rose/fell",
+                # "spiked/dropped" interpretive verbs. Sign conveys direction.
                 significant_events = []
                 if abs(price_change_pips) > 50:
-                    direction = "up" if price_change_pips > 0 else "down"
-                    significant_events.append(f"Price moved {abs(price_change_pips):.0f} pips {direction}")
+                    significant_events.append(f"Price Δ {price_change_pips:+.0f} pips")
                 if abs(rsi_change) > 10:
-                    direction = "rose" if rsi_change > 0 else "fell"
-                    significant_events.append(f"RSI {direction} {abs(rsi_change):.1f} points")
+                    significant_events.append(f"RSI Δ {rsi_change:+.1f}")
                 if abs(volume_change_pct) > 50:
-                    direction = "spiked" if volume_change_pct > 0 else "dropped"
-                    significant_events.append(f"Volume {direction} {abs(volume_change_pct):.0f}%")
+                    significant_events.append(f"Volume Δ {volume_change_pct:+.0f}%")
                 
                 delta_context = {
                     "price_change_pips": price_change_pips,

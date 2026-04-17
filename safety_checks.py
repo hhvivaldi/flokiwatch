@@ -420,8 +420,7 @@ class SafetyChecker:
                 f"{open_hour:02d}:00 UTC."
             )
         return (
-            f"Market closes in ~{mins_to_close} minutes ({close_hour:02d}:00 UTC). "
-            f"Plan accordingly."
+            f"Market closes in ~{mins_to_close} minutes ({close_hour:02d}:00 UTC)."
         )
 
     def check_trading_hours(self) -> Tuple[bool, str]:
