@@ -873,49 +873,113 @@ class AgentTools:
                     "hint": "Pass conditions as array of objects, e.g.: conditions=[{type:'pnl_threshold', value:-15}, {type:'price_touch', level:4550}]",
                 }
 
+            # FLO-301: helper validates a single leaf condition for both top-level
+            # conditions and inside 'all_of' compound conditions.
+            def _clean_leaf(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+                if not isinstance(c, dict):
+                    return None
+                ctype = str(c.get("type", "")).strip()
+                desc = str(c.get("description", "")).strip()
+                if not ctype:
+                    return None
+                if ctype == "price_touch":
+                    lvl = self._safe_float(c.get("level"))
+                    if lvl is None:
+                        return None
+                    return {"type": "price_touch", "level": float(lvl), "description": desc}
+                if ctype == "pnl_threshold":
+                    v = self._safe_float(c.get("value"))
+                    if v is None:
+                        return None
+                    return {"type": "pnl_threshold", "value": float(v), "description": desc}
+                if ctype == "pnl_below":
+                    v = self._safe_float(c.get("value"))
+                    if v is None:
+                        return None
+                    return {"type": "pnl_below", "value": float(v), "description": desc}
+                if ctype == "pnl_above":
+                    lvl = self._safe_float(c.get("level"))
+                    if lvl is None:
+                        lvl = self._safe_float(c.get("value"))
+                    if lvl is None:
+                        return None
+                    return {"type": "pnl_above", "level": float(lvl), "description": desc}
+                if ctype == "bb_position":
+                    want = str(c.get("value", "")).strip().lower()
+                    if want not in ("above_upper", "below_lower", "upper_band", "lower_band", "middle"):
+                        return None
+                    return {"type": "bb_position", "value": want, "description": desc}
+                if ctype == "mfe_drawdown":
+                    pct = self._safe_float(c.get("pct"))
+                    if pct is None or pct <= 0 or pct > 100:
+                        return None
+                    return {"type": "mfe_drawdown", "pct": float(pct), "description": desc}
+                if ctype == "indicator_threshold":
+                    ind = str(c.get("indicator", "")).strip().lower()
+                    direction = str(c.get("direction", "")).strip().lower()
+                    level = self._safe_float(c.get("level"))
+                    if level is None or direction not in ("above", "below"):
+                        return None
+                    if ind not in ("vix", "rsi", "macd_histogram", "macd_hist", "adx"):
+                        return None
+                    return {
+                        "type": "indicator_threshold",
+                        "indicator": ind,
+                        "level": float(level),
+                        "direction": direction,
+                        "description": desc,
+                    }
+                return None
+
             cleaned: List[Dict[str, Any]] = []
             for c in conditions:
                 if not isinstance(c, dict):
                     continue
 
-                ctype = str(c.get("type", "")).strip()
-                desc = str(c.get("description", "")).strip()
-                if not ctype:
+                # FLO-301: compound 'all_of' condition with action dispatch.
+                if isinstance(c.get("all_of"), list) and c.get("all_of"):
+                    action = str(c.get("action", "wake")).strip().lower()
+                    if action not in ("wake", "close", "adjust_sl"):
+                        continue
+                    sub_cleaned: List[Dict[str, Any]] = []
+                    for sub in c["all_of"]:
+                        sc = _clean_leaf(sub)
+                        if sc is not None:
+                            sub_cleaned.append(sc)
+                    if not sub_cleaned:
+                        continue
+                    entry: Dict[str, Any] = {
+                        "all_of": sub_cleaned,
+                        "action": action,
+                        "description": str(c.get("description", "")).strip(),
+                        "fired_at": None,
+                    }
+                    if action == "adjust_sl":
+                        sl_val = self._safe_float(c.get("sl_value"))
+                        if sl_val is None:
+                            continue  # adjust_sl requires sl_value
+                        entry["sl_value"] = float(sl_val)
+                    cleaned.append(entry)
                     continue
-                if ctype == "price_touch":
-                    lvl = self._safe_float(c.get("level"))
-                    if lvl is None:
-                        continue
-                    cleaned.append({"type": "price_touch", "level": float(lvl), "description": desc})
-                elif ctype == "pnl_threshold":
-                    v = self._safe_float(c.get("value"))
-                    if v is None:
-                        continue
-                    cleaned.append({"type": "pnl_threshold", "value": float(v), "description": desc})
-                elif ctype == "indicator_threshold":
-                    ind = str(c.get("indicator", "")).strip().lower()
-                    direction = str(c.get("direction", "")).strip().lower()
-                    level = self._safe_float(c.get("level"))
-                    if ind != "vix" or level is None or direction not in ("above", "below"):
-                        continue
-                    cleaned.append(
-                        {
-                            "type": "indicator_threshold",
-                            "indicator": "vix",
-                            "level": float(level),
-                            "direction": direction,
-                            "description": desc,
-                        }
-                    )
+
+                # Legacy single-condition path (always action=wake).
+                leaf = _clean_leaf(c)
+                if leaf is not None:
+                    cleaned.append(leaf)
 
             if not cleaned:
                 return {"success": False, "reason": "no valid conditions"}
 
             store = self._load_watch_conditions()
-            store[str(t)] = {
+            # FLO-301: preserve existing mfe_pnl tracking across re-sets.
+            _existing = store.get(str(t)) if isinstance(store.get(str(t)), dict) else {}
+            _entry: Dict[str, Any] = {
                 "updated_at": utc_iso(),  # FLO-286
                 "conditions": cleaned,
             }
+            if "mfe_pnl" in _existing:
+                _entry["mfe_pnl"] = _existing["mfe_pnl"]
+            store[str(t)] = _entry
 
             ok = self._write_json_atomic(self._watch_conditions_path(), store)
             if not ok:

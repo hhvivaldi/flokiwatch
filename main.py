@@ -323,7 +323,8 @@ class TradingBot:
 
     def agent_proactive_out_of_cycle(self, trigger_type: str, trigger_data: dict) -> dict:
         # FLO-241: Reset progressive backoff on Simba wake (not scheduled cycles)
-        if str(trigger_type or "") in ("SIMBA_WAKE", "SIMBA_WATCH"):
+        # FLO-301: SIMBA_EXIT_EXECUTED is also a Simba-initiated wake.
+        if str(trigger_type or "") in ("SIMBA_WAKE", "SIMBA_WATCH", "SIMBA_EXIT_EXECUTED"):
             self._consecutive_no_timer = 0
 
         acquired = False
@@ -334,7 +335,8 @@ class TradingBot:
                 acquired = True
 
             # FLO-90: ECHO_CRITICAL removed — Echo is pull-only, no forced cycles
-            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "PENDING_FILL"}
+            # FLO-301: SIMBA_EXIT_EXECUTED added — Simba-initiated wake after close/adjust_sl
+            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "PENDING_FILL", "SIMBA_EXIT_EXECUTED"}
             if str(trigger_type or "") not in allowed:
                 log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
                 return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
@@ -3551,8 +3553,8 @@ class TradingBot:
             except Exception:
                 pass
 
-        if trigger_type in ("SIMBA_WAKE", "SIMBA_WATCH"):
-            log.info("FLOKI_SCHEDULE | Simba override — calling Floki now (wake/watch condition met)")
+        if trigger_type in ("SIMBA_WAKE", "SIMBA_WATCH", "SIMBA_EXIT_EXECUTED"):
+            log.info(f"FLOKI_SCHEDULE | Simba override — calling Floki now ({trigger_type})")
 
         agent = get_agent()
         if not agent.is_enabled():
@@ -3615,7 +3617,42 @@ class TradingBot:
             # line so Floki doesn't have to re-investigate what "c2" was.
             # Fallback to the generic dict-dump for other trigger types or
             # when details are missing.
-            if trigger_type == "SIMBA_WAKE" and isinstance(trigger_data, dict):
+            if trigger_type == "SIMBA_EXIT_EXECUTED" and isinstance(trigger_data, dict):
+                # FLO-301: Simba executed a compound-condition action (close or
+                # adjust_sl). Render the fact + outcome so Floki can decide next
+                # steps. Never a silent execution.
+                _act = str(trigger_data.get("action") or "?").lower()
+                _tic = trigger_data.get("ticket")
+                _ok = trigger_data.get("success")
+                _desc = trigger_data.get("description") or ""
+                _p_trig = trigger_data.get("price_at_trigger")
+                _pnl_trig = trigger_data.get("pnl_at_trigger")
+                lines = [f"Simba executed {_act} on ticket #{_tic}; success={_ok}."]
+                if _desc:
+                    lines.append(f"Your rule: {_desc}.")
+                if _p_trig is not None:
+                    lines.append(f"Price at trigger: {_p_trig}.")
+                if _pnl_trig is not None:
+                    lines.append(f"PnL at trigger: ${_pnl_trig}.")
+                if _act == "close":
+                    cp = trigger_data.get("close_price")
+                    rp = trigger_data.get("realized_profit")
+                    if cp is not None:
+                        lines.append(f"Closed at {cp}.")
+                    if rp is not None:
+                        lines.append(f"Realized P&L: ${rp}.")
+                elif _act == "adjust_sl":
+                    _old = trigger_data.get("old_sl")
+                    _new = trigger_data.get("new_sl")
+                    if _old is not None and _new is not None:
+                        lines.append(f"SL moved: {_old} -> {_new}.")
+                if not _ok and trigger_data.get("reason"):
+                    lines.append(f"Reason for failure: {trigger_data.get('reason')}.")
+                trigger_context += (
+                    "\n<simba_execution>\n" + " ".join(lines) + "\n</simba_execution>\n"
+                    "Evaluate the current market state and decide next steps. "
+                )
+            elif trigger_type == "SIMBA_WAKE" and isinstance(trigger_data, dict):
                 _details = trigger_data.get("triggered_details") or []
                 _cur = trigger_data.get("current_price")
                 _cur_str = f"{_cur}" if _cur is not None else "n/a"
