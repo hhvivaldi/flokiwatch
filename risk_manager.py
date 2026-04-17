@@ -31,6 +31,13 @@ class StopLevels:
     tp2_pips: float
     risk_reward_1: float
     risk_reward_2: float
+    # FLO-299 #22: clamp-visibility fields. When auto-sizing clamps SL to
+    # [MIN_SL_PIPS, MAX_SL_PIPS], consumers (Floki, logs, audit) see the
+    # raw vs capped values and whether a clamp occurred.
+    sl_pips_raw: Optional[float] = None
+    sl_pips_clamped_from: Optional[float] = None
+    sl_clamped: bool = False
+    sl_clamp_reason: Optional[str] = None
 
 
 def calculate_position_size(
@@ -115,7 +122,18 @@ def calculate_sl_tp(
     min_sl = getattr(config, 'MIN_SL_PIPS', 100)
     max_sl = getattr(config, 'MAX_SL_PIPS', 200)
     sl_pips_capped = max(min_sl, min(sl_pips_raw, max_sl))
-    
+
+    # FLO-299 #22: track clamp status so downstream consumers (StopLevels
+    # return value, logs) can surface the fact to Floki.
+    _sl_clamped = (sl_pips_capped != sl_pips_raw)
+    if _sl_clamped:
+        if sl_pips_raw < min_sl:
+            _sl_clamp_reason = f"sl_below_min ({sl_pips_raw:.1f} < {min_sl})"
+        else:
+            _sl_clamp_reason = f"sl_above_max ({sl_pips_raw:.1f} > {max_sl})"
+    else:
+        _sl_clamp_reason = None
+
     # Recalculate distance with capped SL
     sl_distance = sl_pips_capped * pip_size
     
@@ -153,7 +171,12 @@ def calculate_sl_tp(
         tp1_pips=round(tp1_pips, 1),
         tp2_pips=round(tp2_pips, 1),
         risk_reward_1=round(risk_reward_1, 2),
-        risk_reward_2=round(risk_reward_2, 2)
+        risk_reward_2=round(risk_reward_2, 2),
+        # FLO-299 #22: surface auto-sizing SL clamp.
+        sl_pips_raw=round(sl_pips_raw, 1),
+        sl_pips_clamped_from=round(sl_pips_raw, 1) if _sl_clamped else None,
+        sl_clamped=_sl_clamped,
+        sl_clamp_reason=_sl_clamp_reason,
     )
 
 
