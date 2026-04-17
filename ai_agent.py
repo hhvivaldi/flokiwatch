@@ -1274,7 +1274,18 @@ class AIAgent:
 
         messages: List[Dict[str, Any]] = []
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+            # FLO-296 item 1: cache_control marker enables Alibaba DashScope
+            # prompt caching (10% billing on cached tokens vs 100%; 5-min TTL
+            # that resets on each hit). Same syntax works for OpenRouter
+            # fallback (Anthropic-compatible).
+            messages.append({
+                "role": "system",
+                "content": [{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+            })
 
         # Build user message (text only — images available via get_chart_screenshots tool)
         _tc_text = str(trigger_context or "").strip()
@@ -1991,7 +2002,18 @@ class AIAgent:
 
         messages: List[Dict[str, Any]] = []
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+            # FLO-296 item 1: cache_control marker enables Alibaba DashScope
+            # prompt caching (10% billing on cached tokens vs 100%; 5-min TTL
+            # that resets on each hit). Same syntax works for OpenRouter
+            # fallback (Anthropic-compatible).
+            messages.append({
+                "role": "system",
+                "content": [{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+            })
         messages.append({"role": "user", "content": str(trigger_context or "").strip()})
         messages.append({"role": "user", "content": retry_prompt})
 
