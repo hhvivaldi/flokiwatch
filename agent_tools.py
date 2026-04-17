@@ -32,21 +32,27 @@ class AgentTools:
             m = self._safe_int(minutes)
             if m is None:
                 m = 5
+            _original_requested = int(m)
+
+            # FLO-297: Range clamp (valid 2-120). Previously silent.
+            _range_clamped = False
             if m < 2:
                 m = 2
-            if m > 120:
+                _range_clamped = True
+            elif m > 120:
                 m = 120
+                _range_clamped = True
 
-            # Position mode cap: max 2 min with open position
-            _capped = False
-            _requested = int(m)
+            # Position mode cap: max N min with open position
+            _position_capped = False
+            _max_pos = 10
             try:
                 import config as _cfg_snc
                 _max_pos = int(getattr(_cfg_snc, "FLOKI_MAX_CHECK_WITH_POSITION", 10) or 10)
                 _positions = self._executor.get_open_positions() if self._executor else []
                 if _positions and m > _max_pos:
                     m = _max_pos
-                    _capped = True
+                    _position_capped = True
             except Exception:
                 pass
 
@@ -64,10 +70,16 @@ class AgentTools:
 
             self._log_tool("set_next_check", start, f"minutes={m}")
             result = {"success": True, **payload}
-            if _capped:
-                result["capped"] = True
-                result["original_requested"] = _requested
-                result["reason"] = f"Position open — capped from {_requested} to {m} minutes"
+
+            # FLO-297: Report all clamping paths so Floki sees what happened
+            if _range_clamped or _position_capped:
+                result["clamped_from"] = _original_requested
+                reasons = []
+                if _range_clamped:
+                    reasons.append("out_of_range (valid 2-120)")
+                if _position_capped:
+                    reasons.append(f"position_open (max {_max_pos}m)")
+                result["clamp_reason"] = " + ".join(reasons)
             return result
         except Exception as e:
             self._log_tool("set_next_check", start, f"error={e}")
@@ -4137,37 +4149,6 @@ class AgentTools:
         orders = self._executor.get_pending_orders()
         self._log_tool("get_pending_orders", start, f"count={len(orders)}")
         return {"success": True, "orders": orders, "count": len(orders)}
-
-    def get_oracle_verdict(self) -> Dict[str, Any]:
-        """FLO-239: Return the latest Research Manager verdict from the Rex Bull vs Bear debate."""
-        start = time.time()
-        try:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "oracle_verdict.json")
-            if not os.path.exists(path):
-                self._log_tool("get_oracle_verdict", start, "no verdict available")
-                return {"available": False, "reason": "no verdict yet"}
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            try:
-                from luna_analyst import load_luna_brief
-                lb = load_luna_brief()
-                if lb:
-                    data["luna_bias"] = lb.get("directional_bias")
-                    data["luna_environment"] = lb.get("environment")
-            except Exception:
-                pass
-            try:
-                from deep_search import load_deep_research
-                dr = load_deep_research()
-                if dr:
-                    data["analyst_consensus"] = dr.get("analyst_consensus")
-            except Exception:
-                pass
-            self._log_tool("get_oracle_verdict", start, f"winner={data.get('winner')} conv={data.get('conviction')}")
-            return data
-        except Exception as e:
-            self._log_tool("get_oracle_verdict", start, f"error={e}")
-            return {"available": False, "reason": str(e)}
 
     def write_trading_journal(self, entry: str, category: str = "reflection") -> Dict[str, Any]:
         """Append an entry to Floki's persistent trading journal."""
