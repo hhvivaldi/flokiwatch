@@ -1,0 +1,1905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Trade Room · FlokiWatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   TRADE ROOM REDESIGN — FlokiWatch
+   Dark financial terminal · monospace · agent color identities
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Agent identity */
+  --clr-floki:   #AAFF00;
+  --clr-rex:     #9C27B0;
+  --clr-simba:   #00E5FF;
+  --clr-sage:    #FFB300;
+  --clr-echo:    #00BCD4;
+  --clr-luna:    #E040FB;
+  --clr-oracle:  #FFD700;
+
+  /* Market signals */
+  --clr-buy:     #00ff88;
+  --clr-sell:    #ff4444;
+  --clr-warn:    #FFB300;
+  --clr-neutral: #94a3b8;
+  /* Aliases — semantic names for bull/bear contexts */
+  --clr-bull:    #00ff88;
+  --clr-bear:    #ff4444;
+
+  /* Brand */
+  --clr-gold:    #FFD700;
+  --accent:      var(--clr-gold);
+
+  /* Surfaces — zero saturation */
+  --bg-deep:     #0a0a0a;
+  --bg-0:        #0d0d0d;
+  --bg-1:        #111111;
+  --bg-2:        #161616;
+  --bg-3:        #1c1c1c;
+  --border-1:    rgba(255,255,255,0.06);
+  --border-2:    rgba(255,255,255,0.10);
+  --border-3:    rgba(255,255,255,0.16);
+
+  --text-0:      #f4f4f5;
+  --text-1:      #c4c4c8;
+  --text-2:      #8a8a92;
+  --text-3:      #5c5c64;
+  --text-4:      #3a3a40;
+
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; background: var(--bg-deep); color: var(--text-0); font-family: var(--mono); font-size: 13px; line-height: 1.45; }
+body {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+table { border-collapse: collapse; width: 100%; }
+.dim { color: var(--text-2); }
+.pos { color: var(--clr-buy); }
+.neg { color: var(--clr-sell); }
+.warn { color: var(--clr-warn); }
+.hold { color: var(--clr-warn); }
+
+/* ───────────────────────────────────────────────────────────────
+   TIER 1 — COMMAND STRIP
+   ─────────────────────────────────────────────────────────────── */
+.cmd-strip {
+  position: sticky; top: 0; z-index: 50;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  gap: 0;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-2);
+}
+
+.cmd-brand { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-right: 1px solid var(--border-1); }
+.brand-mark { color: var(--accent); font-size: 18px; line-height: 1; }
+.brand-name { font-family: var(--display); font-weight: 700; letter-spacing: 0.18em; font-size: 13px; }
+.brand-sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.2em; margin-left: 6px; padding-left: 10px; border-left: 1px solid var(--border-2); }
+
+.cmd-nav { display: flex; align-items: center; gap: 2px; padding: 0 10px; }
+.nav-link {
+  padding: 10px 12px; font-size: 10.5px; letter-spacing: 0.18em; color: var(--text-3);
+  cursor: pointer; transition: color .15s;
+}
+.nav-link:hover { color: var(--text-1); }
+.nav-link.active { color: var(--accent); position: relative; }
+.nav-link.active::after {
+  content: ''; position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 1px; background: var(--accent);
+}
+
+.cmd-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(110px, auto); border-left: 1px solid var(--border-1); }
+.cmd-cell {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 8px 18px; border-right: 1px solid var(--border-1); min-width: 0;
+}
+.cmd-cell:last-child { border-right: none; }
+.cmd-label {
+  font-size: 9px; color: var(--text-3); letter-spacing: 0.22em; font-weight: 500;
+}
+.cmd-val {
+  font-size: 14px; color: var(--text-0); font-weight: 600; letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.cmd-val-xl { font-size: 22px; font-weight: 500; color: var(--text-0); font-variant-numeric: tabular-nums; margin-top: 0; letter-spacing: -0.01em; }
+.cmd-sub { font-size: 10px; color: var(--text-2); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.cmd-val.live { color: var(--accent); }
+.cmd-val.hold { color: var(--clr-warn); }
+.cmd-price .cmd-label { color: var(--accent); }
+.cmd-status { gap: 1px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--clr-buy); box-shadow: 0 0 8px var(--clr-buy); display: inline-block; margin-right: 6px; }
+
+/* ───────────────────────────────────────────────────────────────
+   STATUS RAIL
+   ─────────────────────────────────────────────────────────────── */
+.status-rail {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 20px; background: var(--bg-0);
+  border-bottom: 1px solid var(--border-1);
+}
+.pill {
+  font-size: 10.5px; letter-spacing: 0.12em; padding: 4px 10px;
+  border-radius: 3px; border: 1px solid var(--border-2);
+  color: var(--text-2); background: var(--bg-1);
+}
+.pill-caution { color: var(--clr-warn); border-color: rgba(255,179,0,0.3); background: rgba(255,179,0,0.06); }
+.pill-ok      { color: var(--clr-buy);  border-color: rgba(0,255,136,0.25); background: rgba(0,255,136,0.05); }
+.pill-warn    { color: var(--clr-warn); border-color: rgba(255,179,0,0.3);  background: rgba(255,179,0,0.06); }
+.pill-neutral { color: var(--text-1);   border-color: var(--border-2);      background: var(--bg-1); }
+.pill-dim     { color: var(--text-3);   border-color: var(--border-1);      background: transparent; }
+
+.rail-live { margin-left: auto; font-size: 10.5px; letter-spacing: 0.14em; color: var(--clr-buy); display: flex; align-items: center; gap: 6px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--clr-buy); animation: live-pulse 1.6s infinite; }
+@keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ───────────────────────────────────────────────────────────────
+   MAIN LAYOUT
+   ─────────────────────────────────────────────────────────────── */
+.tr-main {
+  max-width: 1600px; margin: 0 auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   DECISION HERO
+   ─────────────────────────────────────────────────────────────── */
+.decision-hero {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  gap: 0;
+  background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-0) 100%);
+  border: 1px solid var(--border-2);
+  border-left: 3px solid var(--clr-floki);
+  overflow: hidden;
+  position: relative;
+}
+.decision-hero::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(170,255,0,0.06) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.dh-left { padding: 22px 20px; border-right: 1px solid var(--border-1); display: flex; flex-direction: column; gap: 14px; }
+.dh-avatar {
+  width: 84px; height: 84px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.avatar-floki { background: rgba(170,255,0,0.08); border: 1.5px solid rgba(170,255,0,0.35); }
+.avatar-rex   { background: rgba(156,39,176,0.08); border: 1.5px solid rgba(156,39,176,0.38); }
+.avatar-simba { background: rgba(0,229,255,0.08); border: 1.5px solid rgba(0,229,255,0.35); }
+.avatar-sage  { background: rgba(255,179,0,0.08); border: 1.5px solid rgba(255,179,0,0.35); }
+.avatar-echo  { background: rgba(0,188,212,0.08); border: 1.5px solid rgba(0,188,212,0.35); }
+.avatar-luna  { background: rgba(224,64,251,0.08); border: 1.5px solid rgba(224,64,251,0.35); }
+.avatar-oracle{ background: rgba(255,215,0,0.08); border: 1.5px solid rgba(255,215,0,0.38); }
+
+.av-placeholder {
+  width: 100%; height: 100%;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.03) 0 6px,
+    rgba(255,255,255,0.06) 6px 12px
+  );
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em; font-weight: 700;
+  color: var(--text-1);
+}
+.av-placeholder::before { content: attr(data-label); }
+
+.avatar-floki .av-placeholder  { color: var(--clr-floki); }
+.avatar-rex .av-placeholder    { color: var(--clr-rex); }
+.avatar-simba .av-placeholder  { color: var(--clr-simba); }
+.avatar-sage .av-placeholder   { color: var(--clr-sage); }
+.avatar-echo .av-placeholder   { color: var(--clr-echo); }
+.avatar-luna .av-placeholder   { color: var(--clr-luna); }
+.avatar-oracle .av-placeholder { color: var(--clr-oracle); }
+
+.dh-identity { display: flex; flex-direction: column; gap: 4px; }
+.dh-role { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); }
+.dh-name { font-family: var(--display); font-size: 28px; font-weight: 700; letter-spacing: 0.04em; color: var(--clr-floki); }
+.dh-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-2); letter-spacing: 0.1em; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.dot-active { background: var(--clr-buy); box-shadow: 0 0 8px var(--clr-buy); animation: live-pulse 1.6s infinite; }
+
+.dh-center { padding: 28px 28px; display: flex; align-items: center; position: relative; z-index: 1; }
+.dh-verdict { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.dh-label { font-size: 10px; letter-spacing: 0.24em; color: var(--text-3); }
+.dh-decision {
+  font-family: var(--display); font-size: 64px; font-weight: 700; letter-spacing: 0.03em; line-height: 0.95;
+  color: var(--clr-warn);
+}
+.dh-reason { font-size: 13px; color: var(--text-1); line-height: 1.55; max-width: 560px; }
+
+.dh-right { padding: 22px 24px; border-left: 1px solid var(--border-1); display: flex; flex-direction: column; gap: 18px; background: rgba(0,0,0,0.2); }
+.dh-stat { display: flex; flex-direction: column; gap: 6px; }
+.ds-label { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); }
+.ds-val { font-family: var(--display); font-size: 24px; font-weight: 600; color: var(--text-0); font-variant-numeric: tabular-nums; }
+.ds-val.dim { color: var(--text-2); font-size: 14px; font-weight: 500; letter-spacing: 0.14em; }
+.ds-val.live { color: var(--accent); }
+.ds-unit { font-size: 14px; color: var(--text-2); margin-left: 2px; }
+
+.dh-gauge { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.dh-gauge-fill { height: 100%; background: var(--clr-warn); box-shadow: 0 0 8px rgba(255,179,0,0.4); transition: width .6s; }
+
+/* ───────────────────────────────────────────────────────────────
+   CABINET
+   ─────────────────────────────────────────────────────────────── */
+.sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 2px; }
+.sec-title { font-family: var(--display); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; color: var(--text-0); }
+.sec-sub { font-size: 10.5px; color: var(--text-3); letter-spacing: 0.1em; }
+
+.cab-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+.agent-card {
+  background: var(--bg-0);
+  border: 1px solid var(--border-2);
+  display: flex; flex-direction: column;
+  transition: border-color .15s, transform .15s;
+}
+.agent-card:hover { border-color: var(--border-3); }
+
+.agent-card[data-agent="rex"]    { border-top: 2px solid var(--clr-rex);   grid-column: span 2; }
+.agent-card[data-agent="oracle"] { border-top: 2px solid var(--clr-oracle); }
+.agent-card[data-agent="luna"]   { border-top: 2px solid var(--clr-luna); }
+.agent-card[data-agent="echo"]   { border-top: 2px solid var(--clr-echo); }
+.agent-card[data-agent="simba"]  { border-top: 2px solid var(--clr-simba); }
+.agent-card[data-agent="sage"]   { border-top: 2px solid var(--clr-sage); }
+
+.ac-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border-1);
+}
+.ac-avatar {
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex-shrink: 0;
+}
+.ac-avatar .av-placeholder { font-size: 8.5px; letter-spacing: 0.14em; }
+.ac-identity { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.ac-name { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: 0.1em; color: var(--text-0); }
+.ac-role { font-size: 9.5px; color: var(--text-3); letter-spacing: 0.18em; }
+.ac-pill {
+  font-size: 9px; letter-spacing: 0.14em; padding: 3px 8px;
+  border-radius: 3px; border: 1px solid var(--border-2);
+  color: var(--text-1); background: var(--bg-1);
+  flex-shrink: 0;
+}
+
+.ac-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+
+.kv-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px;
+}
+.kv-row span { color: var(--text-3); font-size: 10px; letter-spacing: 0.14em; }
+.kv-row b { color: var(--text-0); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.ac-note {
+  margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-1);
+  font-size: 11px; color: var(--text-1); line-height: 1.5;
+}
+
+.bar-track { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+.bar-fill { height: 100%; background: var(--clr-simba); transition: width .4s; }
+
+/* REX split */
+.rex-split { display: grid; grid-template-columns: 1fr 24px 1fr; align-items: stretch; gap: 0; }
+.rex-bull { grid-column: 1; }
+.rex-vs {
+  grid-column: 2; align-self: center; justify-self: center;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--text-3);
+  padding: 4px 2px;
+  position: relative;
+}
+.rex-bear { grid-column: 3; }
+.rex-side { display: flex; flex-direction: column; gap: 6px; padding: 0 12px; position: relative; }
+.rs-head { display: flex; justify-content: space-between; align-items: baseline; }
+.rs-label { font-size: 10px; letter-spacing: 0.2em; font-weight: 700; }
+.rex-bull .rs-label { color: #4CAF50; }
+.rex-bear .rs-label { color: #F44336; }
+.rs-conv { font-family: var(--display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rex-bull .rs-conv { color: #4CAF50; }
+.rex-bear .rs-conv { color: #F44336; }
+.rs-dir { font-size: 11px; letter-spacing: 0.16em; font-weight: 600; }
+.rex-bull .rs-dir { color: var(--clr-buy); }
+.rex-bear .rs-dir { color: var(--clr-sell); }
+.rs-case { font-size: 10.5px; color: var(--text-1); line-height: 1.5; min-height: 32px; }
+.rs-bar { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.rex-bull .rs-bar > div { height: 100%; background: #4CAF50; }
+.rex-bear .rs-bar > div { height: 100%; background: #F44336; }
+.rs-foot { font-size: 9.5px; color: var(--text-3); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+
+/* Oracle winner */
+.oracle-winner {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 12px; margin: -2px -2px 4px -2px;
+  background: rgba(255,215,0,0.05);
+  border: 1px solid rgba(255,215,0,0.18);
+}
+.ow-label { font-size: 10px; letter-spacing: 0.22em; color: var(--text-3); }
+.ow-val { font-family: var(--display); font-size: 18px; font-weight: 700; color: var(--clr-oracle); letter-spacing: 0.08em; }
+
+/* ───────────────────────────────────────────────────────────────
+   POSITION + MACRO ROW
+   ─────────────────────────────────────────────────────────────── */
+.row-mid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; }
+
+.panel {
+  background: var(--bg-0);
+  border: 1px solid var(--border-2);
+  display: flex; flex-direction: column;
+}
+.panel-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border-1);
+}
+.panel-title { font-family: var(--display); font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--text-1); }
+.panel-sub { font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+.panel-body { padding: 14px; }
+
+.pos-panel .panel-body { min-height: 160px; display: flex; align-items: center; justify-content: center; }
+
+.pos-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 20px; }
+.pe-glyph {
+  width: 56px; height: 56px; border-radius: 50%; border: 1px dashed var(--border-3);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); font-size: 20px;
+}
+.pe-head { font-family: var(--display); font-size: 14px; letter-spacing: 0.2em; color: var(--text-1); }
+.pe-sub { font-size: 11px; color: var(--text-2); }
+.pe-sub b { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.pos-live { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.pos-row { display: flex; align-items: baseline; gap: 20px; }
+.pos-dir { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: 0.1em; padding: 4px 12px; border: 1px solid currentColor; border-radius: 3px; }
+.pos-entry { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--text-0); }
+.pos-pnl { font-family: var(--display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-left: auto; }
+.pos-meta { display: flex; gap: 22px; font-size: 10.5px; color: var(--text-3); letter-spacing: 0.12em; }
+.pos-meta b { color: var(--text-0); font-variant-numeric: tabular-nums; font-weight: 500; }
+.pos-note { font-size: 11px; color: var(--text-1); padding-top: 6px; border-top: 1px solid var(--border-1); }
+
+/* Macro */
+.macro-grid-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.macro-sub { display: flex; flex-direction: column; gap: 6px; }
+.macro-sub-title { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); padding-bottom: 4px; border-bottom: 1px solid var(--border-1); }
+.macro-tbl { font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.macro-tbl td { padding: 3px 0; }
+.macro-tbl td:nth-child(1) { color: var(--text-2); letter-spacing: 0.04em; }
+.macro-tbl td:nth-child(2) { color: var(--text-0); text-align: right; padding-right: 10px; }
+.macro-tbl td:nth-child(3) { text-align: right; min-width: 48px; }
+
+/* ───────────────────────────────────────────────────────────────
+   BOTTOM ROW — TIMELINE + INTEL
+   ─────────────────────────────────────────────────────────────── */
+.row-bot { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+
+.tab-row { display: flex; gap: 2px; flex-wrap: wrap; }
+.tab {
+  background: transparent; border: 1px solid var(--border-1); color: var(--text-2);
+  padding: 5px 10px; font-size: 10px; letter-spacing: 0.14em; cursor: pointer;
+  border-radius: 2px; transition: all .15s;
+}
+.tab:hover { color: var(--text-0); border-color: var(--border-2); }
+.tab.active { background: var(--bg-2); color: var(--text-0); border-color: var(--border-3); }
+.tab-accent { color: var(--clr-luna); border-color: rgba(224,64,251,0.3); }
+
+.tl { list-style: none; padding: 0; margin: 0; max-height: 440px; overflow-y: auto; }
+.tl::-webkit-scrollbar { width: 6px; }
+.tl::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+.tl-item {
+  display: grid;
+  grid-template-columns: 70px 58px 74px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-1);
+  font-size: 11px;
+}
+.tl-item:hover { background: rgba(255,255,255,0.02); }
+.tl-time { color: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tl-badge {
+  font-size: 9px; letter-spacing: 0.16em; font-weight: 700; text-align: center;
+  padding: 2px 0; border: 1px solid currentColor; border-radius: 2px;
+}
+.badge-floki { color: var(--clr-floki); }
+.badge-rex { color: var(--clr-rex); }
+.badge-simba { color: var(--clr-simba); }
+.badge-sage { color: var(--clr-sage); }
+.badge-echo { color: var(--clr-echo); }
+.badge-luna { color: var(--clr-luna); }
+.badge-oracle { color: var(--clr-oracle); }
+
+.tl-tag {
+  font-size: 9px; letter-spacing: 0.14em; padding: 2px 6px; text-align: center;
+  background: var(--bg-2); color: var(--text-2); border-radius: 2px;
+}
+.tag-decision { color: var(--clr-floki); background: rgba(170,255,0,0.06); }
+.tag-analysis { color: var(--clr-sage); background: rgba(255,179,0,0.06); }
+.tag-macro { color: var(--clr-luna); background: rgba(224,64,251,0.06); }
+.tag-news { color: var(--clr-echo); background: rgba(0,188,212,0.06); }
+.tag-warn { color: var(--clr-warn); background: rgba(255,179,0,0.08); }
+.tag-conflict { color: var(--clr-rex); background: rgba(156,39,176,0.08); }
+
+.tl-msg { color: var(--text-1); }
+.tl-msg b { color: var(--text-0); font-weight: 600; }
+
+/* Intel panel */
+.intel-panel .panel-body { display: flex; flex-direction: column; gap: 14px; max-height: 440px; overflow-y: auto; padding: 14px; }
+.intel-panel .panel-body::-webkit-scrollbar { width: 6px; }
+.intel-panel .panel-body::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+.intel-block { display: flex; flex-direction: column; gap: 6px; }
+.ib-label { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); }
+.ib-label.mt-2 { margin-top: 6px; }
+.ib-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ib-list li { font-size: 11px; color: var(--text-1); display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border-1); }
+.ib-list li:last-child { border-bottom: none; }
+
+.tag { font-size: 9px; letter-spacing: 0.1em; padding: 1px 5px; border-radius: 2px; flex-shrink: 0; }
+.tag-warn { color: var(--clr-warn); background: rgba(255,179,0,0.08); border: 1px solid rgba(255,179,0,0.2); }
+.tag-news { color: var(--text-3); background: var(--bg-2); border: 1px solid var(--border-1); }
+.tag-now  { color: var(--accent); background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.3); }
+
+.pillar-row {
+  display: grid; grid-template-columns: 48px 1fr 30px;
+  gap: 10px; align-items: center; font-size: 10.5px;
+}
+.pillar-row span { color: var(--text-3); letter-spacing: 0.14em; }
+.pillar-row b { color: var(--text-0); font-variant-numeric: tabular-nums; text-align: right; }
+.pb-track { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.pb-fill { height: 100%; background: var(--accent); }
+
+.sr-list { display: flex; flex-direction: column; }
+.sr-row {
+  display: grid; grid-template-columns: 60px 1fr auto;
+  gap: 10px; align-items: baseline;
+  padding: 6px 0; font-size: 11px; border-bottom: 1px solid var(--border-1);
+}
+.sr-row:last-child { border-bottom: none; }
+.sr-row span:first-child { color: var(--text-0); font-variant-numeric: tabular-nums; font-weight: 500; }
+.sr-row.now { background: rgba(255,215,0,0.04); margin: 0 -8px; padding-left: 8px; padding-right: 8px; }
+.sr-row.now span:first-child { color: var(--accent); font-weight: 700; }
+
+/* ───────────────────────────────────────────────────────────────
+   OPS RAIL — Pending orders, session stats, calendar
+   ─────────────────────────────────────────────────────────────── */
+.row-ops { display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 14px; }
+
+.ops-card { display: flex; flex-direction: column; }
+.ops-card .panel-body { flex: 1; }
+
+/* Pending orders list */
+.po-list { display: flex; flex-direction: column; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.po-row {
+  display: grid; grid-template-columns: 52px 1fr auto auto;
+  gap: 10px; align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--border-1);
+  border-radius: 3px;
+  background: rgba(124, 77, 255, 0.03);
+}
+.po-dir { font-weight: 700; font-size: 10px; letter-spacing: 0.08em; }
+.po-dir.buy { color: var(--clr-bull); }
+.po-dir.sell { color: var(--clr-bear); }
+.po-price { color: var(--text-1); font-weight: 600; }
+.po-meta { color: var(--text-3); font-size: 10px; }
+.po-age { color: var(--text-3); font-size: 9.5px; letter-spacing: 0.08em; }
+.po-empty { color: var(--text-3); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 8px 0; }
+
+/* Session stats */
+.ss-list { display: flex; flex-direction: column; gap: 2px; }
+.ss-row {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 10px; align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-1);
+}
+.ss-row:last-child { border-bottom: none; }
+.ss-lbl { font-size: 10px; letter-spacing: 0.18em; color: var(--text-3); font-weight: 700; }
+.ss-val { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text-1); font-weight: 700; }
+.ss-val.warn { color: var(--clr-warn); }
+.ss-val.danger { color: var(--clr-bear); }
+
+/* Calendar events */
+.cal-list { display: flex; flex-direction: column; gap: 6px; }
+.cal-row {
+  display: grid; grid-template-columns: 60px 1fr auto;
+  gap: 10px; align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-1);
+  font-size: 11px;
+}
+.cal-row:last-child { border-bottom: none; }
+.cal-time { color: var(--text-1); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11.5px; }
+.cal-label { color: var(--text-2); line-height: 1.4; }
+.cal-impact {
+  font-size: 9px; letter-spacing: 0.12em; font-weight: 700;
+  padding: 2px 7px; border-radius: 2px;
+}
+.cal-impact.high { background: rgba(248,113,113,0.12); color: var(--clr-bear); border: 1px solid rgba(248,113,113,0.22); }
+.cal-impact.med { background: rgba(251,191,36,0.10); color: var(--clr-warn); border: 1px solid rgba(251,191,36,0.22); }
+.cal-impact.low { background: rgba(255,255,255,0.03); color: var(--text-3); border: 1px solid var(--border-1); }
+
+/* ───────────────────────────────────────────────────────────────
+   TECHNICALS ROW — MTF Indicators + Pivot Points
+   ─────────────────────────────────────────────────────────────── */
+.row-tech { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+
+/* MTF grid */
+.mtf-wrap { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+.mtf-row {
+  display: grid; grid-template-columns: 60px repeat(4, 1fr);
+  gap: 0; padding: 7px 0;
+  border-bottom: 1px solid var(--border-1);
+}
+.mtf-row:last-child { border-bottom: none; }
+.mtf-row.mtf-head { padding: 4px 0 8px; border-bottom: 1px solid var(--border-2); }
+.mtf-lbl { color: var(--text-3); font-weight: 700; letter-spacing: 0.05em; }
+.mtf-tf { color: var(--text-3); text-align: center; font-size: 9.5px; letter-spacing: 0.18em; font-weight: 700; }
+.mtf-cell { text-align: center; font-weight: 700; font-size: 11.5px; }
+.mtf-bull { color: var(--clr-bull); }
+.mtf-bear { color: var(--clr-bear); }
+.mtf-neu { color: var(--text-2); }
+.mtf-hot { color: var(--clr-warn); }
+
+/* Pivots */
+.pivot-wrap { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; display: flex; flex-direction: column; gap: 12px; }
+.pivot-layer { border: 1px solid var(--border-1); border-radius: 3px; padding: 10px 12px; background: rgba(255,255,255,0.01); }
+.pivot-layer-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.pivot-layer-name { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); font-weight: 700; }
+.pivot-layer-pp { font-size: 11px; color: var(--text-2); }
+.pivot-levels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 10px; }
+.pv-cell { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 10.5px; }
+.pv-tag { color: var(--text-3); font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; }
+.pv-tag.r { color: var(--clr-bear); }
+.pv-tag.s { color: var(--clr-bull); }
+.pv-val { color: var(--text-1); font-weight: 600; }
+
+/* ───────────────────────────────────────────────────────────────
+   COLLAPSIBLE TIERS — Deep Dive & Journal
+   ─────────────────────────────────────────────────────────────── */
+.tier {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tier-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.tier-head:hover { background: rgba(255,255,255,0.02); }
+.tier-title-wrap { display: flex; align-items: baseline; gap: 12px; }
+.tier-title { font-size: 11px; letter-spacing: 0.22em; color: var(--text-1); font-weight: 700; }
+.tier-sub { font-size: 10px; color: var(--text-3); letter-spacing: 0.08em; }
+.tier-arrow {
+  font-size: 12px; color: var(--text-3);
+  transition: transform 0.2s;
+}
+.tier.collapsed .tier-arrow { transform: rotate(-90deg); }
+.tier-body {
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--border-1);
+  padding-top: 16px;
+}
+.tier.collapsed .tier-body { display: none; }
+
+/* Deep Dive grid */
+.deep-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+.deep-block {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.deep-block-lbl { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); font-weight: 700; }
+.deep-block-body { font-size: 11.5px; color: var(--text-1); line-height: 1.5; }
+.deep-corr-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-1); font-size: 11px; }
+.deep-corr-row:last-child { border-bottom: none; }
+.deep-corr-row span:first-child { color: var(--text-3); }
+.deep-corr-row span:last-child { color: var(--text-1); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+/* Journal table */
+.journal-stats {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  padding: 10px 14px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-1);
+  border-radius: 3px;
+  margin-bottom: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.jstat { display: flex; flex-direction: column; gap: 2px; }
+.jstat-lbl { font-size: 9.5px; letter-spacing: 0.18em; color: var(--text-3); font-weight: 700; }
+.jstat-val { font-size: 14px; color: var(--text-1); font-weight: 700; }
+.jstat-val.pos { color: var(--clr-bull); }
+.jstat-val.neg { color: var(--clr-bear); }
+
+.journal-table-wrap { overflow-x: auto; max-height: 360px; overflow-y: auto; border: 1px solid var(--border-1); border-radius: 3px; }
+.journal-table {
+  width: 100%; border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.journal-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-0);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 9.5px; letter-spacing: 0.18em; color: var(--text-3); font-weight: 700;
+  border-bottom: 1px solid var(--border-2);
+}
+.journal-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-1);
+  color: var(--text-1);
+}
+.journal-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.j-dir.buy { color: var(--clr-bull); font-weight: 700; }
+.j-dir.sell { color: var(--clr-bear); font-weight: 700; }
+.j-pnl.pos { color: var(--clr-bull); font-weight: 700; }
+.j-pnl.neg { color: var(--clr-bear); font-weight: 700; }
+.j-capture { color: var(--text-2); }
+.j-verdict {
+  display: inline-block; padding: 2px 7px; border-radius: 2px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
+}
+.j-verdict.good { background: rgba(74,222,128,0.1); color: var(--clr-bull); border: 1px solid rgba(74,222,128,0.2); }
+.j-verdict.bad { background: rgba(248,113,113,0.1); color: var(--clr-bear); border: 1px solid rgba(248,113,113,0.2); }
+.j-verdict.mixed { background: rgba(251,191,36,0.08); color: var(--clr-warn); border: 1px solid rgba(251,191,36,0.2); }
+
+/* ───────────────────────────────────────────────────────────────
+   VARIANT B — Crew Grid (equal-weight 7-up)
+   ─────────────────────────────────────────────────────────────── */
+body[data-variant="B"] .decision-hero {
+  grid-template-columns: 180px 1fr 220px;
+}
+body[data-variant="B"] .dh-avatar { width: 64px; height: 64px; }
+body[data-variant="B"] .dh-name { font-size: 22px; }
+body[data-variant="B"] .dh-decision { font-size: 40px; }
+body[data-variant="B"] .dh-center { padding: 18px 22px; }
+body[data-variant="B"] .dh-left { padding: 16px 18px; }
+body[data-variant="B"] .dh-right { padding: 16px 20px; gap: 12px; }
+body[data-variant="B"] .ds-val { font-size: 18px; }
+body[data-variant="B"] .cab-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+body[data-variant="B"] .agent-card[data-agent="rex"] { grid-column: span 2; }
+
+/* ───────────────────────────────────────────────────────────────
+   DENSITY
+   ─────────────────────────────────────────────────────────────── */
+body[data-density="comfy"] .tr-main { gap: 28px; padding: 28px; }
+body[data-density="comfy"] .panel-body { padding: 18px; }
+body[data-density="comfy"] .ac-body { padding: 16px; gap: 8px; }
+body[data-density="comfy"] .dh-center { padding: 36px 32px; }
+
+body[data-density="dense"] .tr-main { gap: 10px; padding: 12px; }
+body[data-density="dense"] .panel-body { padding: 10px; }
+body[data-density="dense"] .ac-body { padding: 10px; gap: 5px; }
+body[data-density="dense"] .dh-decision { font-size: 48px; }
+body[data-density="dense"] .dh-center { padding: 18px 20px; }
+body[data-density="dense"] .tl-item { padding: 5px 4px; font-size: 10.5px; }
+
+/* ───────────────────────────────────────────────────────────────
+   TWEAKS PANEL
+   ─────────────────────────────────────────────────────────────── */
+.tweaks {
+  position: fixed; bottom: 16px; right: 16px; z-index: 100;
+  width: 300px;
+  background: var(--bg-0); border: 1px solid var(--border-3);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+}
+.tw-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid var(--border-2);
+}
+.tw-title { font-family: var(--display); font-size: 11px; letter-spacing: 0.24em; font-weight: 700; color: var(--accent); }
+.tw-close { background: none; border: none; color: var(--text-2); font-size: 18px; cursor: pointer; padding: 0 4px; }
+.tw-close:hover { color: var(--text-0); }
+.tw-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 16px; }
+.tw-group { display: flex; flex-direction: column; gap: 6px; }
+.tw-label { font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-3); }
+.tw-hint { font-size: 10px; color: var(--text-3); line-height: 1.4; }
+.tw-seg { display: flex; gap: 2px; background: var(--bg-1); border: 1px solid var(--border-1); padding: 2px; border-radius: 2px; }
+.tw-seg button {
+  flex: 1; background: transparent; border: none; color: var(--text-2);
+  padding: 6px 8px; font-size: 10px; letter-spacing: 0.12em; cursor: pointer;
+  font-family: var(--mono);
+}
+.tw-seg button.on { background: var(--bg-3); color: var(--text-0); }
+.tw-swatches { display: flex; gap: 6px; }
+.tw-swatches button {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border-2);
+  cursor: pointer; padding: 0;
+}
+.tw-swatches button.on { border-color: var(--text-0); box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 3px currentColor; }
+.tw-chk { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-1); cursor: pointer; }
+.tw-chk input { accent-color: var(--accent); }
+
+/* Tweaks — viewport preview */
+body[data-viewport="375"] .tr-main { max-width: 375px; }
+body[data-viewport="768"] .tr-main { max-width: 768px; }
+
+body[data-hide-nav="1"] .cmd-nav { display: none; }
+body[data-hide-rail="1"] .status-rail { display: none; }
+
+/* ───────────────────────────────────────────────────────────────
+   RESPONSIVE — the pain point
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .cmd-rail { grid-auto-columns: minmax(92px, auto); }
+  .cmd-cell { padding: 8px 12px; }
+  .decision-hero { grid-template-columns: 200px 1fr 260px; }
+  .dh-decision { font-size: 48px; }
+  .cab-grid { grid-template-columns: repeat(2, 1fr); }
+  .agent-card[data-agent="rex"] { grid-column: span 2; }
+  body[data-variant="B"] .cab-grid { grid-template-columns: repeat(3, 1fr); }
+  body[data-variant="B"] .agent-card[data-agent="rex"] { grid-column: span 3; }
+  .macro-grid-wrap { grid-template-columns: repeat(2, 1fr); }
+  .row-bot { grid-template-columns: 1fr; }
+  .row-tech { grid-template-columns: 1fr; }
+  .row-ops { grid-template-columns: 1fr; }
+  .deep-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 820px) {
+  .cmd-strip { grid-template-columns: 1fr auto; grid-template-rows: auto auto; position: relative; }
+  .cmd-brand { grid-column: 1; grid-row: 1; padding: 10px 14px; }
+  .cmd-nav { grid-column: 2; grid-row: 1; padding: 0 8px; }
+  .cmd-nav .nav-link { padding: 10px 8px; font-size: 10px; }
+  .cmd-rail {
+    grid-column: 1 / -1; grid-row: 2;
+    border-top: 1px solid var(--border-1); border-left: none;
+    overflow-x: auto;
+    grid-auto-flow: column; grid-auto-columns: minmax(120px, auto);
+  }
+
+  .decision-hero {
+    grid-template-columns: 1fr;
+    border-left: none; border-top: 3px solid var(--clr-floki);
+  }
+  .dh-left {
+    border-right: none; border-bottom: 1px solid var(--border-1);
+    flex-direction: row; align-items: center; padding: 14px 16px;
+  }
+  .dh-avatar { width: 56px; height: 56px; }
+  .dh-name { font-size: 20px; }
+  .dh-identity { flex: 1; }
+  .dh-center { padding: 18px 16px; border-bottom: 1px solid var(--border-1); }
+  .dh-decision { font-size: 40px; }
+  .dh-right {
+    border-left: none;
+    flex-direction: row; flex-wrap: wrap; gap: 14px;
+    padding: 14px 16px;
+  }
+  .dh-stat { flex: 1; min-width: 90px; }
+  .ds-val { font-size: 18px; }
+
+  .row-mid { grid-template-columns: 1fr; }
+  .cab-grid, body[data-variant="B"] .cab-grid { grid-template-columns: 1fr 1fr; }
+  .agent-card[data-agent="rex"],
+  body[data-variant="B"] .agent-card[data-agent="rex"] { grid-column: span 2; }
+  .rex-split { grid-template-columns: 1fr; gap: 8px; }
+  .rex-vs { display: none; }
+  .rex-bull, .rex-bear { grid-column: 1; }
+  .rex-side { padding: 10px 0; border-top: 1px solid var(--border-1); }
+  .rex-side + .rex-side { }
+  .rex-bull { border-top: none; padding-top: 0; }
+
+  .tl-item { grid-template-columns: 56px 54px 1fr; grid-template-rows: auto auto; }
+  .tl-tag { grid-column: 3; grid-row: 1; justify-self: start; }
+  .tl-msg { grid-column: 1 / -1; grid-row: 2; padding-top: 2px; }
+
+  .macro-grid-wrap { grid-template-columns: 1fr 1fr; }
+  .tweaks { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
+
+  .deep-grid { grid-template-columns: 1fr 1fr; }
+  .pivot-levels { grid-template-columns: 1fr; }
+  .mtf-row { grid-template-columns: 48px repeat(4, 1fr); }
+  .journal-table { font-size: 10px; }
+  .journal-table thead th, .journal-table tbody td { padding: 7px 8px; }
+}
+
+@media (max-width: 500px) {
+  .tr-main { padding: 12px; gap: 12px; }
+  .status-rail { padding: 8px 12px; font-size: 10px; }
+  .status-rail .pill { font-size: 9.5px; padding: 3px 8px; }
+  .dh-decision { font-size: 32px; }
+  .dh-reason { font-size: 12px; }
+  .cab-grid, body[data-variant="B"] .cab-grid { grid-template-columns: 1fr; }
+  .agent-card[data-agent="rex"],
+  body[data-variant="B"] .agent-card[data-agent="rex"] { grid-column: span 1; }
+  .macro-grid-wrap { grid-template-columns: 1fr; }
+  .pos-pnl { font-size: 20px; }
+  .pos-entry { font-size: 16px; }
+  .pos-meta { flex-wrap: wrap; gap: 10px 16px; }
+}
+
+</style>
+</head>
+<body data-variant="A">
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TIER 1 — COMMAND STRIP (sticky, always-visible)
+     ═══════════════════════════════════════════════════════════════ -->
+<header class="cmd-strip">
+  <div class="cmd-brand">
+    <div class="brand-mark">◆</div>
+    <div class="brand-name">FLOKIWATCH</div>
+    <div class="brand-sub">TRADE ROOM</div>
+  </div>
+
+  <nav class="cmd-nav">
+    <a class="nav-link">DASH</a>
+    <a class="nav-link">HISTORY</a>
+    <a class="nav-link">ROADMAP</a>
+    <a class="nav-link active">TRADE ROOM</a>
+    <a class="nav-link">ABOUT</a>
+  </nav>
+
+  <div class="cmd-rail">
+    <div class="cmd-cell cmd-price">
+      <span class="cmd-label">XAU/USD</span>
+      <span id="cc-price" class="cmd-val-xl">4832.62</span>
+      <span id="cc-change" class="cmd-sub pos">+0.87%</span>
+    </div>
+    <div class="cmd-cell">
+      <span class="cmd-label">REGIME</span>
+      <span id="cc-regime" class="cmd-val">RANGING</span>
+      <span id="cc-regime-detail" class="cmd-sub dim">72% · 2h 14m</span>
+    </div>
+    <div class="cmd-cell">
+      <span class="cmd-label">FLOKI</span>
+      <span id="cc-floki-decision" class="cmd-val hold">WAIT</span>
+      <span id="cc-floki-conf" class="cmd-sub dim">58%</span>
+    </div>
+    <div class="cmd-cell">
+      <span class="cmd-label">REX</span>
+      <span id="cc-rex-verdict" class="cmd-val">CLEAR</span>
+    </div>
+    <div class="cmd-cell">
+      <span class="cmd-label">NEXT</span>
+      <span id="cc-countdown" class="cmd-val live">01:47</span>
+      <span class="cmd-sub dim">FLOKI CYCLE</span>
+    </div>
+    <div class="cmd-cell">
+      <span class="cmd-label">SESSION P&amp;L</span>
+      <span id="cc-pnl" class="cmd-val pos">+$13.90</span>
+    </div>
+    <div class="cmd-cell cmd-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="cmd-sub" id="status-label">OPERATIONAL</span>
+      <span class="cmd-sub dim" id="mode">LIVE</span>
+      <span class="cmd-sub dim" id="last-update">12:04:08</span>
+    </div>
+  </div>
+</header>
+
+<!-- hidden plumbing: preserve required IDs from FIELD_CONTRACT -->
+<div hidden>
+  <span id="market"></span><span id="ea-bridge-status"></span><span id="ea-spread"></span>
+  <span id="balance"></span><span id="equity"></span><span id="price"></span><span id="price-label"></span>
+  <span id="goldcon"></span><span id="goldcon-decision"></span><span id="goldcon-score"></span>
+  <span id="goldcon-conf"></span><span id="goldcon-scenario"></span><span id="goldcon-blocked"></span>
+  <span id="signal-segments"></span>
+  <span id="p-tech-bar"></span><span id="p-tech-val"></span>
+  <span id="p-ml-bar"></span><span id="p-ml-val"></span>
+  <span id="p-mom-bar"></span><span id="p-mom-val"></span>
+  <span id="p-news-bar"></span><span id="p-news-val"></span>
+  <span id="p-cal-bar"></span><span id="p-cal-val"></span>
+  <span id="last-trade-evidence"></span><span id="lte-dir"></span><span id="lte-pnl"></span>
+  <span id="lte-reason"></span><span id="lte-time"></span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TIER 1.5 — STATUS RAIL (volatility / alerts)
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="status-rail">
+  <span class="pill pill-caution" id="vol-banner">▲ CAUTION · volatility elevated — spread 2.3p</span>
+  <span class="pill pill-ok">○ MARKET OPEN · NY session</span>
+  <span class="pill pill-neutral">◈ 7 AGENTS ONLINE</span>
+  <span class="pill pill-dim" id="news-marquee">ECHO · 44 headlines scanned · last 12m</span>
+  <span class="rail-live"><span class="live-dot"></span>LIVE DATA</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN
+     ═══════════════════════════════════════════════════════════════ -->
+<main class="tr-main">
+
+  <!-- ─────────────────────────────────────────────────────────────
+       DECISION HERO — "what is Floki doing RIGHT NOW"
+       (variant A shows hero; variant B collapses to equal card)
+       ───────────────────────────────────────────────────────────── -->
+  <section class="decision-hero" id="decision-hero" data-agent="floki" data-screen-label="01 Decision Hero">
+    <div class="dh-left">
+      <div class="dh-avatar avatar-floki">
+        <div class="av-placeholder" data-label="FLOKI"></div>
+      </div>
+      <div class="dh-identity">
+        <div class="dh-role">LEAD STRATEGIST</div>
+        <div class="dh-name">FLOKI</div>
+        <div class="dh-meta">
+          <span class="dot dot-active"></span>
+          <span>ACTIVE · M30 cycle</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dh-center">
+      <div class="dh-verdict">
+        <div class="dh-label">CURRENT DECISION</div>
+        <div class="dh-decision" id="floki-decision-hero">WAIT</div>
+        <div class="dh-reason" id="floki-summary-hero">
+          Price coiling at 4832; macro mixed, yields +2bp. Waiting for a clean
+          break above 4841 or confirmation of the 4820 floor before engaging.
+        </div>
+      </div>
+    </div>
+
+    <div class="dh-right">
+      <div class="dh-stat">
+        <span class="ds-label">CONFIDENCE</span>
+        <div class="dh-gauge">
+          <div class="dh-gauge-fill" style="width:58%"></div>
+        </div>
+        <span class="ds-val">58<span class="ds-unit">%</span></span>
+      </div>
+      <div class="dh-stat">
+        <span class="ds-label">NEXT CYCLE IN</span>
+        <span class="ds-val live" id="dh-countdown">01:47</span>
+      </div>
+      <div class="dh-stat">
+        <span class="ds-label">SIGNAL</span>
+        <span class="ds-val dim">RANGE-BOUND</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       AGENT CABINET — 6 supporting agents
+       ───────────────────────────────────────────────────────────── -->
+  <section class="cabinet" data-screen-label="02 Agent Cabinet">
+    <div class="sec-head">
+      <div class="sec-title">THE CABINET</div>
+      <div class="sec-sub">6 specialists · reporting every cycle</div>
+    </div>
+
+    <div class="cab-grid">
+
+      <!-- REX (debate lead) -->
+      <article class="agent-card" data-agent="rex" id="rex-monitor-pill">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-rex"><div class="av-placeholder" data-label="REX"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">REX</div>
+            <div class="ac-role">DEBATE · BULL vs BEAR</div>
+          </div>
+          <span class="ac-pill pill-neutral">CLEAR</span>
+        </div>
+        <div class="ac-body">
+          <div class="rex-split">
+            <span class="rex-vs">VS</span>
+            <div class="rex-side rex-bull" id="rex-bull-card">
+              <div class="rs-head">
+                <span class="rs-label">BULL</span>
+                <span class="rs-conv" id="rex-bull-conv-text">7</span>
+              </div>
+              <div class="rs-dir" id="rex-bull-dir-pill">BUY</div>
+              <div class="rs-case" id="rex-bull-case">4820 floor holds · MACD turning · DXY rolling over</div>
+              <div class="rs-bar"><div id="rex-bull-conv-bar" style="width:70%"></div></div>
+              <div class="rs-foot" id="rex-bull-levels">E 4832 · SL 4818 · TP 4861</div>
+              <span id="rex-bull-conv-pill" hidden></span>
+            </div>
+            <div class="rex-side rex-bear" id="rex-bear-card">
+              <div class="rs-head">
+                <span class="rs-label">BEAR</span>
+                <span class="rs-conv" id="rex-bear-conv-text">5</span>
+              </div>
+              <div class="rs-dir" id="rex-bear-dir-pill">SELL</div>
+              <div class="rs-case" id="rex-bear-case">Fails 4841 three times · H4 RSI divergence · weak volume</div>
+              <div class="rs-bar"><div id="rex-bear-conv-bar" style="width:50%"></div></div>
+              <div class="rs-foot" id="rex-bear-levels">E 4830 · SL 4849 · TP 4801</div>
+              <span id="rex-bear-conv-pill" hidden></span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- ORACLE (verdict) -->
+      <article class="agent-card" data-agent="oracle">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-oracle"><div class="av-placeholder" data-label="ORAC"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">ORACLE</div>
+            <div class="ac-role">VERDICT · RESEARCH MANAGER</div>
+          </div>
+          <span class="ac-pill pill-neutral">NEUTRAL</span>
+        </div>
+        <div class="ac-body">
+          <div class="oracle-winner">
+            <span class="ow-label">WINNER</span>
+            <span class="ow-val">NEUTRAL</span>
+          </div>
+          <div class="kv-row"><span>RECO</span><b>WAIT FOR BREAK</b></div>
+          <div class="kv-row"><span>CONVICTION</span><b>4/10</b></div>
+          <div class="kv-row"><span>TRIGGER BUY</span><b class="pos">&gt; 4841</b></div>
+          <div class="kv-row"><span>TRIGGER SELL</span><b class="neg">&lt; 4820</b></div>
+        </div>
+      </article>
+
+      <!-- LUNA -->
+      <article class="agent-card" id="luna-card" data-agent="luna">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-luna"><div class="av-placeholder" data-label="LUNA"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">LUNA</div>
+            <div class="ac-role">MACRO ANALYST</div>
+          </div>
+          <span class="ac-pill pill-ok">ON WATCH</span>
+        </div>
+        <div class="ac-body">
+          <div class="kv-row"><span>BIAS</span><b>MIXED · lean bull</b></div>
+          <div class="kv-row"><span>10Y YIELD</span><b class="neg">+2bp · 4.37%</b></div>
+          <div class="kv-row"><span>DXY</span><b class="pos">−0.21%</b></div>
+          <div class="kv-row"><span>REAL YIELDS</span><b>1.84%</b></div>
+          <div class="ac-note" id="luna-deep-insight">Gold down 1.2% from 3-day high · weekend risk premium unwinding</div>
+          <div hidden>
+            <span id="atlas-card"></span>
+            <span id="luna-headlines"></span><span id="luna-headlines-list"></span>
+            <span id="luna-deep-research"></span><span id="luna-deep-consensus"></span>
+            <span id="luna-deep-sources"></span><span id="luna-deep-time"></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ECHO -->
+      <article class="agent-card" id="echo-card" data-agent="echo">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-echo"><div class="av-placeholder" data-label="ECHO"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">ECHO</div>
+            <div class="ac-role">NEWS SENTINEL</div>
+          </div>
+          <span class="ac-pill pill-warn" id="echo-alert-pill">1 IMPORTANT</span>
+        </div>
+        <div class="ac-body">
+          <div class="kv-row"><span>SCANNED</span><b id="echo-scan-count">44</b></div>
+          <div class="kv-row"><span>CRITICAL</span><b class="neg" id="echo-critical-count">0</b></div>
+          <div class="kv-row"><span>IMPORTANT</span><b class="warn" id="echo-important-count">1</b></div>
+          <div class="kv-row"><span>LAST SCAN</span><b class="dim" id="echo-last-scan">12m ago</b></div>
+          <div class="ac-note">UBS trims China easing expectations · NEAR-term impact on gold</div>
+          <span id="echo-status-pill" hidden></span>
+        </div>
+      </article>
+
+      <!-- SIMBA -->
+      <article class="agent-card" id="simba-card" data-agent="simba">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-simba"><div class="av-placeholder" data-label="SIMB"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">SIMBA</div>
+            <div class="ac-role">POSITION WATCHDOG</div>
+          </div>
+          <span class="ac-pill pill-dim" id="simba-status-pill">SLEEP</span>
+        </div>
+        <div class="ac-body">
+          <div class="kv-row"><span>MODE</span><b id="simba-mode-tag">MONITORING</b></div>
+          <div class="kv-row"><span>CONDITIONS</span><b id="simba-conditions-text">0/0 met</b></div>
+          <div class="bar-track"><div id="simba-conditions-bar" class="bar-fill" style="width:0%"></div></div>
+          <div class="ac-note" id="simba-summary-tag">No open positions · waiting for Floki entry trigger</div>
+        </div>
+      </article>
+
+      <!-- SAGE -->
+      <article class="agent-card" id="sage-card" data-agent="sage">
+        <div class="ac-head">
+          <div class="ac-avatar avatar-sage"><div class="av-placeholder" data-label="SAGE"></div></div>
+          <div class="ac-identity">
+            <div class="ac-name">SAGE</div>
+            <div class="ac-role">DAILY AUDITOR</div>
+          </div>
+          <span class="ac-pill pill-ok" id="sage-status">READY</span>
+        </div>
+        <div class="ac-body">
+          <div class="kv-row"><span>PERIOD</span><b id="sage-report-period">LAST 30D</b></div>
+          <div class="kv-row"><span>TRADES</span><b id="sage-report-trades">73</b></div>
+          <div class="kv-row"><span>WIN RATE</span><b class="pos" id="sage-report-win-rate">49%</b></div>
+          <div class="kv-row"><span>PROFIT FACTOR</span><b class="pos" id="sage-report-profit-factor">1.64</b></div>
+          <div class="ac-note" id="sage-summary">
+            <span id="sage-report-recommendations">Prioritize BUY entries over SELL · WR 49% vs 19% on sells</span>
+          </div>
+          <span id="sage-last-run" hidden>2h ago</span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       POSITION + MACRO ROW
+       ───────────────────────────────────────────────────────────── -->
+  <section class="row-mid" data-screen-label="03 Position & Macro">
+
+    <!-- Position panel -->
+    <div class="panel pos-panel">
+      <div class="panel-head">
+        <div class="panel-title">POSITION</div>
+        <div class="panel-sub"><span id="positions-count">0</span> open · <span id="ea-bridge-status-2">EA ONLINE</span></div>
+      </div>
+      <div class="panel-body">
+        <div id="main-has-position" class="pos-live" hidden>
+          <div class="pos-row">
+            <span class="pos-dir pos" id="position-direction">BUY</span>
+            <span class="pos-entry" id="position-entry">4821.10</span>
+            <span class="pos-pnl pos" id="position-pnl">+$24.60</span>
+          </div>
+          <div class="pos-meta">
+            <span>SL <b id="position-sl">4815.0</b></span>
+            <span>TP <b id="position-tp">4861.0</b></span>
+            <span>PHASE <b id="position-phase">OPEN</b></span>
+            <span>DUR <b id="position-duration">14m</b></span>
+          </div>
+          <div class="pos-note" id="position-hold-reasoning">Holding · floor thesis still valid</div>
+          <div class="pos-watch" id="position-watch-conditions"></div>
+        </div>
+        <div id="main-no-position" class="pos-empty">
+          <span id="positions-empty" hidden></span>
+          <div class="pe-glyph">—</div>
+          <div class="pe-head">NO ACTIVE POSITION</div>
+          <div class="pe-sub">Floki will fire on break · next cycle in <b id="pe-count">01:47</b></div>
+        </div>
+        <div id="position-bar" hidden></div>
+        <div id="positions" hidden></div>
+      </div>
+    </div>
+
+    <!-- Macro rail (collapsed into 2x2 on mobile) -->
+    <div class="panel macro-panel">
+      <div class="panel-head">
+        <div class="panel-title">MACRO CONTEXT</div>
+        <div class="panel-sub">live feed · 30s refresh</div>
+      </div>
+      <div class="panel-body macro-grid-wrap">
+
+        <div class="macro-sub">
+          <div class="macro-sub-title">METALS</div>
+          <table id="macro-metals" class="macro-tbl">
+            <tr id="mc-XAGUSD"><td>Silver</td><td>59.41</td><td class="pos">+1.1%</td></tr>
+            <tr id="mc-XPTUSD"><td>Platinum</td><td>1104.2</td><td class="pos">+0.4%</td></tr>
+            <tr id="mc-XPDUSD"><td>Palladium</td><td>1048.7</td><td class="neg">−0.3%</td></tr>
+          </table>
+        </div>
+
+        <div class="macro-sub">
+          <div class="macro-sub-title">FOREX</div>
+          <table id="macro-forex" class="macro-tbl">
+            <tr id="mc-EURUSD"><td>EUR/USD</td><td>1.0842</td><td class="pos">+0.2%</td></tr>
+            <tr id="mc-USDJPY"><td>USD/JPY</td><td>152.44</td><td class="neg">−0.1%</td></tr>
+            <tr id="mc-USDCHF"><td>USD/CHF</td><td>0.8821</td><td class="neg">−0.3%</td></tr>
+            <tr id="mc-AUDUSD"><td>AUD/USD</td><td>0.6612</td><td class="pos">+0.1%</td></tr>
+            <tr id="mc-USDCNH"><td>USD/CNH</td><td>7.241</td><td class="pos">+0.0%</td></tr>
+            <tr id="mc-GBPUSD"><td>GBP/USD</td><td>1.2684</td><td class="pos">+0.2%</td></tr>
+          </table>
+        </div>
+
+        <div class="macro-sub">
+          <div class="macro-sub-title">FUTURES</div>
+          <table id="macro-futures" class="macro-tbl">
+            <tr id="mc-DXY_M6"><td>DXY</td><td>103.42</td><td class="neg">−0.21%</td></tr>
+            <tr id="mc-VIX_J6"><td>VIX</td><td>14.88</td><td class="pos">+2.1%</td></tr>
+            <tr id="mc-UST10Y_M6"><td>10Y</td><td>4.37%</td><td class="neg">+2bp</td></tr>
+          </table>
+        </div>
+
+        <div class="macro-sub">
+          <div class="macro-sub-title">INDICES</div>
+          <table id="macro-grid" class="macro-tbl">
+            <tr id="mc-grid-sp500"><td>S&amp;P</td><td>5804</td><td class="pos">+0.4%</td></tr>
+            <tr id="mc-grid-btc"><td>BTC</td><td>68.4k</td><td class="pos">+1.2%</td></tr>
+            <tr id="mc-grid-oil"><td>Oil</td><td>78.21</td><td class="neg">−0.8%</td></tr>
+            <tr id="mc-grid-yields"><td>10Y</td><td>4.37%</td><td class="neg">+2bp</td></tr>
+          </table>
+        </div>
+
+        <div hidden>
+          <span id="macro-yahoo"></span><span id="mc-gld"></span>
+          <span id="mc-gld-flows"></span><span id="mc-real-yields"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       OPS RAIL — Pending orders, session stats, calendar
+       ───────────────────────────────────────────────────────────── -->
+  <section class="row-ops" data-screen-label="04 Ops Rail">
+
+    <!-- Pending Orders -->
+    <div class="panel ops-card" id="pending-orders-section">
+      <div class="panel-head">
+        <div class="panel-title">PENDING ORDERS</div>
+        <div class="panel-sub">limit · stop entries</div>
+      </div>
+      <div class="panel-body">
+        <div class="po-list" id="pending-orders-list">
+          <div class="po-row">
+            <span class="po-dir buy">BUY</span>
+            <span class="po-price">4820.50</span>
+            <span class="po-meta">LIMIT · SL 4810 · TP 4852</span>
+            <span class="po-age">12m</span>
+          </div>
+          <div class="po-row">
+            <span class="po-dir sell">SELL</span>
+            <span class="po-price">4848.00</span>
+            <span class="po-meta">STOP · SL 4858 · TP 4820</span>
+            <span class="po-age">04m</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Stats -->
+    <div class="panel ops-card" id="session-stats-section">
+      <div class="panel-head">
+        <div class="panel-title">SESSION STATS</div>
+        <div class="panel-sub">crew activity · runtime</div>
+      </div>
+      <div class="panel-body">
+        <div class="ss-list">
+          <div class="ss-row">
+            <span class="ss-lbl">REX INSIGHTS</span>
+            <span class="ss-val" id="stats-agreements">12</span>
+          </div>
+          <div class="ss-row">
+            <span class="ss-lbl">RISK FLAGS</span>
+            <span class="ss-val warn" id="stats-conflicts">3</span>
+          </div>
+          <div class="ss-row">
+            <span class="ss-lbl">MESSAGES</span>
+            <span class="ss-val" id="stats-messages">248</span>
+          </div>
+          <div class="ss-row">
+            <span class="ss-lbl">CALLS / AGENT</span>
+            <span class="ss-val" id="stats-calls">18.4</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upcoming Events -->
+    <div class="panel ops-card" id="calendar-events-section">
+      <div class="panel-head">
+        <div class="panel-title">UPCOMING EVENTS</div>
+        <div class="panel-sub">macro calendar · next 24h</div>
+      </div>
+      <div class="panel-body">
+        <div class="cal-list" id="ctx-calendar-events">
+          <div class="cal-row">
+            <span class="cal-time">14:00</span>
+            <span class="cal-label">US Fed Chair Powell — speech</span>
+            <span class="cal-impact high">HIGH</span>
+          </div>
+          <div class="cal-row">
+            <span class="cal-time">15:30</span>
+            <span class="cal-label">US Crude Oil Inventories</span>
+            <span class="cal-impact med">MED</span>
+          </div>
+          <div class="cal-row">
+            <span class="cal-time">18:00</span>
+            <span class="cal-label">FOMC Minutes release</span>
+            <span class="cal-impact high">HIGH</span>
+          </div>
+          <div class="cal-row">
+            <span class="cal-time">Tmrw</span>
+            <span class="cal-label">US Initial Jobless Claims</span>
+            <span class="cal-impact med">MED</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       TIMELINE + SIDE
+       ───────────────────────────────────────────────────────────── -->
+  <section class="row-bot" data-screen-label="04 Journal & Intel">
+
+    <!-- Timeline / Journal -->
+    <div class="panel tl-panel">
+      <div class="panel-head">
+        <div class="panel-title">JOURNAL</div>
+        <div class="tab-row">
+          <button class="tab active" data-filter="all">ALL</button>
+          <button class="tab" data-filter="decision">DECISIONS</button>
+          <button class="tab" data-filter="conflict">CONFLICTS</button>
+          <button class="tab" data-filter="analysis">ANALYSIS</button>
+          <button class="tab" data-filter="news">NEWS</button>
+          <button class="tab" data-filter="macro">MACRO</button>
+          <button class="tab" data-filter="alert">ALERTS</button>
+          <button class="tab tab-accent" data-filter="journal" id="journal-tab">JOURNAL</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <ul class="tl" id="tl-feed">
+          <li class="tl-item" data-kind="decision" data-agent="floki">
+            <span class="tl-time">12:04:08</span>
+            <span class="tl-badge badge-floki">FLOKI</span>
+            <span class="tl-tag tag-decision">DECISION</span>
+            <span class="tl-msg"><b>WAIT</b> · 58% · price coiling at 4832, waiting for 4841 break or 4820 floor confirm</span>
+          </li>
+          <li class="tl-item" data-kind="analysis" data-agent="sage">
+            <span class="tl-time">12:03:42</span>
+            <span class="tl-badge badge-sage">SAGE</span>
+            <span class="tl-tag tag-analysis">WEEKLY</span>
+            <span class="tl-msg">44 trades analyzed · WR 49% · PF 1.64 · IMPROVING · recommend prioritize BUY over SELL</span>
+          </li>
+          <li class="tl-item" data-kind="macro" data-agent="luna">
+            <span class="tl-time">12:02:19</span>
+            <span class="tl-badge badge-luna">LUNA</span>
+            <span class="tl-tag tag-macro">MACRO</span>
+            <span class="tl-msg">Gold down 1.2% from 3-day high · weekend risk premium unwinding · bias still bullish H1</span>
+          </li>
+          <li class="tl-item" data-kind="news" data-agent="echo">
+            <span class="tl-time">12:01:47</span>
+            <span class="tl-badge badge-echo">ECHO</span>
+            <span class="tl-tag tag-warn">IMPORTANT</span>
+            <span class="tl-msg">China policy easing expectations trimmed — UBS · NEAR-term impact on gold</span>
+          </li>
+          <li class="tl-item" data-kind="decision" data-agent="floki">
+            <span class="tl-time">11:58:02</span>
+            <span class="tl-badge badge-floki">FLOKI</span>
+            <span class="tl-tag tag-decision">DECISION</span>
+            <span class="tl-msg"><b>WAIT</b> · 54% · waiting for confluence</span>
+          </li>
+          <li class="tl-item" data-kind="conflict" data-agent="rex">
+            <span class="tl-time">11:56:14</span>
+            <span class="tl-badge badge-rex">REX</span>
+            <span class="tl-tag tag-conflict">DEBATE</span>
+            <span class="tl-msg">BULL 7 vs BEAR 5 · bull edges on DXY rollover · needs confirmation</span>
+          </li>
+          <li class="tl-item" data-kind="alert" data-agent="simba">
+            <span class="tl-time">11:54:51</span>
+            <span class="tl-badge badge-simba">SIMBA</span>
+            <span class="tl-tag tag-warn">WATCH</span>
+            <span class="tl-msg">Volatility spike detected · spread widened to 3.2p · flagging for Floki</span>
+          </li>
+          <li class="tl-item" data-kind="news" data-agent="echo">
+            <span class="tl-time">11:52:09</span>
+            <span class="tl-badge badge-echo">ECHO</span>
+            <span class="tl-tag tag-news">NEWS</span>
+            <span class="tl-msg">Fed speaker calendar light this week · 1 Powell appearance Thursday 14:00 UTC</span>
+          </li>
+          <li class="tl-item" data-kind="analysis" data-agent="oracle">
+            <span class="tl-time">11:49:33</span>
+            <span class="tl-badge badge-oracle">ORACLE</span>
+            <span class="tl-tag tag-analysis">VERDICT</span>
+            <span class="tl-msg">NEUTRAL · conviction 4/10 · wait for break above 4841 or below 4820</span>
+          </li>
+          <li class="tl-item" data-kind="macro" data-agent="luna">
+            <span class="tl-time">11:44:12</span>
+            <span class="tl-badge badge-luna">LUNA</span>
+            <span class="tl-tag tag-macro">MACRO</span>
+            <span class="tl-msg">10Y yields +2bp · real yields 1.84% · modest headwind to gold</span>
+          </li>
+        </ul>
+
+      </div>
+    </div>
+
+    <!-- Intel sidebar -->
+    <aside class="panel intel-panel" id="intel-feed-section">
+      <div class="panel-head">
+        <div class="panel-title">OSINT &amp; SIGNAL</div>
+        <div class="panel-sub"><span id="intel-method">HYBRID</span> · <span id="intel-cache-age">2m</span></div>
+      </div>
+      <div class="panel-body">
+        <div class="intel-block">
+          <div class="ib-label">HEADLINES</div>
+          <ul class="ib-list" id="intel-headlines">
+            <li><span class="tag tag-warn">IMPT</span> UBS trims China easing outlook</li>
+            <li><span class="tag tag-news">ROUT</span> Gold ETF flows +$120M weekly</li>
+            <li><span class="tag tag-news">ROUT</span> Fed calendar light · 1 Powell speech</li>
+          </ul>
+        </div>
+
+        <div class="intel-block">
+          <div class="ib-label">PILLARS</div>
+          <div class="pillar-row"><span>TECH</span><div class="pb-track"><div class="pb-fill" style="width:62%"></div></div><b>62</b></div>
+          <div class="pillar-row"><span>ML</span><div class="pb-track"><div class="pb-fill" style="width:48%"></div></div><b>48</b></div>
+          <div class="pillar-row"><span>MOM</span><div class="pb-track"><div class="pb-fill" style="width:54%"></div></div><b>54</b></div>
+          <div class="pillar-row"><span>NEWS</span><div class="pb-track"><div class="pb-fill" style="width:41%"></div></div><b>41</b></div>
+          <div class="pillar-row"><span>CAL</span><div class="pb-track"><div class="pb-fill" style="width:50%"></div></div><b>50</b></div>
+        </div>
+
+        <div class="intel-block">
+          <div class="ib-label">S/R ZONES</div>
+          <div class="sr-list" id="intel-sr-zones">
+            <div class="sr-row"><span>4861</span><span class="dim">RES · H4</span><span class="tag tag-warn">HIGH</span></div>
+            <div class="sr-row"><span>4841</span><span class="dim">RES · H1</span><span class="tag tag-news">MED</span></div>
+            <div class="sr-row now"><span>4832</span><span class="dim">NOW</span><span class="tag tag-now">○</span></div>
+            <div class="sr-row"><span>4820</span><span class="dim">SUP · H1</span><span class="tag tag-news">MED</span></div>
+            <div class="sr-row"><span>4801</span><span class="dim">SUP · H4</span><span class="tag tag-warn">HIGH</span></div>
+          </div>
+        </div>
+
+        <div class="intel-block">
+          <div class="ib-label">MTF TREND · <span id="intel-mtf" class="dim">D1 BULL · H4 MIXED</span></div>
+          <div class="ib-label mt-2">VOLUME · <span id="intel-volume" class="dim">Normal · 1.02x</span></div>
+          <div class="ib-label">PATTERNS · <span id="intel-patterns" class="dim">Morning Star forming · H1</span></div>
+        </div>
+
+        <div hidden>
+          <span id="intel-macro"></span><span id="intel-calendar"></span><span id="intel-sr"></span>
+          <span id="intel-gpt"></span><span id="intel-tags"></span><span id="intel-bottom"></span>
+          <span id="intel-cached-badge"></span>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       TECHNICALS ROW — MTF Indicators + Pivot Points
+       ───────────────────────────────────────────────────────────── -->
+  <section class="row-tech">
+    <!-- Multi-TF Indicators -->
+    <div class="panel" id="mtf-indicators-section">
+      <div class="panel-head">
+        <div class="panel-title">MULTI-TF INDICATORS</div>
+        <div class="panel-sub">RSI · MACD · ADX · EMA</div>
+      </div>
+      <div class="panel-body">
+        <div class="mtf-wrap" id="ctx-mtf-grid">
+          <div class="mtf-row mtf-head">
+            <span class="mtf-lbl"></span>
+            <span class="mtf-tf">M15</span>
+            <span class="mtf-tf">H1</span>
+            <span class="mtf-tf">H4</span>
+            <span class="mtf-tf">D1</span>
+          </div>
+          <div class="mtf-row" id="ctx-mtf-rsi">
+            <span class="mtf-lbl">RSI</span>
+            <span class="mtf-cell mtf-hot">68.4</span>
+            <span class="mtf-cell mtf-neu">54.1</span>
+            <span class="mtf-cell mtf-neu">49.8</span>
+            <span class="mtf-cell mtf-bull">58.2</span>
+          </div>
+          <div class="mtf-row" id="ctx-mtf-macd">
+            <span class="mtf-lbl">MACD</span>
+            <span class="mtf-cell mtf-bull">+</span>
+            <span class="mtf-cell mtf-bull">+</span>
+            <span class="mtf-cell mtf-bear">−</span>
+            <span class="mtf-cell mtf-bull">+</span>
+          </div>
+          <div class="mtf-row" id="ctx-mtf-adx">
+            <span class="mtf-lbl">ADX</span>
+            <span class="mtf-cell mtf-neu">18</span>
+            <span class="mtf-cell mtf-neu">22</span>
+            <span class="mtf-cell mtf-hot">31</span>
+            <span class="mtf-cell mtf-hot">28</span>
+          </div>
+          <div class="mtf-row" id="ctx-mtf-ema">
+            <span class="mtf-lbl">EMA</span>
+            <span class="mtf-cell mtf-bull">▲</span>
+            <span class="mtf-cell mtf-bull">▲</span>
+            <span class="mtf-cell mtf-neu">◆</span>
+            <span class="mtf-cell mtf-bull">▲</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pivot Points -->
+    <div class="panel" id="pivot-points-section">
+      <div class="panel-head">
+        <div class="panel-title">PIVOT POINTS</div>
+        <div class="panel-sub">3-layer · classic</div>
+      </div>
+      <div class="panel-body">
+        <div class="pivot-wrap" id="ctx-pivot-points">
+          <div class="pivot-layer">
+            <div class="pivot-layer-head">
+              <span class="pivot-layer-name">DAILY</span>
+              <span class="pivot-layer-pp">PP <b>4832.4</b></span>
+            </div>
+            <div class="pivot-levels">
+              <div class="pv-cell"><span class="pv-tag r">R3</span><span class="pv-val">4861.2</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R2</span><span class="pv-val">4852.0</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R1</span><span class="pv-val">4842.3</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S1</span><span class="pv-val">4822.1</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S2</span><span class="pv-val">4812.6</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S3</span><span class="pv-val">4801.8</span></div>
+            </div>
+          </div>
+          <div class="pivot-layer">
+            <div class="pivot-layer-head">
+              <span class="pivot-layer-name">WEEKLY</span>
+              <span class="pivot-layer-pp">PP <b>4810.2</b></span>
+            </div>
+            <div class="pivot-levels">
+              <div class="pv-cell"><span class="pv-tag r">R3</span><span class="pv-val">4885.0</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R2</span><span class="pv-val">4858.4</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R1</span><span class="pv-val">4840.1</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S1</span><span class="pv-val">4792.7</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S2</span><span class="pv-val">4768.3</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S3</span><span class="pv-val">4741.5</span></div>
+            </div>
+          </div>
+          <div class="pivot-layer">
+            <div class="pivot-layer-head">
+              <span class="pivot-layer-name">MONTHLY</span>
+              <span class="pivot-layer-pp">PP <b>4756.8</b></span>
+            </div>
+            <div class="pivot-levels">
+              <div class="pv-cell"><span class="pv-tag r">R3</span><span class="pv-val">4912.5</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R2</span><span class="pv-val">4855.1</span></div>
+              <div class="pv-cell"><span class="pv-tag r">R1</span><span class="pv-val">4808.3</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S1</span><span class="pv-val">4702.4</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S2</span><span class="pv-val">4655.1</span></div>
+              <div class="pv-cell"><span class="pv-tag s">S3</span><span class="pv-val">4598.8</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       DEEP DIVE — Macro &amp; Patterns (collapsible)
+       ───────────────────────────────────────────────────────────── -->
+  <section class="tier" data-tier="t3-deep">
+    <div class="tier-head" onclick="this.parentElement.classList.toggle('collapsed')">
+      <div class="tier-title-wrap">
+        <span class="tier-title">DEEP DIVE — MACRO &amp; PATTERNS</span>
+        <span class="tier-sub">correlations · investigation · patterns · session</span>
+      </div>
+      <span class="tier-arrow">▾</span>
+    </div>
+    <div class="tier-body">
+      <div id="tr-macro-container"></div>
+      <div class="deep-grid">
+        <div class="deep-block">
+          <div class="deep-block-lbl">CORRELATIONS (30D)</div>
+          <div class="deep-block-body">
+            <div class="deep-corr-row"><span>Gold · DXY</span><span id="ctx-corr-dxy">−0.72</span></div>
+            <div class="deep-corr-row"><span>Gold · 10Y Yields</span><span id="ctx-corr-yields">−0.58</span></div>
+            <div class="deep-corr-row"><span>Gold · S&amp;P 500</span><span id="ctx-corr-sp500">+0.14</span></div>
+          </div>
+        </div>
+        <div class="deep-block">
+          <div class="deep-block-lbl">FLOKI'S LAST INVESTIGATION</div>
+          <div class="deep-block-body" id="ctx-investigation">
+            Cross-examined M15 RSI divergence at 11:42 UTC. Verdict: weak bearish divergence, not actionable without H1 confirmation. Parked hypothesis, continuing to monitor 4830 reclaim.
+          </div>
+        </div>
+        <div class="deep-block">
+          <div class="deep-block-lbl">TOP PATTERNS</div>
+          <div class="deep-block-body" id="ctx-top-patterns">
+            · Morning Star forming · H1 · 72%<br>
+            · Bull flag · H4 · 64%<br>
+            · Rising wedge · M15 · 51%
+          </div>
+        </div>
+        <div class="deep-block">
+          <div class="deep-block-lbl">SESSION WR</div>
+          <div class="deep-block-body">
+            <div class="deep-corr-row"><span>London</span><span id="ctx-session-wr">58% (23W / 17L)</span></div>
+            <div class="deep-corr-row"><span>NY</span><span>61% (29W / 19L)</span></div>
+            <div class="deep-corr-row"><span>Asia</span><span>44% (11W / 14L)</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       TRADE JOURNAL (collapsible)
+       ───────────────────────────────────────────────────────────── -->
+  <section class="tier collapsed" data-tier="t4-journal">
+    <div class="tier-head" onclick="this.parentElement.classList.toggle('collapsed')">
+      <div class="tier-title-wrap">
+        <span class="tier-title">TRADE JOURNAL</span>
+        <span class="tier-sub">closed positions · performance</span>
+      </div>
+      <span class="tier-arrow">▾</span>
+    </div>
+    <div class="tier-body">
+      <div class="journal-stats" id="journal-stats">
+        <div class="jstat"><span class="jstat-lbl">TRADES</span><span class="jstat-val">47</span></div>
+        <div class="jstat"><span class="jstat-lbl">WIN RATE</span><span class="jstat-val pos">58.5%</span></div>
+        <div class="jstat"><span class="jstat-lbl">NET P&amp;L</span><span class="jstat-val pos">+$2,418</span></div>
+        <div class="jstat"><span class="jstat-lbl">AVG MFE</span><span class="jstat-val">$84</span></div>
+        <div class="jstat"><span class="jstat-lbl">AVG CAPTURE</span><span class="jstat-val">64%</span></div>
+        <div class="jstat"><span class="jstat-lbl">BEST</span><span class="jstat-val pos">+$412</span></div>
+        <div class="jstat"><span class="jstat-lbl">WORST</span><span class="jstat-val neg">−$187</span></div>
+      </div>
+      <div class="journal-table-wrap" id="journal-table-wrap">
+        <table class="journal-table" id="journal-table">
+          <thead>
+            <tr>
+              <th>TICKET</th>
+              <th>DIR</th>
+              <th>SESSION</th>
+              <th>P&amp;L</th>
+              <th>MFE</th>
+              <th>CAPTURE</th>
+              <th>CONF</th>
+              <th>#ADJ</th>
+              <th>VERDICT</th>
+            </tr>
+          </thead>
+          <tbody id="journal-tbody">
+            <tr><td>#4472819</td><td class="j-dir buy">BUY</td><td>NY</td><td class="j-pnl pos">+$214</td><td>$248</td><td class="j-capture">86%</td><td>72</td><td>2</td><td><span class="j-verdict good">EXECUTED</span></td></tr>
+            <tr><td>#4472801</td><td class="j-dir sell">SELL</td><td>LDN</td><td class="j-pnl neg">−$87</td><td>$41</td><td class="j-capture">-</td><td>64</td><td>1</td><td><span class="j-verdict bad">STOPPED</span></td></tr>
+            <tr><td>#4472784</td><td class="j-dir buy">BUY</td><td>NY</td><td class="j-pnl pos">+$156</td><td>$203</td><td class="j-capture">77%</td><td>68</td><td>3</td><td><span class="j-verdict good">EXECUTED</span></td></tr>
+            <tr><td>#4472762</td><td class="j-dir buy">BUY</td><td>ASIA</td><td class="j-pnl pos">+$42</td><td>$124</td><td class="j-capture">34%</td><td>55</td><td>4</td><td><span class="j-verdict mixed">EARLY EXIT</span></td></tr>
+            <tr><td>#4472731</td><td class="j-dir sell">SELL</td><td>NY</td><td class="j-pnl pos">+$98</td><td>$118</td><td class="j-capture">83%</td><td>70</td><td>1</td><td><span class="j-verdict good">EXECUTED</span></td></tr>
+            <tr><td>#4472712</td><td class="j-dir buy">BUY</td><td>LDN</td><td class="j-pnl neg">−$124</td><td>$52</td><td class="j-capture">-</td><td>61</td><td>2</td><td><span class="j-verdict bad">STOPPED</span></td></tr>
+            <tr><td>#4472690</td><td class="j-dir sell">SELL</td><td>LDN</td><td class="j-pnl pos">+$187</td><td>$220</td><td class="j-capture">85%</td><td>74</td><td>0</td><td><span class="j-verdict good">EXECUTED</span></td></tr>
+            <tr><td>#4472674</td><td class="j-dir buy">BUY</td><td>NY</td><td class="j-pnl pos">+$68</td><td>$142</td><td class="j-capture">48%</td><td>58</td><td>2</td><td><span class="j-verdict mixed">EARLY EXIT</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="journal-empty" hidden></div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       Hidden plumbing — preserves remaining FIELD_CONTRACT IDs
+       ───────────────────────────────────────────────────────────── -->
+  <div hidden>
+    <span id="agent-card"></span><span id="agent-decision"></span><span id="agent-confidence"></span>
+    <span id="agent-reasoning"></span><span id="agent-factors"></span><span id="agent-concerns"></span>
+    <span id="agent-agreement"></span><span id="agent-executed"></span><span id="agent-latency"></span>
+    <span id="agent-memory-section"></span><span id="agent-memory-timestamp"></span>
+    <span id="agent-memory-brain-signal"></span><span id="agent-memory-brain-score"></span>
+    <span id="agent-memory-view-direction"></span><span id="agent-memory-view-description"></span>
+    <span id="agent-memory-conditions"></span><span id="agent-memory-expiry"></span>
+
+    <span id="proactive-section"></span><span id="proactive-h1-close"></span>
+    <span id="proactive-countdown"></span><span id="proactive-decision"></span>
+    <span id="proactive-confidence"></span><span id="proactive-reasoning"></span>
+    <span id="proactive-factors"></span><span id="proactive-concerns"></span>
+    <span id="proactive-latency"></span><span id="proactive-tokens"></span>
+    <span id="proactive-reasoning-toggle"></span><span id="proactive-entry-conditions"></span>
+    <span id="sentiment-bar"></span><span id="sentiment-indicator"></span><span id="sentiment-label"></span>
+    <span id="lifecycle-bar"></span><span id="lifecycle-indicator"></span><span id="lifecycle-label"></span>
+    <span id="proactive-hold-block"></span><span id="proactive-hold-summary"></span><span id="proactive-hold-pnl"></span>
+    <span id="proactive-tp-block"></span><span id="proactive-tp-entry"></span>
+    <span id="proactive-tp-sl"></span><span id="proactive-tp-tp"></span><span id="proactive-tp-rr"></span>
+    <span id="proactive-close-reason-block"></span><span id="proactive-close-reason"></span>
+    <span id="proactive-adjust-block"></span><span id="proactive-adjust-sl"></span>
+    <span id="proactive-adjust-tp"></span><span id="proactive-adjust-reason"></span>
+
+    <span id="offline-banner"></span><span id="offline-last-update"></span>
+    <span id="pillars-cached-badge"></span><span id="recent-decisions"></span>
+    <span id="brain-toggle"></span><span id="brain-reference-panel"></span>
+    <span id="fast-triggers-chips"></span>
+    <span id="trades-count"></span><span id="trades-w"></span><span id="trades-l"></span>
+    <span id="trades-be"></span><span id="trades-wr"></span><span id="pnl"></span>
+    <span id="floki-thesis-tag"></span><span id="floki-session-notes"></span>
+    <span id="floki-decision-pill"></span><span id="floki-conf-text"></span><span id="floki-conf-bar"></span>
+    <span id="floki-summary"></span><span id="floki-expand"></span>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TWEAKS PANEL
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="tweaks" class="tweaks" hidden>
+  <div class="tw-head">
+    <div class="tw-title">TWEAKS</div>
+    <button class="tw-close" onclick="document.getElementById('tweaks').hidden=true">×</button>
+  </div>
+  <div class="tw-body">
+
+    <div class="tw-group">
+      <div class="tw-label">LAYOUT VARIANT</div>
+      <div class="tw-seg" data-key="variant">
+        <button data-val="A" class="on">A · Decision-First</button>
+        <button data-val="B">B · Crew Grid</button>
+      </div>
+      <div class="tw-hint" id="variant-hint">Hero Floki panel · supporting cabinet below. Mobile collapses to single column.</div>
+    </div>
+
+    <div class="tw-group">
+      <div class="tw-label">INFORMATION DENSITY</div>
+      <div class="tw-seg" data-key="density">
+        <button data-val="comfy">Comfy</button>
+        <button data-val="balanced" class="on">Balanced</button>
+        <button data-val="dense">Dense</button>
+      </div>
+    </div>
+
+    <div class="tw-group">
+      <div class="tw-label">ACCENT</div>
+      <div class="tw-swatches" data-key="accent">
+        <button data-val="#FFD700" class="on" style="background:#FFD700" title="Gold"></button>
+        <button data-val="#AAFF00" style="background:#AAFF00" title="Floki lime"></button>
+        <button data-val="#00E5FF" style="background:#00E5FF" title="Cyan"></button>
+        <button data-val="#E040FB" style="background:#E040FB" title="Luna"></button>
+      </div>
+    </div>
+
+    <div class="tw-group">
+      <div class="tw-label">MOBILE PREVIEW</div>
+      <div class="tw-seg" data-key="viewport">
+        <button data-val="auto" class="on">Auto</button>
+        <button data-val="375">375</button>
+        <button data-val="768">768</button>
+      </div>
+      <div class="tw-hint">Forces a max-width on &lt;main&gt; to preview how the layout collapses on small screens.</div>
+    </div>
+
+    <div class="tw-group">
+      <div class="tw-label">HIDE CHROME</div>
+      <label class="tw-chk"><input type="checkbox" data-key="hideNav"> Hide top nav</label>
+      <label class="tw-chk"><input type="checkbox" data-key="hideRail"> Hide status rail</label>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* Trade Room Redesign — tweaks + edit-mode wiring */
+
+/* ═══ EDIT MODE (Tweaks toolbar) ═══ */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "variant": "B",
+  "density": "balanced",
+  "accent": "#FFD700",
+  "viewport": "auto",
+  "hideNav": false,
+  "hideRail": false
+}/*EDITMODE-END*/;
+
+const state = { ...TWEAK_DEFAULTS };
+const tweaksEl = document.getElementById('tweaks');
+
+function applyState() {
+  document.body.dataset.variant = state.variant;
+  document.body.dataset.density = state.density;
+  document.body.dataset.viewport = state.viewport;
+  document.body.dataset.hideNav = state.hideNav ? '1' : '0';
+  document.body.dataset.hideRail = state.hideRail ? '1' : '0';
+  document.documentElement.style.setProperty('--accent', state.accent);
+
+  document.querySelectorAll('.tw-seg').forEach(seg => {
+    const key = seg.dataset.key;
+    seg.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('on', b.dataset.val === String(state[key]));
+    });
+  });
+  document.querySelectorAll('.tw-swatches').forEach(seg => {
+    const key = seg.dataset.key;
+    seg.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('on', b.dataset.val === state[key]);
+      if (b.classList.contains('on')) b.style.color = state.accent;
+      else b.style.color = '';
+    });
+  });
+  document.querySelectorAll('.tw-chk input').forEach(c => { c.checked = !!state[c.dataset.key]; });
+
+  const hint = document.getElementById('variant-hint');
+  if (hint) {
+    hint.textContent = state.variant === 'A'
+      ? 'Hero Floki panel · supporting cabinet below. Best for single-decision focus.'
+      : 'Equal-weight 7-up agent grid · TradingView-dense. Best for scanning all agents at once.';
+  }
+}
+
+function setKey(key, val) {
+  state[key] = val;
+  applyState();
+  try {
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
+  } catch (e) {}
+}
+
+document.querySelectorAll('.tw-seg').forEach(seg => {
+  const key = seg.dataset.key;
+  seg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      let v = btn.dataset.val;
+      if (key === 'variant' || key === 'density' || key === 'viewport' || key === 'accent') {
+        // string
+      }
+      setKey(key, v);
+    });
+  });
+});
+document.querySelectorAll('.tw-swatches').forEach(seg => {
+  const key = seg.dataset.key;
+  seg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => setKey(key, btn.dataset.val));
+  });
+});
+document.querySelectorAll('.tw-chk input').forEach(c => {
+  c.addEventListener('change', () => setKey(c.dataset.key, c.checked));
+});
+
+/* edit-mode protocol */
+window.addEventListener('message', (e) => {
+  const msg = e.data || {};
+  if (msg.type === '__activate_edit_mode') tweaksEl.hidden = false;
+  else if (msg.type === '__deactivate_edit_mode') tweaksEl.hidden = true;
+});
+try { window.parent.postMessage({ type: '__edit_mode_available' }, '*'); } catch (e) {}
+
+applyState();
+
+/* ═══ TIMELINE FILTER TABS ═══ */
+document.querySelectorAll('.tab-row .tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab-row .tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const f = t.dataset.filter;
+    document.querySelectorAll('.tl-item').forEach(item => {
+      const show = f === 'all' || item.dataset.kind === f || (f === 'journal' && item.dataset.kind === 'decision');
+      item.style.display = show ? '' : 'none';
+    });
+  });
+});
+
+/* ═══ COUNTDOWN TICKER (demo) ═══ */
+let secs = 107;
+function tick() {
+  secs = secs <= 0 ? 600 : secs - 1;
+  const m = String(Math.floor(secs / 60)).padStart(2, '0');
+  const s = String(secs % 60).padStart(2, '0');
+  const v = `${m}:${s}`;
+  ['cc-countdown', 'dh-countdown', 'pe-count'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  });
+}
+setInterval(tick, 1000);
+
+/* ═══ PRICE TICKER (demo shimmer) ═══ */
+let price = 4832.62;
+function priceTick() {
+  price += (Math.random() - 0.5) * 0.8;
+  const el = document.getElementById('cc-price');
+  if (el) el.textContent = price.toFixed(2);
+}
+setInterval(priceTick, 2000);
+
+/* ═══ Toggle tweaks with ? key for dev ═══ */
+window.addEventListener('keydown', (e) => {
+  if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+    tweaksEl.hidden = !tweaksEl.hidden;
+  }
+});
+
+</script>
+</body>
+</html>
