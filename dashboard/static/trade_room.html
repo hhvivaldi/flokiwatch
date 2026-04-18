@@ -94,7 +94,7 @@ table { border-collapse: collapse; width: 100%; }
 }
 
 .cmd-brand { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-right: 1px solid var(--border-1); }
-.brand-mark { color: var(--accent); font-size: 18px; line-height: 1; }
+.brand-logo { width: 28px; height: 28px; image-rendering: pixelated; image-rendering: crisp-edges; flex-shrink: 0; }
 .brand-name { font-family: var(--display); font-weight: 700; letter-spacing: 0.18em; font-size: 13px; }
 .brand-sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.2em; margin-left: 6px; padding-left: 10px; border-left: 1px solid var(--border-2); }
 
@@ -898,17 +898,17 @@ body[data-density="dense"] .tl-item { padding: 5px 4px; font-size: 10.5px; }
      ═══════════════════════════════════════════════════════════════ -->
 <header class="cmd-strip">
   <div class="cmd-brand">
-    <div class="brand-mark">◆</div>
+    <img src="/image/flokiwatch.png" alt="FlokiWatch" class="brand-logo" />
     <div class="brand-name">FLOKIWATCH</div>
     <div class="brand-sub">TRADE ROOM</div>
   </div>
 
   <nav class="cmd-nav">
-    <a class="nav-link">DASH</a>
-    <a class="nav-link">HISTORY</a>
-    <a class="nav-link">ROADMAP</a>
-    <a class="nav-link active">TRADE ROOM</a>
-    <a class="nav-link">ABOUT</a>
+    <a href="/" class="nav-link">DASH</a>
+    <a href="/history" class="nav-link">HISTORY</a>
+    <a href="/roadmap" class="nav-link">ROADMAP</a>
+    <a href="/trade-room" class="nav-link active">TRADE ROOM</a>
+    <a href="/about" class="nav-link">ABOUT</a>
   </nav>
 
   <div class="cmd-rail">
