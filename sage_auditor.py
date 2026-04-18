@@ -400,9 +400,8 @@ def check_intraday_drawdown(db_path: Optional[str] = None) -> Optional[Dict[str,
             record_agent_event(
                 event_type="SAGE_ALERT",
                 content=(
-                    f"INTRADAY DRAWDOWN ALERT: Daily P&L ${daily_pnl:+.2f} "
-                    f"({trades_today} trades, {wins}W/{losses}L, {streak} consecutive losses). "
-                    f"Consider reducing risk or pausing."
+                    f"INTRADAY DRAWDOWN: Daily P&L ${daily_pnl:+.2f} "
+                    f"({trades_today} trades, {wins}W/{losses}L, {streak} consecutive losses)."
                 ),
                 payload=alert,
                 author="SAGE",
@@ -470,8 +469,7 @@ def _write_sage_alert_to_memory(alert: Dict[str, Any]) -> None:
             "time": now.strftime("%H:%M"),
             "note": (
                 f"SAGE ALERT: Daily drawdown ${pnl:+.2f} "
-                f"({trades} trades, {wins}W/{losses}L, {streak} consecutive losses). "
-                f"Consider reducing risk or pausing."
+                f"({trades} trades, {wins}W/{losses}L, {streak} consecutive losses)."
             ),
             "source": "sage_alert",
         })
@@ -947,19 +945,18 @@ async def _call_gemini_for_patterns(
         "- 10 <= n < 20: MEDIUM_CONFIDENCE — can suggest monitoring but not hard rules. "
         "- n >= 20: HIGH_CONFIDENCE — can recommend actionable changes. "
         "WHAT YOU MUST NOT DO: "
-        "- Never recommend disabling an entire direction (BUY or SELL) based on fewer than 20 trades "
-        "- Never recommend trading only on specific days based on fewer than 20 trades per day "
-        "- Never recommend changes that would reduce trading frequency by more than 50% "
-        "- Never invent data or extrapolate beyond the sample "
-        "- Never give vague recommendations like 'consider implementing risk reduction' — be specific or say nothing "
+        "- Never tell Floki what to do — describe what the data shows and let Floki decide the action. "
+        "- Never use directive verbs like 'prioritize', 'avoid', 'focus on', 'consider', 'monitor', 'switch to', 'stop', 'reduce', 'increase', 'pause', 'resume'. If a sentence contains any of these, rewrite it as a statement of fact. "
+        "- Never invent data or extrapolate beyond the sample. "
+        "- Never claim a metric is 'good', 'bad', 'healthy', 'weak' — state the number and let Floki judge. "
         "OUTPUT FORMAT: "
         "Return valid JSON only with two keys: "
-        "1. 'insights': array of objects with fields: category, finding, sample_size (integer), confidence_level "
-        "2. 'recommendations': array of strings — maximum 5 recommendations, ordered by confidence level (highest first). Each must be a direct operational instruction that Floki can follow. Format: '[CONFIDENCE] Action. Reason (n=X).'. "
-        "Example recommendation format: "
-        "- '[HIGH] Prioritize SELL entries over BUY — SELL WR 66.7% vs BUY 37.5% over 20 trades.' "
-        "- '[MEDIUM] Monitor London session performance — WR 42.9% (n=7), below average. Flag if it drops below 40% over 15+ trades.' "
-        "- '[LOW] One instance of lot size doubling after loss detected (ticket #X). Watch for recurrence but no action needed yet.'"
+        "1. 'insights': array of objects with fields: category, finding, sample_size (integer), confidence_level. "
+        "2. 'recommendations': array of strings — maximum 5 factual performance summaries, ordered by sample size (largest first). Each describes WHAT THE DATA SHOWS — not what Floki should do. Format: '[CONFIDENCE] Metric. Context. (n=X).'. Floki reads the numbers and decides the action. "
+        "Example factual-summary format: "
+        "- '[HIGH] BUY 52.9% WR (n=52). SELL 19.0% WR (n=21). Direction split: 71% BUY / 29% SELL over the window.' "
+        "- '[MEDIUM] London session 42.9% WR (n=7). NY session 58% WR (n=23). Overall 51% WR (n=40).' "
+        "- '[LOW] One instance of lot size doubling after loss (ticket #X). Other 31 trades used normal sizing.'"
     )
 
     wins = sum(1 for r in rows if isinstance(r, dict) and _safe_float(r.get("profit"), 0.0) > 0)
