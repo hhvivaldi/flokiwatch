@@ -1,123 +1,613 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>About — FlokiWatch</title>
-    <link rel="icon" type="image/png" href="/image/flokiwatch.png">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>About · FlokiWatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   ABOUT — editorial page in FlokiWatch design system
+   Shares header, tokens, typography with Trade Room.
+   Body is a long-form story, not a dashboard.
+   ═══════════════════════════════════════════════════════════════ */
 
-    <!-- Tailwind CSS (via CDN) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />
+:root {
+  --clr-floki:   #AAFF00;
+  --clr-rex:     #9C27B0;
+  --clr-gold:    #FFD700;
+  --accent:      var(--clr-gold);
 
-    <link rel="stylesheet" href="/static/style.css" />
+  --clr-buy:     #00ff88;
+  --clr-warn:    #FFB300;
 
-    <style>
-      html, body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
-      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    </style>
-  </head>
+  --bg-deep:     #0a0a0a;
+  --bg-0:        #0d0d0d;
+  --bg-1:        #111111;
+  --bg-2:        #161616;
+  --border-1:    rgba(255,255,255,0.06);
+  --border-2:    rgba(255,255,255,0.10);
+  --border-3:    rgba(255,255,255,0.16);
 
-  <body class="bg-black text-white">
+  --text-0:      #f4f4f5;
+  --text-1:      #c4c4c8;
+  --text-2:      #8a8a92;
+  --text-3:      #5c5c64;
+  --text-4:      #3a3a40;
 
-    <!-- Header -->
-    <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
-      <div class="flex items-center justify-between text-xs gap-3">
-        <a href="/" class="back-link flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          <span class="hidden sm:inline">BACK</span>
-        </a>
-        <nav class="flex gap-1 sm:gap-4 md:gap-6 items-center flex-nowrap overflow-x-auto" style="-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-          <a href="/" class="site-nav-link">DASHBOARD</a>
-          <a href="/history" class="site-nav-link">HISTORY</a>
-          <a href="/roadmap" class="site-nav-link">ROADMAP</a>
-          <a href="/trade-room" class="site-nav-link">TRADE ROOM</a>
-          <a href="/about" class="site-nav-link active">ABOUT</a>
-        </nav>
-        <div class="flex items-center gap-3">
-          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon pixel-float">
-          <span class="hidden sm:inline brand-name">FLOKIWATCH</span>
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; background: var(--bg-deep); color: var(--text-0); font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+body {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+em { font-style: italic; color: var(--text-0); }
+
+/* ───────────────────────────────────────────────────────────────
+   COMMAND STRIP — shared with Trade Room
+   ─────────────────────────────────────────────────────────────── */
+.cmd-strip {
+  position: sticky; top: 0; z-index: 50;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-2);
+}
+.cmd-brand { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-right: 1px solid var(--border-1); }
+.brand-mark { color: var(--accent); font-size: 18px; line-height: 1; }
+.brand-name { font-family: var(--display); font-weight: 700; letter-spacing: 0.18em; font-size: 13px; }
+.brand-sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.2em; margin-left: 6px; padding-left: 10px; border-left: 1px solid var(--border-2); }
+
+.cmd-nav { display: flex; align-items: center; gap: 2px; padding: 0 10px; }
+.nav-link {
+  padding: 10px 12px; font-size: 10.5px; letter-spacing: 0.18em; color: var(--text-3);
+  cursor: pointer; transition: color .15s;
+}
+.nav-link:hover { color: var(--text-1); }
+.nav-link.active { color: var(--accent); position: relative; }
+.nav-link.active::after {
+  content: ''; position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 1px; background: var(--accent);
+}
+
+.cmd-meta { display: flex; align-items: center; gap: 10px; padding: 0 18px; border-left: 1px solid var(--border-1); }
+.meta-pill {
+  font-size: 10px; letter-spacing: 0.18em; color: var(--text-2);
+  padding: 4px 10px; border: 1px solid var(--border-2); border-radius: 3px;
+  background: var(--bg-1);
+}
+.meta-live { color: var(--clr-buy); border-color: rgba(0,255,136,0.25); background: rgba(0,255,136,0.05); display: flex; align-items: center; gap: 7px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--clr-buy); animation: live-pulse 1.6s infinite; }
+@keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Breadcrumb rail */
+.crumb-rail {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 24px; background: var(--bg-0);
+  border-bottom: 1px solid var(--border-1);
+}
+.crumb { font-size: 10px; letter-spacing: 0.2em; color: var(--text-3); }
+.crumb b { color: var(--text-1); font-weight: 500; }
+.crumb .sep { color: var(--text-4); margin: 0 6px; }
+.rail-spacer { flex: 1; }
+.rail-tag {
+  font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-2);
+  padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 2px;
+  font-family: var(--mono);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   EDITORIAL SHELL
+   ─────────────────────────────────────────────────────────────── */
+.about-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 28px 100px;
+}
+
+/* Eyebrow — used above major sections like a magazine kicker */
+.eyebrow {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em;
+  color: var(--text-3);
+  margin-bottom: 18px;
+}
+.eyebrow::before {
+  content: ''; display: block; width: 24px; height: 1px;
+  background: var(--accent);
+}
+.eyebrow b { color: var(--accent); font-weight: 500; letter-spacing: 0.28em; }
+
+/* ───────────────────────────────────────────────────────────────
+   HERO — editorial masthead
+   ─────────────────────────────────────────────────────────────── */
+.hero {
+  margin-bottom: 72px;
+}
+.hero-title {
+  font-family: var(--display);
+  font-size: clamp(44px, 6vw, 80px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+  color: var(--text-0);
+  margin: 0 0 28px;
+  text-wrap: balance;
+  max-width: 14ch;
+}
+.hero-title .accent { color: var(--clr-floki); }
+.hero-deck {
+  font-family: var(--display);
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 400;
+  color: var(--text-1);
+  line-height: 1.45;
+  max-width: 52ch;
+  text-wrap: pretty;
+}
+.hero-meta {
+  display: flex; align-items: center; gap: 22px;
+  margin-top: 32px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-1);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
+  color: var(--text-3);
+  flex-wrap: wrap;
+}
+.hero-meta b { color: var(--text-1); font-weight: 500; letter-spacing: 0.2em; }
+.hero-meta .dot { color: var(--text-4); }
+
+/* ───────────────────────────────────────────────────────────────
+   STORY SECTIONS — long-form prose
+   ─────────────────────────────────────────────────────────────── */
+section.story { margin-bottom: 72px; }
+
+.story-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--text-3);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-1);
+  margin-bottom: 24px;
+  display: flex; align-items: baseline; gap: 16px;
+}
+.story-kicker .num {
+  font-family: var(--mono); color: var(--text-4); font-weight: 500;
+}
+.story-kicker .label { color: var(--text-1); letter-spacing: 0.24em; }
+
+.story-heading {
+  font-family: var(--display);
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.05;
+  color: var(--text-0);
+  margin: 0 0 20px;
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.prose {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--text-1);
+  max-width: 64ch;
+  text-wrap: pretty;
+}
+.prose p { margin: 0 0 22px; }
+.prose p:last-child { margin-bottom: 0; }
+.prose p.lead {
+  font-size: 21px;
+  color: var(--text-0);
+  font-weight: 500;
+  line-height: 1.5;
+  max-width: 58ch;
+}
+.prose b, .prose strong { color: var(--text-0); font-weight: 600; }
+.prose em { color: var(--text-0); font-style: italic; }
+
+/* Pull quote — breaks the text up visually */
+.pullquote {
+  margin: 40px 0;
+  padding: 4px 0 4px 28px;
+  border-left: 3px solid var(--clr-floki);
+  font-family: var(--display);
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-0);
+  max-width: 40ch;
+  text-wrap: balance;
+}
+.pullquote::after {
+  content: ''; display: block; width: 32px; height: 1px;
+  background: var(--text-3); margin-top: 16px;
+}
+.pullquote-attr {
+  display: block;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 400;
+  letter-spacing: 0.22em;
+  color: var(--text-3);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   WHO IS FLOKI — big photo section
+   ─────────────────────────────────────────────────────────────── */
+.floki-hero {
+  margin: 20px 0 32px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border-2);
+  background: var(--bg-0);
+}
+.floki-photo {
+  position: relative;
+  min-height: 440px;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border-1);
+  overflow: hidden;
+}
+.floki-photo img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover;
+  filter: saturate(1.05) contrast(1.02);
+}
+.floki-photo .photo-fallback {
+  position: absolute; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.02) 0 12px,
+    rgba(255,255,255,0.04) 12px 24px
+  );
+  color: var(--text-3);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
+  text-align: center; padding: 40px;
+}
+.photo-caption {
+  position: absolute; left: 16px; bottom: 14px; right: 16px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em;
+  color: var(--text-2);
+  display: flex; justify-content: space-between; gap: 10px;
+  background: rgba(10,10,10,0.6);
+  padding: 6px 10px;
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--border-1);
+}
+.floki-bio {
+  padding: 36px 34px;
+  display: flex; flex-direction: column; gap: 20px;
+  justify-content: center;
+}
+.fb-name {
+  font-family: var(--display);
+  font-size: 42px; font-weight: 700;
+  color: var(--clr-floki);
+  letter-spacing: -0.005em;
+  line-height: 1;
+}
+.fb-role {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
+  color: var(--text-3);
+}
+.fb-facts { display: flex; flex-direction: column; gap: 10px; }
+.fb-fact {
+  display: grid; grid-template-columns: 110px 1fr;
+  gap: 14px; align-items: baseline;
+  padding: 8px 0; border-top: 1px solid var(--border-1);
+  font-family: var(--mono); font-size: 11.5px;
+}
+.fb-fact:first-child { border-top: none; padding-top: 0; }
+.fb-fact .k { color: var(--text-3); letter-spacing: 0.18em; font-size: 10px; }
+.fb-fact .v { color: var(--text-0); font-family: var(--display); font-weight: 500; letter-spacing: 0.02em; font-size: 13.5px; }
+
+/* ───────────────────────────────────────────────────────────────
+   ORIGIN STRIP — "This is XAU/USD, demo mode" chip row
+   Small inline-context, not a dashboard section
+   ─────────────────────────────────────────────────────────────── */
+.origin-line {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 24px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-2);
+  letter-spacing: 0.08em;
+}
+.origin-tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  padding: 4px 10px; border-radius: 3px;
+  border: 1px solid var(--border-2); color: var(--text-1);
+  background: var(--bg-1);
+}
+.origin-tag.live { color: var(--clr-buy); border-color: rgba(0,255,136,0.25); background: rgba(0,255,136,0.05); }
+.origin-tag.warn { color: var(--clr-warn); border-color: rgba(255,179,0,0.25); background: rgba(255,179,0,0.05); }
+
+/* ───────────────────────────────────────────────────────────────
+   DISCLAIMER / SIGN-OFF
+   ─────────────────────────────────────────────────────────────── */
+.signoff {
+  margin-top: 96px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-1);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.signoff-mark {
+  font-family: var(--display); font-size: 15px; font-weight: 700;
+  color: var(--accent); letter-spacing: 0.18em;
+}
+.signoff-body {
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.75;
+  color: var(--text-3); letter-spacing: 0.02em;
+  max-width: 70ch;
+}
+.signoff-body b { color: var(--text-1); font-weight: 500; }
+
+/* Footer ticker */
+.page-foot {
+  padding: 14px 24px; border-top: 1px solid var(--border-1);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  font-size: 10px; letter-spacing: 0.18em; color: var(--text-3);
+  background: var(--bg-0);
+}
+.page-foot .pf-right { display: flex; gap: 18px; align-items: center; }
+
+/* ───────────────────────────────────────────────────────────────
+   RESPONSIVE
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 820px) {
+  .cmd-strip { grid-template-columns: 1fr auto; grid-template-rows: auto auto; }
+  .cmd-brand { grid-column: 1; grid-row: 1; padding: 10px 14px; }
+  .cmd-meta { grid-column: 2; grid-row: 1; padding: 0 14px; border-left: none; }
+  .cmd-nav { grid-column: 1 / -1; grid-row: 2; padding: 0 10px; border-top: 1px solid var(--border-1); overflow-x: auto; }
+  .cmd-nav .nav-link { padding: 10px 10px; font-size: 10px; white-space: nowrap; }
+  .brand-sub { display: none; }
+
+  .floki-hero { grid-template-columns: 1fr; }
+  .floki-photo { border-right: none; border-bottom: 1px solid var(--border-1); min-height: 320px; }
+  .floki-bio { padding: 28px; }
+  .fb-name { font-size: 34px; }
+}
+
+@media (max-width: 560px) {
+  .about-page { padding: 32px 18px 72px; }
+  .hero { margin-bottom: 56px; }
+  .prose p.lead { font-size: 18px; }
+  .prose { font-size: 16px; }
+  .pullquote { padding-left: 20px; margin: 32px 0; }
+  .fb-fact { grid-template-columns: 96px 1fr; }
+  .page-foot { flex-direction: column; gap: 8px; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COMMAND STRIP — identical to Trade Room
+     ═══════════════════════════════════════════════════════════════ -->
+<header class="cmd-strip">
+  <div class="cmd-brand">
+    <div class="brand-mark">◆</div>
+    <div class="brand-name">FLOKIWATCH</div>
+    <div class="brand-sub">ABOUT</div>
+  </div>
+
+  <nav class="cmd-nav">
+    <a class="nav-link" href="/">DASH</a>
+    <a class="nav-link" href="/history">HISTORY</a>
+    <a class="nav-link" href="/roadmap">ROADMAP</a>
+    <a class="nav-link" href="/trade-room">TRADE ROOM</a>
+    <a class="nav-link active" href="/about">ABOUT</a>
+  </nav>
+
+  <div class="cmd-meta">
+    <div class="meta-pill meta-live"><span class="live-dot"></span>SYSTEM LIVE</div>
+  </div>
+</header>
+
+<!-- Breadcrumb -->
+<div class="crumb-rail">
+  <div class="crumb"><b>FLOKIWATCH</b> <span class="sep">/</span> <b>ABOUT</b></div>
+  <div class="rail-spacer"></div>
+  <div class="rail-tag">THE STORY BEHIND THE WATCHDOG</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     EDITORIAL BODY
+     ═══════════════════════════════════════════════════════════════ -->
+<main class="about-page">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="eyebrow"><b>ABOUT</b><span>· FLOKIWATCH</span></div>
+    <h1 class="hero-title">
+      A dog that watches everything <span class="accent">that moves.</span>
+    </h1>
+    <p class="hero-deck">
+      FlokiWatch is an automated trading platform, named after a rescue dog who spends all day at the window watching cats cross the garden. It started as a personal experiment — can a system be smart enough to read markets on its own? — and grew from there.
+    </p>
+    <div class="hero-meta">
+      <span><b>SINCE</b> 2024</span>
+      <span class="dot">·</span>
+      <span><b>INSTRUMENT</b> XAU/USD</span>
+      <span class="dot">·</span>
+      <span><b>MODE</b> DEMO</span>
+      <span class="dot">·</span>
+      <span><b>OPERATOR</b> PERSONAL</span>
+    </div>
+  </section>
+
+  <!-- §01 — THE ORIGIN STORY -->
+  <section class="story">
+    <div class="story-kicker">
+      <span class="num">§ 01</span>
+      <span class="label">THE ORIGIN STORY</span>
+    </div>
+    <h2 class="story-heading">It started with a simple question.</h2>
+    <div class="prose">
+      <p class="lead">
+        Can I build a system smart enough to analyze markets and make trading decisions on its own?
+      </p>
+      <p>
+        What began as a personal experiment has grown into a full automated trading platform — a bot that reads price action, macro data, news flow and economic calendars in real time, and then decides what to do about it. This dashboard is the live window into what it's thinking.
+      </p>
+      <p>
+        The name comes from Floki — a rescue dog from Uzbekistan with the scruffy charm of Tramp from <em>Lady and the Tramp</em>. He spends his days watching everything that moves outside the window. FlokiWatch does the same thing, but with financial markets.
+      </p>
+    </div>
+  </section>
+
+  <!-- §02 — WHAT IT IS -->
+  <section class="story">
+    <div class="story-kicker">
+      <span class="num">§ 02</span>
+      <span class="label">WHAT IT IS</span>
+    </div>
+    <h2 class="story-heading">An autonomous trading monitor.</h2>
+    <div class="prose">
+      <p>
+        At its core, FlokiWatch is a bot that analyzes markets in real time using several layers of intelligence — technical analysis, macroeconomic data, machine learning, momentum detection, and economic calendar events — then makes autonomous trading decisions.
+      </p>
+      <p>
+        The dashboard you're looking at is the live window into what the bot is thinking and doing, <strong>right now</strong>. It's not a backtest. It's not a simulation. It's the system's working mind.
+      </p>
+    </div>
+  </section>
+
+  <!-- §03 — WHERE WE ARE -->
+  <section class="story">
+    <div class="story-kicker">
+      <span class="num">§ 03</span>
+      <span class="label">WHERE WE ARE</span>
+    </div>
+    <h2 class="story-heading">XAU/USD, in demo. For now.</h2>
+    <div class="prose">
+      <p>
+        FlokiWatch currently operates on <b>XAU/USD</b> — gold — in demo mode as we fine-tune and validate the system. This is our testing ground. Every decision the bot makes here is real in every way <em>except</em> the money; that's by design, while the behavior is still being shaped.
+      </p>
+    </div>
+    <div class="origin-line">
+      <span class="origin-tag live">● LIVE · XAU/USD</span>
+      <span class="origin-tag warn">DEMO ACCOUNT</span>
+      <span class="origin-tag">7 AGENTS ONLINE</span>
+      <span class="origin-tag">V3.2</span>
+    </div>
+  </section>
+
+  <!-- §04 — WHERE WE'RE GOING -->
+  <section class="story">
+    <div class="story-kicker">
+      <span class="num">§ 04</span>
+      <span class="label">WHERE WE'RE GOING</span>
+    </div>
+    <h2 class="story-heading">The vision is much bigger.</h2>
+    <div class="prose">
+      <p>
+        On the markets side, we're expanding into commodities — silver, oil, natural gas — forex pairs, and crypto: BTC, ETH, and beyond.
+      </p>
+      <p>
+        But the real ambition is making the bot <strong>smarter</strong>. Advanced sentiment analysis pulling from more news sources and social media in real time. Deeper machine learning models trained on longer historical windows with richer features. Adaptive risk management that adjusts position sizing and stop losses based on the current market regime. Multi-timeframe correlation analysis to catch signals that single-timeframe analysis misses. And eventually portfolio-level intelligence — where the bot doesn't just trade one instrument, but manages a diversified portfolio with cross-asset hedging.
+      </p>
+      <p>
+        We're also working on better post-trade analysis tools — to understand not just <em>what</em> the bot decided, but <em>why</em>, and how to make it better next time.
+      </p>
+
+      <div class="pullquote">
+        This is a project that never stops evolving.
+        <span class="pullquote-attr">— FLOKIWATCH ROADMAP</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- §05 — WHO IS FLOKI -->
+  <section class="story">
+    <div class="story-kicker">
+      <span class="num">§ 05</span>
+      <span class="label">WHO IS FLOKI</span>
+    </div>
+    <h2 class="story-heading">Meet the dog the platform is named after.</h2>
+
+    <div class="floki-hero">
+      <div class="floki-photo">
+        <img src="/image/IMG_6654.jpg" alt="Floki in his garden" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <div class="photo-fallback">
+          FLOKI · IN HIS GARDEN<br>
+          / image / IMG_6654.jpg<br>
+          (placeholder — photo will load on the live site)
+        </div>
+        <div class="photo-caption">
+          <span>FLOKI · IN HIS GARDEN</span>
+          <span>UZBEKISTAN · RESCUE</span>
+        </div>
+      </div>
+      <div class="floki-bio">
+        <div>
+          <div class="fb-role">OFFICIAL MARKET WATCHDOG</div>
+          <div class="fb-name">Floki.</div>
+        </div>
+        <div class="fb-facts">
+          <div class="fb-fact"><span class="k">ORIGIN</span><span class="v">Uzbekistan · rescue</span></div>
+          <div class="fb-fact"><span class="k">BREED</span><span class="v">Unknown</span></div>
+          <div class="fb-fact"><span class="k">LOOKS LIKE</span><span class="v">Tramp · scruffy, street-smart</span></div>
+          <div class="fb-fact"><span class="k">SPECIALTY</span><span class="v">Cat surveillance</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Main content -->
-    <main class="page-content max-w-4xl mx-auto px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-16">
+    <div class="prose">
+      <p>
+        Floki is a rescue dog from Uzbekistan with an unknown breed and a whole lot of personality. If you've seen <em>Lady and the Tramp</em>, picture Tramp — that scruffy, street-smart look with a heart of gold.
+      </p>
+      <p>
+        His favorite hobby? Chasing the neighborhood cats with the same intensity we chase good trades. He never catches them, but he never stops trying — and honestly, that's the kind of persistence you want in a trading bot. Always alert, always watching, never misses a movement.
+      </p>
+      <p>
+        Whether it's a cat crossing the garden or a candlestick crossing a moving average — Floki is on it. The perfect market watchdog.
+      </p>
+    </div>
+  </section>
 
-      <!-- Hero -->
-      <section class="flex flex-col items-center gap-4 sm:gap-6 mb-10 sm:mb-16">
-        <div class="flex items-center gap-4">
-          <img src="/image/flokiwatch.png" alt="FlokiWatch pixel art" class="about-pixel-img">
-          <div>
-            <h1 class="page-title-pixel">About FlokiWatch</h1>
-            <div class="section-pixel-header text-gray-500 mt-2">THE STORY BEHIND THE WATCHDOG</div>
-          </div>
-        </div>
-      </section>
+  <!-- Sign-off / disclaimer -->
+  <section class="signoff">
+    <div class="signoff-mark">◆ FLOKIWATCH</div>
+    <div class="signoff-body">
+      <b>DISCLAIMER —</b> FlokiWatch is a personal and experimental project. Nothing on this dashboard constitutes financial advice or investment recommendations. Past performance does not indicate future results. Trading involves risk of capital loss. Use at your own risk.
+    </div>
+  </section>
 
-      <!-- Intro -->
-      <section class="about-section mb-10">
-        <p class="text-sm text-gray-300 leading-relaxed font-black uppercase tracking-wide">
-          FlokiWatch started with a simple question: can I build a system smart enough to analyze markets and make trading decisions on its own? What began as a personal experiment has grown into a full automated trading platform, and it's only getting started.
-        </p>
-        <p class="text-sm text-gray-400 leading-relaxed mt-4 font-black uppercase tracking-wide">
-          The name comes from Floki — a rescue dog from Uzbekistan with the scruffy charm of Tramp from <em>Lady and the Tramp</em>. He spends his days watching everything that moves from the window. FlokiWatch does the same thing, but with financial markets.
-        </p>
-      </section>
+</main>
 
-      <!-- What it is -->
-      <section class="about-card mb-6">
-        <h2 class="about-card-title section-pixel-header text-cyan-400">What it is</h2>
-        <p class="text-sm text-gray-300 leading-relaxed font-black uppercase tracking-wide">
-          FlokiWatch is an automated trading monitoring platform. At its core, a bot analyzes markets in real time using multiple layers of intelligence — technical analysis, macroeconomic data, machine learning, momentum detection, and economic calendar events — then makes autonomous trading decisions. This dashboard is the live window into what the bot is thinking and doing, right now.
-        </p>
-      </section>
+<!-- Footer ticker -->
+<footer class="page-foot">
+  <div>◆ FLOKIWATCH · AUTOMATED TRADING MONITOR</div>
+  <div class="pf-right">
+    <span>XAU/USD</span>
+    <span>V3.2</span>
+    <span style="color:var(--clr-buy);">● SYSTEM LIVE</span>
+  </div>
+</footer>
 
-      <!-- Where we are -->
-      <section class="about-card mb-6">
-        <h2 class="about-card-title section-pixel-header text-cyan-400">Where we are</h2>
-        <p class="text-sm text-gray-300 leading-relaxed font-black uppercase tracking-wide">
-          FlokiWatch currently operates on XAU/USD (gold) in demo mode as we fine-tune and validate the system. This is our testing ground.
-        </p>
-      </section>
-
-      <!-- Where we're going -->
-      <section class="about-card mb-6">
-        <h2 class="about-card-title section-pixel-header text-cyan-400">Where we're going</h2>
-        <p class="text-sm text-gray-300 leading-relaxed font-black uppercase tracking-wide">
-          The vision is much bigger. On the markets side, we're expanding into commodities (silver, oil, natural gas), forex pairs, and crypto (BTC, ETH, and beyond).
-        </p>
-        <p class="text-sm text-gray-300 leading-relaxed mt-4 font-black uppercase tracking-wide">
-          But the real ambition is making the bot smarter. Here's what's on the roadmap: advanced sentiment analysis pulling from more news sources and social media in real time, deeper machine learning models trained on longer historical windows with more features, adaptive risk management that adjusts position sizing and stop losses based on current market regime, multi-timeframe correlation analysis to catch signals that single-timeframe analysis misses, and eventually portfolio-level intelligence — where the bot doesn't just trade one instrument, but manages a diversified portfolio with cross-asset hedging.
-        </p>
-        <p class="text-sm text-gray-300 leading-relaxed mt-4 font-black uppercase tracking-wide">
-          We're also working on better post-trade analysis tools to understand not just what the bot decided, but why — and how to make it better next time. This is a project that never stops evolving.
-        </p>
-      </section>
-
-      <!-- Who is Floki -->
-      <section class="about-card mb-6">
-        <h2 class="about-card-title section-pixel-header text-cyan-400">Who is Floki</h2>
-        <div class="flex flex-col sm:flex-row gap-6 items-start">
-          <div class="about-floki-natural-wrapper flex-shrink-0">
-            <img src="/image/IMG_6654.jpg" alt="Floki in his garden" class="about-floki-natural">
-          </div>
-          <p class="text-sm text-gray-300 leading-relaxed font-black uppercase tracking-wide">
-            Floki is a rescue dog from Uzbekistan with an unknown breed and a whole lot of personality. If you've seen <em>Lady and the Tramp</em>, picture Tramp — that scruffy, street-smart look with a heart of gold. His favorite hobby? Chasing the neighborhood cats with the same intensity we chase good trades. He never catches them, but he never stops trying — and honestly, that's the kind of persistence you want in a trading bot. Always alert, always watching, never misses a movement. Whether it's a cat crossing the garden or a candlestick crossing a moving average, Floki is on it. The perfect market watchdog.
-          </p>
-        </div>
-      </section>
-
-      <!-- Disclaimer -->
-      <section class="mt-16 pt-6 border-t border-gray-800">
-        <h3 class="section-pixel-header text-gray-500 mb-2">DISCLAIMER</h3>
-        <p class="text-[10px] text-gray-600 leading-relaxed font-black tracking-wide uppercase">
-          FlokiWatch is a personal and experimental project. Nothing on this dashboard constitutes financial advice or investment recommendations. Trading involves risk of capital loss. Use at your own risk.
-        </p>
-      </section>
-
-    </main>
-  </body>
+</body>
 </html>
