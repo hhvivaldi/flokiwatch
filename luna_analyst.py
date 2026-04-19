@@ -1638,7 +1638,22 @@ def _enrich_pattern_details_with_age(result: LunaAnalysisResult) -> None:
 
         result.pattern_details = enriched
     except Exception as e:
-        log.debug(f"LUNA: pattern age enrichment failed (non-blocking): {e}")
+        # Visibility: failures here silently leave pattern_details as raw strings,
+        # which breaks downstream {text, first_seen, age_minutes} consumers.
+        log.warning(f"LUNA: pattern age enrichment failed (non-blocking): {e}")
+        # Guarantee dict-shape fallback so consumers don't KeyError.
+        try:
+            _now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            _fallback: Dict[str, Dict[str, Any]] = {}
+            for _name in getattr(result, "patterns_detected", []) or []:
+                _raw = (result.pattern_details or {}).get(_name)
+                if isinstance(_raw, dict):
+                    _fallback[_name] = _raw
+                else:
+                    _fallback[_name] = {"text": str(_raw or ""), "first_seen": _now_iso, "age_minutes": 0}
+            result.pattern_details = _fallback
+        except Exception:
+            pass
 
 
 def _save_brief(result: LunaAnalysisResult) -> None:

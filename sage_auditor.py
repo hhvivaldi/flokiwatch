@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -1062,7 +1063,27 @@ async def _call_gemini_for_patterns(
             }
         )
 
-    clean_recs = [str(r).strip() for r in out_recs if str(r).strip()][:5]
+    # FLO-302 follow-up: prompt forbids directive verbs but Gemini sometimes
+    # drifts. Drop any rec containing one — keeps output factual.
+    _DIRECTIVE_RE = re.compile(
+        r'\b(prioritize|avoid|focus\s+on|consider|monitor|switch(?:\s+to)?|'
+        r'stop|reduce|increase|pause|resume|should|must|need\s+to)\b',
+        re.IGNORECASE,
+    )
+    clean_recs: List[str] = []
+    for r in out_recs:
+        s = str(r).strip()
+        if not s:
+            continue
+        if _DIRECTIVE_RE.search(s):
+            try:
+                log.info(f"SAGE: dropped directive rec: {s[:120]}")
+            except Exception:
+                pass
+            continue
+        clean_recs.append(s)
+        if len(clean_recs) >= 5:
+            break
 
     return clean_insights, clean_recs, meta
 
