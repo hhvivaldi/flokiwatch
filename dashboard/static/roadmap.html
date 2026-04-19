@@ -1,865 +1,1280 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Roadmap — FlokiWatch</title>
-    <link rel="icon" type="image/png" href="/image/flokiwatch.png">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Roadmap · FlokiWatch · 8-bit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   ROADMAP — editorial timeline in FlokiWatch design system
+   Shares header/tokens with Trade Room + About.
+   Single left-rail spine. Entries = log records.
+   ═══════════════════════════════════════════════════════════════ */
 
-    <!-- Tailwind CSS (via CDN) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@300;400;600;700;900&family=Press+Start+2P&display=swap" rel="stylesheet" />
+:root {
+  --clr-floki:   #AAFF00;
+  --clr-rex:     #9C27B0;
+  --clr-gold:    #FFD700;
+  --accent:      var(--clr-gold);
 
-    <link rel="stylesheet" href="/static/style.css" />
+  --clr-done:    #AAFF00;   /* green — shipped */
+  --clr-now:     #00D9FF;   /* cyan  — in progress */
+  --clr-next:    #FFB300;   /* amber — next up */
+  --clr-future:  #8C9EFF;   /* indigo — future */
 
-    <style>
-      html, body {
-        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-        background: #050510;
-        overflow-x: hidden;
-      }
-      .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  --clr-buy:     #00ff88;
 
-      /* ── Topographic texture (inspired by ref 2) ── */
-      .topo-bg {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-        opacity: 0.04;
-        background-image:
-          url("data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.015' numOctaves='4' seed='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
-        background-size: 600px 600px;
-      }
+  --bg-deep:     #0a0a0a;
+  --bg-0:        #0d0d0d;
+  --bg-1:        #111111;
+  --bg-2:        #161616;
+  --border-1:    rgba(255,255,255,0.06);
+  --border-2:    rgba(255,255,255,0.10);
+  --border-3:    rgba(255,255,255,0.16);
 
-      /* ── Timeline spine ── */
-      .rm-timeline {
-        position: relative;
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 0 20px;
-      }
+  --text-0:      #f4f4f5;
+  --text-1:      #c4c4c8;
+  --text-2:      #8a8a92;
+  --text-3:      #5c5c64;
+  --text-4:      #3a3a40;
 
-      /* The glowing center line */
-      .rm-timeline::before {
-        content: '';
-        position: absolute;
-        left: 50%;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        transform: translateX(-50%);
-        background: linear-gradient(
-          180deg,
-          rgba(74,222,128,0.6) 0%,
-          rgba(34,211,238,0.5) 25%,
-          rgba(250,204,21,0.5) 55%,
-          rgba(165,180,252,0.3) 85%,
-          rgba(99,102,241,0.1) 100%
-        );
-        box-shadow: 0 0 12px rgba(34,211,238,0.15);
-      }
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+}
 
-      /* ── Wave/flow SVG behind each section break ── */
-      .rm-wave-wrap {
-        position: relative;
-        width: 100%;
-        height: 80px;
-        margin: -10px 0;
-        z-index: 1;
-      }
-      .rm-wave-wrap svg {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; background: var(--bg-deep); color: var(--text-0); font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+body {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
 
-      /* ── Section badge (centered on timeline) ── */
-      .rm-section-badge {
-        position: relative;
-        z-index: 5;
-        display: flex;
-        justify-content: center;
-        margin: 48px 0 32px;
-      }
-      .rm-section-badge:first-child {
-        margin-top: 0;
-      }
-      .rm-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 28px;
-        border-radius: 40px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid;
-        position: relative;
-      }
-      .rm-badge-completed {
-        background: rgba(74,222,128,0.08);
-        border-color: rgba(74,222,128,0.3);
-        color: #4ade80;
-        box-shadow: 0 0 20px rgba(74,222,128,0.1);
-      }
-      .rm-badge-progress {
-        background: rgba(34,211,238,0.08);
-        border-color: rgba(34,211,238,0.3);
-        color: #22d3ee;
-        box-shadow: 0 0 20px rgba(34,211,238,0.15);
-        animation: pulseGlow 3s ease-in-out infinite;
-      }
-      .rm-badge-next {
-        background: rgba(250,204,21,0.08);
-        border-color: rgba(250,204,21,0.3);
-        color: #facc15;
-        box-shadow: 0 0 20px rgba(250,204,21,0.08);
-      }
-      .rm-badge-future {
-        background: rgba(165,180,252,0.06);
-        border-color: rgba(99,102,241,0.25);
-        color: #a5b4fc;
-        box-shadow: 0 0 20px rgba(99,102,241,0.08);
-      }
+/* ───────────────────────────────────────────────────────────────
+   COMMAND STRIP — identical to Trade Room / About
+   ─────────────────────────────────────────────────────────────── */
+.cmd-strip {
+  position: sticky; top: 0; z-index: 50;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-2);
+  height: 96px;
+}
+.cmd-brand { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-right: 1px solid var(--border-1); }
+.brand-logo { width: 28px; height: 28px; image-rendering: pixelated; image-rendering: crisp-edges; flex-shrink: 0; }
+.brand-name { font-family: var(--display); font-weight: 700; letter-spacing: 0.18em; font-size: 13px; }
+.brand-sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.2em; margin-left: 6px; padding-left: 10px; border-left: 1px solid var(--border-2); }
 
-      @keyframes pulseGlow {
-        0%, 100% { box-shadow: 0 0 20px rgba(34,211,238,0.15); }
-        50% { box-shadow: 0 0 35px rgba(34,211,238,0.3), 0 0 60px rgba(34,211,238,0.08); }
-      }
+.cmd-nav { display: flex; align-items: center; gap: 2px; padding: 0 10px; justify-content: flex-start; }
+.nav-link {
+  padding: 10px 12px; font-size: 10.5px; line-height: 1; letter-spacing: 0.18em; color: var(--text-3);
+  cursor: pointer; transition: color .15s; white-space: nowrap;
+}
+.nav-link:hover { color: var(--text-1); }
+.nav-link.active { color: var(--accent); position: relative; }
+.nav-link.active::after {
+  content: ''; position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 1px; background: var(--accent);
+}
 
-      /* ── Zigzag card row ── */
-      .rm-row {
-        position: relative;
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 20px;
-        z-index: 2;
-      }
-      .rm-row-left {
-        flex-direction: row;
-      }
-      .rm-row-right {
-        flex-direction: row-reverse;
-      }
+.cmd-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(110px, auto); border-left: 1px solid var(--border-1); }
+.cmd-cell {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 8px 18px; border-right: 1px solid var(--border-1); min-width: 0;
+}
+.cmd-cell:last-child { border-right: none; }
+.cmd-label { font-size: 9px; color: var(--text-3); letter-spacing: 0.22em; font-weight: 500; }
+.cmd-val { font-size: 13px; color: var(--text-0); font-weight: 600; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; margin-top: 3px; font-family: var(--display); }
+.cmd-val.accent { color: var(--accent); }
+.cmd-val.live { color: var(--clr-buy); }
+.cmd-val.floki { color: var(--clr-floki); }
+.cmd-sub { font-size: 9.5px; color: var(--text-2); margin-top: 3px; letter-spacing: 0.1em; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--clr-buy); box-shadow: 0 0 6px var(--clr-buy); display: inline-block; margin-right: 6px; vertical-align: 1px; animation: live-pulse 1.6s infinite; }
+@keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-      /* Card takes one half */
-      .rm-card {
-        width: calc(50% - 28px);
-        padding: 16px 20px;
-        border-radius: 10px;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid;
-        transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease;
-        position: relative;
-      }
-      .rm-card:hover {
-        transform: translateY(-2px);
-      }
+/* Breadcrumb rail */
+.crumb-rail {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 24px; background: var(--bg-0);
+  border-bottom: 1px solid var(--border-1);
+}
+.crumb { font-size: 10px; letter-spacing: 0.2em; color: var(--text-3); }
+.crumb b { color: var(--text-1); font-weight: 500; }
+.crumb .sep { color: var(--text-4); margin: 0 6px; }
+.rail-spacer { flex: 1; }
+.rail-tag {
+  font-size: 9.5px; letter-spacing: 0.22em; color: var(--text-2);
+  padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 2px;
+  font-family: var(--mono);
+}
 
-      /* Center dot on the timeline */
-      .rm-dot-wrap {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 16px;
-        height: 16px;
-        z-index: 3;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .rm-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        border: 2px solid;
-        position: relative;
-      }
+/* ───────────────────────────────────────────────────────────────
+   PAGE SHELL
+   ─────────────────────────────────────────────────────────────── */
+.rm-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 56px 100px;
+}
+@media (min-width: 1400px) {
+  .rm-page { padding: 56px 72px 120px; }
+}
 
-      /* Connector arm from dot to card */
-      .rm-arm {
-        position: absolute;
-        top: 7px;
-        height: 1px;
-        width: calc(50% - 28px - 50% + 8px);
-      }
-      .rm-row-left .rm-arm {
-        left: calc(50% + 8px);
-        width: 20px;
-      }
-      .rm-row-right .rm-arm {
-        right: calc(50% + 8px);
-        width: 20px;
-      }
+/* ───────────────────────────────────────────────────────────────
+   HERO
+   ─────────────────────────────────────────────────────────────── */
+.rm-hero {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 64px;
+  align-items: end;
+  margin-bottom: 40px;
+}
+@media (max-width: 900px) {
+  .rm-hero { grid-template-columns: 1fr; gap: 20px; }
+}
+.rm-hero-side { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+.rm-hero-body { min-width: 0; }
+.rm-eyebrow {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em;
+  color: var(--text-3);
+}
+.rm-eyebrow::before {
+  content: ''; display: block; width: 24px; height: 1px;
+  background: var(--accent);
+}
+.rm-eyebrow b { color: var(--accent); font-weight: 500; letter-spacing: 0.28em; }
 
-      /* ── Phase-specific card colors ── */
+.rm-hero-title {
+  font-family: var(--display);
+  font-size: clamp(44px, 6vw, 80px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+  color: var(--text-0);
+  margin: 0 0 22px;
+  text-wrap: balance;
+  max-width: 12ch;
+}
+.rm-hero-title .accent { color: var(--clr-floki); }
+.rm-hero-deck {
+  font-family: var(--display);
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 400;
+  color: var(--text-1);
+  line-height: 1.55;
+  max-width: 60ch;
+  text-wrap: pretty;
+}
 
-      /* COMPLETED: muted green, settled */
-      .rm-card-completed {
-        background: rgba(74,222,128,0.04);
-        border-color: rgba(74,222,128,0.15);
-      }
-      .rm-card-completed:hover {
-        box-shadow: 0 8px 24px rgba(74,222,128,0.08);
-      }
-      .rm-card-completed .rm-card-title {
-        color: rgba(74,222,128,0.7);
-      }
-      .rm-card-completed .rm-card-desc {
-        color: rgba(156,163,175,0.7);
-      }
-      .rm-dot-completed {
-        border-color: rgba(74,222,128,0.5);
-        background: rgba(74,222,128,0.3);
-      }
-      .rm-arm-completed {
-        background: rgba(74,222,128,0.2);
-      }
+/* Hero stat strip — 1 line of context, not a dashboard */
+.rm-hero-meta {
+  display: flex; align-items: stretch; gap: 0;
+  margin-top: 36px;
+  border-top: 1px solid var(--border-1);
+  border-bottom: 1px solid var(--border-1);
+  font-family: var(--mono);
+  flex-wrap: wrap;
+}
+.rm-hero-meta .m-cell {
+  flex: 1; min-width: 140px;
+  padding: 14px 20px 14px 0;
+  border-right: 1px solid var(--border-1);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.rm-hero-meta .m-cell:first-child { padding-left: 0; }
+.rm-hero-meta .m-cell:last-child { border-right: none; }
+.rm-hero-meta .m-k { font-size: 10px; letter-spacing: 0.22em; color: var(--text-3); }
+.rm-hero-meta .m-v {
+  font-family: var(--display); font-weight: 600; font-size: 22px;
+  letter-spacing: -0.005em; color: var(--text-0);
+}
+.rm-hero-meta .m-v.done   { color: var(--clr-done); }
+.rm-hero-meta .m-v.now    { color: var(--clr-now); }
+.rm-hero-meta .m-v.next   { color: var(--clr-next); }
+.rm-hero-meta .m-v.future { color: var(--clr-future); }
 
-      /* IN PROGRESS: cyan glow, active */
-      .rm-card-progress {
-        background: rgba(34,211,238,0.06);
-        border-color: rgba(34,211,238,0.25);
-        box-shadow: 0 0 15px rgba(34,211,238,0.06);
-      }
-      .rm-card-progress:hover {
-        box-shadow: 0 8px 30px rgba(34,211,238,0.12);
-      }
-      .rm-card-progress .rm-card-title {
-        color: #22d3ee;
-      }
-      .rm-card-progress .rm-card-desc {
-        color: #94a3b8;
-      }
-      .rm-dot-progress {
-        border-color: #22d3ee;
-        background: rgba(34,211,238,0.4);
-        box-shadow: 0 0 10px rgba(34,211,238,0.4);
-        animation: dotPulse 2.5s ease-in-out infinite;
-      }
-      .rm-arm-progress {
-        background: rgba(34,211,238,0.3);
-      }
+/* ───────────────────────────────────────────────────────────────
+   LEGEND
+   ─────────────────────────────────────────────────────────────── */
+.rm-legend {
+  display: flex; gap: 22px; flex-wrap: wrap;
+  margin: 28px 0 64px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-1);
+  border-bottom: 1px solid var(--border-1);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  color: var(--text-2);
+}
+.lg-item { display: inline-flex; align-items: center; gap: 8px; }
+.lg-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid; background: transparent;
+}
+.lg-dot.done   { border-color: var(--clr-done);   background: var(--clr-done); }
+.lg-dot.now    { border-color: var(--clr-now); }
+.lg-dot.now::after {
+  content: ''; display: block; width: 100%; height: 100%; border-radius: 50%;
+  background: var(--clr-now); opacity: 0.5;
+  animation: now-pulse 1.8s ease-in-out infinite;
+}
+.lg-dot.next   { border-color: var(--clr-next);   background: transparent; }
+.lg-dot.future { border-color: var(--clr-future); background: transparent; opacity: 0.7; }
 
-      @keyframes dotPulse {
-        0%, 100% { box-shadow: 0 0 8px rgba(34,211,238,0.3); }
-        50% { box-shadow: 0 0 16px rgba(34,211,238,0.6); }
-      }
+@keyframes now-pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 0.9; } }
 
-      /* NEXT UP: amber, warm */
-      .rm-card-next {
-        background: rgba(250,204,21,0.05);
-        border-color: rgba(250,204,21,0.2);
-      }
-      .rm-card-next:hover {
-        box-shadow: 0 8px 24px rgba(250,204,21,0.08);
-      }
-      .rm-card-next .rm-card-title {
-        color: #facc15;
-      }
-      .rm-card-next .rm-card-desc {
-        color: #94a3b8;
-      }
-      .rm-dot-next {
-        border-color: rgba(250,204,21,0.5);
-        background: rgba(250,204,21,0.3);
-      }
-      .rm-arm-next {
-        background: rgba(250,204,21,0.2);
-      }
+/* ───────────────────────────────────────────────────────────────
+   TIMELINE — single left rail spine
+   ─────────────────────────────────────────────────────────────── */
+.rm-timeline {
+  position: relative;
+  padding-left: 0;
+}
 
-      /* FUTURE: dimmed indigo */
-      .rm-card-future {
-        background: rgba(99,102,241,0.04);
-        border-color: rgba(99,102,241,0.15);
-        opacity: 0.75;
-      }
-      .rm-card-future:hover {
-        opacity: 1;
-        box-shadow: 0 8px 24px rgba(99,102,241,0.08);
-      }
-      .rm-card-future .rm-card-title {
-        color: #a5b4fc;
-      }
-      .rm-card-future .rm-card-desc {
-        color: rgba(148,163,184,0.6);
-      }
-      .rm-dot-future {
-        border-color: rgba(99,102,241,0.4);
-        background: rgba(99,102,241,0.2);
-      }
-      .rm-arm-future {
-        background: rgba(99,102,241,0.15);
-      }
+/* Phase header — full-width divider with inline meta */
+.phase-head {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr auto;
+  gap: 64px;
+  align-items: center;
+  padding: 18px 0;
+  border-top: 1px solid var(--border-2);
+  position: relative;
+}
+.phase-head.first { border-top: 1px solid var(--border-3); }
 
-      /* ── Card content ── */
-      .rm-card-title {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        line-height: 1.4;
-        margin-bottom: 4px;
-      }
-      .rm-card-desc {
-        font-size: 10px;
-        line-height: 1.5;
-        letter-spacing: 0.02em;
-      }
-      .rm-card-check {
-        color: rgba(74,222,128,0.5);
-        font-size: 12px;
-        margin-right: 6px;
-      }
+.phase-kicker {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.24em;
+  color: var(--text-3);
+  display: flex; align-items: baseline; gap: 14px;
+}
+.phase-kicker .num { color: var(--text-4); }
+.phase-kicker .status-tag {
+  padding: 3px 10px;
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.22em;
+  border: 1px solid;
+  border-radius: 2px;
+}
+.status-tag.done   { color: var(--clr-done);   border-color: rgba(170,255,0,0.35);  background: rgba(170,255,0,0.06); }
+.status-tag.now    { color: var(--clr-now);    border-color: rgba(0,217,255,0.35);  background: rgba(0,217,255,0.06); }
+.status-tag.next   { color: var(--clr-next);   border-color: rgba(255,179,0,0.35);  background: rgba(255,179,0,0.06); }
+.status-tag.future { color: var(--clr-future); border-color: rgba(140,158,255,0.3); background: rgba(140,158,255,0.05); }
 
-      /* ── Hero ── */
-      .rm-hero {
-        text-align: center;
-        padding: 48px 20px 32px;
-        position: relative;
-        z-index: 2;
-      }
-      .rm-hero-title {
-        font-family: 'Press Start 2P', cursive;
-        font-size: clamp(18px, 4vw, 28px);
-        letter-spacing: 0.12em;
-        background: linear-gradient(135deg, #4ade80, #22d3ee, #facc15, #a5b4fc);
-        background-size: 300% 300%;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: gradientShift 8s ease infinite;
-      }
-      .rm-hero-sub {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: #64748b;
-        margin-top: 12px;
-      }
+.phase-heading {
+  font-family: var(--display);
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.1;
+  color: var(--text-0);
+  margin: 0;
+}
+.phase-count {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+  color: var(--text-2);
+  padding: 6px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 2px;
+}
 
-      @keyframes gradientShift {
-        0%   { background-position: 0% 50%; }
-        50%  { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
+/* The spine — vertical rule running through all entries of a phase */
+.phase-body {
+  position: relative;
+  padding: 8px 0 40px;
+}
+.phase-body::before {
+  content: '';
+  position: absolute;
+  left: calc(300px + 64px - 20px - 1px);  /* aligns to the gutter */
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--border-2);
+}
+@media (max-width: 900px) {
+  .phase-head { grid-template-columns: 1fr; gap: 10px; text-align: left; }
+  .phase-count { justify-self: start; }
+  .phase-body::before { left: 10px; }
+}
 
-      /* ── Fade-in animation ── */
-      .rm-fade {
-        opacity: 0;
-        transform: translateY(20px);
-        transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
-      }
-      .rm-fade.rm-visible {
-        opacity: 1;
-        transform: translateY(0);
-      }
+/* Entry row */
+.entry {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 64px;
+  padding: 16px 0;
+  position: relative;
+  border-bottom: 1px dashed var(--border-1);
+  transition: background .2s;
+}
+.entry:hover { background: rgba(255,255,255,0.015); }
+.entry:last-child { border-bottom: none; }
+@media (max-width: 900px) {
+  .entry { grid-template-columns: 1fr; gap: 8px; padding-left: 32px; }
+}
 
-      /* ── Disclaimer ── */
-      .rm-disclaimer {
-        text-align: center;
-        padding: 48px 20px 32px;
-        position: relative;
-        z-index: 2;
-      }
+/* Meta column (left side) */
+.entry-meta {
+  text-align: right;
+  font-family: var(--mono);
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+  padding-top: 6px;
+}
+@media (max-width: 900px) {
+  .entry-meta { text-align: left; align-items: flex-start; }
+}
+.entry-id {
+  font-size: 10px; letter-spacing: 0.2em; color: var(--text-3);
+}
+.entry-id b { color: var(--text-1); font-weight: 500; }
+.entry-tag {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em;
+  color: var(--text-2);
+  padding: 3px 9px;
+  border: 1px solid var(--border-2); border-radius: 2px;
+  background: var(--bg-1);
+}
 
-      /* ── Responsive: stack cards on mobile ── */
-      @media (max-width: 700px) {
-        .rm-timeline::before {
-          left: 20px;
-        }
-        .rm-row {
-          flex-direction: row !important;
-          padding-left: 40px;
-        }
-        .rm-card {
-          width: 100%;
-        }
-        .rm-dot-wrap {
-          left: 20px;
-        }
-        .rm-arm {
-          display: none;
-        }
-        .rm-section-badge {
-          justify-content: flex-start;
-          padding-left: 40px;
-        }
-      }
-    </style>
-  </head>
+/* Main column */
+.entry-main {
+  position: relative;
+  padding-left: 40px;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .entry-main { padding-left: 0; }
+}
 
-  <body class="bg-black text-white">
+/* Node on the spine */
+.entry-node {
+  position: absolute;
+  left: -21px;
+  top: 14px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--border-3);
+  background: var(--bg-deep);
+  z-index: 2;
+}
+@media (max-width: 900px) {
+  .entry-node { left: -28px; }
+}
+.entry-node.done   { border-color: var(--clr-done);   background: var(--clr-done); box-shadow: 0 0 0 3px rgba(170,255,0,0.12); }
+.entry-node.now    { border-color: var(--clr-now);    background: var(--clr-now);  box-shadow: 0 0 0 3px rgba(0,217,255,0.15); animation: node-pulse 2s ease-in-out infinite; }
+.entry-node.next   { border-color: var(--clr-next);   background: transparent; }
+.entry-node.future { border-color: var(--clr-future); background: transparent; opacity: 0.65; }
 
-    <!-- Topographic texture overlay -->
-    <div class="topo-bg"></div>
+@keyframes node-pulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(0,217,255,0.15); }
+  50%     { box-shadow: 0 0 0 6px rgba(0,217,255,0.25); }
+}
 
-    <!-- Header -->
-    <div class="site-header bg-gray-900 border-b border-gray-700 px-3 sm:px-6 py-2">
-      <div class="flex items-center justify-between text-xs gap-3">
-        <a href="/" class="back-link flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          <span class="hidden sm:inline">BACK</span>
-        </a>
-        <nav class="flex gap-1 sm:gap-4 md:gap-6 items-center flex-nowrap overflow-x-auto" style="-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-          <a href="/" class="site-nav-link">DASHBOARD</a>
-          <a href="/history" class="site-nav-link">HISTORY</a>
-          <a href="/roadmap" class="site-nav-link active">ROADMAP</a>
-          <a href="/trade-room" class="site-nav-link">TRADE ROOM</a>
-          <a href="/about" class="site-nav-link">ABOUT</a>
-        </nav>
-        <div class="flex items-center gap-3">
-          <img src="/image/flokiwatch.png" alt="FlokiWatch" class="floki-header-icon pixel-float">
-          <span class="hidden sm:inline brand-name">FLOKIWATCH</span>
+.entry-title {
+  font-family: var(--display);
+  font-size: 18px; font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  color: var(--text-0);
+  margin: 0 0 6px;
+  max-width: 44ch;
+  text-wrap: balance;
+}
+.entry-title .flag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  margin-left: 8px;
+  vertical-align: 2px;
+}
+.entry-desc {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--text-1);
+  margin: 0;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.entry.done .entry-title { color: var(--text-1); }
+.entry.future .entry-title { color: var(--text-1); }
+.entry.future .entry-desc { color: var(--text-2); }
+
+/* Agent chips inline */
+.chips { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: 1px; }
+.chip {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em;
+  padding: 2px 7px; border-radius: 2px;
+  border: 1px solid var(--border-2);
+  color: var(--text-2); background: var(--bg-1);
+  text-transform: uppercase;
+}
+.chip.floki { color: var(--clr-floki); border-color: rgba(170,255,0,0.3); background: rgba(170,255,0,0.04); }
+.chip.rex   { color: #C77DFF; border-color: rgba(156,39,176,0.4); background: rgba(156,39,176,0.06); }
+.chip.gold  { color: var(--clr-gold); border-color: rgba(255,215,0,0.3); background: rgba(255,215,0,0.04); }
+
+/* ───────────────────────────────────────────────────────────────
+   SIGN-OFF
+   ─────────────────────────────────────────────────────────────── */
+.signoff {
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-1);
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 64px;
+}
+@media (max-width: 900px) { .signoff { grid-template-columns: 1fr; gap: 16px; } }
+.signoff-mark {
+  font-family: var(--display); font-size: 14px; font-weight: 700;
+  color: var(--accent); letter-spacing: 0.18em;
+}
+.signoff-body {
+  font-family: var(--mono); font-size: 11px; line-height: 1.75;
+  color: var(--text-3); letter-spacing: 0.02em;
+  max-width: 68ch;
+}
+.signoff-body b { color: var(--text-1); font-weight: 500; }
+
+/* Footer */
+.page-foot {
+  padding: 14px 24px; border-top: 1px solid var(--border-1);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  font-size: 10px; letter-spacing: 0.18em; color: var(--text-3);
+  background: var(--bg-0);
+}
+.page-foot .pf-right { display: flex; gap: 18px; align-items: center; }
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .55s cubic-bezier(.16,1,.3,1), transform .55s cubic-bezier(.16,1,.3,1);
+}
+.reveal.in { opacity: 1; transform: none; }
+
+/* ───────────────────────────────────────────────────────────────
+   RESPONSIVE — mirrors Trade Room / About
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 820px) {
+  .cmd-strip { grid-template-columns: 1fr auto; grid-template-rows: auto auto; }
+  .cmd-brand { grid-column: 1; grid-row: 1; padding: 10px 14px; }
+  .cmd-rail { grid-column: 2; grid-row: 1; border-left: 1px solid var(--border-1); }
+  .cmd-rail .cmd-cell:not(:last-child) { display: none; }
+  .cmd-nav { grid-column: 1 / -1; grid-row: 2; padding: 0 10px; border-top: 1px solid var(--border-1); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cmd-nav .nav-link { padding: 10px 10px; font-size: 10px; white-space: nowrap; }
+  .brand-sub { display: none; }
+}
+
+@media (max-width: 560px) {
+  .rm-page { padding: 32px 18px 72px; }
+  .rm-hero { margin-bottom: 28px; }
+  .entry-title { font-size: 17px; }
+  .entry-desc { font-size: 14px; }
+  .page-foot { flex-direction: column; gap: 8px; text-align: center; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   8-BIT PIXEL OVERLAY
+   Keep the structure + tokens from the Trade Room DS.
+   Re-skin: pixel fonts, hard edges, chunky nodes, CRT scanlines.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --pixel:   'Press Start 2P', 'Courier New', monospace;
+  --pixel-r: 'VT323', 'Courier New', monospace;   /* readable pixel serif */
+}
+
+/* Global pixel polish */
+html, body {
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+body {
+  /* Hard grid, no subpixel blur */
+  background-image:
+    linear-gradient(rgba(170,255,0,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(170,255,0,0.025) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* CRT scanlines on top — very light */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 100;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0 2px,
+      rgba(0,0,0,0.12) 2px 3px
+    );
+  mix-blend-mode: multiply;
+}
+
+/* Brand + command strip — pixelize */
+.brand-mark { font-family: var(--pixel); font-size: 14px; color: var(--clr-floki); text-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
+.brand-mark::before { content: '\25A0'; } /* solid square pixel */
+.brand-mark { font-size: 0; } /* hide the ◆, keep only ::before */
+.brand-mark::before { font-size: 14px; }
+
+.brand-name { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.14em; }
+.brand-sub  { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.nav-link   { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.1em; padding: 12px 12px; }
+.nav-link.active::after { height: 2px; background: var(--clr-floki); }
+.nav-link.active { color: var(--clr-floki); }
+
+.cmd-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.cmd-val   { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.02em; }
+.cmd-sub   { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.14em; }
+
+.crumb       { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.rail-tag    { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; border-radius: 0; }
+
+/* Hero typography */
+.rm-eyebrow       { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.18em; }
+.rm-eyebrow b     { font-family: var(--pixel); letter-spacing: 0.18em; }
+.rm-eyebrow::before { background: var(--clr-floki); height: 2px; }
+
+.rm-hero-title {
+  font-family: var(--pixel);
+  font-size: clamp(24px, 3.8vw, 48px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-shadow: 4px 4px 0 #000;
+  max-width: 18ch;
+}
+.rm-hero-title .accent { color: var(--clr-floki); text-shadow: 4px 4px 0 rgba(170,255,0,0.15), 4px 4px 0 #000; }
+
+.rm-hero-deck {
+  font-family: var(--pixel-r);
+  font-size: clamp(20px, 1.8vw, 26px);
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  color: var(--text-1);
+  max-width: 50ch;
+}
+
+/* Hero meta — pixel stat cells */
+.rm-hero-meta .m-cell { border-right: 2px solid var(--border-2); padding: 16px 20px 16px 0; }
+.rm-hero-meta .m-k    { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; }
+.rm-hero-meta .m-v    { font-family: var(--pixel); font-size: 20px; letter-spacing: 0; text-shadow: 2px 2px 0 #000; }
+
+/* Legend */
+.rm-legend       { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.14em; border-width: 2px 0; padding: 14px 0; }
+.lg-dot          { border-radius: 0; width: 10px; height: 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.6); border-width: 0; }
+.lg-dot.done     { background: var(--clr-done); }
+.lg-dot.now      { background: var(--clr-now); animation: pixel-blink 0.9s steps(2) infinite; }
+.lg-dot.next     { background: transparent; outline: 2px solid var(--clr-next); outline-offset: -2px; }
+.lg-dot.future   { background: transparent; outline: 2px solid var(--clr-future); outline-offset: -2px; opacity: 0.75; }
+.lg-dot.now::after { display: none; }
+
+@keyframes pixel-blink { 0% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Phase headers */
+.phase-head      { border-top: 2px solid var(--border-2); padding: 22px 0; }
+.phase-head.first{ border-top: 2px solid var(--clr-floki); }
+.phase-kicker    { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.2em; }
+.phase-kicker .num { font-family: var(--pixel); }
+.status-tag      { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em; border-width: 2px; border-radius: 0; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); padding: 5px 10px; }
+
+.phase-heading {
+  font-family: var(--pixel);
+  font-size: clamp(14px, 1.5vw, 20px);
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-shadow: 3px 3px 0 #000;
+}
+.phase-count { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.18em; border-width: 2px; border-radius: 0; padding: 8px 12px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+
+/* Timeline — chunky spine + pixel nodes */
+.phase-body::before { width: 2px; background: var(--border-3); }
+.entry { border-bottom: 2px dashed var(--border-1); padding: 20px 0; }
+.entry:last-child { border-bottom: none; }
+
+.entry-id   { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.entry-id b { font-family: var(--pixel); }
+.entry-tag  { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.18em; border-width: 2px; border-radius: 0; padding: 4px 8px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+
+.entry-node {
+  width: 14px; height: 14px;
+  border-radius: 0;                 /* squares, not circles */
+  border-width: 3px;
+  left: -23px;                      /* re-align to the spine */
+  top: 20px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  image-rendering: pixelated;
+}
+.entry-node.done   { border-color: var(--clr-done);   background: var(--clr-done); }
+.entry-node.now    { border-color: var(--clr-now);    background: var(--clr-now);  animation: pixel-blink 0.9s steps(2) infinite; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+.entry-node.next   { border-color: var(--clr-next);   background: transparent; }
+.entry-node.future { border-color: var(--clr-future); background: transparent; opacity: 0.75; }
+@media (max-width: 900px) { .entry-node { left: -30px; } }
+
+.entry-title {
+  font-family: var(--pixel);
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--text-0);
+  text-shadow: 2px 2px 0 #000;
+  max-width: 32ch;
+}
+.entry-title .flag { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em; }
+.entry-desc {
+  font-family: var(--pixel-r);
+  font-size: 18px;
+  line-height: 1.45;
+  letter-spacing: 0.015em;
+  color: var(--text-1);
+}
+.entry.done .entry-desc   { color: var(--text-2); }
+.entry.future .entry-desc { color: var(--text-2); }
+
+/* Chips */
+.chip { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.16em; border-width: 2px; border-radius: 0; padding: 3px 7px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+
+/* Sign-off + foot */
+.signoff-mark { font-family: var(--pixel); font-size: 11px; letter-spacing: 0.14em; text-shadow: 2px 2px 0 #000; }
+.signoff-body { font-family: var(--pixel-r); font-size: 17px; line-height: 1.45; color: var(--text-2); }
+.signoff-body b { color: var(--text-0); }
+.page-foot { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; border-top: 2px solid var(--border-2); }
+
+/* Kill rounded corners anywhere else */
+* { border-radius: 0 !important; }
+
+/* Responsive tweaks */
+@media (max-width: 820px) {
+  .brand-name { font-size: 9px; }
+  .nav-link { font-size: 7px; padding: 10px 8px; }
+  .cmd-val  { font-size: 9px; }
+}
+@media (max-width: 560px) {
+  .rm-hero-title { font-size: 22px; text-shadow: 3px 3px 0 #000; }
+  .rm-hero-deck  { font-size: 18px; }
+  .entry-title   { font-size: 10px; }
+  .entry-desc    { font-size: 16px; }
+  .phase-heading { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COMMAND STRIP
+     ═══════════════════════════════════════════════════════════════ -->
+<header class="cmd-strip">
+  <div class="cmd-brand">
+    <img src="/image/flokiwatch.png" alt="FlokiWatch" class="brand-logo" />
+    <div class="brand-name">FLOKIWATCH</div>
+    <div class="brand-sub">ROADMAP · 8-BIT</div>
+  </div>
+
+  <nav class="cmd-nav">
+    <a class="nav-link" href="/">DASH</a>
+    <a class="nav-link" href="/history">HISTORY</a>
+    <a class="nav-link active" href="/roadmap">ROADMAP</a>
+    <a class="nav-link" href="/trade-room">TRADE ROOM</a>
+    <a class="nav-link" href="/about">ABOUT</a>
+  </nav>
+
+  <div class="cmd-rail">
+    <div class="cmd-cell">
+      <div class="cmd-label">VERSION</div>
+      <div class="cmd-val accent">V3.2</div>
+    </div>
+    <div class="cmd-cell">
+      <div class="cmd-label">INSTRUMENT</div>
+      <div class="cmd-val floki">XAU/USD</div>
+      <div class="cmd-sub">GOLD · DEMO</div>
+    </div>
+    <div class="cmd-cell">
+      <div class="cmd-label">AGENTS</div>
+      <div class="cmd-val">7 · ONLINE</div>
+      <div class="cmd-sub">FLOKI · REX · …</div>
+    </div>
+    <div class="cmd-cell">
+      <div class="cmd-label">STATUS</div>
+      <div class="cmd-val live"><span class="status-dot"></span>SYSTEM LIVE</div>
+    </div>
+  </div>
+</header>
+
+<!-- Breadcrumb -->
+<div class="crumb-rail">
+  <div class="crumb"><b>FLOKIWATCH</b> <span class="sep">/</span> <b>ROADMAP</b></div>
+  <div class="rail-spacer"></div>
+  <div class="rail-tag">SHIPPED · SHIPPING · SHIPPING NEXT</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN
+     ═══════════════════════════════════════════════════════════════ -->
+<main class="rm-page">
+
+  <!-- HERO -->
+  <section class="rm-hero reveal">
+    <div class="rm-hero-side">
+      <div class="rm-eyebrow"><b>ROADMAP</b><span>· FLOKIWATCH</span></div>
+    </div>
+    <div class="rm-hero-body">
+      <h1 class="rm-hero-title">Where we <span class="accent">are</span>, where we're going.</h1>
+      <p class="rm-hero-deck">
+        An honest log of what's shipped, what's running right now, and what's queued next.
+        Not a vision deck — a changelog you can trust.
+      </p>
+    </div>
+  </section>
+
+  <!-- HERO META -->
+  <section class="rm-hero reveal" style="margin-bottom: 8px; align-items: stretch;">
+    <div></div>
+    <div class="rm-hero-body">
+      <div class="rm-hero-meta">
+        <div class="m-cell">
+          <div class="m-k">SHIPPED</div>
+          <div class="m-v done">17</div>
         </div>
+        <div class="m-cell">
+          <div class="m-k">IN PROGRESS</div>
+          <div class="m-v now">05</div>
+        </div>
+        <div class="m-cell">
+          <div class="m-k">NEXT UP</div>
+          <div class="m-v next">04</div>
+        </div>
+        <div class="m-cell">
+          <div class="m-k">FUTURE</div>
+          <div class="m-v future">07</div>
+        </div>
+      </div>
+
+      <div class="rm-legend">
+        <span class="lg-item"><span class="lg-dot done"></span>SHIPPED</span>
+        <span class="lg-item"><span class="lg-dot now"></span>IN PROGRESS</span>
+        <span class="lg-item"><span class="lg-dot next"></span>NEXT UP</span>
+        <span class="lg-item"><span class="lg-dot future"></span>FUTURE</span>
       </div>
     </div>
+  </section>
 
-    <!-- Hero -->
-    <div class="rm-hero rm-fade">
-      <div class="rm-hero-title">Roadmap</div>
-      <div class="rm-hero-sub">Where we are &amp; where we're going</div>
+  <!-- ═══════════════════════════════════════════════════════════
+       TIMELINE
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="rm-timeline">
+
+    <!-- ─────────── PHASE 01 · SHIPPED ─────────── -->
+    <header class="phase-head first reveal">
+      <div class="phase-kicker">
+        <span class="num">§ 01</span>
+        <span class="status-tag done">SHIPPED</span>
+      </div>
+      <h2 class="phase-heading">The trading office is built.</h2>
+      <div class="phase-count">17 ITEMS</div>
+    </header>
+
+    <div class="phase-body">
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-001</b></div>
+          <div class="entry-tag">ARCHITECTURE</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">8-agent autonomous architecture</h3>
+          <p class="entry-desc">Six AI agents and two deterministic agents running 24/5 — a full autonomous trading office dedicated to XAU/USD.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-002</b></div>
+          <div class="entry-tag">AGENT</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Floki, agentic trader <span class="chips"><span class="chip floki">FLOKI</span></span></h3>
+          <p class="entry-desc">GPT-5.4 with 28 tools, self-scheduling on 5–30 minute cycles. Sole decision-maker across entry, exit, sizing, and management.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-190</b></div>
+          <div class="entry-tag">DEBATE</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Rex bull/bear debate <span class="chips"><span class="chip rex">REX</span></span></h3>
+          <p class="entry-desc">Two opposing analysts argue BUY and SELL in parallel before every Floki cycle. Adversarial reasoning as a first-class input.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-194</b></div>
+          <div class="entry-tag">ORACLE</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Research manager / Oracle</h3>
+          <p class="entry-desc">Gemini 3 Flash picks a winner between Rex Bull and Rex Bear and returns a verdict with entry, stop-loss, and target.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-046</b></div>
+          <div class="entry-tag">MACRO</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Luna, macro analyst</h3>
+          <p class="entry-desc">15-minute cycles on MT5, Yahoo Finance, and FRED. Produces macro bias, risk score, and correlation tracking for Floki.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-058</b></div>
+          <div class="entry-tag">NEWS</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Echo, news sentinel</h3>
+          <p class="entry-desc">25 RSS feeds monitored 24/7. Pull-based — Floki decides when to check. Never interrupts the desk.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-072</b></div>
+          <div class="entry-tag">AUDIT</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Sage, daily auditor</h3>
+          <p class="entry-desc">Gemini-powered review pass at 21:00 UTC. Walks through every trade, pattern, and performance metric of the session.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-080</b></div>
+          <div class="entry-tag">WATCHDOG</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Simba, watchdog</h3>
+          <p class="entry-desc">Zero-AI-cost 30-second polling loop. Wakes Floki on critical conditions. Pure deterministic Python.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-095</b></div>
+          <div class="entry-tag">REGIME</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Market regime detection</h3>
+          <p class="entry-desc">Seven regimes classified continuously — volatile, quiet, breakout imminent, trending bull/bear, ranging, transitional.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-085</b></div>
+          <div class="entry-tag">SAFETY</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Safety system &amp; hard gates</h3>
+          <p class="entry-desc">Opposing-position hard gate, max 3 positions, 6% daily loss cap, volatility and market-hours guards — enforced before any order leaves the desk.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-110</b></div>
+          <div class="entry-tag">POSITIONS</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Floki-owned position management</h3>
+          <p class="entry-desc">Breakeven moves, trailing stops, and drawdown phases live inside Floki. The EA is a pure executor — no hidden logic on the MT5 side.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-125</b></div>
+          <div class="entry-tag">UI</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Trade Room dashboard redesign</h3>
+          <p class="entry-desc">Bloomberg-style terminal. All seven agents visible. Command strip, position bar, deep-dive panels — one screen, no chrome.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-060</b></div>
+          <div class="entry-tag">EXECUTION</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">EA bridge execution</h3>
+          <p class="entry-desc">JSON signals plus tick-by-tick EA management. Python writes the signal; the MQL5 EA places the order on MetaTrader 5.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-130</b></div>
+          <div class="entry-tag">MEMORY</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Reflexion engine &amp; semantic memory</h3>
+          <p class="entry-desc">ChromaDB vector store with enriched post-trade embeddings. Floki can search his own history by meaning, not just keyword.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-165</b></div>
+          <div class="entry-tag">CHARTING</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">S/R zones on the MT5 chart</h3>
+          <p class="entry-desc">Bridge pattern — Python writes JSON, the EA draws the zones. H1 intraday layered over H4 structural levels.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-211</b></div>
+          <div class="entry-tag">SCANNER</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Rex Monitor, zero-LLM scanner <span class="chips"><span class="chip rex">REX</span></span></h3>
+          <p class="entry-desc">Background analyst that runs four deterministic checks every 30 minutes: divergence, correlation, regime history, session performance.</p>
+        </div>
+      </article>
+
+      <article class="entry done reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-218</b></div>
+          <div class="entry-tag">UI</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node done"></div>
+          <h3 class="entry-title">Watch-condition display</h3>
+          <p class="entry-desc">Human-readable watch conditions with colored arrows. No technical IDs — a trader can read the desk at a glance.</p>
+        </div>
+      </article>
+
     </div>
 
-    <!-- Main timeline -->
-    <div class="rm-timeline" style="padding-bottom:64px;">
+    <!-- ─────────── PHASE 02 · IN PROGRESS ─────────── -->
+    <header class="phase-head reveal">
+      <div class="phase-kicker">
+        <span class="num">§ 02</span>
+        <span class="status-tag now">IN PROGRESS</span>
+      </div>
+      <h2 class="phase-heading">What's running on the desk today.</h2>
+      <div class="phase-count">05 ITEMS</div>
+    </header>
 
-      <!-- ═══════════════ COMPLETED ═══════════════ -->
-      <div class="rm-section-badge rm-fade">
-        <div class="rm-badge rm-badge-completed">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          COMPLETED
+    <div class="phase-body">
+
+      <article class="entry now reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-220</b></div>
+          <div class="entry-tag">LIVE TRADES</div>
         </div>
-      </div>
-
-      <!-- Wave separator: completed → progress (green to cyan) -->
-      <div class="rm-wave-wrap rm-fade">
-        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="waveGreen" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#4ade80" stop-opacity="0.25"/>
-              <stop offset="50%" stop-color="#22d3ee" stop-opacity="0.15"/>
-              <stop offset="100%" stop-color="#4ade80" stop-opacity="0.25"/>
-            </linearGradient>
-          </defs>
-          <path d="M0,50 Q150,10 300,40 T600,35 T900,50" fill="none" stroke="url(#waveGreen)" stroke-width="2"/>
-          <path d="M0,55 Q200,20 400,50 T800,40 T900,55" fill="none" stroke="url(#waveGreen)" stroke-width="1.5" opacity="0.5"/>
-          <path d="M0,45 Q100,25 250,45 T500,30 T750,50 T900,40" fill="none" stroke="url(#waveGreen)" stroke-width="1" opacity="0.3"/>
-        </svg>
-      </div>
-
-      <!-- C1: 8-Agent Architecture -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>8-Agent Autonomous Architecture</div>
-          <div class="rm-card-desc">6 AI + 2 deterministic agents running 24/5. Fully autonomous trading office for XAU/USD.</div>
+        <div class="entry-main">
+          <div class="entry-node now"></div>
+          <h3 class="entry-title">First live trades, under supervision <span class="flag">· POPULATION B</span></h3>
+          <p class="entry-desc">One hundred and one demo trades being watched in real time. Tracking entry/exit logic, P&amp;L accuracy, and trailing/breakeven triggers.</p>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
+      </article>
 
-      <!-- C2: Floki -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Floki Agentic Trading</div>
-          <div class="rm-card-desc">GPT-5.4, 28 tools, self-scheduling 5-30 min cycles. Sole decision-maker.</div>
+      <article class="entry now reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-222</b></div>
+          <div class="entry-tag">REFLEXION</div>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C3: Rex Debate -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Rex Bull/Bear Debate System</div>
-          <div class="rm-card-desc">FLO-190. Rex Bull argues BUY, Rex Bear argues SELL in parallel. Adversarial analysis before every Floki cycle.</div>
+        <div class="entry-main">
+          <div class="entry-node now"></div>
+          <h3 class="entry-title">Post-trade reflexion, end-to-end</h3>
+          <p class="entry-desc">Engine is built and wired. We're waiting on the first closed live trade to confirm the reflexion pipeline writes cleanly into ChromaDB.</p>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
+      </article>
 
-      <!-- C4: Oracle -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Research Manager / Oracle</div>
-          <div class="rm-card-desc">FLO-194. Gemini 3 Flash picks winner between Bull and Bear. Verdict with entry, SL, target.</div>
+      <article class="entry now reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-223</b></div>
+          <div class="entry-tag">RETRIEVAL</div>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C5: Luna -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Luna Macro Analyst</div>
-          <div class="rm-card-desc">15-min cycles. MT5 + Yahoo Finance + FRED. Macro bias, risk score, correlation tracking.</div>
+        <div class="entry-main">
+          <div class="entry-node now"></div>
+          <h3 class="entry-title">Semantic search, real-world validation</h3>
+          <p class="entry-desc">The <b>search_memory</b> tool is active. Awaiting real trades to judge embedding quality and retrieval relevance at scale.</p>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
+      </article>
 
-      <!-- C6: Echo -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Echo News Sentinel</div>
-          <div class="rm-card-desc">25 RSS feeds, 24/7 monitoring. Pull-based — Floki decides when to check news.</div>
+      <article class="entry now reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-141</b></div>
+          <div class="entry-tag">GUARD</div>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C7: Sage -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Sage Daily Auditor</div>
-          <div class="rm-card-desc">Gemini-powered. Runs at 21:00 UTC. Reviews all trades, patterns, and performance.</div>
+        <div class="entry-main">
+          <div class="entry-node now"></div>
+          <h3 class="entry-title">SL-widening guard confirmation</h3>
+          <p class="entry-desc">Guard plus rate limit (max three widenings per hour per ticket) is implemented. Needs a live stop-loss event to confirm behavior.</p>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
+      </article>
 
-      <!-- C8: Simba -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Simba Watchdog</div>
-          <div class="rm-card-desc">Zero AI cost. 30s polling. Wakes Floki on critical conditions. Pure Python deterministic.</div>
+      <article class="entry now reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-208</b></div>
+          <div class="entry-tag">CALENDAR</div>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C9: Regime -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Market Regime Detection</div>
-          <div class="rm-card-desc">7 regimes: Volatile, Quiet, Breakout Imminent, Trending Bullish/Bearish, Ranging, Transitional.</div>
+        <div class="entry-main">
+          <div class="entry-node now"></div>
+          <h3 class="entry-title">Holiday detection</h3>
+          <p class="entry-desc">Holiday dictionary shipped in config. We validate against the next major market holiday to confirm the suppression logic fires correctly.</p>
         </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
+      </article>
 
-      <!-- C10: Safety -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Safety System</div>
-          <div class="rm-card-desc">FLO-85 opposing position hard gate. Max 3 positions. 6% daily loss cap. Volatility guard. Market hours guard.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C11: Position Management -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Floki Position Management</div>
-          <div class="rm-card-desc">Breakeven, trailing stop, drawdown phases. Floki manages all positions directly — EA is pure executor.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C12: Trade Room -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Trade Room Dashboard</div>
-          <div class="rm-card-desc">Bloomberg-style redesign. All 8 agents visible. Command center, position bar, deep dive panels.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C13: EA Bridge -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>EA Bridge Execution</div>
-          <div class="rm-card-desc">JSON signals + tick-by-tick EA management. Python writes signal, MQL5 EA executes on MetaTrader 5.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C14: Reflexion -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Reflexion Engine + Semantic Memory</div>
-          <div class="rm-card-desc">ChromaDB vector store. Post-trade reflexion with enriched embeddings. Semantic search across all past trades.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C15: S/R -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>S/R Zones on MT5 Chart</div>
-          <div class="rm-card-desc">Bridge pattern: Python writes JSON, MQL5 EA draws zones. H1 intraday + H4 structural layers.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C16: Rex Monitor -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Rex Monitor</div>
-          <div class="rm-card-desc">FLO-211. Zero-LLM background scanner. 4 tools every 30 min: divergence, correlation, regime history, session performance.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-      <!-- C17: FLO-218 -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-completed">
-          <div class="rm-card-title"><span class="rm-card-check">&#10003;</span>Watch Conditions Display</div>
-          <div class="rm-card-desc">FLO-218. Human-friendly format with colored arrows. No technical IDs — intuitive at a glance.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-completed"></div></div>
-      </div>
-
-
-      <!-- ═══════════════ IN PROGRESS ═══════════════ -->
-
-      <!-- Wave separator: completed → in progress -->
-      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
-        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="waveCyan" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
-              <stop offset="40%" stop-color="#06b6d4" stop-opacity="0.2"/>
-              <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.3"/>
-            </linearGradient>
-          </defs>
-          <path d="M0,40 Q225,10 450,45 T900,35" fill="none" stroke="url(#waveCyan)" stroke-width="2.5"/>
-          <path d="M0,50 Q180,25 360,55 T720,40 T900,50" fill="none" stroke="url(#waveCyan)" stroke-width="1.5" opacity="0.4"/>
-          <path d="M0,35 Q300,55 600,30 T900,45" fill="none" stroke="url(#waveCyan)" stroke-width="1" opacity="0.25"/>
-        </svg>
-      </div>
-
-      <div class="rm-section-badge rm-fade">
-        <div class="rm-badge rm-badge-progress">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          IN PROGRESS
-        </div>
-      </div>
-
-      <!-- P1: Live Trades -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-progress">
-          <div class="rm-card-title">First Live Trades Monitoring</div>
-          <div class="rm-card-desc">Population B, 101 trades. Tracking entry/exit logic, P&L accuracy, trailing/BE triggers on demo account.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
-      </div>
-
-      <!-- P2: Reflexion -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-progress">
-          <div class="rm-card-title">Post-Trade Reflexion Confirmation</div>
-          <div class="rm-card-desc">Engine built. Pending first closed trade to verify end-to-end reflexion pipeline and ChromaDB storage.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
-      </div>
-
-      <!-- P3: Semantic -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-progress">
-          <div class="rm-card-title">Semantic Search Confirmation</div>
-          <div class="rm-card-desc">search_memory tool active. Awaiting real trades to validate embedding quality and retrieval relevance.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
-      </div>
-
-      <!-- P4: SL Guard -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-progress">
-          <div class="rm-card-title">SL-Widening Guard Confirmation</div>
-          <div class="rm-card-desc">FLO-141. Guard + rate limit (max 3/hour/ticket) implemented. Pending real trade validation.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
-      </div>
-
-      <!-- P5: Holiday -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-progress">
-          <div class="rm-card-title">Holiday Detection</div>
-          <div class="rm-card-desc">FLO-208. Market holidays dictionary in config. Validates against next major holiday to confirm correct behavior.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-progress"></div></div>
-      </div>
-
-
-      <!-- ═══════════════ NEXT UP ═══════════════ -->
-
-      <!-- Wave separator: progress → next -->
-      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
-        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="waveAmber" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#facc15" stop-opacity="0.2"/>
-              <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.15"/>
-              <stop offset="100%" stop-color="#facc15" stop-opacity="0.2"/>
-            </linearGradient>
-          </defs>
-          <path d="M0,45 Q200,15 400,50 T800,30 T900,45" fill="none" stroke="url(#waveAmber)" stroke-width="2"/>
-          <path d="M0,38 Q250,55 500,35 T900,50" fill="none" stroke="url(#waveAmber)" stroke-width="1.2" opacity="0.4"/>
-        </svg>
-      </div>
-
-      <div class="rm-section-badge rm-fade">
-        <div class="rm-badge rm-badge-next">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          NEXT UP
-        </div>
-      </div>
-
-      <!-- N1: Brain cleanup -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-next">
-          <div class="rm-card-title">Brain Cleanup</div>
-          <div class="rm-card-desc">FLO-154. Remove legacy decision layer fields (original_scores, raw_data, gpt_validation). Brain = data pipeline only.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
-      </div>
-
-      <!-- N2: Echo -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-next">
-          <div class="rm-card-title">Echo Contextual Investigation</div>
-          <div class="rm-card-desc">FLO-212. Echo deep-dives into high-impact news with follow-up queries. Context-aware alert enrichment.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
-      </div>
-
-      <!-- N3: Luna -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-next">
-          <div class="rm-card-title">Luna Adaptive Cadence</div>
-          <div class="rm-card-desc">FLO-213. Dynamic cycle intervals based on market volatility. Faster during events, slower during quiet periods.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
-      </div>
-
-      <!-- N4: Journal -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-next">
-          <div class="rm-card-title">Floki Journaling</div>
-          <div class="rm-card-desc">FLO-178. Structured trading journal. write_trading_journal tool exists — expanding to full session narratives.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-next"></div></div>
-      </div>
-
-
-      <!-- ═══════════════ FUTURE ═══════════════ -->
-
-      <!-- Wave separator: next → future -->
-      <div class="rm-wave-wrap rm-fade" style="margin-top:20px;">
-        <svg viewBox="0 0 900 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="waveIndigo" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#a5b4fc" stop-opacity="0.15"/>
-              <stop offset="50%" stop-color="#6366f1" stop-opacity="0.1"/>
-              <stop offset="100%" stop-color="#a5b4fc" stop-opacity="0.15"/>
-            </linearGradient>
-          </defs>
-          <path d="M0,42 Q180,18 360,48 T720,32 T900,42" fill="none" stroke="url(#waveIndigo)" stroke-width="2"/>
-          <path d="M0,50 Q220,35 440,55 T880,40" fill="none" stroke="url(#waveIndigo)" stroke-width="1" opacity="0.35"/>
-        </svg>
-      </div>
-
-      <div class="rm-section-badge rm-fade">
-        <div class="rm-badge rm-badge-future">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          FUTURE
-        </div>
-      </div>
-
-      <!-- F1: Atlas -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Atlas — Technical Analyst Agent</div>
-          <div class="rm-card-desc">Phase 4. Dedicated chart analysis agent with pattern recognition and multi-timeframe structure mapping.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F2: Multi-pair -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Multi-Pair Expansion</div>
-          <div class="rm-card-desc">Extend to XAG/USD, EUR/USD, and other instruments. Per-pair config, model retraining, indicator tuning.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F3: Live -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Live Account Migration</div>
-          <div class="rm-card-desc">Transition from demo to real capital after validation metrics are met. Gradual sizing ramp.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F4: Position sizing -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Confidence-Based Position Sizing</div>
-          <div class="rm-card-desc">Deferred until account > $5,000. Correlation confirmed (WR 67.6% → 77.6% by tier). Lot constraints currently prevent benefit.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F5: Domain -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Domain floki.watch + Public Dashboard</div>
-          <div class="rm-card-desc">Split architecture: dedicated trading server vs public-facing dashboard. Custom domain deployment.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F6: Twitter -->
-      <div class="rm-row rm-row-right rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Twitter / X Automation</div>
-          <div class="rm-card-desc">Phased rollout: manual posting first, semi-automated, then fully automated trade commentary.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-      <!-- F7: Advanced ML -->
-      <div class="rm-row rm-row-left rm-fade">
-        <div class="rm-card rm-card-future">
-          <div class="rm-card-title">Advanced ML / Pattern Discovery</div>
-          <div class="rm-card-desc">Deep learning, market microstructure analysis. Future exploration beyond current ensemble approach.</div>
-        </div>
-        <div class="rm-dot-wrap" style="top:16px"><div class="rm-dot rm-dot-future"></div></div>
-      </div>
-
-    </div><!-- /rm-timeline -->
-
-    <!-- Disclaimer -->
-    <div class="rm-disclaimer rm-fade">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#475569;">
-        This roadmap reflects the current plan and may change as the system evolves.<br>
-        Items are directions we're exploring, not commitments.
-      </div>
     </div>
 
-    <!-- Intersection Observer for scroll-reveal -->
-    <script>
-      (function() {
-        var els = document.querySelectorAll('.rm-fade');
-        if (!('IntersectionObserver' in window)) {
-          for (var i = 0; i < els.length; i++) els[i].classList.add('rm-visible');
-          return;
-        }
-        var obs = new IntersectionObserver(function(entries) {
-          for (var i = 0; i < entries.length; i++) {
-            if (entries[i].isIntersecting) {
-              entries[i].target.classList.add('rm-visible');
-              obs.unobserve(entries[i].target);
-            }
-          }
-        }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-        for (var i = 0; i < els.length; i++) obs.observe(els[i]);
-      })();
-    </script>
+    <!-- ─────────── PHASE 03 · NEXT UP ─────────── -->
+    <header class="phase-head reveal">
+      <div class="phase-kicker">
+        <span class="num">§ 03</span>
+        <span class="status-tag next">NEXT UP</span>
+      </div>
+      <h2 class="phase-heading">Queued for the next sprint.</h2>
+      <div class="phase-count">04 ITEMS</div>
+    </header>
 
-  </body>
+    <div class="phase-body">
+
+      <article class="entry next reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-154</b></div>
+          <div class="entry-tag">CLEANUP</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node next"></div>
+          <h3 class="entry-title">Brain cleanup</h3>
+          <p class="entry-desc">Remove legacy decision-layer fields (<b>original_scores</b>, <b>raw_data</b>, <b>gpt_validation</b>). Brain becomes a pure data pipeline — nothing more.</p>
+        </div>
+      </article>
+
+      <article class="entry next reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-212</b></div>
+          <div class="entry-tag">NEWS+</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node next"></div>
+          <h3 class="entry-title">Echo, contextual investigation</h3>
+          <p class="entry-desc">Echo will deep-dive into high-impact news with follow-up queries instead of reporting headlines in isolation. Context-aware alert enrichment.</p>
+        </div>
+      </article>
+
+      <article class="entry next reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-213</b></div>
+          <div class="entry-tag">CADENCE</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node next"></div>
+          <h3 class="entry-title">Luna adaptive cadence</h3>
+          <p class="entry-desc">Dynamic cycle intervals tied to market volatility — tighter during events, slower during quiet periods. Less noise, more signal.</p>
+        </div>
+      </article>
+
+      <article class="entry next reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-178</b></div>
+          <div class="entry-tag">JOURNAL</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node next"></div>
+          <h3 class="entry-title">Floki journaling</h3>
+          <p class="entry-desc">Structured trading journal. The <b>write_trading_journal</b> tool is live — we're expanding it to produce full session narratives.</p>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- ─────────── PHASE 04 · FUTURE ─────────── -->
+    <header class="phase-head reveal">
+      <div class="phase-kicker">
+        <span class="num">§ 04</span>
+        <span class="status-tag future">FUTURE</span>
+      </div>
+      <h2 class="phase-heading">Directions we're exploring.</h2>
+      <div class="phase-count">07 ITEMS</div>
+    </header>
+
+    <div class="phase-body">
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-301</b></div>
+          <div class="entry-tag">PHASE 4</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Atlas, dedicated technical analyst</h3>
+          <p class="entry-desc">A pattern-recognition agent with multi-timeframe structure mapping. The chart-reading brain Floki currently does not have.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-310</b></div>
+          <div class="entry-tag">MULTI-PAIR</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Multi-pair expansion</h3>
+          <p class="entry-desc">Extend beyond gold to XAG/USD, EUR/USD, and other liquid instruments. Per-pair config, model retraining, and indicator tuning.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-320</b></div>
+          <div class="entry-tag">LIVE</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Live account migration</h3>
+          <p class="entry-desc">Transition from demo to real capital once validation metrics are met. Gradual sizing ramp — not a switch flipped in one session.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-330</b></div>
+          <div class="entry-tag">SIZING</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Confidence-based position sizing</h3>
+          <p class="entry-desc">Deferred until account &gt; $5,000. Tier correlation is confirmed (win rate 67.6% → 77.6%), but lot-size constraints currently prevent the benefit.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-340</b></div>
+          <div class="entry-tag">INFRA</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">floki.watch domain &amp; split architecture</h3>
+          <p class="entry-desc">Dedicated trading server separated from the public-facing dashboard. Custom-domain deployment with clear blast-radius boundaries.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-350</b></div>
+          <div class="entry-tag">SOCIAL</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Twitter / X automation</h3>
+          <p class="entry-desc">Phased rollout: manual posting first, then semi-automated commentary, then fully automated trade narration — always on a leash.</p>
+        </div>
+      </article>
+
+      <article class="entry future reveal">
+        <div class="entry-meta">
+          <div class="entry-id"><b>FLO-360</b></div>
+          <div class="entry-tag">ML</div>
+        </div>
+        <div class="entry-main">
+          <div class="entry-node future"></div>
+          <h3 class="entry-title">Advanced ML &amp; pattern discovery</h3>
+          <p class="entry-desc">Deep learning and market-microstructure analysis. Exploration territory beyond the current ensemble approach — no commitments.</p>
+        </div>
+      </article>
+
+    </div>
+
+  </div><!-- /.rm-timeline -->
+
+  <!-- SIGN-OFF -->
+  <footer class="signoff reveal">
+    <div class="signoff-mark">◆ FLOKIWATCH · ROADMAP</div>
+    <div class="signoff-body">
+      This roadmap reflects the current plan and <b>will change</b> as the system evolves.
+      Items listed under <b>NEXT UP</b> and <b>FUTURE</b> are directions we're exploring, not commitments.
+      <br><br>
+      Shipped items are the only contract. Everything else is a best guess from the desk, written down honestly.
+    </div>
+  </footer>
+
+</main>
+
+<!-- Footer -->
+<div class="page-foot">
+  <div>FLOKIWATCH · V3.2 · ROADMAP</div>
+  <div class="pf-right">
+    <span>MAINTAINED BY THE DESK</span>
+    <span>·</span>
+    <span>UPDATED CONTINUOUSLY</span>
+  </div>
+</div>
+
+<!-- Scroll reveal -->
+<script>
+(function() {
+  var els = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window)) {
+    for (var i = 0; i < els.length; i++) els[i].classList.add('in');
+    return;
+  }
+  var obs = new IntersectionObserver(function(entries) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].isIntersecting) {
+        entries[i].target.classList.add('in');
+        obs.unobserve(entries[i].target);
+      }
+    }
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  for (var i = 0; i < els.length; i++) obs.observe(els[i]);
+})();
+</script>
+
+</body>
 </html>

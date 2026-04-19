@@ -6,7 +6,7 @@
 <title>Trade Room · FlokiWatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
 <style>
 /* ═══════════════════════════════════════════════════════════════
    TRADE ROOM REDESIGN — FlokiWatch
@@ -893,6 +893,208 @@ body[data-density="dense"] .tl-item { padding: 5px 4px; font-size: 10.5px; }
 
 /* v2: animated avatar GIFs inside ac-avatar / dh-avatar containers */
 .ac-avatar img, .dh-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+
+
+
+/* ═══════════════════════════════════════════════════════════════
+   8-BIT PIXEL OVERLAY — Trade Room
+   Re-skin over the DS: Press Start 2P for labels/headings,
+   VT323 for readable body. Hard edges, pixel nodes, CRT scanlines.
+   Density is kept — mostly font swaps and squared corners.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --pixel:   'Press Start 2P', 'Courier New', monospace;
+  --pixel-r: 'VT323', 'Courier New', monospace;
+}
+
+html, body {
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+/* Tighter grid, slightly green-tinted */
+body {
+  background-image:
+    linear-gradient(rgba(170,255,0,0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(170,255,0,0.022) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* CRT scanlines */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0 2px,
+    rgba(0,0,0,0.11) 2px 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Kill all rounded corners */
+* { border-radius: 0 !important; }
+
+/* ── COMMAND STRIP ───────────────────────────────────── */
+.brand-mark { font-size: 0; }
+.brand-mark::before { content: '\25A0'; font-size: 14px; color: var(--clr-floki); }
+.brand-name { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.14em; }
+.brand-sub  { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.nav-link   { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.1em; padding: 12px 12px; }
+.nav-link.active { color: var(--clr-floki); }
+.nav-link.active::after { height: 2px; background: var(--clr-floki); }
+
+.cmd-label  { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.cmd-val    { font-family: var(--pixel); font-size: 11px; letter-spacing: 0.02em; }
+.cmd-val.cmd-price-val { font-size: 13px; text-shadow: 2px 2px 0 #000; }
+.cmd-sub    { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.14em; }
+
+/* ── STATUS RAIL ─────────────────────────────────────── */
+.status-rail .sr-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.status-rail .sr-value { font-family: var(--pixel); font-size: 9px; letter-spacing: 0.04em; }
+.status-rail .pill     { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.14em; border-width: 2px; padding: 4px 8px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+
+/* ── DECISION HERO ───────────────────────────────────── */
+.dh-label { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.22em; }
+.dh-decision {
+  font-family: var(--pixel);
+  font-size: clamp(22px, 3.5vw, 36px);
+  letter-spacing: 0.02em;
+  text-shadow: 3px 3px 0 #000;
+}
+.dh-reason {
+  font-family: var(--pixel-r);
+  font-size: 18px;
+  line-height: 1.45;
+  letter-spacing: 0.015em;
+}
+.dh-trigger, .dh-target, .dh-stop { font-family: var(--pixel); font-size: 9px; letter-spacing: 0.08em; }
+.dh-conf-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.dh-conf-val   { font-family: var(--pixel); font-size: 14px; text-shadow: 2px 2px 0 #000; }
+
+/* ── POSITION PANEL ──────────────────────────────────── */
+.panel-label, .panel-title { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.22em; }
+.pos-empty { font-family: var(--pixel-r); font-size: 17px; letter-spacing: 0.02em; color: var(--text-2); }
+.pos-pnl   { font-family: var(--pixel); font-size: 22px; letter-spacing: 0.02em; text-shadow: 2px 2px 0 #000; }
+.pos-entry { font-family: var(--pixel); font-size: 14px; letter-spacing: 0.04em; }
+.pos-k     { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.pos-v     { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.02em; }
+
+/* ── SECTION HEADERS ─────────────────────────────────── */
+.sec-title { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.22em; text-shadow: 2px 2px 0 #000; }
+.sec-sub   { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.16em; }
+
+/* ── AGENT CARDS (cabinet) ───────────────────────────── */
+.ac-head   { border-bottom: 2px solid var(--border-2); }
+.ac-name   { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.14em; text-shadow: 2px 2px 0 #000; }
+.ac-role   { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.18em; }
+.ac-pill   { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.14em; border-width: 2px; padding: 4px 8px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+
+.agent-card { border-width: 2px; box-shadow: 3px 3px 0 rgba(0,0,0,0.5); }
+.agent-card:hover { border-color: var(--border-3); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 rgba(0,0,0,0.55); }
+
+/* Avatar tiles — pixelate */
+.agent-avatar, .avatar-rex, .avatar-oracle, .avatar-luna, .avatar-echo, .avatar-simba, .avatar-sage, .avatar-regime {
+  image-rendering: pixelated;
+  border-width: 2px;
+}
+
+/* ── REX DEBATE ──────────────────────────────────────── */
+.rex-side-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; }
+.rex-claim      { font-family: var(--pixel-r); font-size: 17px; line-height: 1.4; }
+.rex-rationale  { font-family: var(--pixel-r); font-size: 15px; line-height: 1.45; color: var(--text-2); }
+.rex-meta       { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.14em; }
+.ra-label       { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.ra-val         { font-family: var(--pixel); font-size: 9px; letter-spacing: 0.02em; }
+
+/* ── VERDICT (Oracle) ────────────────────────────────── */
+#verdict-card .ac-body { gap: 14px; }
+.vc-verdict     { font-family: var(--pixel); font-size: 20px; letter-spacing: 0.02em; text-shadow: 2px 2px 0 #000; }
+.vc-label, .vc-bar-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; }
+.vc-reasoning   { font-family: var(--pixel-r); font-size: 16px; line-height: 1.45; color: var(--text-1); }
+.vc-trigger, .vc-bar-val { font-family: var(--pixel); font-size: 9px; letter-spacing: 0.04em; }
+.vc-bar         { border-width: 2px; height: 12px; }
+.vc-bar-fill    { image-rendering: pixelated; }
+
+/* ── KV ROWS (shared) ────────────────────────────────── */
+.kv-k { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; }
+.kv-v { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.02em; }
+
+/* Luna risk row, Echo pills, Sage 3-col body — inherit via kv styles */
+
+/* ── MACRO / INTEL / TIMELINE ────────────────────────── */
+.macro-k { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.macro-v { font-family: var(--pixel); font-size: 11px; letter-spacing: 0.02em; }
+
+.ib-label { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.2em; text-shadow: 1px 1px 0 #000; }
+.ib-body  { font-family: var(--pixel-r); font-size: 16px; line-height: 1.4; }
+.ib-item  { font-family: var(--pixel-r); font-size: 15px; line-height: 1.4; }
+
+.tl-item-time   { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.14em; }
+.tl-item-agent  { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em; padding: 3px 7px; border-width: 2px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+.tl-item-title  { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.05em; }
+.tl-item-body   { font-family: var(--pixel-r); font-size: 15px; line-height: 1.45; }
+
+/* ── OPS RAIL / STATS / CALENDAR ─────────────────────── */
+.ops-head { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.22em; }
+.ops-k    { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.ops-v    { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.02em; }
+.ops-row  { border-bottom: 1px dashed var(--border-1); }
+
+/* ── MTF / PIVOTS / JOURNAL / DEEP DIVE ──────────────── */
+.mtf-cell, .pv-cell {
+  font-family: var(--pixel); font-size: 8px; letter-spacing: 0.08em;
+  border-width: 2px; padding: 6px 4px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+}
+.mtf-k, .pv-k, .dd-k, .jr-k { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.mtf-v, .pv-v, .dd-v, .jr-v { font-family: var(--pixel); font-size: 9px; letter-spacing: 0.02em; }
+.dd-body { font-family: var(--pixel-r); font-size: 15px; line-height: 1.45; }
+
+/* Tables (journal) */
+table { font-family: var(--pixel-r); font-size: 14px; }
+th { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+td { padding: 5px 7px; }
+
+/* Buttons */
+button, .btn {
+  font-family: var(--pixel); font-size: 8px; letter-spacing: 0.16em;
+  border-width: 2px !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.6);
+}
+button:hover, .btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 rgba(0,0,0,0.7); }
+button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 rgba(0,0,0,0.6); }
+
+/* ── TAGS / PILLS / CHIPS everywhere ─────────────────── */
+.chip, .tag, .badge, .pill {
+  font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em;
+  border-width: 2px; padding: 3px 7px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+/* ── BLINKING LIVE DOT ───────────────────────────────── */
+.status-dot { border-radius: 0 !important; width: 6px; height: 6px; animation: pixel-blink 0.9s steps(2) infinite; box-shadow: none; }
+@keyframes pixel-blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ── FOOTER ──────────────────────────────────────────── */
+.crumb, .rail-tag, .page-foot { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+
+/* ── Responsive tweaks ──────────────────────────────── */
+@media (max-width: 820px) {
+  .brand-name { font-size: 9px; }
+  .nav-link { font-size: 7px; padding: 10px 8px; }
+  .cmd-val { font-size: 9px; }
+  .dh-decision { font-size: 20px; }
+  .ac-name { font-size: 9px; }
+}
+@media (max-width: 560px) {
+  .dh-decision { font-size: 18px; }
+  .dh-reason { font-size: 16px; }
+  .tl-item-body, .ib-item, .ib-body, .vc-reasoning, .rex-claim { font-size: 15px; }
+  .rex-rationale, .dd-body { font-size: 14px; }
+}
 
 </style>
   <link rel="icon" type="image/png" href="/image/flokiwatch.png">

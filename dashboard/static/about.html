@@ -6,7 +6,7 @@
 <title>About · FlokiWatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
 <style>
 /* ═══════════════════════════════════════════════════════════════
    ABOUT — editorial page in FlokiWatch design system
@@ -445,6 +445,182 @@ section.story {
   .fb-fact { grid-template-columns: 96px 1fr; }
   .page-foot { flex-direction: column; gap: 8px; text-align: center; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   8-BIT PIXEL OVERLAY — About
+   Same approach as Trade Room / Roadmap 8bit: Press Start 2P
+   for labels/headings, VT323 for readable body copy.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --pixel:   'Press Start 2P', 'Courier New', monospace;
+  --pixel-r: 'VT323', 'Courier New', monospace;
+}
+
+html, body {
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(170,255,0,0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(170,255,0,0.022) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0 2px,
+    rgba(0,0,0,0.11) 2px 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+* { border-radius: 0 !important; }
+
+/* ── COMMAND STRIP (shared) ──────────────────────── */
+.brand-mark { font-size: 0; }
+.brand-mark::before { content: '\25A0'; font-size: 14px; color: var(--clr-floki); }
+.brand-name { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.14em; }
+.brand-sub  { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.nav-link   { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.1em; padding: 12px 12px; }
+.nav-link.active { color: var(--clr-floki); }
+.nav-link.active::after { height: 2px; background: var(--clr-floki); }
+
+.cmd-label { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; }
+.cmd-val   { font-family: var(--pixel); font-size: 11px; letter-spacing: 0.02em; text-shadow: 2px 2px 0 #000; }
+.cmd-sub   { font-family: var(--pixel); font-size: 6.5px; letter-spacing: 0.14em; }
+
+.status-dot { border-radius: 0 !important; width: 6px; height: 6px; animation: pixel-blink 0.9s steps(2) infinite; box-shadow: none; }
+.live-dot   { border-radius: 0 !important; width: 6px; height: 6px; animation: pixel-blink 0.9s steps(2) infinite; }
+@keyframes pixel-blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.crumb      { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+.rail-tag   { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.18em; border-width: 2px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); padding: 4px 8px; }
+
+/* ── EYEBROW ──────────────────────────────────────── */
+.eyebrow { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.22em; }
+
+/* ── HERO ─────────────────────────────────────────── */
+.hero-title {
+  font-family: var(--pixel);
+  font-size: clamp(26px, 4.2vw, 56px);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-shadow: 4px 4px 0 #000;
+  max-width: 16ch;
+}
+.hero-deck {
+  font-family: var(--pixel-r);
+  font-size: clamp(20px, 2.2vw, 26px);
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+.hero-meta   { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.18em; }
+.hero-meta b { font-family: var(--pixel); letter-spacing: 0.2em; }
+
+/* ── STORY BLOCKS ─────────────────────────────────── */
+.story-kicker       { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.24em; }
+.story-kicker .num  { font-family: var(--pixel); color: var(--text-4); }
+.story-kicker .label{ font-family: var(--pixel); letter-spacing: 0.24em; }
+
+.story-heading {
+  font-family: var(--pixel);
+  font-size: clamp(16px, 1.8vw, 22px);
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  text-shadow: 2px 2px 0 #000;
+}
+
+/* Long-form prose — VT323 is the readable one */
+.prose {
+  font-family: var(--pixel-r);
+  font-size: 20px;
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+}
+.prose p.lead { font-family: var(--pixel-r); font-size: 22px; line-height: 1.45; }
+.prose p      { font-family: var(--pixel-r); font-size: 19px; line-height: 1.5; }
+.prose h3, .prose h4 {
+  font-family: var(--pixel); font-size: 11px; letter-spacing: 0.18em;
+  text-shadow: 2px 2px 0 #000; margin-top: 32px;
+}
+.prose strong, .prose b { font-family: var(--pixel-r); color: var(--text-0); font-weight: normal; border-bottom: 1px dashed var(--clr-floki); }
+.prose em { font-family: var(--pixel-r); font-style: normal; color: var(--clr-floki); }
+.prose code, .prose kbd, .prose tt {
+  font-family: var(--pixel); font-size: 10px; letter-spacing: 0.04em;
+  padding: 2px 6px; border: 1px solid var(--border-2);
+  background: var(--bg-1);
+}
+
+/* Pull quote */
+.pullquote {
+  border-left: 4px solid var(--clr-floki);
+  padding-left: 24px;
+}
+.pullquote p, .pullquote blockquote {
+  font-family: var(--pixel-r); font-size: 22px; line-height: 1.4;
+  color: var(--text-0);
+}
+.pullquote-attr { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.2em; }
+
+/* ── FLOKI HERO (photo + bio) ─────────────────────── */
+.floki-hero {
+  border-width: 2px; border-style: solid; border-color: var(--border-2);
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
+}
+.floki-photo, .floki-photo img { image-rendering: pixelated; }
+.photo-caption { font-family: var(--pixel); font-size: 7px; letter-spacing: 0.2em; padding: 5px 8px; border-width: 2px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+.fb-name       { font-family: var(--pixel); font-size: clamp(18px, 2.6vw, 28px); line-height: 1.2; letter-spacing: 0.02em; text-shadow: 3px 3px 0 #000; }
+.fb-role       { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.22em; }
+.fb-fact       { font-family: var(--pixel-r); font-size: 17px; }
+.fb-fact > *:first-child { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.2em; color: var(--text-3); }
+
+/* ── ORIGIN LINE & TAGS ───────────────────────────── */
+.origin-line { font-family: var(--pixel); font-size: 8px; letter-spacing: 0.14em; }
+.origin-tag {
+  font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em;
+  border-width: 2px; padding: 4px 8px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+/* ── SIGN-OFF ─────────────────────────────────────── */
+.signoff-mark { font-family: var(--pixel); font-size: 10px; letter-spacing: 0.22em; text-shadow: 2px 2px 0 #000; }
+.signoff-body { font-family: var(--pixel-r); font-size: 16px; line-height: 1.55; }
+
+/* ── FOOTER ───────────────────────────────────────── */
+.page-foot { font-family: var(--pixel); font-size: 7.5px; letter-spacing: 0.18em; }
+
+/* Tags / chips / pills globally */
+.chip, .tag, .badge, .pill {
+  font-family: var(--pixel); font-size: 7px; letter-spacing: 0.16em;
+  border-width: 2px; padding: 3px 7px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+/* ── Responsive ───────────────────────────────────── */
+@media (max-width: 820px) {
+  .brand-name { font-size: 9px; }
+  .nav-link { font-size: 7px; padding: 10px 8px; }
+  .cmd-val { font-size: 9px; }
+  .hero-title { font-size: clamp(22px, 6vw, 36px); }
+  .fb-name { font-size: 20px; }
+}
+@media (max-width: 560px) {
+  .hero-title { font-size: 22px; }
+  .hero-deck  { font-size: 18px; }
+  .prose p.lead { font-size: 19px; }
+  .prose p { font-size: 17px; }
+  .pullquote p, .pullquote blockquote { font-size: 19px; }
+  .fb-fact { font-size: 15px; }
+}
+
 </style>
 </head>
 <body>
