@@ -69,7 +69,7 @@ em { font-style: italic; color: var(--text-0); }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-2);
-  min-height: 84px;
+  height: 96px;
 }
 .cmd-brand { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-right: 1px solid var(--border-1); }
 .brand-logo { width: 28px; height: 28px; image-rendering: pixelated; image-rendering: crisp-edges; flex-shrink: 0; }
@@ -78,8 +78,8 @@ em { font-style: italic; color: var(--text-0); }
 
 .cmd-nav { display: flex; align-items: center; gap: 2px; padding: 0 10px; justify-content: flex-start; }
 .nav-link {
-  padding: 10px 12px; font-size: 10.5px; letter-spacing: 0.18em; color: var(--text-3);
-  cursor: pointer; transition: color .15s;
+  padding: 10px 12px; font-size: 10.5px; line-height: 1; letter-spacing: 0.18em; color: var(--text-3);
+  cursor: pointer; transition: color .15s; white-space: nowrap;
 }
 .nav-link:hover { color: var(--text-1); }
 .nav-link.active { color: var(--accent); position: relative; }
@@ -413,7 +413,7 @@ section.story {
    ─────────────────────────────────────────────────────────────── */
 @media (max-width: 820px) {
   /* Mobile: brand (row 1) / nav (row 2, scrollable) / rail (row 3, scrollable) — same as Trade Room */
-  .cmd-strip { grid-template-columns: 1fr; grid-template-rows: auto auto auto; min-height: 0; }
+  .cmd-strip { grid-template-columns: 1fr; grid-template-rows: auto auto auto; height: auto; }
   .cmd-brand { grid-column: 1; grid-row: 1; padding: 10px 14px; border-right: none; border-bottom: 1px solid var(--border-1); }
   .cmd-nav {
     grid-column: 1; grid-row: 2; padding: 0 10px;
