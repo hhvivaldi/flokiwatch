@@ -5288,7 +5288,14 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
 
                 // Floki decision hero: when market closed, show rest label instead of WAIT
                 if (!isOpen) {
-                  var isCoffee2 = /daily pause|21:00|22:00/i.test(reason);
+                  // Weekend detection first (UTC-day or reason keyword) — daily pause
+                  // regex alone falsely matches "Sunday before 22:00 UTC" weekend strings.
+                  var _nowUtc = new Date();
+                  var _utcDay = _nowUtc.getUTCDay(); // 0=Sun, 6=Sat
+                  var _utcHour = _nowUtc.getUTCHours();
+                  var isWeekend2 = (_utcDay === 0 || _utcDay === 6 || (_utcDay === 5 && _utcHour >= 21))
+                                   || /weekend|saturday|sunday/i.test(reason);
+                  var isCoffee2 = !isWeekend2 && /daily[\s_]?pause/i.test(reason);
                   var restLabel = isCoffee2 ? 'COFFEE BREAK' : 'REST DAY';
                   var dhEl = document.getElementById('floki-decision-hero');
                   if (dhEl) {
