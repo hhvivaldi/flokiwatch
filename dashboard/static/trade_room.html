@@ -5751,13 +5751,6 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
               if (_dhConfFill.style.width !== _confBar.style.width) _dhConfFill.style.width = _confBar.style.width;
             }
 
-            // Countdown: cc-countdown (cmd strip) -> dh-countdown
-            var _ccCd = _get('cc-countdown');
-            var _dhCd = _get('dh-countdown');
-            if (_ccCd && _dhCd && _ccCd.textContent && _dhCd.textContent !== _ccCd.textContent) {
-              _dhCd.textContent = _ccCd.textContent;
-            }
-
             // Signal: cc-regime (cmd strip) -> dh-signal-val
             var _ccRegime = _get('cc-regime');
             var _dhSignal = _get('dh-signal-val');
@@ -5766,11 +5759,8 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
               if (_dhSignal.textContent !== _rt) _dhSignal.textContent = _rt;
             }
 
-            // Pending-orders countdown: cc-countdown -> pe-count
-            var _peCd = _get('pe-count');
-            if (_ccCd && _peCd && _ccCd.textContent && _peCd.textContent !== _ccCd.textContent) {
-              _peCd.textContent = _ccCd.textContent;
-            }
+            // dh-countdown + pe-count are now driven by the 1s ticker; no
+            // poll-mirror needed here (that caused the yellow-countdown lag).
 
             // FLO-304 Intel sidebar + EA bridge — direct state reads
             var _la = (state && state.last_analysis) || {};
@@ -5963,6 +5953,8 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             var targets = [
               {el: document.getElementById('proactive-countdown'), label: document.getElementById('proactive-countdown-label'), big: true},
               {el: document.getElementById('cc-countdown'), label: null, big: false},
+              {el: document.getElementById('dh-countdown'), label: null, big: false},
+              {el: document.getElementById('pe-count'), label: null, big: false},
             ];
             for (var ti = 0; ti < targets.length; ti++) {
               var tgt = targets[ti];
