@@ -1275,7 +1275,22 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
 # ---------------------------------------------------------------------------
 
 def _detect_patterns(macro: Dict[str, Any], echo_alerts: List[Dict]) -> Dict[str, Any]:
-    """Detect cross-asset patterns from macro data. Returns {detected: [], details: {}}."""
+    """Detect cross-asset patterns from macro data. Returns {detected: [], details: {}}.
+
+    WARNING — MUST be kept in sync with Luna's LLM prompt PATTERN DETECTION section
+    (SYSTEM_PROMPT around line 85). Adding a pattern description to the prompt
+    without adding a corresponding branch here will cause the new pattern to be
+    silently dropped by _parse_mimo_response() reconciliation (intersection of
+    LLM output with this deterministic detector).
+
+    Currently covered patterns (5/5 as of commit 2 below):
+      - forced_liquidation
+      - safe_haven_flow
+      - news_price_divergence
+      - dollar_gold_correlation_break
+      - blow_off_reversal    (added in commit 1)
+    Last synced: see commit hash in commit 2 of the Bug A fix pair.
+    """
     detected: List[str] = []
     details: Dict[str, str] = {}
 
@@ -1339,6 +1354,26 @@ def _detect_patterns(macro: Dict[str, Any], echo_alerts: List[Dict]) -> Dict[str
                 f"DXY {dxy_chg:+.2f}% and Gold {gold_chg:+.2f}% moving in same direction ({direction}). "
                 "Normal inverse correlation broken — unusual driver at work."
             )
+
+    # blow_off_reversal
+    # Prompt criteria (SYSTEM_PROMPT lines ~112-117):
+    #   Gold down >1.5% from 3-day high WHILE DXY falling AND yields falling.
+    # Data field: gold["from_3d_high_pct"] populated at line ~332 on MT5 path
+    # (current − 3d_high) / 3d_high * 100 → negative when below peak.
+    # Field is absent on Yahoo fallback path; guard with `is not None`.
+    yields = macro.get("yields", {})
+    yields_chg = yields.get("change_percent", 0) or 0
+    gold_from_3d_high_pct = gold.get("from_3d_high_pct")
+    if (gold_from_3d_high_pct is not None
+            and gold_from_3d_high_pct <= -1.5
+            and dxy_chg < 0
+            and yields_chg < 0):
+        detected.append("blow_off_reversal")
+        details["blow_off_reversal"] = (
+            f"Gold {gold_from_3d_high_pct:+.2f}% from 3-day high while DXY "
+            f"{dxy_chg:+.2f}% and yields {yields_chg:+.2f}% (both falling = bullish macro). "
+            "Price diverging from fundamentals — forced liquidation or exhaustion top."
+        )
 
     return {"detected": detected, "details": details}
 
