@@ -5059,6 +5059,14 @@ class TradingBot:
         except Exception as e:
             log.warning(f"{trigger_type} | DB write error (ignored): {e}")
 
+        # FLO-XXX: post-cycle flag counters (observability only, no behavior change)
+        try:
+            from decision_flags import compute_and_persist as _cf_compute
+            _tool_trace = getattr(agent_result, "tool_trace", None)
+            _cf_compute(snapshot_time_iso, _tool_trace, "proactive")
+        except Exception:
+            pass
+
         try:
             # Store for dashboard
             if self.last_analysis and isinstance(self.last_analysis, dict):
@@ -6484,6 +6492,16 @@ class TradingBot:
             executed=executed,
             agreement=agreement,
         )
+
+        # FLO-XXX: post-cycle flag counters (observability only, no behavior change)
+        try:
+            from decision_flags import compute_and_persist as _cf_compute
+            _ar_dict = agent_result.to_dict()
+            _ts_iso = _ar_dict.get("timestamp")
+            if _ts_iso:
+                _cf_compute(str(_ts_iso), _ar_dict.get("tool_trace"), "scheduled")
+        except Exception:
+            pass
         
         # Send Discord alert
         alert_agent_decision(
