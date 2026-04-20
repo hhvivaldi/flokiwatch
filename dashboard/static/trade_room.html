@@ -2096,6 +2096,15 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
                 var vc = t.verdict_type === 'helped' ? '#4ade80' : t.verdict_type === 'hurt' ? '#f87171' : '#94a3b8';
                 var vBg = t.verdict_type === 'helped' ? 'rgba(74,222,128,0.1)' : t.verdict_type === 'hurt' ? 'rgba(248,113,113,0.1)' : 'rgba(148,163,184,0.08)';
                 verdictHtml = '<span style="color:'+vc+';background:'+vBg+';padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;border:1px solid '+vc+'22">' + t.verdict + '</span>';
+              } else if (t.close_reason) {
+                // FLO-304 fallback: when no counterfactual yet, show mechanical
+                // outcome derived from close_reason so the column isn't blank.
+                // (Real counterfactual verdicts populate via run_eod_counterfactuals.)
+                var _crMap = {'Stop Loss':'STOPPED','Take Profit':'TP HIT','Expert Advisor':'EA EXIT','Breakeven':'BE HIT','Manual':'MANUAL'};
+                var _crLbl = _crMap[t.close_reason] || t.close_reason;
+                var _crColor = (t.pnl || 0) > 0 ? '#4ade80' : ((t.pnl || 0) < 0 ? '#f87171' : '#94a3b8');
+                var _crBg = (t.pnl || 0) > 0 ? 'rgba(74,222,128,0.06)' : ((t.pnl || 0) < 0 ? 'rgba(248,113,113,0.06)' : 'rgba(148,163,184,0.05)');
+                verdictHtml = '<span style="color:' + _crColor + ';background:' + _crBg + ';padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;border:1px solid ' + _crColor + '18;opacity:0.85" title="mechanical outcome — counterfactual pending">' + _crLbl + '</span>';
               }
               html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
                 '<td style="padding:4px 6px;color:#94a3b8">' + t.ticket + '</td>' +
@@ -4066,12 +4075,18 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
                   html_final += '<div style="font-size:10px;color:#f59e0b;font-weight:700;margin-top:4px">\u26A0 All conditions fired — waiting for Floki to set new ones</div>';
                 }
                 expandEl.innerHTML = html_final;
+                // CSS at line 50 has [hidden] { display: none !important } which
+                // beats inline style.display — so we must REMOVE the hidden
+                // attribute (so the selector stops matching) before showing.
+                expandEl.removeAttribute('hidden');
                 expandEl.style.display = 'block';
                 expandEl.style.overflow = 'visible';
                 expandEl.style.webkitLineClamp = 'initial';
                 expandEl.style.lineClamp = 'initial';
               } else {
-                expandEl.textContent = 'No active conditions.';
+                // No active conditions: re-hide to keep the card tidy.
+                expandEl.textContent = '';
+                expandEl.setAttribute('hidden', '');
               }
             }
           } catch (e) {
@@ -4649,6 +4664,8 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             }
 
             // FLO-195: Research Manager Verdict card
+            // FLO-304: relaxed gating — accept winner without explicit status:'OK'
+            // (some produce paths write verdict{} without a status field).
             try {
               var verdict = (state && state.last_analysis && state.last_analysis.verdict) ? state.last_analysis.verdict : {};
               var vStatus = verdict.status || '';
@@ -4659,7 +4676,9 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
               var vReasoning = document.getElementById('verdict-reasoning');
               var vLevels = document.getElementById('verdict-levels');
 
-              if (vStatus === 'OK' && verdict.winner) {
+              // FLO-304: render if we have any winner signal; don't require status==OK
+              var _hasVerdict = verdict && verdict.winner && vStatus !== 'FAILED' && vStatus !== 'SKIPPED';
+              if (_hasVerdict) {
                 var vWinner = verdict.winner;
                 var vRec = verdict.recommendation || '?';
                 var vConv = parseInt(verdict.conviction) || 0;
