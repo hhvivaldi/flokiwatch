@@ -1226,9 +1226,9 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
       <div class="dh-stat">
         <span class="ds-label">CONFIDENCE</span>
         <div class="dh-gauge">
-          <div class="dh-gauge-fill" style="width:58%"></div>
+          <div class="dh-gauge-fill" id="dh-conf-fill" style="width:58%"></div>
         </div>
-        <span class="ds-val">58<span class="ds-unit">%</span></span>
+        <span class="ds-val"><span id="dh-conf-val">58</span><span class="ds-unit">%</span></span>
       </div>
       <div class="dh-stat">
         <span class="ds-label">NEXT CYCLE IN</span>
@@ -1236,7 +1236,7 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
       </div>
       <div class="dh-stat">
         <span class="ds-label">SIGNAL</span>
-        <span class="ds-val dim">RANGE-BOUND</span>
+        <span class="ds-val dim" id="dh-signal-val">RANGE-BOUND</span>
       </div>
     </div>
   </section>
@@ -5703,6 +5703,55 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
           } catch(e) {
             // silent
           }
+
+          // FLO-304: mirror legacy IDs (written by HEAD renderer) into v2 hero
+          // IDs that the user sees. Fixes "WAIT 58% 4832" frozen state on
+          // the Decision Hero when market is open. Runs on every updatePanels.
+          try {
+            var _get = function(id) { return document.getElementById(id); };
+
+            // Decision text: floki-decision-pill -> floki-decision-hero
+            var _decPill = _get('floki-decision-pill');
+            var _decHero = _get('floki-decision-hero');
+            if (_decPill && _decHero && _decPill.textContent && _decPill.textContent.trim() !== '' && _decPill.textContent.trim() !== '—') {
+              if (_decHero.textContent !== _decPill.textContent) _decHero.textContent = _decPill.textContent;
+            }
+
+            // Reasoning: floki-summary -> floki-summary-hero
+            var _summary = _get('floki-summary');
+            var _summaryHero = _get('floki-summary-hero');
+            if (_summary && _summaryHero && _summary.textContent && _summary.textContent.trim() !== '') {
+              if (_summaryHero.textContent !== _summary.textContent) _summaryHero.textContent = _summary.textContent;
+            }
+
+            // Confidence: floki-conf-text "58%" -> dh-conf-val "58", floki-conf-bar style.width -> dh-conf-fill
+            var _confText = _get('floki-conf-text');
+            var _confBar = _get('floki-conf-bar');
+            var _dhConfVal = _get('dh-conf-val');
+            var _dhConfFill = _get('dh-conf-fill');
+            if (_confText && _dhConfVal) {
+              var _ct = (_confText.textContent || '').replace('%', '').replace('—', '?').trim();
+              if (_ct && _dhConfVal.textContent !== _ct) _dhConfVal.textContent = _ct;
+            }
+            if (_confBar && _dhConfFill && _confBar.style.width) {
+              if (_dhConfFill.style.width !== _confBar.style.width) _dhConfFill.style.width = _confBar.style.width;
+            }
+
+            // Countdown: cc-countdown (cmd strip) -> dh-countdown
+            var _ccCd = _get('cc-countdown');
+            var _dhCd = _get('dh-countdown');
+            if (_ccCd && _dhCd && _ccCd.textContent && _dhCd.textContent !== _ccCd.textContent) {
+              _dhCd.textContent = _ccCd.textContent;
+            }
+
+            // Signal: cc-regime (cmd strip) -> dh-signal-val
+            var _ccRegime = _get('cc-regime');
+            var _dhSignal = _get('dh-signal-val');
+            if (_ccRegime && _dhSignal && _ccRegime.textContent && _ccRegime.textContent.trim() !== '') {
+              var _rt = _ccRegime.textContent.trim();
+              if (_dhSignal.textContent !== _rt) _dhSignal.textContent = _rt;
+            }
+          } catch(e) { /* silent */ }
         }
 
         function fetchJson(url) {
