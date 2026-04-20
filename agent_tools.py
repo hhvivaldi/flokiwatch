@@ -454,6 +454,18 @@ class AgentTools:
             if bid is None or ask is None:
                 return None
 
+            # Bug C live-recovery: the cache may have been coerced to a
+            # placeholder upstream (bid == ask via main.py:2190 scalar coerce,
+            # or spread == 0.0 hardcoded via main.py:6139). Refresh from MT5
+            # once if the trigger fires; on any failure, pass cache values
+            # through unchanged (never raise, never block).
+            if bid == ask or spread is None or spread <= 0.0:
+                live = self._fetch_live_price_from_executor()
+                if live and live.get("bid") != live.get("ask"):
+                    bid = live["bid"]
+                    ask = live["ask"]
+                    spread = live["spread"]
+
             if spread is None:
                 spread = (ask - bid) / 0.1  # Convert raw price diff to pips (gold pip = 0.1)
 
