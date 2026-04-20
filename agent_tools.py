@@ -467,6 +467,36 @@ class AgentTools:
         except Exception:
             return None
 
+    def _fetch_live_price_from_executor(self) -> Optional[Dict[str, Any]]:
+        """Bug C live-recovery helper (dormant until Commit 2 wiring).
+
+        Fetches a fresh (bid, ask) tuple directly from MT5 via the executor,
+        intended as a fallback when the cached price dict has been coerced
+        to a placeholder (bid == ask or spread <= 0.0, see main.py:2190 /
+        main.py:6139 injection sites). Returns a {bid, ask, spread} dict on
+        success or None on any failure. Caller is responsible for deciding
+        whether to accept the result (e.g. by checking bid != ask); helper
+        does not second-guess live MT5. Never raises.
+        """
+        try:
+            if self._executor is None:
+                return None
+            tup = self._executor.get_current_price()
+            if not tup or len(tup) != 2:
+                return None
+            bid = self._safe_float(tup[0])
+            ask = self._safe_float(tup[1])
+            if bid is None or ask is None:
+                return None
+            spread = (ask - bid) / 0.1  # XAU/USD: 1 pip = 0.1
+            return {"bid": bid, "ask": ask, "spread": spread}
+        except Exception as e:
+            try:
+                log.debug(f"agent_tools: _fetch_live_price_from_executor non-blocking error: {e}")
+            except Exception:
+                pass
+            return None
+
     def _log_tool(self, name: str, start_t: float, extra: str = "") -> None:
         try:
             ms = int((time.time() - start_t) * 1000)
