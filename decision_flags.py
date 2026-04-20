@@ -202,6 +202,10 @@ def flag_low_volume_entry(trace: List[Dict[str, Any]]) -> bool:
         if isinstance(vr, (int, float)):
             return float(vr) < 0.5
     # 2. Fallback: regex against get_market_regime.evidence string.
+    # FRAGILE: depends on get_market_regime.evidence string format
+    # ("Volume 0.37x avg (below average)"). If that format changes, this
+    # flag will silently return False with no warning. Revisit if volume
+    # ratio begins appearing in get_indicators output directly.
     for t in _find_tool_results(trace, "get_market_regime"):
         r = t.get("result") or {}
         for line in (r.get("evidence") or []):
