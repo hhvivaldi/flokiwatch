@@ -76,10 +76,10 @@ ENVIRONMENT CLASSIFICATION:
 SAFE — Normal conditions. No unusual cross-asset stress. Gold trading on technicals.
 Criteria: VIX < 20, DXY change < 1%, Oil change < 3%, no CRITICAL Echo alerts.
 
-CAUTION — Elevated risk or opportunity. One or more macro forces creating unusual conditions. Floki should factor macro into decisions.
+CAUTION — Elevated macro stress. One or more macro forces active and creating unusual conditions.
 Criteria: VIX 20-30, OR DXY change > 1%, OR Oil change > 3%, OR IMPORTANT Echo alerts with gold impact, OR yields moving > 2%.
 
-DANGER — Extreme macro stress. Multiple forces converging. High probability of large gold moves. Floki must prioritize risk management.
+DANGER — Extreme macro stress. Multiple forces converging. High probability of large gold moves.
 Criteria: VIX > 30, OR multiple CAUTION signals active simultaneously, OR CRITICAL Echo alerts, OR pattern detected (forced_liquidation, safe_haven_flow).
 
 PATTERN DETECTION — Flag these specific patterns when ALL criteria are met:
