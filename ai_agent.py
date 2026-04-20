@@ -89,11 +89,18 @@ def _update_session_memory(session_notes: str, session_context: Optional[Dict[st
                 "last_updated": now.isoformat(timespec="seconds"),
             }
 
-        sc = session_context if isinstance(session_context, dict) else {}
+        # Bug B commit 2: counters sourced from SQL trades table via helper.
+        # Previous code read from session_context (expected a dict); at some
+        # refactor the caller started passing trigger_context as a string, so
+        # the dict-extraction silently failed and counters stayed at 0. The
+        # session_context parameter is kept on the function signature for
+        # backward-compat but no longer consumed.
         try:
-            payload["trades_today"] = int(sc.get("today_trades", payload.get("trades_today", 0)) or 0)
-            payload["wins_today"] = int(sc.get("today_wins", payload.get("wins_today", 0)) or 0)
-            payload["losses_today"] = int(sc.get("today_losses", payload.get("losses_today", 0)) or 0)
+            from agent_memory import _read_daily_counters_for_session_date
+            counters = _read_daily_counters_for_session_date(today)
+            payload["trades_today"] = counters["trades_today"]
+            payload["wins_today"]   = counters["wins_today"]
+            payload["losses_today"] = counters["losses_today"]
         except Exception:
             pass
 
@@ -2193,16 +2200,11 @@ async def agent_decide(
 
     try:
         if result.session_notes:
-            session_context = None
-            session_context = None
-            if isinstance(trigger_context, dict):
-                try:
-                    session_context = (trigger_context.get("session") or {}).get("context")
-                except Exception:
-                    session_context = None
-                if not session_context:
-                    session_context = trigger_context.get("session")
-            _update_session_memory(result.session_notes, session_context=session_context)
+            # Bug B commit 2: dropped broken session_context extraction.
+            # trigger_context here is a STRING (not the dict the old code
+            # assumed), so the extraction always returned None. Counters
+            # now come from SQL via the helper inside _update_session_memory.
+            _update_session_memory(result.session_notes)
     except Exception as e:
         logger.debug(f"Session memory persist failed (non-blocking): {e}")
     

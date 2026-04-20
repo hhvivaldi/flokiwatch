@@ -3717,6 +3717,19 @@ class AgentTools:
                 except Exception:
                     payload["notes"] = payload["notes"][-8:]
 
+            # Bug B commit 2: overwrite counters with fresh SQL values before
+            # write. Merge at ~3628 may have imported stale 0/0/0 from the
+            # existing file; this ensures Floki sees today's actual trades.
+            # Helper is silent-fallback (zeros on DB error), never raises.
+            try:
+                from agent_memory import _read_daily_counters_for_session_date
+                _counters = _read_daily_counters_for_session_date(str(payload.get("session_date") or ""))
+                payload["trades_today"] = _counters["trades_today"]
+                payload["wins_today"]   = _counters["wins_today"]
+                payload["losses_today"] = _counters["losses_today"]
+            except Exception:
+                pass
+
             payload["last_updated"] = utc_iso()  # FLO-309 regression fix
 
             try:
