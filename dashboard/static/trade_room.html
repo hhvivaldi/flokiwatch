@@ -5771,6 +5771,40 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             if (_ccCd && _peCd && _ccCd.textContent && _peCd.textContent !== _ccCd.textContent) {
               _peCd.textContent = _ccCd.textContent;
             }
+
+            // FLO-304 Intel sidebar + EA bridge — direct state reads
+            var _la = (state && state.last_analysis) || {};
+            var _ind = _la.indicators || {};
+            var _feed = _la.intel_feed || {};
+            var _setIf = function(id, val) {
+              var el = _get(id);
+              if (el && val != null && val !== '' && el.textContent !== String(val)) {
+                el.textContent = String(val);
+              }
+            };
+
+            // intel-mtf: mtf_trend from last_analysis (top-level)
+            if (_la.mtf_trend) _setIf('intel-mtf', _la.mtf_trend);
+            // intel-volume: volume_classification
+            if (_ind.volume_classification) _setIf('intel-volume', String(_ind.volume_classification).toUpperCase());
+            // intel-patterns: mirror cached top patterns (already built, just not piped here)
+            if (typeof cachedTopPatternsText !== 'undefined' && cachedTopPatternsText) {
+              _setIf('intel-patterns', cachedTopPatternsText);
+            }
+            // intel-method: intel_feed.analysis_method
+            if (_feed.analysis_method) _setIf('intel-method', _feed.analysis_method);
+            // intel-cache-age: intel_feed.cache_age_minutes
+            if (_feed.cache_age_minutes != null) {
+              _setIf('intel-cache-age', _feed.cache_age_minutes + 'm ago');
+            }
+
+            // ea-bridge-status-2: "EA ONLINE" / "EA OFFLINE" from state.ea_bridge
+            var _eab = (state && state.ea_bridge) || {};
+            var _eaEl = _get('ea-bridge-status-2');
+            if (_eaEl) {
+              var _eaTxt = _eab.online ? 'EA ONLINE' : (_eab.enabled === false ? 'EA DISABLED' : 'EA OFFLINE');
+              if (_eaEl.textContent !== _eaTxt) _eaEl.textContent = _eaTxt;
+            }
           } catch(e) { /* silent */ }
         }
 
