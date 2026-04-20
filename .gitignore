@@ -38,9 +38,10 @@ data/*.csv
 data/*.txt
 data/*.json
 
-# Allow committing Sage schema/report artifacts
+# Allow committing Sage schema only. sage_report.json is runtime state —
+# tracking it in git caused FLO-303: Apr 18 git reset reverted the file
+# to a 20-day-old committed version.
 !data/sage_report.schema.json
-!data/sage_report.json
 
 # ChromaDB vector store (runtime, regenerated from SQLite)
 data/chromadb/
