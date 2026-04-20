@@ -1216,8 +1216,19 @@ def _analyze_with_mimo(macro: Dict[str, Any], echo_alerts: List[Dict],
         return None
 
 
-def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaAnalysisResult:
-    """Convert MiMo JSON response into LunaAnalysisResult."""
+def _parse_mimo_response(
+    parsed: Dict[str, Any],
+    macro: Dict[str, Any],
+    echo_alerts: Optional[List[Dict[str, Any]]] = None,
+) -> LunaAnalysisResult:
+    """Convert MiMo JSON response into LunaAnalysisResult.
+
+    Bug A fix: patterns_detected from the LLM is reconciled against the
+    deterministic _detect_patterns() output (intersection). LLM-only
+    patterns are dropped with a WARNING log line so Floki never sees
+    hallucinated patterns contradicted by the correlations block.
+    echo_alerts is optional for backward-compat; when omitted, the
+    news_price_divergence detector path reads an empty list."""
     # Ensure data_snapshot is present — inject from collected data if MiMo omits it
     data_snapshot = parsed.get("data_snapshot")
     if not data_snapshot or not isinstance(data_snapshot, dict):
@@ -1251,6 +1262,47 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         log.warning(f"LUNA: invalid bias_confidence '{parsed.get('bias_confidence')}' — defaulting to 3")
         bias_confidence = 3
 
+    # Bug A commit 2: Reconcile LLM-reported patterns with deterministic detector.
+    # LLM sometimes hallucinates patterns (e.g. claims "both negative directionally"
+    # when DXY is positive). Intersect LLM output with _detect_patterns() so only
+    # patterns with verifiable numeric evidence survive. _detect_patterns() MUST
+    # cover every prompt pattern (docstring warning there).
+    llm_patterns = parsed.get("patterns_detected", []) or []
+    llm_details = parsed.get("pattern_details", {}) or {}
+    if not isinstance(llm_patterns, list):
+        llm_patterns = []
+    if not isinstance(llm_details, dict):
+        llm_details = {}
+
+    try:
+        det = _detect_patterns(macro, echo_alerts or [])
+        verified = set(det.get("detected", []))
+        det_details = det.get("details", {}) or {}
+
+        final_patterns = [p for p in llm_patterns if p in verified]
+        dropped = [p for p in llm_patterns if p not in verified]
+        if dropped:
+            log.warning(
+                f"LUNA: dropped unverified LLM pattern(s): {dropped} "
+                f"(verified by _detect_patterns: {sorted(verified)})"
+            )
+        # Prefer LLM's explanation text where present (richer prose);
+        # fall back to the deterministic detector's text if LLM text missing.
+        final_details = {
+            p: (llm_details.get(p) or det_details.get(p) or "")
+            for p in final_patterns
+        }
+    except Exception as e:
+        # Defensive fallback: if _detect_patterns crashes, preserve current
+        # behavior (pass LLM output through) rather than drop everything.
+        # A visible WARNING surfaces the issue without degrading service.
+        log.warning(
+            f"LUNA: _detect_patterns raised {type(e).__name__}: {e}. "
+            f"Falling back to LLM patterns unfiltered: {llm_patterns}"
+        )
+        final_patterns = list(llm_patterns)
+        final_details = dict(llm_details)
+
     return LunaAnalysisResult(
         timestamp=utc_iso(),  # FLO-309: Z suffix per Rule 22
         environment=environment,
@@ -1258,8 +1310,8 @@ def _parse_mimo_response(parsed: Dict[str, Any], macro: Dict[str, Any]) -> LunaA
         directional_bias=directional_bias,
         bias_confidence=bias_confidence,
         key_factors=parsed.get("key_factors", []),
-        patterns_detected=parsed.get("patterns_detected", []),
-        pattern_details=parsed.get("pattern_details", {}),
+        patterns_detected=final_patterns,
+        pattern_details=final_details,
         market_regime=parsed.get("market_regime", "mixed"),
         summary=parsed.get("summary", ""),
         next_events=parsed.get("next_events", []),
@@ -1283,13 +1335,16 @@ def _detect_patterns(macro: Dict[str, Any], echo_alerts: List[Dict]) -> Dict[str
     silently dropped by _parse_mimo_response() reconciliation (intersection of
     LLM output with this deterministic detector).
 
-    Currently covered patterns (5/5 as of commit 2 below):
+    Currently covered patterns (5/5):
       - forced_liquidation
       - safe_haven_flow
       - news_price_divergence
       - dollar_gold_correlation_break
-      - blow_off_reversal    (added in commit 1)
-    Last synced: see commit hash in commit 2 of the Bug A fix pair.
+      - blow_off_reversal
+
+    Last synced: 2026-04-20 (Bug A Commit 1 added blow_off_reversal detector,
+    Commit 2 wired reconciliation into _parse_mimo_response via intersection).
+    If you add a pattern to the prompt, add a branch here AND update this date.
     """
     detected: List[str] = []
     details: Dict[str, str] = {}
@@ -1767,7 +1822,7 @@ def run_luna_analysis() -> LunaAnalysisResult:
                 ai_source = "gemini_fallback"
 
         if ai_response is not None:
-            result = _parse_mimo_response(ai_response, macro)
+            result = _parse_mimo_response(ai_response, macro, echo_alerts)
             # Tag source so dashboard can show which tier produced this analysis
             try:
                 result.source = ai_source or "ai"
