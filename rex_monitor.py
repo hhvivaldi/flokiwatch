@@ -201,6 +201,18 @@ def _classify_findings(
                     "implication": f"{direction.lower()}_favored_in_{current_sess}",
                     "source": "rex_session_performance",
                 })
+            elif n >= 5 and wr > 45 and float(stats.get("pnl", 0.0)) > 0:
+                # FLO-303: symmetry — surface positive session data so Floki
+                # sees both sides. SESSION_WARNING tells him what to avoid;
+                # this tells him what's working. Floki decides, not Rex.
+                _pnl_val = float(stats.get("pnl", 0.0))
+                findings.append({
+                    "type": "SESSION_ENDORSEMENT",
+                    "severity": "LOW",
+                    "detail": f"{current_sess.capitalize()} {direction}: {wr:.1f}% WR, +${_pnl_val:.2f} net (n={n})",
+                    "implication": f"{direction.lower()}_viable_in_{current_sess}",
+                    "source": "rex_session_performance",
+                })
 
     return findings
 
