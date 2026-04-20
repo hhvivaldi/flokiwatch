@@ -1945,19 +1945,32 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
         });
       }
 
-      // FLO-269: Trade Journal — fetch and render
+      // FLO-269 + FLO-304: Trade Journal — fetch on tier-expand AND refresh on cycle
       (function(){
         var _journalLoaded = false;
+        var _journalInterval = null;
         // Observe when journal tier is expanded
         var tier = document.querySelector('[data-tier="t4-journal"]');
+        function _journalVisible() {
+          // Default to true if no tier wrapper (v2 journal is always visible)
+          return !tier || !tier.classList.contains('collapsed');
+        }
         if (tier) {
           new MutationObserver(function() {
-            if (!tier.classList.contains('collapsed') && !_journalLoaded) {
+            if (_journalVisible() && !_journalLoaded) {
               _journalLoaded = true;
               loadJournal();
             }
           }).observe(tier, {attributes: true, attributeFilter: ['class']});
         }
+        // FLO-304: journal stats were frozen after first load. Refresh every
+        // 60s if journal is visible so stats strip + table stay current.
+        window.addEventListener('load', function() {
+          if (_journalVisible()) { _journalLoaded = true; loadJournal(); }
+          _journalInterval = setInterval(function() {
+            if (_journalVisible()) loadJournal();
+          }, 60000);
+        });
         function loadJournal() {
           fetch('/api/journal').then(function(r){return r.json()}).then(function(data){
             if (data.error) { document.getElementById('journal-empty').style.display='block'; return; }
@@ -5595,17 +5608,18 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
                   }
                 } catch(e) {}
 
-                // FLO-215 Phase 3: Position bar — show above cards when position exists, hide when none
+                // FLO-215 Phase 3 + FLO-304: Position bar toggle + empty-state + count
                 try {
                   var _posC = document.getElementById('main-has-position');
+                  var _noPos = document.getElementById('main-no-position');
+                  var _posCount = document.getElementById('positions-count');
+                  var _hasPos = _pos.length > 0;
                   if (_posC) {
-                    if (_pos.length > 0) {
-                      _posC.style.display = '';
-                      _renderPositionBar(_pos, state);
-                    } else {
-                      _posC.style.display = 'none';
-                    }
+                    if (_hasPos) { _posC.style.display = ''; _renderPositionBar(_pos, state); }
+                    else { _posC.style.display = 'none'; }
                   }
+                  if (_noPos) _noPos.style.display = _hasPos ? 'none' : '';
+                  if (_posCount) _posCount.textContent = String(_pos.length);
                 } catch(e) {}
               } catch(e) {}
 
@@ -5750,6 +5764,12 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             if (_ccRegime && _dhSignal && _ccRegime.textContent && _ccRegime.textContent.trim() !== '') {
               var _rt = _ccRegime.textContent.trim();
               if (_dhSignal.textContent !== _rt) _dhSignal.textContent = _rt;
+            }
+
+            // Pending-orders countdown: cc-countdown -> pe-count
+            var _peCd = _get('pe-count');
+            if (_ccCd && _peCd && _ccCd.textContent && _peCd.textContent !== _ccCd.textContent) {
+              _peCd.textContent = _ccCd.textContent;
             }
           } catch(e) { /* silent */ }
         }
