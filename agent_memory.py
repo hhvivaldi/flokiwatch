@@ -708,6 +708,70 @@ def get_memory_for_dashboard() -> Optional[Dict]:
 
 
 # =============================================================================
+# BUG B — DAILY COUNTERS HELPER
+# =============================================================================
+
+def _read_daily_counters_for_session_date(session_date: str) -> Dict[str, int]:
+    """Count today's closed trades from the SQL trades table.
+
+    Authoritative source for session_memory.json counters. Filters on the
+    UTC calendar day via `date(close_time) = session_date` so the result
+    aligns with session_memory.session_date (set via trading_day_utc).
+
+    Applies the same breakeven threshold as main.py daily_stats (0.50) for
+    win/loss classification consistency across the system. Trades with
+    |profit| < 0.50 are counted in trades_today but NOT in wins_today or
+    losses_today (breakeven, excluded from both per main.py:762/972).
+
+    Silent fallback to zeros on any error — never raises to caller.
+
+    Note: date(close_time) runs a full table scan (no index on close_time).
+    At current trades table size (~100 rows) this is sub-millisecond. Add
+    an index when the table exceeds ~100K rows.
+
+    Args:
+        session_date: UTC calendar day string "YYYY-MM-DD", must match
+            session_memory.json session_date (trading_day_utc boundary).
+
+    Returns:
+        {"trades_today": int, "wins_today": int, "losses_today": int}
+    """
+    try:
+        import sqlite3
+        import config
+        db_path = getattr(config, "HISTORY_DB_PATH", "data/history.db")
+        be_thr = 0.50  # mirrors main.py:762 + main.py:972 _breakeven_threshold default
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS trades,
+                    SUM(CASE WHEN profit >=  ? THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN profit <= -? THEN 1 ELSE 0 END) AS losses
+                FROM trades
+                WHERE date(close_time) = ?
+                  AND close_time IS NOT NULL
+                  AND profit IS NOT NULL
+                """,
+                (be_thr, be_thr, session_date),
+            ).fetchone()
+        finally:
+            conn.close()
+        return {
+            "trades_today": int(row[0] or 0),
+            "wins_today":   int(row[1] or 0),
+            "losses_today": int(row[2] or 0),
+        }
+    except Exception as e:
+        try:
+            log.debug(f"agent_memory: _read_daily_counters_for_session_date error (non-blocking): {e}")
+        except Exception:
+            pass
+        return {"trades_today": 0, "wins_today": 0, "losses_today": 0}
+
+
+# =============================================================================
 # TESTS
 # =============================================================================
 
