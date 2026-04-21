@@ -648,7 +648,6 @@ def format_proactive_xml(data_package: Dict) -> str:
     sr_prox = dp.get("sr_proximity", {}) or {}
 
     vol = dp.get("volatility", {}) or {}
-    session = dp.get("session", {}) or {}
     positions = dp.get("positions", []) or []
     trade_feedback = dp.get("trade_feedback", {}) or {}
 
@@ -1229,19 +1228,6 @@ def format_proactive_xml(data_package: Dict) -> str:
     )
     lines.append("")
 
-    lines.append(f"<session name=\"{_xml_attr(session.get('name'))}\" hour_utc=\"{_xml_attr(session.get('hour_utc'))}\">")
-    lines.append(
-        "  <today "
-        f"trades=\"{_xml_attr(session.get('today_trades'))}\" "
-        f"wins=\"{_xml_attr(session.get('today_wins'))}\" "
-        f"losses=\"{_xml_attr(session.get('today_losses'))}\" "
-        f"pnl=\"{_xml_attr(session.get('today_pnl'))}\"/>"
-    )
-    lines.append(f"  <last_5_results>{_xml_escape(', '.join([str(x) for x in (session.get('last_5_results') or [])]))}</last_5_results>")
-    lines.append(f"  <consecutive_losses>{_xml_escape(session.get('consecutive_losses'))}</consecutive_losses>")
-    lines.append("</session>")
-    lines.append("")
-
     lines.append(f"<open_positions count=\"{_xml_attr(len(positions))}\"/>")
     lines.append("")
 
@@ -1287,7 +1273,6 @@ def build_data_package(
     m5_candles: List[Dict],
     current_price: Dict,
     positions: List[Dict],
-    session_context: Dict,
     volatility_status: Dict,
     sr_zones: Optional[List] = None,
     candlestick_patterns: Optional[Dict] = None,
@@ -1314,7 +1299,6 @@ def build_data_package(
         m5_candles: Last 10 M5 candles (OHLCV)
         current_price: Current bid/ask/spread
         positions: Open positions list
-        session_context: Session info and recent performance
         volatility_status: Volatility guard status
         sr_zones: List of SRZone objects (4-8 nearest zones)
         candlestick_patterns: Dict from detect_candlestick_patterns()
@@ -1354,7 +1338,6 @@ def build_data_package(
             "ml_predictions": _format_ml_data(ml_data),
             "macro": _format_macro_data(news_data, calendar_data),
             "positions": _format_positions(positions),
-            "session": _format_session_context(session_context),
             "volatility": _format_volatility(volatility_status),
             "sr_zones": formatted_sr_zones,
             "nearest_support": nearest_support,
@@ -1387,7 +1370,6 @@ def build_proactive_data_package(
     m5_candles: List[Dict],
     current_price: Dict,
     positions: List[Dict],
-    session_context: Dict,
     volatility_status: Dict,
     sr_zones: Optional[List] = None,
     candlestick_patterns: Optional[Dict] = None,
@@ -1437,7 +1419,6 @@ def build_proactive_data_package(
             "ml_predictions": _format_ml_data(ml_data),
             "macro": _format_macro_data(news_data, calendar_data),
             "positions": _format_positions(positions),
-            "session": _format_session_context(session_context),
             "volatility": _format_volatility(volatility_status),
             "sr_zones": formatted_sr_zones,
             "nearest_support": nearest_support,
@@ -1902,29 +1883,6 @@ def _format_positions(positions: List[Dict]) -> List[Dict]:
     return formatted
 
 
-def _format_session_context(session_context: Dict) -> Dict:
-    """Format session and recent performance context"""
-    if not session_context:
-        return {
-            "name": "unknown",
-            "today_trades": 0,
-            "today_wl": "0W/0L",
-            "today_pnl": 0,
-            "last_5_results": [],
-        }
-    
-    return {
-        "name": session_context.get("session_name", "unknown"),
-        "hour_utc": session_context.get("hour_utc", 0),
-        "today_trades": session_context.get("today_trades", 0),
-        "today_wins": session_context.get("today_wins", 0),
-        "today_losses": session_context.get("today_losses", 0),
-        "today_pnl": _safe_round(session_context.get("today_pnl", 0), 2),
-        "last_5_results": session_context.get("last_5_results", []),
-        "consecutive_losses": session_context.get("consecutive_losses", 0),
-    }
-
-
 def _format_volatility(volatility_status: Dict) -> Dict:
     """Format volatility guard status"""
     if not volatility_status:
@@ -2335,18 +2293,9 @@ def _test_data_builder():
     mock_price = {"bid": 2915.50, "ask": 2915.80, "spread": 3.0}
     
     mock_positions = []
-    
-    mock_session = {
-        "session_name": "London",
-        "hour_utc": 10,
-        "today_trades": 2,
-        "today_wins": 1,
-        "today_losses": 1,
-        "today_pnl": 12.50,
-    }
-    
+
     mock_volatility = {"status": "NORMAL"}
-    
+
     # Build package
     package = build_data_package(
         brain_result=MockBrainResult(),
@@ -2359,7 +2308,6 @@ def _test_data_builder():
         m5_candles=mock_candles,
         current_price=mock_price,
         positions=mock_positions,
-        session_context=mock_session,
         volatility_status=mock_volatility,
     )
     

@@ -204,15 +204,6 @@ def main():
         "score": 50,
     }
     
-    session_context = {
-        "session_name": "London",
-        "hour_utc": 8,
-        "today_trades": 2,
-        "today_wins": 1,
-        "today_losses": 1,
-        "today_pnl": -23.27,
-    }
-    
     volatility_status = {"status": "NORMAL"}
     
     # ================================================================
@@ -232,7 +223,6 @@ def main():
         m5_candles=m5_candles,
         current_price=current_price,
         positions=[],
-        session_context=session_context,
         volatility_status=volatility_status,
         sr_zones=[],
         candlestick_patterns=None,
