@@ -66,15 +66,23 @@ class PositionInfo:
 
 class MT5Executor:
     """MT5 order executor"""
-    
+
     def __init__(self):
         self.connected = False
         self.symbol = config.SYMBOL
         self.magic = config.MAGIC_NUMBER
         self.dry_run = config.DRY_RUN
-    
+        # Bug D: timestamp of last connect() attempt (any caller: self-recovery
+        # path or monitor.py:917 DEAL_REFRESH). Zero = never attempted.
+        self._last_reconnect_attempt = 0.0
+
     def connect(self) -> bool:
         """Connect to MT5"""
+        # Bug D: stamp every connect() attempt so the cooldown in
+        # _try_reconnect_once() reflects ALL callers (self-recovery AND
+        # monitor.py:917 DEAL_REFRESH path). Both paths share the same
+        # cooldown window via this timestamp.
+        self._last_reconnect_attempt = time.time()
         terminal_path = getattr(config, 'MT5_TERMINAL_PATH', None)
         if terminal_path:
             init_ok = mt5.initialize(path=terminal_path)
@@ -123,27 +131,97 @@ class MT5Executor:
         log.mt5_status(False, "Disconnected")
     
     def is_connected(self) -> bool:
-        """Check if connected"""
-        if not self.connected:
-            return False
-        
-        # Check if still active
+        """Fast connection-flag check (no MT5 probe).
+
+        Bug D: was previously a live probe that latched the flag to False
+        on any transient None from mt5.account_info(), with no recovery
+        path — one stall would permanently disconnect the executor instance
+        until the bot restarted. Now flag-only; the flag is maintained by
+        get_account_info() which owns the retry + reconnect recovery logic.
+        For fresh live verification call get_account_info() instead.
+        """
+        return bool(self.connected)
+
+    def _read_account_info_with_retry(self):
+        """Read mt5.account_info() with retries on transient None.
+
+        Bug D: MT5 Python API is known to return None transiently during
+        terminal resync / GUI-busy / broker server stalls (typically
+        <500ms). Retry 3x with exponential backoff (100ms, 300ms, 900ms;
+        total budget ~1.3s) before declaring the read failed.
+
+        Returns native mt5 AccountInfo object on success, None if all
+        retries fail.
+        """
         account = mt5.account_info()
-        if account is None:
-            self.connected = False
+        if account is not None:
+            return account
+        for i, delay_ms in enumerate((100, 300, 900), 1):
+            log.warning(f"MT5 | STALE_READ | account_info None, retry {i}/3 after {delay_ms}ms")
+            time.sleep(delay_ms / 1000.0)
+            account = mt5.account_info()
+            if account is not None:
+                log.info(f"MT5 | STALE_READ | resolved after retry {i}")
+                return account
+        return None
+
+    def _try_reconnect_once(self, cooldown_s: float = 60.0) -> bool:
+        """Attempt single reconnect via self.connect(), gated by cooldown.
+
+        60s cooldown prevents reconnect storm when MT5 is genuinely offline.
+        Chosen as balance between responsiveness (try again within a minute)
+        and restraint (don't hammer mt5.initialize() on every caller).
+
+        Returns True if connect() was attempted and succeeded; False if
+        skipped due to cooldown or if the attempt failed.
+        """
+        now = time.time()
+        elapsed = now - self._last_reconnect_attempt
+        if elapsed < cooldown_s:
+            remaining = int(cooldown_s - elapsed)
+            log.info(f"MT5 | RECONNECT | skipped (cooldown, {remaining}s remaining)")
             return False
-        
-        return True
-    
+        log.warning(f"MT5 | RECONNECT | attempt (last {int(elapsed)}s ago)")
+        try:
+            ok = self.connect()
+            if ok:
+                log.info("MT5 | RECONNECT | success")
+                return True
+            log.error(f"MT5 | RECONNECT | failed: {mt5.last_error()}")
+            return False
+        except Exception as e:
+            log.error(f"MT5 | RECONNECT | failed: {e}")
+            return False
+
     def get_account_info(self) -> Optional[dict]:
-        """Return account information"""
-        if not self.is_connected():
+        """Return account information with retry + auto-reconnect recovery.
+
+        Bug D: previously a thin wrapper around mt5.account_info() that
+        returned None on any transient stall, silently latching is_connected
+        to False. Now owns the recovery flow:
+          1. Read with retry (handles transient None: ~1.3s budget)
+          2. If retries exhausted, attempt single reconnect (cooldown-gated)
+          3. If still unavailable, flip self.connected=False with visible log
+
+        Happy path: 1 MT5 call, zero retries, zero logs, zero sleep.
+        """
+        if not self.connected:
             return None
-        
-        account = mt5.account_info()
+
+        account = self._read_account_info_with_retry()
         if account is None:
-            return None
-        
+            # Retries exhausted — attempt one reconnect (respects cooldown)
+            if self._try_reconnect_once():
+                account = mt5.account_info()
+                if account is not None:
+                    log.mt5_status(True, "recovered after reconnect")
+            if account is None:
+                # Genuinely unavailable: flip flag with visible log
+                if self.connected:
+                    self.connected = False
+                    log.mt5_status(False, "latched after stale-read + reconnect failure")
+                return None
+
         return {
             'login': account.login,
             'balance': account.balance,
