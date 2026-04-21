@@ -154,19 +154,16 @@ def _build_user_message(
         bear_text += f"\nEntry: ${bear['entry']} SL: ${bear.get('sl', '?')} Target: ${bear.get('target', '?')}"
     parts.append(bear_text)
 
-    # REPORT 3: Luna Macro Brief
+    # REPORT 3: Luna Macro Brief — Bug G: observational data only (no
+    # environment/risk/bias/confidence/regime labels; those fields were
+    # removed from Luna's schema).
     if luna_brief and isinstance(luna_brief, dict):
-        env = luna_brief.get("environment", "?")
-        risk = luna_brief.get("risk_level", "?")
-        bias = luna_brief.get("directional_bias", "?")
-        bias_conf = luna_brief.get("bias_confidence", "?")
-        patterns = luna_brief.get("patterns") or luna_brief.get("patterns_detected") or []
-        regime = luna_brief.get("regime") or luna_brief.get("market_regime") or "?"
+        patterns = luna_brief.get("patterns_detected") or []
+        key_factors = (luna_brief.get("key_factors") or [])[:5]
         luna_text = (
-            f"REPORT 3 \u2014 Luna Macro Brief:\n"
-            f"Environment: {env} | Risk: {risk}/10 | Bias: {bias} ({bias_conf}/10)\n"
+            f"REPORT 3 \u2014 Luna Macro Brief (observational):\n"
             f"Patterns: {', '.join(patterns) if isinstance(patterns, list) and patterns else 'none'}\n"
-            f"Regime: {regime}"
+            f"Key factors: {' | '.join(str(k) for k in key_factors) if key_factors else 'none'}"
         )
         parts.append(luna_text)
 

@@ -3862,14 +3862,18 @@ class TradingBot:
                 # (prevents Rex Bull from inflating headline count)
                 try:
                     _lb_debate = _debate_data.get("luna", {})
-                    if isinstance(_lb_debate, dict) and _lb_debate.get("environment"):
-                        _debate_data["news_context"] = {
-                            "luna_environment": _lb_debate.get("environment"),
-                            "luna_bias": _lb_debate.get("directional_bias"),
-                            "luna_risk": _lb_debate.get("risk_level"),
-                            "patterns": _lb_debate.get("patterns_detected", []),
-                            "key_message": _lb_debate.get("key_message", ""),
-                        }
+                    if isinstance(_lb_debate, dict):
+                        # Bug G: Luna prescriptive fields removed from schema.
+                        # Feed only observational data (patterns + key_factors)
+                        # to Bull/Bear debate context; they don't reach Floki anyway
+                        # (FLO-243) but keep pattern evidence for internal debate quality.
+                        _patterns = _lb_debate.get("patterns_detected", [])
+                        _kf = _lb_debate.get("key_factors", [])
+                        if _patterns or _kf:
+                            _debate_data["news_context"] = {
+                                "patterns": _patterns,
+                                "key_factors": _kf[:3] if isinstance(_kf, list) else [],
+                            }
                 except Exception:
                     pass
                 try:
@@ -3914,11 +3918,11 @@ class TradingBot:
                         _rm_echo = None
                         try:
                             if _rm_luna and isinstance(_rm_luna, dict):
+                                # Bug G: Luna prescriptive fields removed.
+                                # Pass only observational data to RM.
                                 _rm_echo = {
-                                    "luna_environment": _rm_luna.get("environment"),
-                                    "luna_bias": _rm_luna.get("directional_bias"),
-                                    "luna_risk": _rm_luna.get("risk_level"),
                                     "patterns": _rm_luna.get("patterns_detected", []),
+                                    "key_factors": (_rm_luna.get("key_factors") or [])[:3],
                                 }
                             # Add Deep Research if available
                             try:

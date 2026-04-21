@@ -539,9 +539,35 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 `luna-deep-research` (FLO-236): Deep Search panel. `luna-deep-consensus`, `luna-deep-insight`, `luna-deep-sources`, `luna-deep-time`.
 
 ### Luna Brief API (`/api/luna-brief`)
-Response includes:
+
+**Bug G schema (observational-only, Escola 1 alignment):**
+
+Response `brief` contains:
+- `timestamp` (ISO 8601 UTC, Z suffix)
+- `source` (`mimo` | `gemini_fallback` | `local_fallback`)
+- `data_snapshot`: per-instrument numeric values + changes:
+  - `dxy`, `vix`, `yields_10y`: `{value, change_pct_24h, trend_3d}` where `trend_3d` ∈ `rising`/`falling`/`flat`
+  - `oil_wti`, `sp500`, `usdcny`: `{value, change_pct_24h}`
+  - `gold`: `{value, change_pct_24h, dist_from_3d_high_pct, 3d_high}`
+  - `gld_volume`: `{avg_5d_vs_baseline, rising_price, status}` where status ∈ `accumulation`/`distribution`/`quiet_bid`/`quiet`
+  - `real_yields`, `fed_funds`, `breakeven`, `cpi`: `{value, change}`
+- `correlations`: `gold_dxy`, `gold_silver`, `gold_10y` → each `{current, typical}` (raw numbers, no `status` labels)
+- `patterns_detected` (list of Python-validated pattern names): `forced_liquidation`, `safe_haven_flow`, `news_price_divergence`, `dollar_gold_correlation_break`, `blow_off_reversal`
+- `key_factors` (3–5 short observational statements, each anchored to a number)
+- `next_events` (list of `{event, time, impact}`)
 - `brief.headlines_consumed` (FLO-238): Array of `{title, severity}` — Echo alerts Luna consumed on her last cycle. Severity: CRITICAL/IMPORTANT/ROUTINE.
-- `deep_research` (FLO-236): Deep Search cache if fresh (<3h). Contains `analyst_consensus`, `key_insight`, `price_targets`, `risks_this_week`, `sources`.
+
+**Removed fields (Bug G, 2026-04-21)** — no longer present in the JSON:
+- `environment` (SAFE/CAUTION/DANGER)
+- `risk_level` (1-10)
+- `directional_bias` (BULLISH/BEARISH/NEUTRAL)
+- `bias_confidence` (1-10)
+- `market_regime` (Luna's LLM interpretation; FLO-139 Market Regime Detector is unchanged and continues to produce RANGING/TRENDING_*/etc. via `regime_detector.py`)
+- `summary` (interpretive prose)
+
+Rationale: Luna reports observational data; Floki forms his own view. Prescriptive labels violate Escola 1.
+
+`deep_research` (FLO-236): Deep Search cache if fresh (<3h). Contains `analyst_consensus`, `key_insight`, `price_targets`, `risks_this_week`, `sources`.
 
 ### AI Agent Memory (v1.3)
 `agent-memory-section`, `agent-memory-timestamp`, `agent-memory-brain-signal`, `agent-memory-view-direction`, `agent-memory-view-description`, `agent-memory-conditions`, `agent-memory-expiry`

@@ -52,9 +52,13 @@ MACRO_HISTORY_DAYS = 5  # Keep last 5 business days
 # System Prompt
 # ---------------------------------------------------------------------------
 
-LUNA_SYSTEM_PROMPT = """You are Luna, a senior macro analyst with 15 years of experience at a gold-focused commodity desk. Your job is to read the macro environment and produce a structured brief for Floki, the portfolio manager who trades XAU/USD.
+LUNA_SYSTEM_PROMPT = """You are Luna, a senior macro analyst at a gold-focused commodity desk. Your job is to report what the macro data shows — specific numbers, specific changes, specific correlations, specific patterns — so Floki, the portfolio manager, can read the data and form his own view.
 
-You are NOT a trader. You do not recommend entries, exits, or directions. You describe the ENVIRONMENT — what is happening around gold, what forces are in play, and what patterns you detect. Floki decides what to do with your analysis.
+You are NOT a trader. You do NOT categorize conditions as cautious, dangerous, or safe. You do NOT rate risk on a 1-10 scale. You do NOT assign directional bias (bullish, bearish, neutral). You do NOT issue confidence scores. You do NOT label the overall market regime. You do NOT write summaries that interpret what the data means for the trade.
+
+Floki decides whether conditions are cautious, dangerous, or safe. Floki decides direction. Floki decides confidence. Your job is to give him clean numbers and observable facts.
+
+Words that MUST NOT appear anywhere in your output: "cautious", "caution", "dangerous", "danger", "risky", "risk on", "risk off", "safe", "crisis", "volatile", "hesitate", "careful", "trust", "stable environment", "bullish environment", "bearish environment", "mixed regime", "risk-on", "risk-off". Do not describe the environment with an emotional or directional label. Report numbers.
 
 DATA YOU RECEIVE:
 - DXY (US Dollar Index): value + 24h change
@@ -63,141 +67,74 @@ DATA YOU RECEIVE:
 - Oil (Crude WTI): price + 24h change + 1h change
 - S&P 500: value + 24h change
 - Gold price: current price + 24h change + 1h change + day high/low + 3-day high/low + distance from 3-day peak
-- GLD ETF: price + volume + 24h change (gold proxy with real volume — high volume confirms conviction, low volume flags divergence risk)
-- USD/CNY: exchange rate + 24h change (yuan weakness signals capital flight into gold; strengthening yuan reduces gold demand from China)
-- Real Yields (TIPS 10Y, FRED DFII10): current value + change (higher real yields = gold less attractive as non-yielding asset; falling real yields = bullish gold)
-- Fed Funds Rate (FRED FEDFUNDS): current value + change (rate cuts = dovish = bullish gold; rate hikes = hawkish = bearish gold)
-- Breakeven Inflation 10Y (FRED T10YIE): current value + change (rising breakevens = inflation expectations up = bullish gold as inflation hedge)
-- CPI All Urban (FRED CPIAUCSL): current value + change (rising CPI = inflation reality = bullish gold; falling CPI = less need for gold hedge)
-- Echo classified news alerts: each has classification (CRITICAL/IMPORTANT/ROUTINE), gold_impact (BULLISH/BEARISH/NEUTRAL), and a summary. CRITICAL alerts indicate immediate market-moving events — factor them heavily. IMPORTANT alerts provide context. ROUTINE alerts can be ignored.
+- GLD ETF: price + volume + 24h change (volume is a conviction signal, not a direction)
+- USD/CNY: exchange rate + 24h change
+- Real Yields (TIPS 10Y, FRED DFII10): current value + change
+- Fed Funds Rate (FRED FEDFUNDS): current value + change
+- Breakeven Inflation 10Y (FRED T10YIE): current value + change
+- CPI All Urban (FRED CPIAUCSL): current value + change
+- Echo classified news alerts: each has classification (CRITICAL / IMPORTANT / ROUTINE), gold_impact label, and a summary. Treat the classification as factual metadata, not as a directive.
 - Economic calendar: upcoming events with impact level and time
 
-ENVIRONMENT CLASSIFICATION:
-SAFE — Normal conditions. No unusual cross-asset stress. Gold trading on technicals.
-Criteria: VIX < 20, DXY change < 1%, Oil change < 3%, no CRITICAL Echo alerts.
-
-CAUTION — Elevated macro stress. One or more macro forces active and creating unusual conditions.
-Criteria: VIX 20-30, OR DXY change > 1%, OR Oil change > 3%, OR IMPORTANT Echo alerts with gold impact, OR yields moving > 2%.
-
-DANGER — Extreme macro stress. Multiple forces converging. High probability of large gold moves.
-Criteria: VIX > 30, OR multiple CAUTION signals active simultaneously, OR CRITICAL Echo alerts, OR pattern detected (forced_liquidation, safe_haven_flow).
-
-PATTERN DETECTION — Flag these specific patterns when ALL criteria are met:
+PATTERN DETECTION — flag these patterns when ALL criteria are met. Report only the pattern name in the "patterns_detected" list. Do NOT add interpretation, direction, or recommended action.
 
 forced_liquidation:
-  VIX > 25 AND rising + Oil change > +3% in 24h + Gold change negative (falling) + S&P 500 change negative (falling)
-  Meaning: institutions selling everything for cash. Gold drops despite being safe haven.
-  Gold impact: SHORT-TERM BEARISH (forced selling), MEDIUM-TERM BULLISH (recovery).
+  VIX > 25 AND rising + Oil change > +3% in 24h + Gold change negative + S&P 500 change negative.
 
 safe_haven_flow:
-  VIX rising (change positive) + DXY falling (change negative) + Gold rising (change positive)
-  Meaning: flight from risk assets into gold. Classic safe haven demand.
-  Gold impact: BULLISH.
+  VIX rising (change positive) + DXY falling (change negative) + Gold rising (change positive).
 
 news_price_divergence:
-  Echo CRITICAL/IMPORTANT alerts are BULLISH but gold change is NEGATIVE (or vice versa)
-  Meaning: market is not reacting to news as expected. Possible positioning or delayed reaction.
-  Gold impact: WATCH — divergence often resolves violently.
+  Echo CRITICAL/IMPORTANT alerts dominantly in one direction (majority BULLISH or majority BEARISH gold_impact) while gold 24h change is in the opposite direction.
 
 dollar_gold_correlation_break:
-  DXY change_24h and Gold change_24h are BOTH positive or BOTH negative (same direction)
-  Normal: DXY up = Gold down (inverse correlation)
-  Meaning: unusual force overriding normal correlation. Often geopolitical or central bank driven.
-  Gold impact: INVESTIGATE — the unusual driver is the story.
+  DXY change_24h and Gold change_24h are BOTH positive or BOTH negative (same direction; the typical relationship is inverse).
 
 blow_off_reversal:
-  Gold is down >1.5% from 3-day high WHILE macro indicators remain bullish (DXY falling, yields falling)
-  Meaning: forced liquidation or profit-taking from exhaustion top. Price diverges from fundamentals.
-  Gold impact: SHORT-TERM BEARISH. This pattern OVERRIDES macro alignment.
-  MANDATORY: When blow_off_reversal is detected, set directional_bias to NEUTRAL (not BULLISH), cap bias_confidence at 4, and set environment to DANGER.
+  Gold is down > 1.5% from the 3-day high AND DXY is falling AND yields are falling (macro indicators would typically favor gold, but price is selling off).
 
-OUTPUT FORMAT — Return ONLY valid JSON:
+A downstream Python reconciler validates each pattern you claim against the actual data and drops unverified claims. Claim only patterns you can justify from the numbers provided. Pattern names above are terms of art for specific market-microstructure conditions — use them as labels only, do not add prose interpretation.
+
+OUTPUT FORMAT — Return ONLY valid JSON. Exact schema:
 {
-  "timestamp": "ISO 8601",
-  "environment": "SAFE" | "CAUTION" | "DANGER",
-  "risk_level": 1-10,
-  "directional_bias": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "bias_confidence": 1-10,
-  "key_factors": ["factor 1", "factor 2", "factor 3"],
-  "patterns_detected": ["pattern_name"] or [],
-  "pattern_details": {"pattern_name": "explanation with specific numbers"},
-  "market_regime": "risk_on" | "risk_off" | "mixed" | "crisis",
-  "summary": "2-3 sentences max.",
-  "next_events": [{"event": "name", "time": "HH:MM UTC", "impact": "HIGH/MEDIUM/LOW"}],
+  "timestamp": "ISO 8601 UTC with Z suffix",
   "data_snapshot": {
-    "dxy": {"value": X, "change_pct": Y},
-    "vix": {"value": X, "change_pct": Y},
-    "yields_10y": {"value": X, "change_pct": Y},
-    "oil": {"value": X, "change_pct": Y},
-    "sp500": {"value": X, "change_pct": Y},
-    "gold": {"price": X, "change_pct": Y},
-    "gld": {"value": X, "volume": N, "change_pct": Y},
-    "usdcny": {"value": X, "change_pct": Y},
+    "dxy":         {"value": X, "change_pct_24h": Y, "trend_3d": "rising"|"falling"|"flat"},
+    "vix":         {"value": X, "change_pct_24h": Y, "trend_3d": "rising"|"falling"|"flat"},
+    "yields_10y":  {"value": X, "change_pct_24h": Y, "trend_3d": "rising"|"falling"|"flat"},
+    "oil_wti":     {"value": X, "change_pct_24h": Y},
+    "sp500":       {"value": X, "change_pct_24h": Y},
+    "gold":        {"value": X, "change_pct_24h": Y, "dist_from_3d_high_pct": Z, "3d_high": W},
+    "gld_volume":  {"avg_5d_vs_baseline": X, "rising_price": bool, "status": "accumulation"|"distribution"|"quiet_bid"|"quiet"},
+    "usdcny":      {"value": X, "change_pct_24h": Y},
     "real_yields": {"value": X, "change": Y},
-    "fed_funds": {"value": X, "change": Y},
-    "breakeven": {"value": X, "change": Y},
-    "cpi": {"value": X, "change": Y}
-  }
+    "fed_funds":   {"value": X, "change": Y},
+    "breakeven":   {"value": X, "change": Y},
+    "cpi":         {"value": X, "change": Y}
+  },
+  "correlations": {
+    "gold_dxy":    {"current": X, "typical": Y},
+    "gold_silver": {"current": X, "typical": Y},
+    "gold_10y":    {"current": X, "typical": Y}
+  },
+  "patterns_detected": ["pattern_name", "..."],
+  "key_factors": ["3-5 short factual statements, each referencing a specific number"],
+  "next_events": [{"event": "name", "time": "HH:MM UTC", "impact": "HIGH"|"MEDIUM"|"LOW"}]
 }
 
-CALIBRATION RULES:
-- risk_level: 1-3 = SAFE conditions, 4-6 = CAUTION conditions, 7-10 = DANGER conditions. Must be consistent with environment classification.
-- bias_confidence: 1-3 = low (missing data or conflicting signals), 4-6 = medium (partial data alignment), 7-10 = high (all data points align). If any data source is null, cap bias_confidence at 5.
-- Be specific. "VIX at 28.4, up 12% from yesterday" not "VIX is elevated."
-- Every claim must reference a number from the data you received.
-- If data is missing (null), say so. Do not invent values.
-- Patterns require ALL criteria to be met. Do not flag partial matches.
-- Keep summary under 3 sentences. Floki reads this every 15 minutes — be concise.
+KEY_FACTORS RULES:
+- 3 to 5 statements maximum.
+- Each statement is a specific observation anchored to a number from the data. Example OK: "Gold -1.98% from 3-day high 4891.62." Example NOT OK: "Gold looks weak."
+- Every claim must reference a number. No floating adjectives.
+- Use the forbidden-words list above as a self-audit before returning.
+- If a data source is null, you may note that ("DXY data unavailable this cycle") but do not invent values.
 
-FACTOR ALIGNMENT:
-When assessing directional bias and confidence, consider how many of the 5 major macro forces align:
-- DXY direction (falling favors gold, rising pressures gold)
-- VIX direction (rising = fear = gold demand, falling = calm = gold less needed)
-- Yields direction (falling = gold attractive, rising = gold less attractive)
-- Oil context (rising during crisis = geopolitical safe haven; rising without crisis = inflation pressure)
-- Equities direction (S&P falling = risk off = gold demand; S&P rising = risk on)
-
-When most factors point the same way, your confidence should be HIGH and your bias clear.
-When factors conflict (e.g. war headlines bullish but yields rising bearish), your confidence should be LOW and your summary must explain the conflict.
-
-PRICE OVERRIDE RULE: Price action beats macro when they diverge. If gold is down >1% from 3-day high but macro says BULLISH, the market is telling you something macro can't see (forced liquidation, profit-taking, structural selling). In this case:
-- Set directional_bias to NEUTRAL (not BULLISH)
-- Cap bias_confidence at 4
-- Flag the macro-price divergence as the #1 key factor
-- Never stay BULLISH when gold is falling significantly from recent highs, regardless of how bullish macro looks.
-
-TREND ANALYSIS:
-Use macro_trend_5d data to distinguish escalating vs stabilizing conditions:
-- Escalating trends (VIX rising 3+ days, DXY accelerating) increase risk_level
-- Stabilizing trends (VIX falling from highs, yields flattening) decrease risk_level
-- "VIX at 26.78" means different things if it came from 18 (escalating) vs from 35 (recovering)
-- Always reference the trend direction in your summary when it contradicts the snapshot level
-
-CORRELATION ANALYSIS:
-When correlation breaks from historical norm (status = BROKEN), flag it and adjust interpretation.
-A broken gold-DXY correlation (normally -0.7 to -0.9, now positive) often signals regime change:
-forced liquidation, central bank intervention, or structural shift. "DXY falling = gold bullish"
-may be WRONG during a correlation break. Always check correlation status before applying standard rules.
-
-GLD ETF SENTIMENT:
-GLD sentiment is a volume-based conviction indicator, NOT actual ETF flows.
-ACCUMULATION = high volume + rising price (institutions buying with conviction).
-DISTRIBUTION = high volume + falling price (institutions selling with conviction).
-QUIET_BID = low volume + rising price (steady demand, no urgency).
-QUIET = low volume + no clear direction.
-This is a PROXY — it cannot measure actual fund inflows/outflows.
-
-ECHO SENTIMENT AGGREGATE:
-Echo sentiment aggregate shows the TREND of news coverage across 1h and 4h windows. When 80%+ of headlines point one direction, that's strong news confirmation. When sentiment is MIXED, headlines conflict — trust macro data more than news. Individual CRITICAL alerts still matter regardless of aggregate direction.
-
-SAGE PERFORMANCE CONTEXT:
-You receive historical performance insights from Sage showing Floki's actual win rates by session, direction, and day-of-week (last 14 days). Consider this when assessing risk:
-- If current session has historically low win rate (< 35%), note it in your summary and increase risk_level
-- If Sage flags a danger pattern matching current conditions, mention it
-- This data reflects Floki's ACTUAL performance, not theoretical — respect it
-
-REAL YIELD PROXY:
-Use the "Real Yield proxy (live)" for intraday decisions. The FRED DFII10 value is end-of-day (previous close). The proxy = nominal yield minus breakeven inflation gives a live estimate using real-time ^TNX data."""
+DATA NOTES:
+- "Real Yield proxy (live)" is computed from real-time ^TNX minus breakeven inflation. Prefer it for intraday observation. FRED DFII10 is end-of-day and can be hours stale.
+- GLD "status" values are volume-based conviction descriptors, not flow labels. "accumulation" = high volume + rising price. "distribution" = high volume + falling price. "quiet_bid" = low volume + rising price. "quiet" = low volume + no clear direction.
+- Correlations: report raw numeric "current" and "typical" values only. Do NOT add status labels like "broken" or "weak" — Floki compares the numbers himself.
+- Trends: "rising" / "falling" / "flat" are observational 3-day directional descriptors, not sentiment labels. Use them; do not add emotional qualifiers.
+- Pattern names (forced_liquidation, safe_haven_flow, news_price_divergence, dollar_gold_correlation_break, blow_off_reversal) are the only valid entries in "patterns_detected". Any other string will be dropped by the reconciler."""
 
 
 # ---------------------------------------------------------------------------
@@ -1234,33 +1171,16 @@ def _parse_mimo_response(
     if not data_snapshot or not isinstance(data_snapshot, dict):
         data_snapshot = _build_data_snapshot(macro)
 
-    # P1-2: Validate environment
-    environment = str(parsed.get("environment", "SAFE")).upper()
-    if environment not in ("SAFE", "CAUTION", "DANGER"):
-        log.warning(f"LUNA: invalid environment '{environment}' from MiMo — defaulting to SAFE")
-        environment = "SAFE"
-
-    # P1-2: Validate risk_level (int 1-10, default 3)
-    try:
-        risk_level = int(parsed.get("risk_level", 3))
-        risk_level = max(1, min(10, risk_level))
-    except (ValueError, TypeError):
-        log.warning(f"LUNA: invalid risk_level '{parsed.get('risk_level')}' — defaulting to 3")
-        risk_level = 3
-
-    # P1-2: Validate directional_bias
-    directional_bias = str(parsed.get("directional_bias", "NEUTRAL")).upper()
-    if directional_bias not in ("BULLISH", "BEARISH", "NEUTRAL"):
-        log.warning(f"LUNA: invalid directional_bias '{directional_bias}' — defaulting to NEUTRAL")
-        directional_bias = "NEUTRAL"
-
-    # P1-2: Validate bias_confidence (int 1-10, default 3)
-    try:
-        bias_confidence = int(parsed.get("bias_confidence", 3))
-        bias_confidence = max(1, min(10, bias_confidence))
-    except (ValueError, TypeError):
-        log.warning(f"LUNA: invalid bias_confidence '{parsed.get('bias_confidence')}' — defaulting to 3")
-        bias_confidence = 3
+    # Bug G: Luna prescriptive fields (environment, risk_level, directional_bias,
+    # bias_confidence, market_regime, summary) were removed from schema.
+    # Legacy dataclass fields remain with empty defaults for backward compat;
+    # _save_brief pops them before JSON write (Test A/B on disk shape).
+    # If MiMo still emits legacy keys despite the updated prompt, log a warning
+    # so regression is visible — then discard.
+    _legacy_keys = ("environment", "risk_level", "directional_bias", "bias_confidence", "market_regime", "summary")
+    _leaked = [k for k in _legacy_keys if k in parsed]
+    if _leaked:
+        log.warning(f"LUNA: MiMo response still included legacy keys {_leaked} — discarded (Bug G)")
 
     # Bug A commit 2: Reconcile LLM-reported patterns with deterministic detector.
     # LLM sometimes hallucinates patterns (e.g. claims "both negative directionally"
@@ -1305,15 +1225,16 @@ def _parse_mimo_response(
 
     return LunaAnalysisResult(
         timestamp=utc_iso(),  # FLO-309: Z suffix per Rule 22
-        environment=environment,
-        risk_level=risk_level,
-        directional_bias=directional_bias,
-        bias_confidence=bias_confidence,
+        # Bug G: legacy prescriptive fields emptied; _save_brief pops them pre-write.
+        environment="",
+        risk_level=0,
+        directional_bias="",
+        bias_confidence=0,
         key_factors=parsed.get("key_factors", []),
         patterns_detected=final_patterns,
         pattern_details=final_details,
-        market_regime=parsed.get("market_regime", "mixed"),
-        summary=parsed.get("summary", ""),
+        market_regime="",
+        summary="",
         next_events=parsed.get("next_events", []),
         data_snapshot=data_snapshot,
         macro_trend=_build_macro_trends(macro),
@@ -1511,89 +1432,17 @@ def _compute_risk_level(environment: str, macro: Dict[str, Any],
 
 def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
                         calendar_events: List[Dict]) -> LunaAnalysisResult:
-    """Produce a Luna analysis using deterministic rules (FALLBACK — no AI)."""
+    """Produce a Luna analysis using deterministic rules (FALLBACK — no AI).
+
+    Bug G: produces only observational fields. No environment classification,
+    no risk_level, no directional_bias, no bias_confidence, no market_regime,
+    no interpretive summary. key_factors are numeric observations only.
+    """
     now = utc_iso()  # FLO-309
 
     pattern_result = _detect_patterns(macro, echo_alerts)
     patterns = pattern_result["detected"]
     pattern_details = pattern_result["details"]
-
-    environment = _classify_environment(macro, echo_alerts, patterns)
-    risk_level = _compute_risk_level(environment, macro, patterns)
-
-    # Directional bias from macro signals
-    bias_signals = 0
-    null_count = 0
-
-    dxy_chg = macro.get("dxy", {}).get("change_percent")
-    if dxy_chg is not None:
-        if dxy_chg < -0.3:
-            bias_signals += 1
-        elif dxy_chg > 0.3:
-            bias_signals -= 1
-    else:
-        null_count += 1
-
-    vix_chg = macro.get("vix", {}).get("change_percent")
-    if vix_chg is not None:
-        if vix_chg > 1:
-            bias_signals += 1
-        elif vix_chg < -1:
-            bias_signals -= 1
-    else:
-        null_count += 1
-
-    gold_chg = macro.get("gold", {}).get("change_percent")
-    if gold_chg is not None:
-        if gold_chg > 0.2:
-            bias_signals += 1
-        elif gold_chg < -0.2:
-            bias_signals -= 1
-    else:
-        null_count += 1
-
-    bullish_alerts = sum(1 for a in echo_alerts
-                         if a.get("classification") in ("CRITICAL", "IMPORTANT")
-                         and a.get("gold_impact") == "BULLISH")
-    bearish_alerts = sum(1 for a in echo_alerts
-                         if a.get("classification") in ("CRITICAL", "IMPORTANT")
-                         and a.get("gold_impact") == "BEARISH")
-    if bullish_alerts > bearish_alerts:
-        bias_signals += 1
-    elif bearish_alerts > bullish_alerts:
-        bias_signals -= 1
-
-    if bias_signals >= 2:
-        directional_bias = "BULLISH"
-    elif bias_signals <= -2:
-        directional_bias = "BEARISH"
-    else:
-        directional_bias = "NEUTRAL"
-
-    aligned = abs(bias_signals)
-    if null_count > 0:
-        bias_confidence = min(5, 2 + aligned)
-    elif aligned >= 3:
-        bias_confidence = 8
-    elif aligned >= 2:
-        bias_confidence = 6
-    elif aligned >= 1:
-        bias_confidence = 4
-    else:
-        bias_confidence = 2
-
-    vix_val = macro.get("vix", {}).get("current")
-    sp500_chg = macro.get("sp500", {}).get("change_percent", 0) or 0
-    if vix_val is not None and vix_val > 35:
-        market_regime = "crisis"
-    elif "forced_liquidation" in patterns:
-        market_regime = "crisis"
-    elif vix_val is not None and vix_val > 25:
-        market_regime = "risk_off"
-    elif sp500_chg > 0.5 and (vix_val is None or vix_val < 18):
-        market_regime = "risk_on"
-    else:
-        market_regime = "mixed"
 
     key_factors = []
     dxy = macro.get("dxy", {})
@@ -1614,31 +1463,6 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
     if critical_count > 0:
         key_factors.append(f"{critical_count} CRITICAL Echo alert(s) active")
 
-    # FLO-291: snake_case pattern IDs render as visual underlines in the
-    # monospace UI (underscore glyphs sit low and connect visually across
-    # characters). Emit human-readable labels in the summary; the raw IDs
-    # are still carried in patterns_detected for code/UI consumers that
-    # want them.
-    _PATTERN_LABELS = {
-        "blow_off_reversal": "Blow-Off Reversal",
-        "news_price_divergence": "News-Price Divergence",
-        "safe_haven_flow": "Safe Haven Flow",
-        "forced_liquidation": "Forced Liquidation",
-        "dollar_gold_correlation_break": "Dollar-Gold Correlation Break",
-    }
-
-    def _pretty(pid: str) -> str:
-        return _PATTERN_LABELS.get(pid) or pid.replace("_", " ").title()
-
-    summary_parts = [f"Environment: {environment}."]
-    if patterns:
-        summary_parts.append(f"Patterns: {', '.join(_pretty(p) for p in patterns)}.")
-    if directional_bias != "NEUTRAL":
-        summary_parts.append(f"Macro bias {directional_bias} (confidence {bias_confidence}/10).")
-    else:
-        summary_parts.append("No clear directional bias from macro data.")
-    summary = " ".join(summary_parts)
-
     next_events = []
     for ev in calendar_events[:3]:
         next_events.append({
@@ -1651,15 +1475,16 @@ def _run_local_analysis(macro: Dict[str, Any], echo_alerts: List[Dict],
 
     return LunaAnalysisResult(
         timestamp=now,
-        environment=environment,
-        risk_level=risk_level,
-        directional_bias=directional_bias,
-        bias_confidence=bias_confidence,
+        # Bug G: legacy prescriptive fields emptied; _save_brief pops them pre-write.
+        environment="",
+        risk_level=0,
+        directional_bias="",
+        bias_confidence=0,
         key_factors=key_factors,
         patterns_detected=patterns,
         pattern_details=pattern_details,
-        market_regime=market_regime,
-        summary=summary,
+        market_regime="",
+        summary="",
         next_events=next_events,
         data_snapshot=data_snapshot,
         macro_trend=_build_macro_trends(macro),
@@ -1747,14 +1572,23 @@ def _enrich_pattern_details_with_age(result: LunaAnalysisResult) -> None:
 
 
 def _save_brief(result: LunaAnalysisResult) -> None:
-    """Save Luna analysis result to data/luna_brief.json (atomic write)."""
+    """Save Luna analysis result to data/luna_brief.json (atomic write).
+
+    Bug G: strip legacy prescriptive fields from disk payload. Dataclass
+    keeps them for backward-compat in-memory API, but JSON output matches
+    the new observational-only schema.
+    """
     try:
         _enrich_pattern_details_with_age(result)  # FLO-298 fix 1
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         brief_path = str(BRIEF_FILE)
         tmp_path = brief_path + ".tmp"
+        payload = asdict(result)
+        # Bug G: strip legacy prescriptive fields — no longer reach Floki or dashboard.
+        for _lk in ("environment", "risk_level", "directional_bias", "bias_confidence", "market_regime", "summary"):
+            payload.pop(_lk, None)
         with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(asdict(result), f, indent=2, ensure_ascii=False, default=str)
+            json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
         os.replace(tmp_path, brief_path)
     except Exception as e:
         log.warning(f"LUNA: error saving brief — {e}")
@@ -1829,57 +1663,21 @@ def run_luna_analysis() -> LunaAnalysisResult:
             except Exception:
                 pass
             log.info(
-                f"LUNA: {ai_source} analysis — {result.environment} | "
-                f"risk {result.risk_level}/10 | bias {result.directional_bias} "
-                f"({result.bias_confidence}/10) | patterns: {result.patterns_detected or 'none'}"
+                f"LUNA: {ai_source} analysis — patterns: {result.patterns_detected or 'none'} | "
+                f"key_factors: {len(result.key_factors)}"
             )
         else:
             # 3. LAST RESORT — deterministic local analysis (both AI tiers down)
             log.warning("LUNA: MiMo + Gemini both unavailable — using local fallback")
             result = _run_local_analysis(macro, echo_alerts, calendar_events)
             log.info(
-                f"LUNA: local fallback — {result.environment} | "
-                f"risk {result.risk_level}/10 | bias {result.directional_bias} "
-                f"({result.bias_confidence}/10)"
+                f"LUNA: local fallback — patterns: {result.patterns_detected or 'none'} | "
+                f"key_factors: {len(result.key_factors)}"
             )
 
-        # FLO-87: Recovery detection heuristic — post-process Luna's bias
-        try:
-            import config as _rcfg
-            _recovery_threshold = float(getattr(_rcfg, "LUNA_RECOVERY_THRESHOLD_PCT", 50))
-            _gold_current = macro.get("gold", {}).get("current")
-            if _gold_current and result.directional_bias == "BEARISH":
-                import MetaTrader5 as _mt5r
-                _gi = _mt5r.symbol_info("XAUUSD")
-                if _gi:
-                    _day_high = getattr(_gi, "session_high", 0) or 0
-                    _day_low = getattr(_gi, "session_low", 0) or 0
-                    _day_range = _day_high - _day_low
-                    if _day_range > 0 and _day_low > 0:
-                        _recovery_pct = ((_gold_current - _day_low) / _day_range) * 100
-                        if _recovery_pct >= _recovery_threshold:
-                            log.info(
-                                f"LUNA | Recovery detected: price recovered {_recovery_pct:.0f}% from daily low "
-                                f"${_day_low:.2f} to ${_gold_current:.2f} (high ${_day_high:.2f}) "
-                                f"— shifting bias BEARISH → NEUTRAL"
-                            )
-                            result = LunaAnalysisResult(
-                                timestamp=result.timestamp,
-                                environment=result.environment,
-                                risk_level=result.risk_level,
-                                directional_bias="NEUTRAL",
-                                bias_confidence=max(1, result.bias_confidence - 2),
-                                key_factors=result.key_factors + [f"Recovery override: {_recovery_pct:.0f}% from daily low"],
-                                patterns_detected=result.patterns_detected,
-                                pattern_details=result.pattern_details,
-                                market_regime=result.market_regime,
-                                summary=result.summary + f" [Recovery override: BEARISH→NEUTRAL, {_recovery_pct:.0f}% from low]",
-                                data_snapshot=result.data_snapshot,
-                                source=result.source,
-                                correlations=result.correlations,
-                            )
-        except Exception as e:
-            log.debug(f"LUNA | recovery check error (ignored): {e}")
+        # Bug G: FLO-87 recovery block (BEARISH→NEUTRAL override) removed —
+        # directional_bias field no longer exists in the new schema, Floki
+        # forms his own directional view from the data.
 
         # 4. Save macro history snapshot (one per day)
         _save_macro_snapshot(macro)
@@ -1914,31 +1712,9 @@ def run_luna_analysis() -> LunaAnalysisResult:
         except Exception as e:
             log.warning(f"LUNA: error recording event — {e}")
 
-        # 6. Discord card for DANGER/CAUTION (FLO-78)
-        if result.environment in ("DANGER", "CAUTION"):
-            try:
-                from discord_cards import build_luna_brief_card, send_built_card
-                # Get echo aggregate for sentiment field
-                agg = _get_echo_aggregate()
-                sentiment = None
-                if agg:
-                    w4h = agg.get("4h", {})
-                    if w4h.get("total", 0) > 0:
-                        sentiment = f"{w4h.get('dominant', 'N/A')} ({int(w4h.get('bullish', 0) / w4h['total'] * 100)}% bullish, {w4h['total']} headlines)"
-
-                card = build_luna_brief_card(
-                    environment=result.environment,
-                    risk=result.risk_level,
-                    bias=result.directional_bias,
-                    regime=result.market_regime,
-                    patterns=result.patterns_detected or None,
-                    summary=result.summary,
-                    macro_data=result.data_snapshot,
-                    sentiment=sentiment,
-                )
-                send_built_card(card)
-            except Exception:
-                pass
+        # Bug G: Discord DANGER/CAUTION card removed — prescriptive labels
+        # no longer produced. If a neutral Luna Discord card is needed, add
+        # a data-forward card in follow-up commit.
 
         return result
 
@@ -1946,11 +1722,13 @@ def run_luna_analysis() -> LunaAnalysisResult:
         log.error(f"LUNA: analysis failed — {e}")
         return LunaAnalysisResult(
             timestamp=utc_iso(),  # FLO-309: Z suffix per Rule 22
-            environment="SAFE",
-            risk_level=3,
-            directional_bias="NEUTRAL",
-            bias_confidence=1,
-            summary=f"Luna analysis failed: {e}",
+            # Bug G: legacy prescriptive fields emptied.
+            environment="",
+            risk_level=0,
+            directional_bias="",
+            bias_confidence=0,
+            market_regime="",
+            summary="",
             source="error",
             error=str(e),
         )
@@ -1990,15 +1768,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print(f"\nSource:       {result.source}")
-    print(f"Environment:  {result.environment}")
-    print(f"Risk Level:   {result.risk_level}/10")
-    print(f"Bias:         {result.directional_bias} (confidence {result.bias_confidence}/10)")
-    print(f"Regime:       {result.market_regime}")
     print(f"Patterns:     {result.patterns_detected or 'none'}")
     print(f"\nKey Factors:")
     for f in result.key_factors:
         print(f"  - {f}")
-    print(f"\nSummary: {result.summary}")
     print(f"\nData Snapshot:")
     print(json.dumps(result.data_snapshot, indent=2))
+    print(f"\nCorrelations:")
+    print(json.dumps(result.correlations, indent=2))
     print(f"\nSaved to: {BRIEF_FILE}")

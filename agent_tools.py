@@ -2410,16 +2410,17 @@ class AgentTools:
                 try:
                     from trade_lessons import save_trade_conditions
                     indicators = self.get_indicators() if dp else {}
+                    # Bug G: Luna prescriptive fields removed from schema.
+                    # Persist observational metadata only (patterns) so the
+                    # lessons/trade_conditions index retains useful signal
+                    # without prescription leakage.
                     luna_ctx = {}
                     try:
                         from luna_analyst import load_luna_brief
                         lb = load_luna_brief()
                         if lb:
-                            luna_ctx = {
-                                "luna_environment": lb.get("environment"),
-                                "luna_risk_level": lb.get("risk_level"),
-                                "luna_bias": lb.get("directional_bias"),
-                            }
+                            _pats = lb.get("patterns_detected") or []
+                            luna_ctx = {"luna_patterns": list(_pats)[:3]}
                     except Exception:
                         pass
 

@@ -228,13 +228,13 @@ class PositionMonitor:
                                                 _conds["regime"] = _mr["regime"]
                                         except Exception:
                                             pass
-                                        # luna snapshot
+                                        # Bug G: Luna prescriptive fields removed. Persist
+                                        # only observational metadata (patterns) for the
+                                        # lessons/trade_conditions index.
                                         try:
                                             from luna_analyst import load_luna_brief
                                             _lb = load_luna_brief() or {}
-                                            _conds["luna_environment"] = _lb.get("environment")
-                                            _conds["luna_risk_level"] = _lb.get("risk_level")
-                                            _conds["luna_bias"] = _lb.get("directional_bias")
+                                            _conds["luna_patterns"] = list(_lb.get("patterns_detected") or [])[:3]
                                         except Exception:
                                             pass
                                         # session + utc_hour

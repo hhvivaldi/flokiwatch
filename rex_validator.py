@@ -545,24 +545,34 @@ def _build_debate_context(data: Dict[str, Any]) -> str:
             parts.append(f"Market structure:\n{ms}")
     except Exception:
         pass
+    # Bug G: Luna prescriptive fields (environment/bias/risk) removed from
+    # schema. Surface only observational data: patterns + first 3 key_factors.
     try:
         luna = data.get("luna")
-        if luna:
-            parts.append(f"Luna: environment={luna.get('environment')}, bias={luna.get('directional_bias')}, risk={luna.get('risk_level')}")
+        if isinstance(luna, dict):
+            _pats = luna.get("patterns_detected") or []
+            _kf = (luna.get("key_factors") or [])[:3]
+            _lbits = []
+            if _pats:
+                _lbits.append(f"patterns={', '.join(str(p) for p in _pats)}")
+            if _kf:
+                _lbits.append("key_factors: " + "; ".join(str(k) for k in _kf))
+            if _lbits:
+                parts.append("Luna (observational): " + " | ".join(_lbits))
     except Exception:
         pass
-    # FLO-237: Luna's interpreted news analysis (replaces raw headline count)
     try:
         nc = data.get("news_context", {})
-        if nc:
-            _nc_text = (
-                f"News analysis (Luna): {nc.get('luna_environment', '?')} environment, "
-                f"bias {nc.get('luna_bias', '?')}, risk {nc.get('luna_risk', '?')}/10"
-            )
-            _pats = nc.get("patterns")
-            if _pats:
-                _nc_text += f", patterns: {', '.join(str(p) for p in _pats)}"
-            parts.append(_nc_text)
+        if isinstance(nc, dict):
+            _pats = nc.get("patterns") or []
+            _kf = nc.get("key_factors") or []
+            if _pats or _kf:
+                _nc_bits = []
+                if _pats:
+                    _nc_bits.append("patterns: " + ", ".join(str(p) for p in _pats))
+                if _kf:
+                    _nc_bits.append("key_factors: " + "; ".join(str(k) for k in _kf))
+                parts.append("News context: " + " | ".join(_nc_bits))
     except Exception:
         pass
     try:

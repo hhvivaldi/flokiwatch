@@ -232,12 +232,12 @@ def build_luna_brief_card(
     if sentiment:
         fields.append(_f("Sentiment", sentiment))
 
-    env_color = COLORS["alert"] if environment == "DANGER" else (COLORS["sage"] if environment == "CAUTION" else COLORS["luna"])
+    # Bug G: neutral Luna color — no env-based selection (environment field removed).
     return {
         "channel": "luna",
-        "color": env_color,
+        "color": COLORS["luna"],
         "author_name": "\U0001F43A LUNA \u2014 MACRO BRIEF",
-        "title": f"{environment} \u2014 Risk {risk}/10 | {bias} | {regime.upper()}",
+        "title": "LUNA \u2014 Observational macro brief",
         "fields": fields,
         "footer": f"FlokiWatch \u2022 via MiMo AI \u2022 {datetime.now(timezone.utc).strftime('%H:%M')} UTC",
     }

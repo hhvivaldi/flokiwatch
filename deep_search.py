@@ -58,16 +58,11 @@ def _build_search_query() -> str:
             else:
                 base = f"gold XAU/USD outlook today key levels support resistance {today}"
 
-            # Context modifiers
-            try:
-                luna_path = DATA_DIR / "luna_brief.json"
-                if luna_path.exists():
-                    lb = json.loads(luna_path.read_text(encoding="utf-8"))
-                    luna_bias = str(lb.get("directional_bias", "")).upper()
-                    if luna_bias == "BULLISH" and change is not None and change < 0:
-                        base += " despite bullish macro"
-            except Exception:
-                pass
+            # Bug G: Luna bias-filter removed (Luna no longer produces
+            # bias labels — observational data only). Net effect: search
+            # query no longer annotates "despite bullish/bearish macro".
+            # Accepted loss per Bug G decision — prescription-over-precision
+            # trade rejected in favor of Escola 1 alignment.
 
             if "RANGING" in regime:
                 base += " range consolidation"

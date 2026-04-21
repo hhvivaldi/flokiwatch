@@ -17,11 +17,11 @@ Invariants:
 
 Flags (definitions fixed per spec — do not refine without a new ticket):
   - skipped_oracle_in_luna_danger:
-      Luna.environment == "DANGER" (from get_luna_brief result in cycle)
-      AND no get_oracle_verdict call in tool_trace.
+      Bug G: DEPRECATED — Luna.environment field removed from schema.
+      Helper retained; computation now returns False unconditionally.
   - skipped_rex_in_luna_danger:
-      Luna.environment == "DANGER" AND no call to any of
-      {debate_with_rex, get_rex_debate, get_rex_monitor}.
+      Bug G: DEPRECATED — Luna.environment field removed from schema.
+      Helper retained; computation now returns False unconditionally.
   - contradicted_own_recent_wait:
       The most recent prior Floki decision (either table) within a 30-min
       window strictly before cycle_ts has agent_decision == "WAIT".
@@ -126,27 +126,19 @@ def _find_tool_results(trace: List[Dict[str, Any]], name: str) -> List[Dict[str,
 
 
 def _luna_environment_in_cycle(trace: List[Dict[str, Any]]) -> Optional[str]:
-    for t in _find_tool_results(trace, "get_luna_brief"):
-        r = t.get("result") or {}
-        brief = r.get("brief") or {}
-        env = brief.get("environment")
-        if env:
-            return str(env).upper()
+    # Bug G: Luna.environment removed from schema. Retained as a no-op helper
+    # so callers that still invoke it don't crash; always returns None.
     return None
 
 
 def flag_skipped_oracle_in_luna_danger(trace: List[Dict[str, Any]]) -> bool:
-    if _luna_environment_in_cycle(trace) != "DANGER":
-        return False
-    names = set(_tool_names(trace))
-    return not any(n in names for n in _ORACLE_TOOLS)
+    # Bug G: permanently False — Luna no longer emits DANGER (or any env label).
+    return False
 
 
 def flag_skipped_rex_in_luna_danger(trace: List[Dict[str, Any]]) -> bool:
-    if _luna_environment_in_cycle(trace) != "DANGER":
-        return False
-    names = set(_tool_names(trace))
-    return not any(n in names for n in _REX_TOOLS)
+    # Bug G: permanently False — Luna no longer emits DANGER (or any env label).
+    return False
 
 
 def flag_contradicted_own_recent_wait(conn: sqlite3.Connection, cycle_ts: str) -> bool:

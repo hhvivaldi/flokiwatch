@@ -2669,9 +2669,13 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
           }
 
           var b = data.brief;
-          var env = (b.environment || 'SAFE').toUpperCase();
-          var envColor = env === 'DANGER' ? '#ef4444' : (env === 'CAUTION' ? '#f59e0b' : '#4ade80');
-          var envBg = env === 'DANGER' ? 'rgba(239,68,68,0.2)' : (env === 'CAUTION' ? 'rgba(245,158,11,0.15)' : 'rgba(74,222,128,0.15)');
+          /* Bug G: Luna prescriptive fields (environment/risk/bias) removed from schema.
+             Null-safe defaults show neutral placeholders; full data-forward redesign
+             deferred to follow-up commit with WEBDESIGNER coordination. */
+          var env = (b.environment || '').toUpperCase();
+          var envColor = env === 'DANGER' ? '#ef4444' : (env === 'CAUTION' ? '#f59e0b' : (env === 'SAFE' ? '#4ade80' : '#8a8a9a'));
+          var envBg = env === 'DANGER' ? 'rgba(239,68,68,0.2)' : (env === 'CAUTION' ? 'rgba(245,158,11,0.15)' : (env === 'SAFE' ? 'rgba(74,222,128,0.15)' : 'rgba(138,138,154,0.15)'));
+          if (!env) env = '—';
 
           /* FLO-215: Update status bar Luna pill */
           window._sbLunaEnv = env;
@@ -2689,18 +2693,22 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             envPill.style.color = envColor;
           }
 
-          var bias = (b.directional_bias || 'NEUTRAL').toUpperCase();
+          /* Bug G: bias/risk fields removed — show neutral placeholders when absent. */
+          var bias = (b.directional_bias || '').toUpperCase();
           var biasColor = bias === 'BULLISH' ? '#4ade80' : (bias === 'BEARISH' ? '#f87171' : '#8a8a9a');
           if (biasPill) {
-            biasPill.textContent = bias + ' (' + (b.bias_confidence || '?') + '/10)';
+            if (bias) {
+              biasPill.textContent = bias + ' (' + (b.bias_confidence || '?') + '/10)';
+            } else {
+              biasPill.textContent = '—';
+            }
             biasPill.style.color = biasColor;
           }
 
-          var risk = b.risk_level != null ? b.risk_level : 0;
-          if (riskText) riskText.textContent = risk + '/10';
-          if (riskBar) riskBar.style.width = (risk * 10) + '%';
-          // Color bar by risk
-          if (riskBar) riskBar.style.background = env === 'DANGER' ? '#ef4444' : (env === 'CAUTION' ? '#f59e0b' : '#E040FB');
+          var risk = b.risk_level != null ? b.risk_level : null;
+          if (riskText) riskText.textContent = risk != null ? (risk + '/10') : '—';
+          if (riskBar) riskBar.style.width = risk != null ? ((risk * 10) + '%') : '0%';
+          if (riskBar) riskBar.style.background = env === 'DANGER' ? '#ef4444' : (env === 'CAUTION' ? '#f59e0b' : '#8a8a9a');
 
           if (summaryEl) summaryEl.textContent = b.summary || '—';
           if (regimeEl) regimeEl.textContent = (b.market_regime || '—').toUpperCase().replace('_', ' ');

@@ -26,7 +26,7 @@ python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 | Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. |
 | Sage | Gemini | `sage_auditor.py` | Daily auditor at 21:00 UTC. |
 | Echo | MiMo-V2-Flash | `echo_sentinel.py` | News sentinel. 25 RSS feeds. PULL-only. |
-| Luna | MiMo-V2-Flash | `luna_analyst.py` | Macro analyst. MT5+Yahoo+FRED. |
+| Luna | MiMo-V2-Flash | `luna_analyst.py` | Macro analyst. MT5+Yahoo+FRED. Observational output only (no env/risk/bias labels post-Bug G — Floki interprets). |
 | Brain | Python | `central_brain.py` | Data pipeline. 5-pillar analysis. No decisions. |
 
 **NOTE:** `simba_watcher.py` is dead code. Canonical Simba is `agent_monitor.py`.
