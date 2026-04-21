@@ -3884,23 +3884,10 @@ class TradingBot:
                 except Exception:
                     pass
 
-                # FLO-211: Inject Rex monitor findings into debate context
-                try:
-                    from rex_monitor import load_rex_monitor
-                    _rex_mon = load_rex_monitor()
-                    if _rex_mon:
-                        _ts = _rex_mon.get("timestamp")
-                        _age = None
-                        if _ts:
-                            _st = datetime.fromisoformat(_ts.replace("Z", "+00:00"))
-                            _age = round((datetime.now(timezone.utc) - _st).total_seconds() / 60, 1)
-                        _debate_data["rex_monitor"] = {
-                            "findings": _rex_mon.get("findings", []),
-                            "alert_level": _rex_mon.get("alert_level", "QUIET"),
-                            "age_minutes": _age,
-                        }
-                except Exception:
-                    pass
+                # FLO-211 Rex-Monitor → Bull/Bear injection REMOVED: Bull/Bear
+                # output does not reach Floki (FLO-243 removed verdict auto-inject),
+                # so piping monitor findings here was dead weight at decision level.
+                # Floki still pulls monitor directly via get_rex_monitor tool.
 
                 _debate_result = run_bull_bear_debate(_debate_data)
 
