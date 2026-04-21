@@ -551,7 +551,7 @@ Response `brief` contains:
   - `gold`: `{value, change_pct_24h, dist_from_3d_high_pct, 3d_high}`
   - `gld_volume`: `{avg_5d_vs_baseline, rising_price, status}` where status ∈ `accumulation`/`distribution`/`quiet_bid`/`quiet`
   - `real_yields`, `fed_funds`, `breakeven`, `cpi`: `{value, change}`
-- `correlations`: `gold_dxy`, `gold_silver`, `gold_10y` → each `{current, typical}` (raw numbers, no `status` labels)
+- `correlations`: top-level `{status: "ok"|"insufficient_data", days, gold_dxy, gold_yields, gold_sp500}`. Per-pair values are `{value, normal_range}` (raw current + typical only — no `NORMAL`/`WEAK`/`BROKEN` status labels; Bug G follow-up 2026-04-21 removed prescriptive classification).
 - `patterns_detected` (list of Python-validated pattern names): `forced_liquidation`, `safe_haven_flow`, `news_price_divergence`, `dollar_gold_correlation_break`, `blow_off_reversal`
 - `key_factors` (3–5 short observational statements, each anchored to a number)
 - `next_events` (list of `{event, time, impact}`)

@@ -909,13 +909,12 @@ def _calc_pearson(x: list, y: list) -> Optional[float]:
 
 
 def _classify_correlation(value: float, normal_low: float, normal_high: float) -> str:
-    """Classify correlation as NORMAL, WEAK, or BROKEN."""
-    if normal_low <= value <= normal_high:
-        return "NORMAL"
-    # Check if sign flipped from expected
-    if (normal_high < 0 and value > 0) or (normal_low > 0 and value < 0):
-        return "BROKEN"
-    return "WEAK"
+    """Bug G follow-up: gutted to no-op. Previously emitted NORMAL / WEAK / BROKEN
+    labels that prescribed interpretation on top of raw numbers, violating Escola 1.
+    Floki now compares the raw current vs typical values himself. Retained as a
+    callable stub so any out-of-tree caller doesn't AttributeError.
+    """
+    return ""
 
 
 def _build_correlations(macro: Dict[str, Any]) -> Dict[str, Any]:
@@ -953,16 +952,19 @@ def _build_correlations(macro: Dict[str, Any]) -> Dict[str, Any]:
         "gold_sp500": {"series": sp500_vals, "normal": (-0.5, 0.5)},
     }
 
+    # Bug G follow-up: remove per-pair "status" prescriptive labels (NORMAL /
+    # WEAK / BROKEN). Emit raw current + typical (normal_range) values only;
+    # Floki compares and decides whether a correlation is broken. Top-level
+    # "status" key ('ok' / 'insufficient_data') is retained — it's a
+    # data-quality flag consumed by the dashboard, not a prescription.
     result = {"status": "ok", "days": len(gold_vals)}
     for name, cfg in pairs.items():
         corr = _calc_pearson(gold_vals, cfg["series"])
         if corr is None:
-            result[name] = {"value": None, "status": "N/A"}
+            result[name] = {"value": None, "normal_range": list(cfg["normal"])}
             continue
-        status = _classify_correlation(corr, cfg["normal"][0], cfg["normal"][1])
         result[name] = {
             "value": corr,
-            "status": status,
             "normal_range": list(cfg["normal"]),
         }
 
@@ -980,15 +982,16 @@ def _build_correlation_context(correlations: Dict[str, Any]) -> str:
         "gold_yields": "Gold-Yields",
         "gold_sp500": "Gold-S&P500",
     }
+    # Bug G follow-up: strip per-pair status label from the prompt context.
+    # Luna now sees raw current + typical numbers only.
     lines = ["<correlations>"]
     for name in ("gold_dxy", "gold_yields", "gold_sp500"):
         c = correlations.get(name, {})
         val = c.get("value")
-        status = c.get("status", "N/A")
         if val is not None:
             nr = c.get("normal_range", [])
-            nr_str = f" (normal: {nr[0]} to {nr[1]})" if nr else ""
-            lines.append(f"{labels.get(name, name)}: {val:+.2f} ({status}{nr_str})")
+            nr_str = f" (typical: {nr[0]} to {nr[1]})" if nr else ""
+            lines.append(f"{labels.get(name, name)}: {val:+.2f}{nr_str}")
     lines.append("</correlations>")
     return "\n".join(lines)
 
