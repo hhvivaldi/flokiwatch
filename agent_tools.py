@@ -4092,12 +4092,12 @@ class AgentTools:
                 except Exception:
                     pass
 
-            # Return summary (not full raw_data — Floki doesn't need it)
+            # FLO-316: alert_level / alert_context / alert_hint removed from
+            # Rex Monitor output (prescriptive labels violated Escola 1).
+            # Surface observational summary only: findings_count + findings[]
+            # where each finding is {type, observation, data}.
             summary = {
-                "alert_level": monitor.get("alert_level", "QUIET"),
-                "alert_context": monitor.get("alert_context"),  # FLO-300: was dropped (FLO-298 Fix 2 half-wire)
-                "alert_hint": monitor.get("alert_hint"),        # FLO-300: was dropped (FLO-298 Fix 2 half-wire)
-                "finding_count": monitor.get("finding_count", 0),
+                "findings_count": monitor.get("findings_count", monitor.get("finding_count", 0)),
                 "findings": monitor.get("findings", []),
                 "timestamp": ts,
             }
@@ -4119,7 +4119,7 @@ class AgentTools:
             except Exception:
                 pass
 
-            self._log_tool("get_rex_monitor", start, f"alert={summary['alert_level']} findings={summary['finding_count']}")
+            self._log_tool("get_rex_monitor", start, f"findings={summary['findings_count']}")
             return {
                 "success": True,
                 "monitor": summary,

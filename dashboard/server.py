@@ -1110,10 +1110,13 @@ def rex_monitor_api():
             except Exception:
                 pass
 
+        # FLO-316: alert_level removed from Rex Monitor schema. Endpoint
+        # surfaces findings_count + findings[] only; dashboard renders
+        # observational data, no prescriptive badge color.
         return JSONResponse({
             "monitor": {
-                "alert_level": monitor.get("alert_level", "QUIET"),
-                "finding_count": monitor.get("finding_count", 0),
+                "findings_count": monitor.get("findings_count", monitor.get("finding_count", 0)),
+                "findings": monitor.get("findings", []),
                 "timestamp": ts,
                 "age_minutes": age_minutes,
             },

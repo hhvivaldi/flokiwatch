@@ -722,7 +722,13 @@ class AgentMonitor:
             if os.path.exists(_rex_path):
                 with open(_rex_path, "r", encoding="utf-8") as _rf:
                     _rex = _rj.load(_rf)
-                if isinstance(_rex, dict) and _rex.get("alert_level") == "CRITICAL":
+                # FLO-316: wake threshold gated on findings_count (>= 2) instead
+                # of alert_level == "CRITICAL" (alert_level removed). The old
+                # "2 HIGH-severity sources" trigger corresponds to ~2 findings in
+                # the new schema when distinct types deviate; preserves Simba's
+                # safety wake semantics without the prescriptive label.
+                _fc = _rex.get("findings_count") or _rex.get("finding_count") or 0
+                if isinstance(_rex, dict) and isinstance(_fc, (int, float)) and _fc >= 2:
                     # 2-hour debounce: only wake if last critical wake was >2h ago
                     _last_cw = _rex.get("last_critical_wake_at")
                     _debounce_ok = True

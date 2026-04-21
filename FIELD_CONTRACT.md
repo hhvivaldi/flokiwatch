@@ -191,15 +191,32 @@ Simba monitors these conditions every 30s for open positions. Written by `agent_
 
 **Trigger registration:** when a compound `action=close` or `action=adjust_sl` fires, `agent_monitor` calls `executor.close_position` / `executor.modify_position`, then `bot.agent_proactive_out_of_cycle(trigger_type="SIMBA_EXIT_EXECUTED", trigger_data=...)`. `main.py:337` accepts this trigger; `main.py:3618` renders a `<simba_execution>` block in trigger_context so Floki sees the execution report and decides next steps.
 
-### `/api/rex-monitor` Endpoint (FLO-214 Rex Proactive Monitor)
+### `/api/rex-monitor` Endpoint (FLO-214 + FLO-316 Rex Proactive Monitor)
+
+**FLO-316 (2026-04-21)** removed prescriptive labels from Rex Monitor schema
+to reduce Floki's compounding caution. The endpoint now surfaces only
+observational findings.
 
 | Field | Type | Writer | Reader |
 |-------|------|--------|--------|
-| `monitor.alert_level` | string (`"QUIET"` \| `"NORMAL"` \| `"ELEVATED"` \| `"CRITICAL"`) | `rex_monitor.py` | Rex card pill `#rex-monitor-pill` |
-| `monitor.finding_count` | int (0+) | `rex_monitor.py` | Rex card pill |
+| `monitor.findings_count` | int (0+) | `rex_monitor.py` | Rex card pill `#rex-monitor-pill` |
+| `monitor.findings` | list of `{type, observation, data}` | `rex_monitor.py` | get_rex_monitor tool response |
 | `monitor.timestamp` | string (ISO) | `rex_monitor.py` | Rex card pill (age calc) |
 | `monitor.age_minutes` | float \| null | `server.py` | Rex card pill ("Xm ago") |
 | `stale` | boolean | `server.py` | Rex card pill ("stale" suffix) |
+
+**Removed fields (FLO-316):**
+- `monitor.alert_level` (QUIET/NORMAL/ELEVATED/CRITICAL) — prescriptive label
+- `monitor.alert_context` (decorrelation / directional_risk / transition / mixed) — narrative interpretation
+- `monitor.alert_hint` (guidance text) — parroted back as blanket "caution"
+- Per-finding `severity` (HIGH/MEDIUM/LOW), `implication` (bullish / bearish / avoid_X), and `source` tag
+
+**Finding shape:** each finding in `findings[]` is `{type, observation, data}`:
+- `type` ∈ `DIVERGENCE` | `CORRELATION` | `REGIME` | `SESSION`
+- `observation` — human-readable sentence with numeric values
+- `data` — dict of numeric fields (specific to type)
+
+**Simba wake threshold:** `findings_count >= 2` (was `alert_level == "CRITICAL"`). 2h debounce preserved.
 
 ### FLO-215 Phase 3: Adaptive Main Area IDs
 

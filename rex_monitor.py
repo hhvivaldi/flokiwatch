@@ -83,44 +83,52 @@ def _classify_findings(
     performance: Dict[str, Any],
     prev_regime: Optional[str],
 ) -> List[Dict[str, Any]]:
-    """Classify tool outputs into structured findings. No LLM — pure rules."""
+    """Classify tool outputs into structured findings. No LLM — pure rules.
+
+    FLO-316 (Bug G-style follow-up to reduce Floki's compounding caution):
+    emit observational findings only. Each finding is {type, observation, data}.
+    Removed prior prescriptive fields:
+      * severity (HIGH/MEDIUM/LOW) — Floki was treating any HIGH as
+        "extra caution"; the aggregate across sources pushed his conviction
+        bar upward. Now absent; Floki reads raw numbers.
+      * implication (bullish / bearish / avoid_X / regime_transition) —
+        prescriptive interpretation Floki parroted into reasoning.
+      * source tag — simplified; tool-trace retains provenance if needed.
+      * detail formatted with "BROKEN" / "weakening" sentiment words —
+        replaced with neutral numeric phrasing.
+    """
     findings: List[Dict[str, Any]] = []
 
-    # --- Divergence findings (HIGH) ---
+    # --- Divergences (H4/D1 RSI + MACD) ---
     if divergences.get("success"):
         for tf_name in ("H4", "D1"):
             tf_data = divergences.get("divergences", {}).get(tf_name)
             if not isinstance(tf_data, dict):
                 continue
-
             rsi_div = tf_data.get("rsi", "none")
             rsi_val = tf_data.get("rsi_value")
             macd_div = tf_data.get("macd_divergence", "none")
 
             if rsi_div not in ("none", "insufficient_data"):
+                obs = f"{tf_name} RSI {rsi_div} divergence"
+                if rsi_val is not None:
+                    obs += f" (RSI={rsi_val:.1f})"
                 findings.append({
                     "type": "DIVERGENCE",
-                    "severity": "HIGH",
-                    "timeframe": tf_name,
-                    "detail": (
-                        f"{tf_name} RSI {rsi_div} divergence"
-                        + (f" (RSI={rsi_val:.1f})" if rsi_val is not None else "")
-                    ),
-                    "implication": "bearish" if "bearish" in rsi_div else "bullish",
-                    "source": "rex_divergence_scan",
+                    "observation": obs,
+                    "data": {"timeframe": tf_name, "indicator": "rsi",
+                             "pattern": rsi_div, "rsi_value": rsi_val},
                 })
 
             if macd_div not in ("none", "insufficient_data"):
                 findings.append({
                     "type": "DIVERGENCE",
-                    "severity": "HIGH",
-                    "timeframe": tf_name,
-                    "detail": f"{tf_name} MACD {macd_div} divergence",
-                    "implication": "bearish" if "bearish" in macd_div else "bullish",
-                    "source": "rex_divergence_scan",
+                    "observation": f"{tf_name} MACD {macd_div} divergence",
+                    "data": {"timeframe": tf_name, "indicator": "macd",
+                             "pattern": macd_div},
                 })
 
-    # --- Correlation findings (HIGH if BROKEN, LOW if WEAK) ---
+    # --- Correlations (surface only when deviating from typical range) ---
     if correlations.get("success"):
         pair_labels = {
             "gold_dxy": "Gold-DXY",
@@ -131,52 +139,61 @@ def _classify_findings(
             pair_data = correlations.get("correlations", {}).get(pair)
             if not isinstance(pair_data, dict):
                 continue
-            status = pair_data.get("status")
             corr_val = pair_data.get("correlation")
             normal = pair_data.get("normal")
-            if status == "BROKEN" and corr_val is not None:
-                findings.append({
-                    "type": "CORRELATION_BREAK",
-                    "severity": "HIGH",
-                    "detail": f"{label} correlation {corr_val:+.2f} (normal: {normal}) — BROKEN",
-                    "implication": "unusual_driver",
-                    "source": "rex_correlation_check",
-                })
-            elif status == "WEAK" and corr_val is not None:
-                findings.append({
-                    "type": "CORRELATION_WEAK",
-                    "severity": "LOW",
-                    "detail": f"{label} correlation {corr_val:+.2f} (normal: {normal}) — weakening",
-                    "implication": "monitor",
-                    "source": "rex_correlation_check",
-                })
+            # Gate kept: only surface correlations that DEVIATE from typical
+            # (was BROKEN/WEAK in prior classifier). Normal/strong-normal
+            # correlations are not news. The gate uses status internally
+            # for efficiency; but the finding no longer carries the label.
+            status = pair_data.get("status")
+            if corr_val is None or status not in ("BROKEN", "WEAK"):
+                continue
+            typical_min = typical_max = None
+            if isinstance(normal, (list, tuple)) and len(normal) == 2:
+                typical_min, typical_max = normal[0], normal[1]
+            if typical_min is not None:
+                typical_txt = f"typical range {typical_min:+.2f} to {typical_max:+.2f}"
+            elif isinstance(normal, (int, float)):
+                typical_txt = f"typical {normal:+.2f}"
+            else:
+                typical_txt = ""
+            obs = f"{label} correlation current {corr_val:+.2f}" + (
+                f", {typical_txt}" if typical_txt else ""
+            )
+            findings.append({
+                "type": "CORRELATION",
+                "observation": obs,
+                "data": {
+                    "pair": pair,
+                    "current": corr_val,
+                    "typical_min": typical_min,
+                    "typical_max": typical_max,
+                    "typical_scalar": normal if isinstance(normal, (int, float)) else None,
+                },
+            })
 
-    # --- Regime change findings (graduated severity) ---
+    # --- Regime transitions (surface when recent; omit settled regimes) ---
     if regime.get("success"):
         current = regime.get("current_regime")
         duration = regime.get("duration_minutes")
         first_scan_after_change = prev_regime is not None and prev_regime != current
 
         if duration is not None and current:
-            if first_scan_after_change or (duration is not None and duration < 30):
+            if first_scan_after_change or duration < 120:
+                prev_txt = f" from {prev_regime}" if prev_regime and prev_regime != current else ""
+                obs = f"Regime changed to {current}{prev_txt}, {duration} minutes ago"
                 findings.append({
-                    "type": "REGIME_CHANGE",
-                    "severity": "HIGH",
-                    "detail": f"Regime changed to {current} {duration}m ago",
-                    "implication": "regime_transition",
-                    "source": "rex_regime_history",
+                    "type": "REGIME",
+                    "observation": obs,
+                    "data": {
+                        "current": current,
+                        "previous": prev_regime,
+                        "age_minutes": duration,
+                        "first_scan_after_change": first_scan_after_change,
+                    },
                 })
-            elif duration < 120:
-                findings.append({
-                    "type": "REGIME_CHANGE",
-                    "severity": "MEDIUM",
-                    "detail": f"Regime changed to {current} {duration}m ago",
-                    "implication": "regime_transition",
-                    "source": "rex_regime_history",
-                })
-            # > 120 min: omit finding
 
-    # --- Session performance findings ---
+    # --- Session performance ---
     if performance.get("success"):
         current_sess = _current_session()
         sess_data = performance.get("performance", {}).get(current_sess, {})
@@ -185,101 +202,45 @@ def _classify_findings(
                 continue
             n = stats.get("n", 0)
             wr = stats.get("wr", 50)
-            if n >= 5 and wr < 25:
+            pnl = float(stats.get("pnl", 0.0) or 0.0)
+            if n < 5:
+                continue
+            # Surface extreme WR (either tail) or net-positive edge with
+            # meaningful WR. Floki decides how to weight it — no SESSION_HOT
+            # / SESSION_WARNING / SESSION_ENDORSEMENT prescriptive labels.
+            if wr < 25 or wr > 75 or (wr > 45 and pnl > 0):
+                obs = (
+                    f"{current_sess.capitalize()} {direction}: {wr:.1f}% win rate "
+                    f"over {n} trades, net {pnl:+.2f}"
+                )
                 findings.append({
-                    "type": "SESSION_WARNING",
-                    "severity": "MEDIUM",
-                    "detail": f"{current_sess.capitalize()} {direction}: {wr:.0f}% WR over {n} trades",
-                    "implication": f"avoid_{direction.lower()}_in_{current_sess}",
-                    "source": "rex_session_performance",
-                })
-            elif n >= 5 and wr > 75:
-                findings.append({
-                    "type": "SESSION_HOT",
-                    "severity": "LOW",
-                    "detail": f"{current_sess.capitalize()} {direction}: {wr:.0f}% WR over {n} trades",
-                    "implication": f"{direction.lower()}_favored_in_{current_sess}",
-                    "source": "rex_session_performance",
-                })
-            elif n >= 5 and wr > 45 and float(stats.get("pnl", 0.0)) > 0:
-                # FLO-303: symmetry — surface positive session data so Floki
-                # sees both sides. SESSION_WARNING tells him what to avoid;
-                # this tells him what's working. Floki decides, not Rex.
-                _pnl_val = float(stats.get("pnl", 0.0))
-                findings.append({
-                    "type": "SESSION_ENDORSEMENT",
-                    "severity": "LOW",
-                    "detail": f"{current_sess.capitalize()} {direction}: {wr:.1f}% WR, +${_pnl_val:.2f} net (n={n})",
-                    "implication": f"{direction.lower()}_viable_in_{current_sess}",
-                    "source": "rex_session_performance",
+                    "type": "SESSION",
+                    "observation": obs,
+                    "data": {
+                        "session": current_sess,
+                        "direction": direction,
+                        "win_rate_pct": wr,
+                        "n_trades": n,
+                        "pnl": pnl,
+                    },
                 })
 
     return findings
 
 
 def _classify_alert_level(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Classify alert level + context + hint from findings list.
+    """FLO-316: gutted to no-op.
 
-    FLO-298 fix 2: alert_level alone conflated decorrelation (follow price) with
-    directional risk (reversal watch) with transition (unstable regime). The
-    context + hint disambiguate so Floki can weight the alert appropriately.
+    Previously emitted prescriptive alert_level (QUIET/NORMAL/ELEVATED/CRITICAL)
+    + alert_context + alert_hint labels that Floki parroted into reasoning
+    as blanket "extra caution" regardless of the hint's actual content. The
+    alert_hint "This is NOT a do-not-trade signal" was observed being
+    ignored — Floki treated any CRITICAL as do-not-trade anyway.
 
-    Returns dict: {level, context, hint}
-      level:    OK | NORMAL | ELEVATED | CRITICAL  (unchanged semantics)
-      context:  None, or one of: decorrelation | directional_risk | transition,
-                or "mixed: <a> + <b>" when multiple HIGH-type findings coexist.
-      hint:     None, or a one-line guidance string explaining how to weight.
+    Retained as callable stub so any out-of-tree caller doesn't AttributeError.
+    Callers in-tree (run_rex_monitor) no longer read the return dict.
     """
-    high_sources = set()
-    high_types = set()
-    for f in findings:
-        if f.get("severity") == "HIGH":
-            high_sources.add(f.get("source", ""))
-            high_types.add(f.get("type", ""))
-
-    if len(high_sources) >= 2:
-        level = "CRITICAL"
-    elif high_sources:
-        level = "ELEVATED"
-    elif findings:
-        level = "NORMAL"
-    else:
-        level = "OK"
-
-    type_to_ctx = {
-        "CORRELATION_BREAK": "decorrelation",
-        "DIVERGENCE": "directional_risk",
-        "REGIME_CHANGE": "transition",
-    }
-    hint_for = {
-        "decorrelation": (
-            "Macro signals decoupled from price. Use price action and volume, "
-            "not correlation-based bias. This is NOT a do-not-trade signal."
-        ),
-        "directional_risk": (
-            "Divergence detected — reversal watch. Be cautious on continuation "
-            "trades; tight stops or wait for confirmation."
-        ),
-        "transition": (
-            "Regime transition in progress. Breakout plays risky until the new "
-            "regime stabilizes; wait for confirmation or scale in."
-        ),
-    }
-
-    context = None
-    hint = None
-    if level in ("ELEVATED", "CRITICAL"):
-        active = sorted({type_to_ctx[t] for t in high_types if t in type_to_ctx})
-        if len(active) == 1:
-            context = active[0]
-            hint = hint_for.get(context)
-        elif len(active) >= 2:
-            context = "mixed: " + " + ".join(active)
-            hint = "Multiple active risks: " + "; ".join(
-                f"[{c}] {hint_for[c]}" for c in active if c in hint_for
-            )
-
-    return {"level": level, "context": context, "hint": hint}
+    return {"level": "", "context": None, "hint": None}
 
 
 # ---------------------------------------------------------------------------
@@ -370,10 +331,8 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
     regime = _run_regime_history(agent_tools)
     performance = _run_session_performance(agent_tools)
 
-    # Classify findings
+    # Classify findings (FLO-316: observational-only {type, observation, data})
     findings = _classify_findings(divergences, correlations, regime, performance, prev_regime)
-    _alert = _classify_alert_level(findings)
-    alert_level = _alert["level"]
 
     scan_ms = int((time.time() - t0) * 1000)
     now_iso = utc_iso()  # FLO-309
@@ -390,28 +349,27 @@ def run_rex_monitor(agent_tools: Any) -> Dict[str, Any]:
         "session_performance": performance.get("performance") if performance.get("success") else {"error": performance.get("reason")},
     }
 
-    # Carry forward debounce timestamp
+    # Carry forward debounce timestamp (Simba wake — now gated on findings_count
+    # threshold instead of alert_level == CRITICAL; see agent_monitor.py).
     last_critical_wake_at = prev.get("last_critical_wake_at")
 
+    # FLO-316: alert_level / alert_context / alert_hint REMOVED from payload.
+    # Floki reads findings[].observation + findings_count, decides himself.
     payload = {
         "timestamp": now_iso,
         "scan_latency_ms": scan_ms,
         "findings": findings,
-        "finding_count": len(findings),
-        "alert_level": alert_level,
-        "alert_context": _alert["context"],
-        "alert_hint": _alert["hint"],
+        "findings_count": len(findings),  # renamed from finding_count per FLO-316 spec
+        "finding_count": len(findings),   # preserved for any inflight consumer
         "raw_data": raw_data,
         "last_critical_wake_at": last_critical_wake_at,
     }
 
     _save_monitor(payload)
 
-    high_count = sum(1 for f in findings if f.get("severity") == "HIGH")
     log.info(
         f"REX_MONITOR | scan complete | {scan_ms}ms | "
-        f"findings={len(findings)} (HIGH={high_count}) | alert={alert_level}"
-        + (f" ctx={_alert['context']}" if _alert['context'] else "")
+        f"findings={len(findings)}"
     )
 
     return payload

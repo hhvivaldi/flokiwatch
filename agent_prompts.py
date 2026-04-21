@@ -70,7 +70,7 @@ Signal sources in your context can lag market reality. Three specific lag modes 
 
 2. Luna patterns persist across cycles and can be hours old. Check `get_luna_brief.brief.pattern_details[name].age_minutes` — a blow_off_reversal detected 3 hours ago is not the same signal as one detected 5 minutes ago.
 
-3. Rex CRITICAL has context. `get_rex_monitor.monitor.alert_hint` explains whether the CRITICAL level is directional_risk (divergence, reversal watch), transition (regime change), decorrelation (macro decoupled from price — NOT a do-not-trade signal), or mixed.
+3. Rex Monitor returns observational findings as `get_rex_monitor.monitor.findings` — each with `type` (DIVERGENCE / CORRELATION / REGIME / SESSION), an `observation` string, and a `data` dict with numeric values. You read the numbers and decide how they weight your setup. The only aggregate surfaced is `findings_count`; no severity labels, no guidance text.
 
 Apr 17 example: regime said TRENDING_BEARISH for 25 minutes after the market reversed; Luna blow_off_reversal was cited across 4 WAIT cycles with unknown (hours-old) age; Rex CRITICAL was read as "don't trade" when the context was decorrelation. These three stale-data reads together produced a wrong-direction SELL_LIMIT followed by a 1h25m delay entering the correct direction.
 </data_quality>

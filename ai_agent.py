@@ -1138,7 +1138,7 @@ class AIAgent:
             },
             {
                 "name": "get_rex_monitor",
-                "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns alert_level (QUIET/NORMAL/ELEVATED/CRITICAL) and findings.",
+                "description": "Get Rex's proactive monitor scan — divergences, correlations, regime changes, session performance. Rex scans every 30 min independently. Returns findings_count and findings[] where each finding is {type, observation, data} (observational only, no prescriptive labels).",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
