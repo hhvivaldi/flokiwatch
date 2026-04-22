@@ -1,0 +1,43 @@
+[
+  {
+    "bucket": "<=10",
+    "n": 0
+  },
+  {
+    "bucket": "11-20",
+    "n": 0
+  },
+  {
+    "bucket": "21-50",
+    "n": 4,
+    "wins": 1,
+    "losses": 3,
+    "wr": 25.0,
+    "avg_pnl": -2.62,
+    "avg_mfe_pts": 9.2,
+    "stopout_pct": 75.0,
+    "avg_tp_pips": 117.8
+  },
+  {
+    "bucket": "51-100",
+    "n": 24,
+    "wins": 8,
+    "losses": 15,
+    "wr": 33.3,
+    "avg_pnl": -0.82,
+    "avg_mfe_pts": 34.0,
+    "stopout_pct": 66.7,
+    "avg_tp_pips": 189.0
+  },
+  {
+    "bucket": ">100",
+    "n": 65,
+    "wins": 28,
+    "losses": 37,
+    "wr": 43.1,
+    "avg_pnl": 1.42,
+    "avg_mfe_pts": 69.8,
+    "stopout_pct": 46.2,
+    "avg_tp_pips": 14031.0
+  }
+]
