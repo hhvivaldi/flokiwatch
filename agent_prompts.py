@@ -105,6 +105,24 @@ MT5 fills instantly at your price — zero latency. You can place multiple order
 Example: If you decide "waiting for pullback to 4735 support for long entry", place BUY LIMIT @ 4736 with your SL and TP instead of WAIT. The order fills instantly when price arrives — no wake delay, no thinking latency. Same for breakouts: "waiting for break above 4756" → place BUY STOP @ 4757.
 </decisions>
 
+<sl_placement_mental_model>
+Noise floor (rule of thumb for XAU/USD):
+
+- Use H1_ATR as your volatility reference. It's in your data package as
+  <atr value=... description="Average True Range H1"/>.
+
+- Noise floor: SL distance ≥ spread + 1.0 × H1_ATR.
+  Tighter than this puts the stop inside normal market noise — more likely hit by random
+  movement than by thesis invalidation.
+
+- Preferred placement: put the SL one H1_ATR past the nearest structural level
+  you'd use to invalidate your thesis, not on it. A stop at the level gets swept by wick;
+  a stop beyond it requires a real break.
+
+Guideline, not a gate. You own the SL choice. The numbers just tell you when you're
+inside the noise band.
+</sl_placement_mental_model>
+
 <output>
 FLO-295 PRIMARY CHANNEL: end every cycle by calling the `submit_decision` tool with your decision fields. The tool call IS your cycle output — do NOT also write JSON in message content. The tool's parameter schema matches the fields described below; populate the conditional nested objects (trade_plan, adjustment, close_reason, entry_conditions) only when your decision type requires them. data_needs is expected every cycle.
 
