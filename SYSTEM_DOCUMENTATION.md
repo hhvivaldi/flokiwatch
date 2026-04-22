@@ -370,6 +370,8 @@ Verifica últimas 6 velas M5 antes de executar trade:
 
 **SL:** ATR × 2.0 (min 150, max 800 pips). **TP:** ATR × 3.0.
 
+**SL mental model (FLO-322, 2026-04-22):** `SYSTEM_PROMPT` carries an `<sl_placement_mental_model>` block giving Floki a rule-of-thumb noise floor — `SL distance ≥ spread + 1.0 × H1_ATR` — and a preferred placement heuristic (one H1_ATR past the structural invalidation level). Guideline, not enforcement: Floki retains full SL authority; no code-level clamp. Added to address the sub-0.5 × H1_ATR SL cohort identified in Phase 1 (36.5% of trades, ~3× WR penalty vs 0.5-1.5 ATR cohort).
+
 **Breakeven:** Dinâmico = 50% dos pips do SL original (changed from 70% after 6-month backtest: +5.7% WR, +0.44 PF). Fallback: fixo 100 pips quando SL não está disponível; em **COOLING_DOWN** usa 50 pips fixos. Move SL para entrada.
 
 **Trailing:** Trigger = 150 pips de lucro. Distância = 100 pips atrás do preço.
