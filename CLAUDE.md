@@ -133,33 +133,39 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 - Home: `C:\Users\Hermano\OneDrive\Desktop\XAUUSD` | Remote: `C:\Users\hvivaldi\Desktop\DevOPS\flokiwatch`
 - Keys: `OPENAI_API_KEY` (Floki/Rex), `LUNA_API_KEY` (Echo/Luna), `GEMINI_API_KEY` (Sage), `FCS_API_KEY`
 
-## Trade Lessons Era Management (FLO-328)
+## Trade Lessons Era Management (FLO-334, supersedes FLO-328)
 
 `data/trade_conditions/*.json` files each carry a `system_version` field
 (short git SHA, set automatically at trade open). `get_relevant_lessons()`
 computes lessons on-read with two filters applied to every trade:
 `open_time` within `config.LESSONS_WINDOW_DAYS` (default 30), AND
-`system_version` ∈ `config.LESSONS_CURRENT_ERA_SHAS`. Both must pass.
+`system_version` must NOT equal `config.LESSONS_ERA_BOUNDARY` (default
+`"pre_FLO-327"`) and must be non-empty. Both filters must pass.
 
-**When shipping a change that could affect Floki's decisions** — prompt
-edits, position_mode rewrites, tool-catalog additions/removals, parser
-changes, output-schema changes, fundamental pillar-weight shifts — decide:
+**Operator maintenance: none required for typical commits.** Any snapshot
+tagged with the boundary sentinel is excluded; everything else qualifies
+— no per-commit append step. The FLO-328 SHA whitelist required
+prospective operator discipline that did not scale (see FLO-334 Phase 1
+audit for evidence); the time-boundary sentinel replaces it.
 
-- **Append** the new commit SHA to `LESSONS_CURRENT_ERA_SHAS`. Old
-  lessons still apply. Use for most commits: bugfixes, observability,
-  additive tools, minor prompt tweaks.
-- **Reset** the list to `[new_sha]` only. Old trades stop contributing.
-  Lessons rebuild over 3–5 days. Use for major inflections: AI-model
-  swaps, position_mode vocabulary changes, tool-access rule changes,
-  decision-label schema changes.
+**When to reset the boundary** — rare. Only for major system-level
+inflections that invalidate prior learnings wholesale (AI-model swap,
+fundamental decision-schema change, pillar-weight rewrite). Procedure:
 
-Examples (for future reference):
-- *append*: FLO-312 volume enrichment, FLO-319 get_volume_profile
-- *reset*: FLO-327 era-start (different Qwen-era system vs prior setup)
+1. Tag the legacy snapshots with the new boundary value (one-time backfill
+   script pattern — see `scripts/backfill_system_version.py` for reference).
+2. Update `config.LESSONS_ERA_BOUNDARY` to the new sentinel.
+3. Lessons rebuild over 3–5 days as new post-boundary trades accumulate.
 
-Legacy trades (pre-FLO-327) are tagged `system_version: "pre_FLO-327"`
-and are excluded by default. To re-include them for one-off analysis:
-`LESSONS_CURRENT_ERA_SHAS = ["<current>", "pre_FLO-327"]`.
+To re-include legacy trades for one-off analysis, set
+`LESSONS_ERA_BOUNDARY` to a sentinel value that no snapshot carries
+(e.g. `"__disabled__"`) — this effectively disables the era filter.
+
+**Silent-failure detection (FLO-334):** if `get_relevant_lessons()`
+aggregates zero snapshots because all were excluded by the era filter,
+it logs a single `LESSONS_ERA_FILTER_DEGRADED | ... era boundary may be
+stale` WARN per process lifetime. If you see this, verify the boundary
+value matches what snapshots actually carry.
 
 `trade_lessons.json` is retained as an audit log (written by
 `extract_trade_lesson` on every trade close) but is no longer the source

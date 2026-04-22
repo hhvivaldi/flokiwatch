@@ -75,20 +75,23 @@ PAUSE_AFTER_LOSSES_HOURS = 24  # Hours of pause after consecutive losses
 # Smart Pyramid: allow 2nd position in same direction ONLY if 1st is in profit
 PYRAMID_MIN_PROFIT_PERCENT = 0.3  # Minimum profit (%) on existing position to allow reinforcement
 
-# FLO-328: Trade-lessons era filter. get_relevant_lessons() aggregates only
-# from trades whose `system_version` tag matches one of these SHAs.
-# See CLAUDE.md "Trade Lessons Era Management" for when to append vs reset.
-# Reset rationale for the FLO-327/328 line: pre-327 trades were taken under
-# materially different systems (different AI model, broken capture formula,
-# pre-planning prompt, fewer tools) — contaminating current Qwen lessons.
-LESSONS_CURRENT_ERA_SHAS = [
-    "1205fd4",
-    "4f0981c",   # FLO-298 data-quality prompt
-    "68fa3d3",   # FLO-299 1/5 — main.py trigger_context autonomy cleanup
-    "6844820",   # FLO-299 2/5 — agent_prompts.py neutralization
-    "4a271e0",   # FLO-299 3/5 — truncation markers + suggestion removal
-    "6458e5a",   # FLO-299 4/5 — SL auto-clamp visibility
-]
+# FLO-334: Trade-lessons era filter. Time-boundary sentinel replaces the
+# FLO-328 SHA whitelist. Intent unchanged: exclude pre-FLO-327 snapshots
+# (materially different system — different AI, broken capture formula,
+# pre-planning prompt, fewer tools). Any snapshot whose `system_version`
+# equals this sentinel OR is missing/empty is excluded; everything else
+# qualifies. Maintenance-free — no per-commit operator discipline.
+LESSONS_ERA_BOUNDARY = "pre_FLO-327"
+
+# FLO-328 (superseded by FLO-334): per-commit SHA whitelist required
+# prospective operator discipline that stopped past FLO-299 closure.
+# Net effect: 0/125 non-empty responses post-deploy. Kept commented as
+# historical record; see data/_audits/flo334/FLO-334_Phase1_Investigation.md.
+# LESSONS_CURRENT_ERA_SHAS = [
+#     "1205fd4",  "4f0981c",  "68fa3d3",
+#     "6844820",  "4a271e0",  "6458e5a",
+# ]
+
 LESSONS_WINDOW_DAYS = 30                # Rolling window for lessons aggregation
 
 # XAU/USD market hours (UTC)

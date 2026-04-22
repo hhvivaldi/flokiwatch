@@ -22,6 +22,10 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 CONDITIONS_DIR = os.path.join(DATA_DIR, "trade_conditions")
 LESSONS_FILE = os.path.join(DATA_DIR, "trade_lessons.json")
 
+# FLO-334: once-per-process flag for the era-filter degraded-state WARN.
+# Resets on process restart — operator will see the WARN once per bot lifetime.
+_LESSONS_EMPTY_WARNED = False
+
 # FLO-328: git SHA for system_version tagging. Cached after first lookup.
 _CURRENT_SHA_CACHE: Optional[str] = None
 
@@ -314,9 +318,11 @@ def get_relevant_lessons(
       - aggregates in-memory on every call (trivial: ~50ms for 100 files)
       - applies TWO filters per trade before it contributes to a bucket:
           age  ≤ config.LESSONS_WINDOW_DAYS (default 30)
-          era  snapshot.system_version ∈ config.LESSONS_CURRENT_ERA_SHAS
+          era  snapshot.system_version != config.LESSONS_ERA_BOUNDARY
+               (FLO-334: time-boundary sentinel; excludes pre-FLO-327 snapshots
+               and any snapshot with a missing/empty system_version tag)
         Both filters must pass.
-      - sorts AVOID > PREFERRED > NEUTRAL, returns top `limit`
+      - sorts by win-rate group (lowest WR group first — FLO-336), returns top `limit`
       - returns [] when no trades qualify yet (era boundary or cold start)
 
     trade_lessons.json still gets written by extract_trade_lesson() but is
@@ -326,9 +332,9 @@ def get_relevant_lessons(
         import config as _cfg
     except Exception:
         _cfg = None
-    era_list = list(getattr(_cfg, "LESSONS_CURRENT_ERA_SHAS", []))
-    if not era_list:
-        return []
+    # FLO-334: time-boundary sentinel replaces LESSONS_CURRENT_ERA_SHAS whitelist.
+    # Any snapshot tagged with the boundary (or missing/empty tag) is excluded.
+    boundary = str(getattr(_cfg, "LESSONS_ERA_BOUNDARY", "pre_FLO-327"))
 
     win_days = int(window_days if window_days is not None
                    else getattr(_cfg, "LESSONS_WINDOW_DAYS", 30) or 30)
@@ -367,9 +373,9 @@ def get_relevant_lessons(
             except Exception:
                 continue
 
-            # Era filter
+            # Era filter (FLO-334: time-boundary sentinel)
             sv = snap.get("system_version")
-            if sv not in era_list:
+            if not sv or sv == boundary:
                 skipped_era += 1
                 continue
 
@@ -415,9 +421,20 @@ def get_relevant_lessons(
         conn.close()
 
     log.debug(
-        f"LESSONS_AGG | era={era_list} window={win_days}d | "
+        f"LESSONS_AGG | boundary={boundary!r} window={win_days}d | "
         f"processed={processed} skip_era={skipped_era} skip_age={skipped_age} skip_noprofit={skipped_noprofit}"
     )
+    # FLO-334: once-per-process WARN when the era filter excludes everything.
+    # Actionable signal: LESSONS_ERA_BOUNDARY may be misconfigured or all
+    # snapshots are tagged with the boundary value.
+    global _LESSONS_EMPTY_WARNED
+    if processed == 0 and skipped_era > 0 and not _LESSONS_EMPTY_WARNED:
+        log.warning(
+            f"LESSONS_ERA_FILTER_DEGRADED | "
+            f"skipped_era={skipped_era} processed=0 | "
+            f"era boundary may be stale — check config.LESSONS_ERA_BOUNDARY"
+        )
+        _LESSONS_EMPTY_WARNED = True
 
     out: List[Dict[str, Any]] = []
     for key, b in buckets.items():
