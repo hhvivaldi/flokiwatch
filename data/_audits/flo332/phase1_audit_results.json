@@ -1,0 +1,2351 @@
+{
+  "generated_utc": "2026-04-22T17:28:22.256516+00:00",
+  "tool_frequency_7d": {
+    "days_window": 7,
+    "total_cycles": 796,
+    "open_cycles": 16,
+    "wait_cycles": 610,
+    "close_cycles": 18,
+    "per_tool_cycle_pct": {
+      "get_indicators": 95.5,
+      "get_chart_screenshots": 90.3,
+      "get_sr_zones": 89.2,
+      "get_current_price": 88.3,
+      "get_luna_brief": 83.0,
+      "get_open_positions": 81.8,
+      "get_market_regime": 76.4,
+      "set_wake_conditions": 62.8,
+      "get_tick_pressure": 57.8,
+      "get_pending_orders": 44.0,
+      "get_session_context": 35.1,
+      "get_rex_monitor": 30.3,
+      "write_session_memory": 25.1,
+      "get_fibonacci_levels": 19.0,
+      "get_trade_lessons": 16.5,
+      "get_position_history": 16.1,
+      "get_candles": 14.2,
+      "get_volume_profile": 12.3,
+      "get_pivot_points": 11.6,
+      "get_calendar": 10.6,
+      "set_watch_conditions": 10.4,
+      "read_session_memory": 8.0,
+      "get_market_context": 7.7,
+      "set_next_check": 7.3,
+      "place_pending_order": 5.3,
+      "adjust_trade": 4.8,
+      "get_echo_alerts": 4.0,
+      "get_chart_patterns": 3.8,
+      "get_account_info": 3.5,
+      "close_trade": 2.6,
+      "execute_trade": 2.5,
+      "cancel_pending_order": 2.5,
+      "get_position_events": 1.8,
+      "plan_tools": 1.5,
+      "get_recent_reflexions": 1.3,
+      "get_trade_history": 0.6,
+      "save_lesson": 0.5,
+      "search_reflexions": 0.4,
+      "get_trade_journal": 0.4,
+      "get_trade_patterns": 0.3,
+      "write_trading_journal": 0.1,
+      "debate_with_rex": 0.1,
+      "get_headlines": 0.1,
+      "search_memory": 0.1
+    },
+    "per_tool_total_calls": {
+      "get_indicators": 1162,
+      "get_sr_zones": 725,
+      "get_chart_screenshots": 725,
+      "get_current_price": 703,
+      "get_luna_brief": 662,
+      "get_open_positions": 651,
+      "get_market_regime": 608,
+      "set_wake_conditions": 539,
+      "get_tick_pressure": 461,
+      "get_pending_orders": 352,
+      "get_session_context": 279,
+      "get_rex_monitor": 241,
+      "write_session_memory": 200,
+      "get_fibonacci_levels": 156,
+      "get_position_history": 139,
+      "get_trade_lessons": 131,
+      "get_candles": 127,
+      "set_watch_conditions": 112,
+      "get_volume_profile": 98,
+      "get_pivot_points": 92,
+      "get_calendar": 84,
+      "read_session_memory": 64,
+      "get_market_context": 61,
+      "set_next_check": 58,
+      "place_pending_order": 53,
+      "adjust_trade": 43,
+      "get_echo_alerts": 32,
+      "get_chart_patterns": 30,
+      "get_account_info": 29,
+      "execute_trade": 22,
+      "close_trade": 21,
+      "cancel_pending_order": 21,
+      "get_position_events": 14,
+      "plan_tools": 12,
+      "get_recent_reflexions": 10,
+      "get_trade_history": 5,
+      "save_lesson": 4,
+      "search_reflexions": 3,
+      "get_trade_journal": 3,
+      "get_trade_patterns": 2,
+      "write_trading_journal": 1,
+      "debate_with_rex": 1,
+      "get_headlines": 1,
+      "search_memory": 1
+    },
+    "open_memory_tool_cycle_pct": {
+      "search_reflexions": 6.2,
+      "read_session_memory": 6.2,
+      "write_session_memory": 87.5,
+      "get_trade_lessons": 31.2
+    },
+    "open_cycles_with_memory_read": 5,
+    "open_cycles_without_memory_read": 11,
+    "open_with_memory_sample": [
+      {
+        "id": 4097,
+        "timestamp": "2026-04-16T15:29:15.249136Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4173,
+        "timestamp": "2026-04-17T05:44:12.526110Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 17
+      },
+      {
+        "id": 4274,
+        "timestamp": "2026-04-19T22:05:05.136117Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "read_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 4618,
+        "timestamp": "2026-04-21T23:37:50.028607Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "search_reflexions",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4700,
+        "timestamp": "2026-04-22T12:43:47.480868Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      }
+    ],
+    "open_without_memory_sample": [
+      {
+        "id": 4026,
+        "timestamp": "2026-04-16T05:03:27.009462Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 4056,
+        "timestamp": "2026-04-16T09:18:25.752359Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 10
+      },
+      {
+        "id": 4162,
+        "timestamp": "2026-04-17T04:44:02.187077Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4277,
+        "timestamp": "2026-04-19T22:22:24.607062Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4362,
+        "timestamp": "2026-04-20T10:09:11.346866Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4531,
+        "timestamp": "2026-04-21T13:37:16.520311Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 4588,
+        "timestamp": "2026-04-21T20:35:45.558381Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4593,
+        "timestamp": "2026-04-21T22:03:55.581534Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 17
+      },
+      {
+        "id": 4622,
+        "timestamp": "2026-04-21T23:51:48.892371Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 4709,
+        "timestamp": "2026-04-22T13:45:29.493078Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4721,
+        "timestamp": "2026-04-22T15:03:10.620443Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 15
+      }
+    ]
+  },
+  "tool_frequency_30d": {
+    "days_window": 30,
+    "total_cycles": 1950,
+    "open_cycles": 41,
+    "wait_cycles": 1122,
+    "close_cycles": 33,
+    "per_tool_cycle_pct": {
+      "get_indicators": 93.7,
+      "get_sr_zones": 90.8,
+      "get_current_price": 88.1,
+      "get_open_positions": 85.9,
+      "get_chart_screenshots": 60.9,
+      "get_luna_brief": 54.6,
+      "set_wake_conditions": 43.1,
+      "get_candles": 39.2,
+      "get_echo_alerts": 37.4,
+      "read_session_memory": 37.3,
+      "get_market_regime": 31.2,
+      "get_pending_orders": 29.6,
+      "get_rex_monitor": 29.5,
+      "write_session_memory": 27.4,
+      "get_trade_lessons": 24.4,
+      "get_tick_pressure": 23.6,
+      "get_market_context": 20.3,
+      "set_next_check": 16.9,
+      "get_session_context": 14.3,
+      "set_watch_conditions": 13.2,
+      "get_fibonacci_levels": 12.7,
+      "get_calendar": 12.5,
+      "get_pivot_points": 12.4,
+      "get_position_history": 10.1,
+      "adjust_trade": 5.5,
+      "get_volume_profile": 5.1,
+      "place_pending_order": 4.9,
+      "get_account_info": 2.6,
+      "execute_trade": 2.5,
+      "close_trade": 1.9,
+      "cancel_pending_order": 1.8,
+      "get_chart_patterns": 1.5,
+      "get_recent_reflexions": 1.4,
+      "debate_with_rex": 1.3,
+      "get_position_events": 1.3,
+      "get_trade_patterns": 0.8,
+      "get_trade_history": 0.7,
+      "search_reflexions": 0.7,
+      "plan_tools": 0.6,
+      "search_memory": 0.5,
+      "write_trading_journal": 0.5,
+      "get_headlines": 0.3,
+      "get_trade_journal": 0.3,
+      "save_lesson": 0.2
+    },
+    "per_tool_total_calls": {
+      "get_indicators": 2229,
+      "get_sr_zones": 1785,
+      "get_current_price": 1719,
+      "get_open_positions": 1679,
+      "get_chart_screenshots": 1196,
+      "get_candles": 1083,
+      "get_luna_brief": 1066,
+      "set_wake_conditions": 907,
+      "get_echo_alerts": 730,
+      "read_session_memory": 729,
+      "get_market_regime": 608,
+      "get_pending_orders": 579,
+      "get_rex_monitor": 575,
+      "write_session_memory": 539,
+      "get_trade_lessons": 475,
+      "get_tick_pressure": 462,
+      "get_market_context": 396,
+      "set_watch_conditions": 359,
+      "set_next_check": 329,
+      "get_session_context": 279,
+      "get_fibonacci_levels": 253,
+      "get_calendar": 243,
+      "get_pivot_points": 243,
+      "get_position_history": 214,
+      "place_pending_order": 125,
+      "adjust_trade": 120,
+      "get_volume_profile": 99,
+      "execute_trade": 52,
+      "get_account_info": 51,
+      "close_trade": 38,
+      "cancel_pending_order": 36,
+      "get_chart_patterns": 30,
+      "get_recent_reflexions": 28,
+      "debate_with_rex": 26,
+      "get_position_events": 26,
+      "get_trade_patterns": 15,
+      "get_trade_history": 14,
+      "search_reflexions": 13,
+      "plan_tools": 12,
+      "search_memory": 10,
+      "write_trading_journal": 9,
+      "get_headlines": 6,
+      "get_trade_journal": 6,
+      "save_lesson": 4
+    },
+    "open_memory_tool_cycle_pct": {
+      "search_reflexions": 2.4,
+      "read_session_memory": 2.4,
+      "write_session_memory": 95.1,
+      "get_trade_lessons": 51.2
+    },
+    "open_cycles_with_memory_read": 21,
+    "open_cycles_without_memory_read": 20,
+    "open_with_memory_sample": [
+      {
+        "id": 2843,
+        "timestamp": "2026-04-08T10:41:40.972549",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 11
+      },
+      {
+        "id": 2852,
+        "timestamp": "2026-04-08T11:49:19.237988",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 19
+      },
+      {
+        "id": 2857,
+        "timestamp": "2026-04-08T12:38:08.102373",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 2875,
+        "timestamp": "2026-04-08T16:28:54.578736",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 2904,
+        "timestamp": "2026-04-08T19:09:15.194526",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 15
+      },
+      {
+        "id": 2909,
+        "timestamp": "2026-04-08T19:41:57.307427",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 15
+      },
+      {
+        "id": 3017,
+        "timestamp": "2026-04-09T10:34:43.442159",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 3447,
+        "timestamp": "2026-04-13T07:11:35.903980",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 3514,
+        "timestamp": "2026-04-13T14:52:41.234710",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 3568,
+        "timestamp": "2026-04-13T18:50:28.057242",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 3593,
+        "timestamp": "2026-04-14T00:42:44.075984",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 11
+      },
+      {
+        "id": 3642,
+        "timestamp": "2026-04-14T08:02:31.475410",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 3829,
+        "timestamp": "2026-04-15T07:48:28.912623",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 3860,
+        "timestamp": "2026-04-15T10:06:42.172928Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 11
+      },
+      {
+        "id": 3884,
+        "timestamp": "2026-04-15T11:36:21.771785Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 11
+      },
+      {
+        "id": 3897,
+        "timestamp": "2026-04-15T12:17:45.915104Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4097,
+        "timestamp": "2026-04-16T15:29:15.249136Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4173,
+        "timestamp": "2026-04-17T05:44:12.526110Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 17
+      },
+      {
+        "id": 4274,
+        "timestamp": "2026-04-19T22:05:05.136117Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "read_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 4618,
+        "timestamp": "2026-04-21T23:37:50.028607Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "get_trade_lessons",
+          "search_reflexions",
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      }
+    ],
+    "open_without_memory_sample": [
+      {
+        "id": 2876,
+        "timestamp": "2026-04-08T16:29:00.123768",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 2948,
+        "timestamp": "2026-04-09T02:33:20.345670",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 2983,
+        "timestamp": "2026-04-09T07:39:40.725922",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 3028,
+        "timestamp": "2026-04-09T11:29:18.332250",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 3080,
+        "timestamp": "2026-04-09T15:44:52.276431",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 3098,
+        "timestamp": "2026-04-09T17:27:28.821111",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 3124,
+        "timestamp": "2026-04-10T00:03:23.231801",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 3171,
+        "timestamp": "2026-04-10T03:13:52.028804",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 11
+      },
+      {
+        "id": 3637,
+        "timestamp": "2026-04-14T07:35:33.870981",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 4026,
+        "timestamp": "2026-04-16T05:03:27.009462Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 4056,
+        "timestamp": "2026-04-16T09:18:25.752359Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 10
+      },
+      {
+        "id": 4162,
+        "timestamp": "2026-04-17T04:44:02.187077Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4277,
+        "timestamp": "2026-04-19T22:22:24.607062Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4362,
+        "timestamp": "2026-04-20T10:09:11.346866Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [],
+        "total_tools_in_cycle": 12
+      },
+      {
+        "id": 4531,
+        "timestamp": "2026-04-21T13:37:16.520311Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 13
+      },
+      {
+        "id": 4588,
+        "timestamp": "2026-04-21T20:35:45.558381Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4593,
+        "timestamp": "2026-04-21T22:03:55.581534Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 17
+      },
+      {
+        "id": 4622,
+        "timestamp": "2026-04-21T23:51:48.892371Z",
+        "decision": "OPEN_SELL",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 14
+      },
+      {
+        "id": 4709,
+        "timestamp": "2026-04-22T13:45:29.493078Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 16
+      },
+      {
+        "id": 4721,
+        "timestamp": "2026-04-22T15:03:10.620443Z",
+        "decision": "OPEN_BUY",
+        "memory_tools_called": [
+          "write_session_memory"
+        ],
+        "total_tools_in_cycle": 15
+      }
+    ]
+  },
+  "pattern_rigidity_30d": {
+    "days_window": 30,
+    "radius_pips": 5.0,
+    "total_trades": 98,
+    "unique_days_traded": 14,
+    "trades_with_same_level_repeat_today": 11,
+    "pct_trades_are_repeats": 11.2,
+    "wr_on_repeats": 36.4,
+    "wr_on_fresh_levels": 40,
+    "n_repeats": 11,
+    "n_fresh": 86,
+    "top_cluster_days": [
+      {
+        "day": "2026-04-08",
+        "total_trades": 12,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4750.5
+          }
+        ]
+      },
+      {
+        "day": "2026-04-09",
+        "total_trades": 12,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4729.3
+          },
+          {
+            "size": 2,
+            "price_center": 4791.54
+          }
+        ]
+      },
+      {
+        "day": "2026-04-13",
+        "total_trades": 12,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4729.84
+          },
+          {
+            "size": 2,
+            "price_center": 4745.29
+          }
+        ]
+      },
+      {
+        "day": "2026-04-14",
+        "total_trades": 9,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4813.12
+          }
+        ]
+      },
+      {
+        "day": "2026-04-16",
+        "total_trades": 8,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4834.5
+          }
+        ]
+      },
+      {
+        "day": "2026-04-20",
+        "total_trades": 7,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4797.86
+          },
+          {
+            "size": 2,
+            "price_center": 4803.14
+          }
+        ]
+      },
+      {
+        "day": "2026-04-21",
+        "total_trades": 8,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4775.35
+          }
+        ]
+      },
+      {
+        "day": "2026-04-22",
+        "total_trades": 6,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4736.27
+          }
+        ]
+      }
+    ]
+  },
+  "pattern_rigidity_30d_10pips": {
+    "days_window": 30,
+    "radius_pips": 10.0,
+    "total_trades": 98,
+    "unique_days_traded": 14,
+    "trades_with_same_level_repeat_today": 15,
+    "pct_trades_are_repeats": 15.3,
+    "wr_on_repeats": 40.0,
+    "wr_on_fresh_levels": 39,
+    "n_repeats": 15,
+    "n_fresh": 82,
+    "top_cluster_days": [
+      {
+        "day": "2026-04-08",
+        "total_trades": 12,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4794.42
+          },
+          {
+            "size": 2,
+            "price_center": 4750.5
+          }
+        ]
+      },
+      {
+        "day": "2026-04-09",
+        "total_trades": 12,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4729.3
+          },
+          {
+            "size": 2,
+            "price_center": 4791.54
+          }
+        ]
+      },
+      {
+        "day": "2026-04-10",
+        "total_trades": 4,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4756.64
+          }
+        ]
+      },
+      {
+        "day": "2026-04-13",
+        "total_trades": 12,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4729.84
+          },
+          {
+            "size": 2,
+            "price_center": 4745.29
+          }
+        ]
+      },
+      {
+        "day": "2026-04-14",
+        "total_trades": 9,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4813.12
+          }
+        ]
+      },
+      {
+        "day": "2026-04-15",
+        "total_trades": 9,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4798.23
+          },
+          {
+            "size": 2,
+            "price_center": 4803.4
+          }
+        ]
+      },
+      {
+        "day": "2026-04-16",
+        "total_trades": 8,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4834.5
+          }
+        ]
+      },
+      {
+        "day": "2026-04-20",
+        "total_trades": 7,
+        "clusters": 2,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 4,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4797.86
+          },
+          {
+            "size": 2,
+            "price_center": 4803.14
+          }
+        ]
+      },
+      {
+        "day": "2026-04-21",
+        "total_trades": 8,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4775.35
+          }
+        ]
+      },
+      {
+        "day": "2026-04-22",
+        "total_trades": 6,
+        "clusters": 1,
+        "max_cluster_size": 2,
+        "trades_in_any_cluster": 2,
+        "cluster_detail": [
+          {
+            "size": 2,
+            "price_center": 4736.27
+          }
+        ]
+      }
+    ]
+  },
+  "today_decisions": [
+    {
+      "id": 4625,
+      "ts": "2026-04-22T00:01:32.290391Z",
+      "decision": "HOLD_TRADE",
+      "conf": 65,
+      "n_tools": 14,
+      "memory_tools": [
+        "get_position_history",
+        "read_session_memory",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position only 7 minutes old. Price sitting at 4737 FLIP zone (M15/M5/M1 confluence + daily/monthly PP) \u2014 bounce from 470"
+    },
+    {
+      "id": 4626,
+      "ts": "2026-04-22T00:04:32.604653Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price bounced from 4704 support but is running into the 4748-4759 resistance zone with M15 stochastics overbought (97). "
+    },
+    {
+      "id": 4627,
+      "ts": "2026-04-22T00:11:08.887224Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price bouncing from 4679 crash into 4746-4749 H1 S/R resistance zone. M15 stochastic at 97.74 and M5 at 89.66 - extremel"
+    },
+    {
+      "id": 4628,
+      "ts": "2026-04-22T00:22:10.884446Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 10,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4743 trapped between H4 support (4735) and H4 resistance (4752) in a tight 17-pip range. Asian session volume n"
+    },
+    {
+      "id": 4629,
+      "ts": "2026-04-22T00:35:00.408579Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 14,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Rex monitor flagged a CRITICAL Gold-10Y correlation anomaly at +0.93 (typical -0.50), a major macro divergence. Price is"
+    },
+    {
+      "id": 4630,
+      "ts": "2026-04-22T00:41:53.181719Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Placed BUY_LIMIT at 4737 targeting the H4/H1 confluence support zone at 4735. Price bounced sharply from 4668 low with s"
+    },
+    {
+      "id": 4631,
+      "ts": "2026-04-22T00:52:49.429529Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price has recovered from the H4 breakdown lows near 4704-4723 and is now consolidating at 4743. My BUY_LIMIT at 4737 is "
+    },
+    {
+      "id": 4632,
+      "ts": "2026-04-22T01:08:39.569319Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is only 16 minutes old, sitting at entry (-$0.56). Entry at 4735 confluence support is structurally valid. M5 j"
+    },
+    {
+      "id": 4633,
+      "ts": "2026-04-22T01:11:59.285846Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_position_history",
+        "get_trade_lessons",
+        "read_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "BUY at 4736.51 on 4735 H1 confluence support (21 touches, 524K volume, H4+H1 confluence) is +35 pips after 2 minutes. Th"
+    },
+    {
+      "id": 4634,
+      "ts": "2026-04-22T01:15:05.416754Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "BUY position +17 pips, 4 min old. Price pulled back from M15 4747 resistance rejection but holding above M5 4737 support"
+    },
+    {
+      "id": 4635,
+      "ts": "2026-04-22T01:18:10.043036Z",
+      "decision": "HOLD_TRADE",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Holding the BUY at 4736.51 - price has bounced +6 pips from the 4735 support confluence as expected. The regime_price_di"
+    },
+    {
+      "id": 4636,
+      "ts": "2026-04-22T01:20:58.169459Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 7,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Position is protected at breakeven after SL adjustment to 4737. Price is consolidating between 4741-4745 on M5 with 4735"
+    },
+    {
+      "id": 4637,
+      "ts": "2026-04-22T01:23:36.449324Z",
+      "decision": "ADJUST_TRADE",
+      "conf": 75,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position at peak profit with M15 overbought and resistance at 4749 approaching. Adjusted SL from 4737 to 4742 to lock in"
+    },
+    {
+      "id": 4638,
+      "ts": "2026-04-22T01:27:03.032451Z",
+      "decision": "HOLD_TRADE",
+      "conf": 72,
+      "n_tools": 9,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Trade is +$21.68 with SL at 4742 already protecting capital. The bounce from 4704 is confirmed by regime price divergenc"
+    },
+    {
+      "id": 4639,
+      "ts": "2026-04-22T01:28:05.552597Z",
+      "decision": "ADJUST_TRADE",
+      "conf": 75,
+      "n_tools": 9,
+      "memory_tools": [
+        "get_position_history",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is in profit but hitting resistance at 4747 (M15 CONF RES) with M1 rejection candles and overbought stochastic."
+    },
+    {
+      "id": 4640,
+      "ts": "2026-04-22T01:32:26.212966Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Placed BUY_LIMIT at 4740 (pullback entry) with SL 4731, TP 4758, expiring in 6h. Price at 4749 testing flip zone 4748.56"
+    },
+    {
+      "id": 4641,
+      "ts": "2026-04-22T01:43:35.651071Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4751 near 4758 H1 resistance with M5/M15 stochastics overbought (87/85) suggesting near-term exhaustion. Pendin"
+    },
+    {
+      "id": 4642,
+      "ts": "2026-04-22T01:59:39.967279Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price bounced from 4735 confluence support (21 touches, H4/H1 flip) but is now at 4752-4758 resistance zone with M5/M15 "
+    },
+    {
+      "id": 4643,
+      "ts": "2026-04-22T02:06:08.265573Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4752 testing 4758 confluent H1 resistance with M5 stochastic overbought (90.50), suggesting momentum exhaustion"
+    },
+    {
+      "id": 4644,
+      "ts": "2026-04-22T02:17:35.649850Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 13,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Placed BUY_STOP at 4761 targeting breakout above 4755-4759 resistance confluence. Regime price divergence (3 consecutive"
+    },
+    {
+      "id": 4645,
+      "ts": "2026-04-22T02:33:56.916035Z",
+      "decision": "WAIT",
+      "conf": 72,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Cancelled the BUY_STOP at 4761 \u2014 it was only 3 points from current price with 1.31 R:R, and M15 Stochastic at 96 signals"
+    },
+    {
+      "id": 4646,
+      "ts": "2026-04-22T02:35:22.034930Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 11,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Rex CRITICAL flagged Gold-10Y decorrelation (+0.93 vs typical -0.50) \u2014 abnormal macro regime. Regime price divergence de"
+    },
+    {
+      "id": 4647,
+      "ts": "2026-04-22T02:42:07.086007Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is pulling back from 4759 resistance after a recovery rally from the 4704-4737 zone. M1 shows active breakdown to "
+    },
+    {
+      "id": 4648,
+      "ts": "2026-04-22T02:53:26.549363Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price consolidating at 4753 after bounce from 4723 support, caught between 4758-4759 resistance overhead and 4747-4749 s"
+    },
+    {
+      "id": 4649,
+      "ts": "2026-04-22T03:07:42.851514Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4758-4759 confluence resistance (former support flip) with M15/M5 stochastics overbought. Regime price divergen"
+    },
+    {
+      "id": 4650,
+      "ts": "2026-04-22T03:15:25.764000Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4757 testing the critical 4758-4759 resistance cluster (H1 confluence zone + M15 resistance). M1 shows rejectio"
+    },
+    {
+      "id": 4651,
+      "ts": "2026-04-22T03:26:38.423432Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is consolidating at 4758-4761, a critical pivot zone where previous support became resistance. H1 shows 3 consecut"
+    },
+    {
+      "id": 4652,
+      "ts": "2026-04-22T03:42:44.560995Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is testing the 4758-4759 resistance cluster (H1 confirmation resistance + M15 resistance + flipped 4754 support). "
+    },
+    {
+      "id": 4653,
+      "ts": "2026-04-22T04:04:03.527405Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 12,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Asian session compressed range after bounce from 4704 low. Price at 4759 in no-man's land between H1 support 4735 and re"
+    },
+    {
+      "id": 4654,
+      "ts": "2026-04-22T04:30:43.139405Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 14,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price is compressed between 4754-4755 support and 4758-4765 resistance. M5 stochastic is oversold (17.5) suggesting the "
+    },
+    {
+      "id": 4655,
+      "ts": "2026-04-22T04:35:59.222377Z",
+      "decision": "WAIT",
+      "conf": 75,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Rex CRITICAL wake was the Gold-10Y correlation anomaly (+0.89 vs typical -0.50) \u2014 gold and yields rising together, break"
+    },
+    {
+      "id": 4656,
+      "ts": "2026-04-22T04:43:06.131757Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is consolidating between 4749 support and 4758-4765 resistance after a sharp drop from 4804 to 4704. The bounce is"
+    },
+    {
+      "id": 4657,
+      "ts": "2026-04-22T04:56:48.583000Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 18,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Placed BUY LIMIT @ 4748.50 targeting the confluence support zone (FLIP + Fib 38.2%) after a strong bounce from 4668. H4 "
+    },
+    {
+      "id": 4658,
+      "ts": "2026-04-22T05:13:35.695167Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Pending BUY_LIMIT at 4748.50 is positioned for a pullback to M15 confluent support (4749) after the bounce from 4704. Pr"
+    },
+    {
+      "id": 4659,
+      "ts": "2026-04-22T05:17:59.980688Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Simba woke on price_above 4765 \u2014 price tested the M15/M5 confluence resistance and rejected (M5 long upper wick, tick pr"
+    },
+    {
+      "id": 4660,
+      "ts": "2026-04-22T05:20:38.974889Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price broke above 4766 (Simba wake trigger) and is now at 4768.87 with no open position. Pending BUY_LIMIT at 4748.50 re"
+    },
+    {
+      "id": 4661,
+      "ts": "2026-04-22T05:27:33.336697Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 18,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Strong M15 breakout candle with 3x volume (7607 vs 1800 avg) pushing toward 4775 resistance, but M5 stochastic at 90 sig"
+    },
+    {
+      "id": 4662,
+      "ts": "2026-04-22T05:39:08.488987Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_recent_reflexions"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "No open position. Two pending orders in place: BUY_STOP @ 4776 to catch breakout of 4775 H1 resistance, and BUY_LIMIT @ "
+    },
+    {
+      "id": 4663,
+      "ts": "2026-04-22T05:55:30.021133Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4769.6 sits between two pending orders: BUY LIMIT at 4748.50 (pullback to M15/H1 support) and BUY STOP at 4776 "
+    },
+    {
+      "id": 4664,
+      "ts": "2026-04-22T06:17:57.583284Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 14,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Cancelled both pending BUY orders as they conflict with the TRENDING_BEARISH regime and bearish M15 momentum (RSI fallin"
+    },
+    {
+      "id": 4665,
+      "ts": "2026-04-22T06:35:59.621229Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price consolidating at 4766 with no clear conviction. H4 RSI bullish divergence (+12.7 over 4 bars) suggests potential r"
+    },
+    {
+      "id": 4666,
+      "ts": "2026-04-22T06:42:16.403247Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price at 4765 sits directly at M5 confluence resistance (4765) and 10 pips below H1 resistance at 4775. M5 shows full bu"
+    },
+    {
+      "id": 4667,
+      "ts": "2026-04-22T06:54:24.534948Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Placed SELL LIMIT at 4775 (H1 confluence resistance, 30 touches). Price in TRENDING_BEARISH regime with full bearish EMA"
+    },
+    {
+      "id": 4668,
+      "ts": "2026-04-22T07:11:08.784278Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [
+        "read_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price bounced strongly from 4704 H4 support to 4772, now testing 4775 H1/H4 confluence resistance. Existing SELL_LIMIT a"
+    },
+    {
+      "id": 4669,
+      "ts": "2026-04-22T07:32:31.490845Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "No open positions; one valid SELL LIMIT pending at 4775 (H1 confluence resistance + 200 EMA) with SL 4793 and TP 4735. P"
+    },
+    {
+      "id": 4670,
+      "ts": "2026-04-22T07:59:06.035694Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 13,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Cancelled pending SELL LIMIT at 4775 \u2014 H4 RSI bullish divergence combined with gold-10Y correlation break (+0.86 vs -0.5"
+    },
+    {
+      "id": 4671,
+      "ts": "2026-04-22T08:30:37.709406Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 15,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price sits at 4754 \u2014 a multi-TF confluence support zone with a double bottom pattern forming at 4752 just 2 pts below. M"
+    },
+    {
+      "id": 4672,
+      "ts": "2026-04-22T08:56:06.255362Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 13,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Rex monitor triggered CRITICAL on H4 RSI bullish divergence (price made lower low to 4679 but H4 RSI at 46.3 rising). Ch"
+    },
+    {
+      "id": 4673,
+      "ts": "2026-04-22T09:01:52.618752Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Simba woke for price_above 4760 but current price is 4759 \u2014 the trigger hasn't fired yet. Price is pressing against a mu"
+    },
+    {
+      "id": 4674,
+      "ts": "2026-04-22T09:09:29.261192Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Placed BUY_LIMIT at 4758 (H1 confluence support + M15 support). Bounce from 4735 was strong and decisive. M5 momentum tu"
+    },
+    {
+      "id": 4675,
+      "ts": "2026-04-22T09:20:52.901581Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Pending BUY_LIMIT at 4758 sits at H1+M15 confluence support with reasonable 1:1.67 RR. Ranging regime (ADX 23.5) and cho"
+    },
+    {
+      "id": 4676,
+      "ts": "2026-04-22T09:28:45.435805Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 11,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Position #1605837214 (BUY 4757.96, SL 4752, TP 4768) remains valid. Price bounced off the 4758 H1/M5 confluence support "
+    },
+    {
+      "id": 4677,
+      "ts": "2026-04-22T09:32:06.071384Z",
+      "decision": "HOLD_TRADE",
+      "conf": 60,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_position_history",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is young (-$4.58, only 2.3 pts from entry). SL at 4752 sits below the 4750 M15 flip support zone (17 touches, s"
+    },
+    {
+      "id": 4678,
+      "ts": "2026-04-22T09:35:03.140773Z",
+      "decision": "WAIT",
+      "conf": 70,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Closed the BUY at 4756.28 after recognizing the entry thesis was invalid \u2014 I bought at 4757.96 right into an H1/M15 conf"
+    },
+    {
+      "id": 4679,
+      "ts": "2026-04-22T09:43:32.577913Z",
+      "decision": "WAIT",
+      "conf": 70,
+      "n_tools": 15,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4762 is entering a major confluence resistance zone (4764-4767) combining M15 resistance at 4765, M5 resistance"
+    },
+    {
+      "id": 4680,
+      "ts": "2026-04-22T09:50:13.249956Z",
+      "decision": "WAIT",
+      "conf": 25,
+      "n_tools": 9,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4756 sits in the middle of a ranging market with no directional edge. Volume is 0.42x average, ADX 23.3, regime"
+    },
+    {
+      "id": 4681,
+      "ts": "2026-04-22T09:59:22.327154Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 14,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is testing the H4 double bottom at 4755 but hasn't confirmed a reversal yet. M5 shows weakening momentum (MACD his"
+    },
+    {
+      "id": 4682,
+      "ts": "2026-04-22T10:05:34.940235Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 9,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price testing critical 4748-4749 support confluence (H1 FLIP zone + daily PP). M5 shows rejection wick but MACD histogra"
+    },
+    {
+      "id": 4683,
+      "ts": "2026-04-22T10:17:26.136692Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 18,
+      "memory_tools": [
+        "get_trade_lessons",
+        "get_recent_reflexions",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price at 4749 sits between 4735 confluence support and 4754-4760 resistance cluster. Risk-reward from current levels is "
+    },
+    {
+      "id": 4684,
+      "ts": "2026-04-22T10:33:51.021529Z",
+      "decision": "WAIT",
+      "conf": 75,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is chopping in a tight range between 4749 support and 4758 resistance with no directional conviction. Volume is 0."
+    },
+    {
+      "id": 4685,
+      "ts": "2026-04-22T10:36:15.793977Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price broke above 4758 but is sitting directly at H1 confluence resistance (18 touches) with H1 stochastic overbought (8"
+    },
+    {
+      "id": 4686,
+      "ts": "2026-04-22T10:42:51.203012Z",
+      "decision": "WAIT",
+      "conf": 75,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price consolidating at the 4756-4758 resistance band (M5 CONFLUENCE RES with 81 touches + H1 CONFLUENCE RES). M5 shows f"
+    },
+    {
+      "id": 4687,
+      "ts": "2026-04-22T10:49:52.597263Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 14,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is stuck in a compressed 10-pip range at 4755 with no conviction \u2014 M5 stochastics are overbought (78/82) but volum"
+    },
+    {
+      "id": 4688,
+      "ts": "2026-04-22T10:56:04.624590Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 13,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Rex CRITICAL was the Gold-10Y correlation anomaly (+0.85 vs -0.50 typical) \u2014 a decorrelation driven by safe-haven flows "
+    },
+    {
+      "id": 4689,
+      "ts": "2026-04-22T11:02:52.578034Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is trapped in a tight 16.6pt range during London with extremely low volume conviction (0.02x avg). M5 stochastic a"
+    },
+    {
+      "id": 4690,
+      "ts": "2026-04-22T11:13:55.564620Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 9,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Market is directionless \u2014 ranging between 4751 and 4765 with no conviction. H1 RSI at 50, MACD histogram weakening, M5 s"
+    },
+    {
+      "id": 4691,
+      "ts": "2026-04-22T11:30:01.855298Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is oscillating in a tight 4751-4765 range with no directional conviction \u2014 RSI neutral at 49.4, ADX falling to 21."
+    },
+    {
+      "id": 4692,
+      "ts": "2026-04-22T11:49:17.206567Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 14,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Simba woke me at 4747-4749 support cluster after price broke below 4748. M5 stoch is extremely oversold (5.04) suggestin"
+    },
+    {
+      "id": 4693,
+      "ts": "2026-04-22T11:58:52.252874Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 16,
+      "memory_tools": [
+        "get_trade_lessons",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price testing 4748.56 H1 support (18 touches, daily PP confluence) after bounce from 4679 low. London session range abno"
+    },
+    {
+      "id": 4694,
+      "ts": "2026-04-22T12:05:34.963711Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "RANGING regime with very low volume (0.05x avg) creates chop risk. Price broke above M5 4756 resistance but faces H1 475"
+    },
+    {
+      "id": 4695,
+      "ts": "2026-04-22T12:12:43.004475Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 15,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price at 4750.75 sits at a critical confluence: 4748 H1 support (19 touches) + Fib 23.6% retracement (4747.83). The 11:3"
+    },
+    {
+      "id": 4696,
+      "ts": "2026-04-22T12:21:31.003594Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Simba woke me at 4747.5 support test - price sitting at critical M5 support zone with oversold stochastics but H1 remain"
+    },
+    {
+      "id": 4697,
+      "ts": "2026-04-22T12:23:55.937411Z",
+      "decision": "WAIT",
+      "conf": 75,
+      "n_tools": 9,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "London session is in extreme compression (range 16.6 pts vs typical 46, 0th percentile) with normal volume but zero dire"
+    },
+    {
+      "id": 4698,
+      "ts": "2026-04-22T12:30:53.373105Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 11,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "XAU/USD is trapped in a tight 10-point range (4748-4758) with very low volume (0.35x average) and neutral tick pressure."
+    },
+    {
+      "id": 4699,
+      "ts": "2026-04-22T12:42:18.033324Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is sitting at the critical 4748 flip zone (18 touches, H1+M1 confluence) with conflicting signals: bearish EMA ali"
+    },
+    {
+      "id": 4700,
+      "ts": "2026-04-22T12:43:47.480868Z",
+      "decision": "OPEN_BUY",
+      "conf": 55,
+      "n_tools": 13,
+      "memory_tools": [
+        "get_trade_lessons",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price sitting on 4747-4748 multi-timeframe support confluence (H1 FLIP 18T, M15 CONF SUP 14T, M5 CONF SUP 40T). M5 stoch"
+    },
+    {
+      "id": 4701,
+      "ts": "2026-04-22T12:45:54.989608Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 9,
+      "memory_tools": [
+        "get_position_history",
+        "read_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Trade just opened at 4747.48 on ranging regime bounce thesis from 4735-4748 multi-TF support. Price bounced from 4735 bu"
+    },
+    {
+      "id": 4702,
+      "ts": "2026-04-22T12:49:15.904372Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 9,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is only 4 minutes old, sitting at entry zone with price testing the 4747-4748 FLIP support. SL at 4733 is prope"
+    },
+    {
+      "id": 4703,
+      "ts": "2026-04-22T12:52:22.946521Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Position is -7.4 pts from entry at 4747.47. Price broke below entry level (now resistance on M5/M15), but strong support"
+    },
+    {
+      "id": 4704,
+      "ts": "2026-04-22T12:53:29.044321Z",
+      "decision": "HOLD_TRADE",
+      "conf": 35,
+      "n_tools": 9,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is -3.5 pips against me at 4744 after buying at 4747.47. The entry level has been broken and now acts as resist"
+    },
+    {
+      "id": 4705,
+      "ts": "2026-04-22T12:55:27.737181Z",
+      "decision": "HOLD_TRADE",
+      "conf": 60,
+      "n_tools": 8,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Position BUY @4747.47 is only ~1.5 pts underwater \u2014 price is bouncing off the 4746.68 flip zone (15 touches, M15+M5 conf"
+    },
+    {
+      "id": 4706,
+      "ts": "2026-04-22T12:59:28.676103Z",
+      "decision": "CLOSE_TRADE",
+      "conf": 75,
+      "n_tools": 8,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Entry thesis broken \u2014 price has closed below the 4747 entry level across M5/M15 with no signs of holding. M5 RSI at 37.2"
+    },
+    {
+      "id": 4707,
+      "ts": "2026-04-22T13:11:04.152175Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 13,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price testing 4735 H1 confluent support (strong, 18 touches, H4+H1 confluence). M5 printed rejection wick at 4741 and bo"
+    },
+    {
+      "id": 4708,
+      "ts": "2026-04-22T13:27:39.540548Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 14,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is sandwiched in an extremely tight 13-point band between 4735 support (H1 confluence + Fib 38.2%) and 4749 resist"
+    },
+    {
+      "id": 4709,
+      "ts": "2026-04-22T13:45:29.493078Z",
+      "decision": "OPEN_BUY",
+      "conf": 68,
+      "n_tools": 16,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "V-bottom bounce from 4735 confluence support with M5 momentum confirmation (two strong green candles, expanding volume)."
+    },
+    {
+      "id": 4710,
+      "ts": "2026-04-22T13:49:03.246467Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 13,
+      "memory_tools": [
+        "read_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price is stuck in a tight 4756-4761 range after bouncing from 4735. M5 shows rejection wick at 4761 with overbought stoc"
+    },
+    {
+      "id": 4711,
+      "ts": "2026-04-22T13:55:39.779706Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "No open position. Price stuck in tight H1 range (4749-4758, only 9pts) with M5 stoch overbought at 82 and rejection at 4"
+    },
+    {
+      "id": 4712,
+      "ts": "2026-04-22T14:06:21.527786Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 15,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price broke below 4747 (H1 Fib 23.6%) in a RANGING regime with only 0.15x average volume \u2014 no conviction on the breakdow"
+    },
+    {
+      "id": 4713,
+      "ts": "2026-04-22T14:12:48.986235Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 6,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4743 in a range between 4735 support and 4749 resistance. M15 bearish engulfing just rejected from 4751, but M5"
+    },
+    {
+      "id": 4714,
+      "ts": "2026-04-22T14:24:03.719202Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price sits at a multi-timeframe support cluster (4747: H1 Fib 23.6%, M15/M5 confluence) but lacks a confirming reversal "
+    },
+    {
+      "id": 4715,
+      "ts": "2026-04-22T14:33:58.449452Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 13,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price broke below 4735 (Simba wake) but is retesting the zone. Placed BUY_LIMIT at 4735 targeting bounce from strong S/R"
+    },
+    {
+      "id": 4716,
+      "ts": "2026-04-22T14:36:29.208722Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 10,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Fresh BUY at 4734.97 (-$7.84). M5 shows long lower wick at 4731 with deeply oversold stoch (7.74) and BUY tick pressure "
+    },
+    {
+      "id": 4717,
+      "ts": "2026-04-22T14:40:10.338381Z",
+      "decision": "HOLD_TRADE",
+      "conf": 60,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position just entered at 4735 H1 confluence support. M5 shows clear rejection wick at 4729 (M5 CONF SUP) with oversold s"
+    },
+    {
+      "id": 4718,
+      "ts": "2026-04-22T14:43:19.412470Z",
+      "decision": "ADJUST_TRADE",
+      "conf": 65,
+      "n_tools": 10,
+      "memory_tools": [
+        "get_position_history",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Moved SL to breakeven (4735) after position gave back 35 pips from MFE (+48 to +13). H1 structure remains bearish with p"
+    },
+    {
+      "id": 4719,
+      "ts": "2026-04-22T14:46:27.734042Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4734 is testing the strong 4735 FLIP zone (18 touches, H4+H1 confluence) with Fib 38.2% at 4732.67 nearby. Bear"
+    },
+    {
+      "id": 4720,
+      "ts": "2026-04-22T14:56:08.078401Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 13,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Rex flagged Gold-10Y decorrelation (+0.71 vs typical -0.50) and regime shift to RANGING. Price is consolidating at 4735 "
+    },
+    {
+      "id": 4721,
+      "ts": "2026-04-22T15:03:10.620443Z",
+      "decision": "OPEN_BUY",
+      "conf": 55,
+      "n_tools": 15,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4736 confluence support (M15/M5/M1 alignment + daily+monthly PP confluence, 8 touches). M15 stochastic deeply o"
+    },
+    {
+      "id": 4722,
+      "ts": "2026-04-22T15:06:22.701189Z",
+      "decision": "HOLD_TRADE",
+      "conf": 55,
+      "n_tools": 11,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Position is at a strong multi-TF confluence support (4736) after a sharp drop. M5/M15 MACD both show bearish momentum we"
+    },
+    {
+      "id": 4723,
+      "ts": "2026-04-22T15:09:20.667829Z",
+      "decision": "ADJUST_TRADE",
+      "conf": 75,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_position_history"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "BUY position at 4736 is +25.7 pips but gave back from MFE of +32 pips. M15 momentum is bearish (MACD histogram -1.46 and"
+    },
+    {
+      "id": 4724,
+      "ts": "2026-04-22T15:12:34.636230Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 8,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4735 strong confluence support with oversold stochastic on M15/M5, but no conviction on the bounce \u2014 M5 green c"
+    },
+    {
+      "id": 4725,
+      "ts": "2026-04-22T15:19:29.767280Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price broke below 4730 confluence support but M5 RSI is extremely oversold at 24.2 and regime is RANGING where breakouts"
+    },
+    {
+      "id": 4726,
+      "ts": "2026-04-22T15:25:38.088041Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 9,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is compressed in a tight 6-point range (4730-4736) with no clear directional edge. H1 RSI at 40.7 and M15 Stochast"
+    },
+    {
+      "id": 4727,
+      "ts": "2026-04-22T15:36:50.851336Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 13,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price broke 4730 M15 support and is now at 4728.50, but M15 stochastic is deeply oversold (13.77) suggesting bounce risk"
+    },
+    {
+      "id": 4728,
+      "ts": "2026-04-22T15:40:48.854403Z",
+      "decision": "WAIT",
+      "conf": 45,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Sharp breakdown through 4735 strong confluence FLIP zone with full bearish EMA alignment on M15/M5, but RSI oversold (M1"
+    },
+    {
+      "id": 4729,
+      "ts": "2026-04-22T15:46:52.317880Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 7,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "H1 breakdown below 4735 flip zone is confirmed with full bearish EMA alignment and strengthening MACD, but price is only"
+    },
+    {
+      "id": 4730,
+      "ts": "2026-04-22T15:58:19.195448Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 9,
+      "memory_tools": [
+        "read_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price is testing the 4730 support level where M15/M5 show oversold bounce conditions (stochastic turning up from deep ov"
+    },
+    {
+      "id": 4731,
+      "ts": "2026-04-22T16:10:37.381172Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 14,
+      "memory_tools": [
+        "get_trade_lessons",
+        "get_trade_journal"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price bounced from 4732 H1 support with M5 momentum, but the setup lacks conviction: volume is 0.22x average, regime is "
+    },
+    {
+      "id": 4732,
+      "ts": "2026-04-22T16:19:16.072908Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 20,
+      "memory_tools": [
+        "get_trade_lessons",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price sits at critical monthly PP confluence (4728.40) with bearish structure below \u2014 full EMA alignment bearish, MACD s"
+    },
+    {
+      "id": 4733,
+      "ts": "2026-04-22T16:20:18.041978Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 5,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is testing the critical 4724 support level after a clear breakdown from 4732 (now resistance). H1 structure is bea"
+    },
+    {
+      "id": 4734,
+      "ts": "2026-04-22T16:22:05.794361Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 15,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4726 with M1 rejection hammer at 4724.82, but H1/M15/M5 all bearish-aligned. M5 stochastic crossing up from ove"
+    },
+    {
+      "id": 4735,
+      "ts": "2026-04-22T16:29:36.932049Z",
+      "decision": "WAIT",
+      "conf": 55,
+      "n_tools": 18,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price at 4727 testing M5 support 4725 within a clear bearish structure (full EMA alignment, MACD bearish, H1 broke 4732 "
+    },
+    {
+      "id": 4736,
+      "ts": "2026-04-22T16:40:55.034884Z",
+      "decision": "WAIT",
+      "conf": 25,
+      "n_tools": 11,
+      "memory_tools": [
+        "write_session_memory"
+      ],
+      "has_memory_read": false,
+      "reasoning_first_120": "Price is trapped between 4730 M15 support and 4732 H1 flip resistance - a classic squeeze zone with no directional edge."
+    },
+    {
+      "id": 4737,
+      "ts": "2026-04-22T16:55:53.925384Z",
+      "decision": "WAIT",
+      "conf": 40,
+      "n_tools": 12,
+      "memory_tools": [
+        "get_trade_lessons"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Regime is TRANSITIONAL with low confidence and 46 changes in 24h \u2014 too unstable for directional bias. Price sits at 4732"
+    },
+    {
+      "id": 4738,
+      "ts": "2026-04-22T17:02:24.441282Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 13,
+      "memory_tools": [
+        "get_trade_lessons",
+        "read_session_memory",
+        "write_session_memory"
+      ],
+      "has_memory_read": true,
+      "reasoning_first_120": "Price sits at 4730-4732 confluence support zone after bouncing from 4723-4725, but no directional confirmation yet. H1 r"
+    },
+    {
+      "id": 4739,
+      "ts": "2026-04-22T17:07:07.025535Z",
+      "decision": "WAIT",
+      "conf": 35,
+      "n_tools": 12,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Simba woke on price_above 4736, but price is only marginally above (4735.89) with no conviction \u2014 the M5 candle at 17:00"
+    },
+    {
+      "id": 4740,
+      "ts": "2026-04-22T17:14:06.523272Z",
+      "decision": "WAIT",
+      "conf": 65,
+      "n_tools": 11,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Range-bound setup between 4732 support and 4747 resistance. M5 stochastic at 90 (overbought) after bounce from 4724 lows"
+    },
+    {
+      "id": 4741,
+      "ts": "2026-04-22T17:25:34.631794Z",
+      "decision": "WAIT",
+      "conf": 60,
+      "n_tools": 13,
+      "memory_tools": [],
+      "has_memory_read": false,
+      "reasoning_first_120": "Cancelled the pending BUY_LIMIT at 4732 \u2014 SL at 4720 (12 pts) was inside the noise band for ATR 14.5 (minimum should be "
+    }
+  ]
+}
