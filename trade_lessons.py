@@ -83,13 +83,8 @@ def _session_from_hour(utc_hour: Optional[int]) -> str:
     return "NY"
 
 
-def _luna_env_bucket(env: Optional[str]) -> str:
-    if not env:
-        return "UNKNOWN"
-    e = str(env).upper().strip()
-    if e in ("SAFE", "CAUTION", "DANGER"):
-        return e
-    return "UNKNOWN"
+# FLO-336: _luna_env_bucket removed. Bug G killed the write path (execute_trade
+# no longer captures luna_environment); _build_bucket_key no longer reads it.
 
 
 # ---------------------------------------------------------------------------
@@ -133,14 +128,18 @@ def save_trade_conditions(
 # ---------------------------------------------------------------------------
 
 def _build_bucket_key(direction: str, conditions: Dict[str, Any]) -> str:
-    """Build a deterministic pattern bucket key from conditions."""
+    """Build a deterministic pattern bucket key from conditions.
+
+    FLO-336: removed luna_environment dimension. Bug G (7b5f8a9) killed the
+    write path in execute_trade; the read path here now drops the field too
+    so historical CAUTION/DANGER values stop surfacing through lessons.
+    """
     rsi = _rsi_bucket(conditions.get("rsi_h1"))
     vol = _volume_bucket(conditions.get("volume_h1"))
     session = conditions.get("session") or _session_from_hour(conditions.get("utc_hour"))
-    luna = _luna_env_bucket(conditions.get("luna_environment"))
     d = str(direction).upper()
 
-    return f"{d} | RSI {rsi} | Vol {vol} | {session} | {luna}"
+    return f"{d} | RSI {rsi} | Vol {vol} | {session}"
 
 
 def _load_lessons() -> List[Dict[str, Any]]:
@@ -167,18 +166,18 @@ def _save_lessons(lessons: List[Dict[str, Any]]) -> None:
 
 
 def _generate_lesson_text(bucket_key: str, wins: int, losses: int, avg_pnl: float) -> str:
-    """Deterministic lesson text based on statistics."""
+    """Factual lesson text — statistics only, no directive prefixes.
+
+    FLO-336: removed AVOID:/PREFERRED:/NEUTRAL: prefixes. Prior framing
+    (FLO-63, commit 21f83f2) prescribed action; Escola 1 v2.0 supersedes.
+    Floki reads the numbers and decides for himself.
+    """
     total = wins + losses
     if total < 3:
-        return f"NEUTRAL: {bucket_key} — insufficient data ({total} trades)"
+        return f"{bucket_key} — insufficient data ({total} trades)"
 
     win_rate = (wins / total) * 100 if total > 0 else 0
-
-    if win_rate < 30:
-        return f"AVOID: {bucket_key} — {wins}/{total} wins ({win_rate:.0f}%), avg P&L ${avg_pnl:+.2f}"
-    if win_rate > 70:
-        return f"PREFERRED: {bucket_key} — {wins}/{total} wins ({win_rate:.0f}%), avg P&L ${avg_pnl:+.2f}"
-    return f"NEUTRAL: {bucket_key} — {wins}/{total} wins ({win_rate:.0f}%), avg P&L ${avg_pnl:+.2f}"
+    return f"{bucket_key} — {wins}/{total} wins ({win_rate:.0f}% WR), avg P&L ${avg_pnl:+.2f}"
 
 
 def extract_trade_lesson(ticket: int, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -436,10 +435,14 @@ def get_relevant_lessons(
         })
 
     def _sort_key(l):
-        t = l.get("lesson", "")
-        if t.startswith("AVOID"):    return (0, -l["occurrences"])
-        if t.startswith("PREFERRED"): return (1, -l["occurrences"])
-        return (2, -l["occurrences"])
+        # FLO-336: sort by win-rate extremes (lowest WR first = most cautionary
+        # statistical signal), then higher WR, then mid, then by sample size.
+        # Replaces prior AVOID/PREFERRED/NEUTRAL prefix parse (editorial label removed).
+        occ = max(1, int(l.get("occurrences") or 0))
+        wr = (int(l.get("wins") or 0) / occ) * 100
+        if wr < 30:    return (0, -occ)
+        if wr > 70:    return (1, -occ)
+        return (2, -occ)
 
     out.sort(key=_sort_key)
     return out[:limit]
