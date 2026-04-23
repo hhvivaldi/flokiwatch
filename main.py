@@ -40,7 +40,7 @@ def _mt5_server_offset() -> int:
     if time.time() - _mt5_offset_cache["computed_at"] < 3600:
         return _mt5_offset_cache["value"]
     try:
-        import MetaTrader5 as _mt5_tz
+        from mt5_safe import mt5 as _mt5_tz  # FLO-348
         _tick = _mt5_tz.symbol_info_tick("XAUUSD")
         if _tick and _tick.time > 0:
             offset = int(_tick.time) - int(time.time())
@@ -1060,7 +1060,7 @@ class TradingBot:
         # FLO-263: Log existing pending orders at startup (do NOT cancel — Floki placed them)
         try:
             if getattr(config, "PENDING_ORDERS_ENABLED", False):
-                import MetaTrader5 as _mt5_startup
+                from mt5_safe import mt5 as _mt5_startup  # FLO-348
                 _pending_startup = _mt5_startup.orders_get(symbol=config.SYMBOL)
                 _our_pending = [o for o in (_pending_startup or []) if o.magic == config.MAGIC_NUMBER]
                 if _our_pending:
@@ -1162,7 +1162,7 @@ class TradingBot:
         else:
             log.info("DRY RUN mode - MT5 will not be connected for real orders")
             # Initialize MT5 for data only
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
             if not mt5.initialize():
                 log.warning("MT5 not available for data. Using simulated data.")
         
@@ -1897,7 +1897,7 @@ class TradingBot:
 
                     # M5/H1/H4/D1 from MT5 (backfill individual TFs)
                     try:
-                        import MetaTrader5 as mt5
+                        from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
 
                         def _rates_to_candles(rates):
                             out = []
@@ -3121,7 +3121,7 @@ class TradingBot:
 
             m5_candles = []
             try:
-                import MetaTrader5 as mt5
+                from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
                 rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_M5, 0, 10)
                 if rates is not None:
                     for r in rates:
@@ -3490,7 +3490,7 @@ class TradingBot:
     def _get_last_closed_h1_time_iso(self) -> str:
         """Return ISO timestamp of the last CLOSED H1 candle, or empty string if unavailable."""
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
             rates = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 1, 1)
             if rates is None or len(rates) == 0:
                 return ""
@@ -4142,7 +4142,7 @@ class TradingBot:
             try:
                 if getattr(config, "AUTO_CONTEXT_MODE", "full") != "full":
                     raise _AutoContextSkip()
-                import MetaTrader5 as _mt5_ms
+                from mt5_safe import mt5 as _mt5_ms  # FLO-348
                 import numpy as _np_ms
                 from datetime import datetime as _dt_ms
 
@@ -5306,7 +5306,7 @@ class TradingBot:
     def _compute_macro_divergence(self) -> None:
         """FLO-293 Part 3: Cross-asset S24/S25 signal, cached to self._last_macro_divergence."""
         try:
-            import MetaTrader5 as _mt5
+            from mt5_safe import mt5 as _mt5  # FLO-348
             import time as _time
             from macro_divergence_detector import detect_macro_divergence
             for _s in ("UST10Y_M6", "DXY_M6", "XAUUSD"):
@@ -5460,7 +5460,7 @@ class TradingBot:
         try:
             from support_resistance import detect_zones_triple, is_near_strong_zone
             from technical_analyzer import get_atr_value
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
             import pandas as pd
             # Fetch dedicated H1 data for S/R (main df only has ANALYSIS_BARS=100)
             h1_rates_sr = mt5.copy_rates_from_pos(config.SYMBOL, mt5.TIMEFRAME_H1, 0, config.SR_LOOKBACK_H1 + 50)
@@ -6111,7 +6111,7 @@ class TradingBot:
         d1_candles = []
         h4_candles = []
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
             
             # H1 candles from df
             for i in range(max(0, len(df) - 50), len(df)):
@@ -6843,7 +6843,7 @@ class TradingBot:
             # Get current price
             _cp = None
             try:
-                import MetaTrader5 as mt5
+                from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
                 tick = mt5.symbol_info_tick("XAUUSD")
                 if tick:
                     _cp = tick.bid
@@ -7651,7 +7651,7 @@ def run_single_analysis():
     print("=" * 60)
     
     # Initialize MT5 for data
-    import MetaTrader5 as mt5
+    from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
     if not mt5.initialize():
         print("⚠️ MT5 not available")
         return

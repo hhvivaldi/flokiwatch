@@ -477,7 +477,7 @@ hindsight_tags: lowercase snake_case. Examples: sl_tightening_saved_money, sl_ti
 def _get_post_close_prices(close_time_str: str, direction: str, entry_price: float) -> Optional[Dict]:
     """Fetch price at close+1h from MT5."""
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         from datetime import timedelta
         import time as _time
 
@@ -888,7 +888,7 @@ def run_eod_counterfactuals() -> int:
     try:
         import sqlite3
         import config as _cfg
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         from datetime import timedelta
         import time as _time
 

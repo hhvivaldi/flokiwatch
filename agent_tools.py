@@ -3507,7 +3507,7 @@ class AgentTools:
         """Scan for RSI/MACD divergences on H4 and D1."""
         start = time.time()
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348
             import numpy as np
             if not mt5.initialize():
                 return {"success": False, "reason": "MT5 unavailable"}
@@ -3634,7 +3634,7 @@ class AgentTools:
         """Real-time correlation check: gold vs DXY, yields, silver (last 24h H1)."""
         start = time.time()
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348
             import numpy as np
             if not mt5.initialize():
                 return {"success": False, "reason": "MT5 unavailable"}
@@ -4037,7 +4037,7 @@ class AgentTools:
         """
         start = time.time()
         try:
-            import MetaTrader5 as _mt5
+            from mt5_safe import mt5 as _mt5  # FLO-348
             from pattern_detector import detect_patterns
 
             bars = _mt5.copy_rates_from_pos("XAUUSD", _mt5.TIMEFRAME_H4, 0, 30)

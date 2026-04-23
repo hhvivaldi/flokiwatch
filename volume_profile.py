@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-import MetaTrader5 as mt5
+from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
 from logger import log
 
 

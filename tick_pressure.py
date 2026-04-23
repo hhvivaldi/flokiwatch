@@ -23,7 +23,7 @@ every time he calls this tool.
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
 
-import MetaTrader5 as mt5
+from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
 from logger import log
 
 

@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 
 try:
-    import MetaTrader5 as mt5
+    from mt5_safe import mt5  # FLO-348
 except Exception:
     mt5 = None
 

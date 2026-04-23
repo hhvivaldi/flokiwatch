@@ -1105,7 +1105,7 @@ def _get_mtf_trend_direction(timeframe: str) -> Optional[str]:
     from logger import log
     
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         import config as _cfg
         
         tf_map = {

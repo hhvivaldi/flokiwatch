@@ -1182,7 +1182,7 @@ class AgentMonitor:
 
             current_price = None
             try:
-                import MetaTrader5 as _mt5
+                from mt5_safe import mt5 as _mt5  # FLO-348
                 _tk = _mt5.symbol_info_tick("XAUUSD")
                 if _tk and _tk.bid and _tk.ask:
                     current_price = round((float(_tk.bid) + float(_tk.ask)) / 2.0, 2)

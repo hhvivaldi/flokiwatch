@@ -316,7 +316,7 @@ class MLPredictor:
     def _get_xag_change_1h(self) -> float:
         """Fetch XAGUSD 1h change from MT5."""
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348
             if not mt5.terminal_info():
                 return 0.0
             
@@ -334,7 +334,7 @@ class MLPredictor:
         """Fetch M5 microstructure features from MT5 live (last N M5 candles)."""
         defaults = {'volume_spike_M5': 0.0, 'price_change_M30': 0.0}
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348
             if not mt5.terminal_info():
                 return defaults
             
@@ -368,7 +368,7 @@ class MLPredictor:
         """Fetch H4 features from MT5 live."""
         defaults = {'rsi_H4': 50.0, 'price_change_H4': 0.0, 'dist_ema21_H4': 0.0}
         try:
-            import MetaTrader5 as mt5
+            from mt5_safe import mt5  # FLO-348
             if not mt5.terminal_info():
                 return defaults
             

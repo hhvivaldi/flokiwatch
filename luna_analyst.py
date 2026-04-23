@@ -244,7 +244,7 @@ def _get_macro_data() -> Dict[str, Any]:
     # Gold price from MT5 XAUUSD (replaces Yahoo GC=F which was 4.5h stale during intraday)
     gold = {}
     try:
-        import MetaTrader5 as _mt5
+        from mt5_safe import mt5 as _mt5  # FLO-348
         _gt = _mt5.symbol_info_tick("XAUUSD")
         if _gt and _gt.bid > 0:
             _gi = _mt5.symbol_info("XAUUSD")

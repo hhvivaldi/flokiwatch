@@ -493,7 +493,7 @@ def get_m5_status() -> Dict:
     }
     
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         
         n_candles = getattr(_cfg, 'M5_REVERSAL_CANDLES', 6)
         
@@ -559,7 +559,7 @@ def check_m5_reversal(direction: str) -> Dict:
     }
     
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         
         n_candles = getattr(_cfg, 'M5_REVERSAL_CANDLES', 6)
         moderate_threshold = getattr(_cfg, 'M5_REVERSAL_MODERATE_THRESHOLD', 0.20)
@@ -655,7 +655,7 @@ def test_momentum_detector():
     print("🧪 MOMENTUM DETECTOR TEST")
     print("=" * 60)
     
-    import MetaTrader5 as mt5
+    from mt5_safe import mt5  # FLO-348
     
     use_simulated = False
     df = None

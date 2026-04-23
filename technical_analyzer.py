@@ -6,7 +6,7 @@ Calculates technical score based on indicators
 import numpy as np
 import pandas as pd
 from typing import Dict, Tuple, Optional
-import MetaTrader5 as mt5
+from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
 import config
 
 

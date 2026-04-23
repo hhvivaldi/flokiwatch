@@ -163,7 +163,7 @@ def write_state(bot_instance: Any) -> None:
         price_daily_change_pct = None
         prev_d1_close = None
         try:
-            import MetaTrader5 as _mt5
+            from mt5_safe import mt5 as _mt5  # FLO-348
             _xau_info = _mt5.symbol_info("XAUUSD")
             if _xau_info and last_known_price:
                 _sc = getattr(_xau_info, "session_close", 0)

@@ -94,7 +94,7 @@ def _save_regime_state() -> None:
 def _broker_offset_s() -> int:
     """Broker time offset in seconds (FLO-96). Positive = broker ahead of UTC."""
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         tick = mt5.symbol_info_tick("XAUUSD")
         if tick and tick.time:
             return int(tick.time) - int(time.time())
@@ -106,7 +106,7 @@ def _broker_offset_s() -> int:
 def _compute_h4_volume_bias() -> Optional[Dict[str, Any]]:
     """FLO-293 S9: H4 volume expansion + directional close -> bias (180d conf 70)."""
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         import numpy as np
         rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_H4, 0, 25)
         if rates is None or len(rates) < 21:
@@ -203,7 +203,7 @@ def _compute_regime_price_divergence(
 def _compute_m15_explosive() -> Optional[Dict[str, Any]]:
     """FLO-293 S5: M15 range > 2x M15 ATR(14). Checks latest and prior bar."""
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
         import numpy as np
         rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, 16)
         if rates is None or len(rates) < 15:

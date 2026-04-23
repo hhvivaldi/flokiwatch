@@ -3,13 +3,38 @@ ORDER EXECUTOR - MT5 Order Execution
 Automatically sends orders to MetaTrader 5
 """
 
-import MetaTrader5 as mt5
+# FLO-348: thread-safe MT5 proxy; every mt5.* call auto-locks via mt5_safe.mt5_lock
+from mt5_safe import mt5, mt5_lock
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
 from tz_utils import utc_now  # FLO-309: local→UTC cleanup
 import config
+
+# FLO-348: module-level lock serialising the three write methods
+# (execute_trade, modify_position, close_position) across concurrent
+# callers (Floki main loop, monitor.py, Snow FLO-347). RLock so
+# re-entry from the same thread is safe (e.g. retry logic inside
+# execute_trade that calls close_position on phantom cleanup).
+executor_lock: threading.RLock = threading.RLock()
+
+
+def _with_executor_lock(fn):
+    """FLO-348 decorator: serialise execute_trade/modify_position/close_position.
+
+    RLock is acquired for the full method lifetime so concurrent callers
+    (Snow, Floki, monitor.py) observe atomic end-to-end state transitions,
+    not just atomic per-mt5-call (which mt5_lock already covers).
+    """
+    def wrapper(self, *args, **kwargs):
+        with executor_lock:
+            return fn(self, *args, **kwargs)
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    wrapper.__wrapped__ = fn
+    return wrapper
 
 # FLO-96: MT5 server time offset (shared helper, same as main.py)
 _mt5_offset_cache_ex = {"value": 10800, "computed_at": 0.0}
@@ -248,6 +273,7 @@ class MT5Executor:
         bid, ask = prices
         return (ask - bid) / 0.1  # XAU/USD: 1 pip = 0.1
     
+    @_with_executor_lock  # FLO-348
     def execute_trade(
         self,
         direction: str,
@@ -262,14 +288,14 @@ class MT5Executor:
     ) -> OrderResult:
         """
         Execute a trade.
-        
+
         Args:
             direction: "BUY" or "SELL"
             lot_size: Lot size
             stop_loss: SL price
             take_profit: TP price
             comment: Order comment
-        
+
         Returns:
             OrderResult with details
         """
@@ -764,7 +790,7 @@ class MT5Executor:
                             stop_loss: float, take_profit: float,
                             expiry_minutes: int = 0, comment: str = "") -> dict:
         """Place a pending order (BUY_LIMIT/SELL_LIMIT/BUY_STOP/SELL_STOP) via MT5."""
-        import MetaTrader5 as mt5
+        # FLO-348: inline import removed; module-level `mt5` is the thread-safe proxy
 
         _TYPE_MAP = {
             "BUY_LIMIT": mt5.ORDER_TYPE_BUY_LIMIT,
@@ -819,7 +845,7 @@ class MT5Executor:
 
     def cancel_pending_order(self, ticket: int) -> dict:
         """Cancel a pending order by ticket."""
-        import MetaTrader5 as mt5
+        # FLO-348: inline import removed; module-level `mt5` is the thread-safe proxy
 
         request = {"action": mt5.TRADE_ACTION_REMOVE, "order": ticket}
         result = mt5.order_send(request)
@@ -833,7 +859,7 @@ class MT5Executor:
 
     def cancel_all_pending(self) -> dict:
         """Cancel all pending orders for this symbol with our magic number."""
-        import MetaTrader5 as mt5
+        # FLO-348: inline import removed; module-level `mt5` is the thread-safe proxy
 
         orders = mt5.orders_get(symbol=self.symbol)
         cancelled = 0
@@ -848,7 +874,7 @@ class MT5Executor:
 
     def get_pending_orders(self) -> list:
         """List all pending orders for this symbol with our magic number."""
-        import MetaTrader5 as mt5
+        # FLO-348: inline import removed; module-level `mt5` is the thread-safe proxy
 
         orders = mt5.orders_get(symbol=self.symbol)
         result = []
@@ -909,6 +935,7 @@ class MT5Executor:
         
         return result
     
+    @_with_executor_lock  # FLO-348
     def close_position(
         self,
         ticket: int,
@@ -916,11 +943,11 @@ class MT5Executor:
     ) -> OrderResult:
         """
         Close a position (total or partial).
-        
+
         Args:
             ticket: Position ticket
             volume: Volume to close (None = total)
-        
+
         Returns:
             OrderResult
         """
@@ -1008,6 +1035,7 @@ class MT5Executor:
             volume=close_volume
         )
     
+    @_with_executor_lock  # FLO-348
     def modify_position(
         self,
         ticket: int,
@@ -1016,12 +1044,12 @@ class MT5Executor:
     ) -> OrderResult:
         """
         Modify SL/TP of a position.
-        
+
         Args:
             ticket: Position ticket
             new_sl: New SL (None = keep)
             new_tp: New TP (None = keep)
-        
+
         Returns:
             OrderResult
         """

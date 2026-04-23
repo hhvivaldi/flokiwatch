@@ -137,7 +137,7 @@ class PositionMonitor:
         try:
             import config as _cfg
             if getattr(_cfg, "PENDING_ORDERS_ENABLED", False):
-                import MetaTrader5 as _mt5_m
+                from mt5_safe import mt5 as _mt5_m  # FLO-348
                 _pending = _mt5_m.orders_get(symbol="XAUUSD")
                 _pending_tickets = set()
                 if _pending:

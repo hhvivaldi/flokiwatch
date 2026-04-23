@@ -18,7 +18,7 @@ import time as _time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 
-import MetaTrader5 as mt5
+from mt5_safe import mt5  # FLO-348: thread-safe MT5 proxy
 
 from logger import log
 

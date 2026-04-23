@@ -60,7 +60,7 @@ def fetch_market_context(force: bool = False) -> Dict[str, Any]:
         return _cache
 
     try:
-        import MetaTrader5 as mt5
+        from mt5_safe import mt5  # FLO-348
     except ImportError:
         return _cache or {}
 
