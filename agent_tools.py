@@ -2405,6 +2405,44 @@ class AgentTools:
                     "reason": str(reason),
                 }
 
+            # FLO-338 C.1: register the trade in history.db at the nearest point to MT5
+            # success. Phase 1.5 audit proved 15/20 ghosts bypassed main.py:4911 (FLO-103)
+            # because agent_result never reached it; writing here closes that gap.
+            # record_trade_open uses INSERT OR IGNORE on ticket UNIQUE (db_writer.py:781),
+            # so the belt-and-suspenders main.py:4911 call is a safe no-op. Ghost 1580068886
+            # (2026-04-08) is the canonical symptom fixed here.
+            try:
+                import config as _cfg_c1
+                _c1_on = bool(getattr(_cfg_c1, "GHOST_GUARDS_ENABLED", True))
+            except Exception:
+                _c1_on = True
+            if _c1_on:
+                try:
+                    from db_writer import record_trade_open
+                    record_trade_open(
+                        ticket=int(ticket),
+                        direction=dir_s,
+                        volume=float(pos.lot_size),
+                        open_price=float(fill_price) if fill_price else float(entry_ref),
+                        sl=float(sl_f),
+                        tp=float(tp_f),
+                        comment="floki_agent",
+                        decision_source="floki_agent",
+                    )
+                    log.info(f"FLOKI | record_trade_open(C.1) → ticket={ticket} {dir_s} @ {fill_price}")
+                except Exception as e_c1:
+                    log.error(f"FLOKI | record_trade_open(C.1) FAILED: ticket={ticket} err={e_c1}")
+                    try:
+                        from alerts import alert_error
+                        alert_error(
+                            "Ghost Guard C.1 Failed",
+                            f"record_trade_open at agent_tools failed for ticket #{ticket} ({dir_s}): {e_c1}. "
+                            f"Fallback: main.py:4911 (C.2) will retry.",
+                            severity="warning",
+                        )
+                    except Exception:
+                        pass
+
             # FLO-63: Save trade conditions snapshot at open time
             if ticket is not None:
                 try:

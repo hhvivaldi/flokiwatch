@@ -4902,14 +4902,26 @@ class TradingBot:
         # regardless of decision type (OPEN_BUY, HOLD_TRADE, etc.). Covers the
         # case where Floki opens a trade mid-conversation via GEMINI_FOLLOWUP
         # but the final decision text says HOLD_TRADE.
+        # FLO-338 C.2: belt-and-suspenders for FLO-103. agent_tools.execute_trade (C.1)
+        # writes the row at the MT5 success branch; this path covers the case where the
+        # tool result still reaches main.py (idempotent via INSERT OR IGNORE). Changes:
+        #  - removed `break` (Floki can call OPEN twice per cycle)
+        #  - added row-verify SELECT; if missing, loud WARN + Discord alert
+        #  - upgraded log.warning → log.error on outer exception
+        try:
+            import config as _cfg_c2
+            _c2_on = bool(getattr(_cfg_c2, "GHOST_GUARDS_ENABLED", True))
+        except Exception:
+            _c2_on = True
         try:
             _tt = getattr(agent_result, "tool_trace", None) or []
             for _t in _tt:
                 if isinstance(_t, dict) and str(_t.get("name", "")).lower() == "execute_trade":
                     _r = _t.get("result")
                     if isinstance(_r, dict) and _r.get("success") and _r.get("ticket"):
+                        _tk = int(_r["ticket"])
                         record_trade_open(
-                            ticket=int(_r["ticket"]),
+                            ticket=_tk,
                             direction=str(_r.get("direction", "UNKNOWN")),
                             volume=float(_r.get("volume", 0.01)),
                             open_price=float(_r.get("fill_price", 0)),
@@ -4919,12 +4931,48 @@ class TradingBot:
                             decision_source="floki_agent",
                         )
                         log.info(
-                            f"FLOKI | record_trade_open → ticket={_r['ticket']} "
+                            f"FLOKI | record_trade_open → ticket={_tk} "
                             f"{_r.get('direction', '?')} @ {_r.get('fill_price', '?')}"
                         )
-                    break
+                        # FLO-338 C.2: verify row landed in history.db. If missing, loud alert.
+                        # Use the same path resolution as db_writer._get_connection (config-relative)
+                        # to guarantee we query the same file record_trade_open wrote to.
+                        if _c2_on:
+                            try:
+                                import sqlite3 as _sq3
+                                _dbp = os.path.abspath(getattr(_cfg_c2, "HISTORY_DB_PATH", "data/history.db"))
+                                _c = _sq3.connect(_dbp)
+                                _row = _c.execute("SELECT 1 FROM trades WHERE ticket = ? LIMIT 1", (_tk,)).fetchone()
+                                _c.close()
+                                if not _row:
+                                    log.error(f"INSERT_TRADE_FAILED_NO_RECOVERY | ticket={_tk} — row absent after record_trade_open")
+                                    try:
+                                        from alerts import alert_error
+                                        alert_error(
+                                            "Ghost Guard C.2: INSERT_TRADE_FAILED",
+                                            f"record_trade_open returned without error but ticket #{_tk} "
+                                            f"({_r.get('direction', '?')}) is not in history.db. "
+                                            f"Reconciliation will backfill at next run; operator review needed.",
+                                            severity="warning",
+                                        )
+                                    except Exception:
+                                        pass
+                            except Exception as e_c2v:
+                                log.error(f"FLOKI | C.2 verify-after-insert failed: ticket={_tk} err={e_c2v}")
+                    # FLO-338: `break` removed intentionally — loop continues to process
+                    # any additional execute_trade entries in the tool_trace.
         except Exception as e_rto:
-            log.warning(f"FLOKI | record_trade_open failed: {e_rto}")
+            log.error(f"FLOKI | record_trade_open failed: {e_rto}")
+            try:
+                from alerts import alert_error
+                alert_error(
+                    "Ghost Guard C.2 Outer Failure",
+                    f"FLO-103 record_trade_open loop raised: {e_rto}. "
+                    f"Some ticket(s) from this cycle may be missing in history.db.",
+                    severity="warning",
+                )
+            except Exception:
+                pass
 
         # FLO-127: Persist active thesis for inter-cycle continuity
         try:

@@ -698,7 +698,55 @@ class MT5Executor:
             risk_amount=risk_amount,
             risk_percent=risk_percent,
         )
-        
+
+        # FLO-338 B: post-fill duplicate scan (MT5-direct success path only; EA path
+        # already has FLO-282 + FLO-291). Defense-in-depth for the rare race where the
+        # EA places an order AFTER direct fallback completes. Phase 1.5 data showed
+        # 0/20 known ghosts had this signature, but this is cheap insurance.
+        try:
+            import config as _cfg_b
+            _b_on = bool(getattr(_cfg_b, "GHOST_GUARDS_ENABLED", True))
+        except Exception:
+            _b_on = True
+        if _b_on:
+            try:
+                import time as _tb
+                _tb.sleep(1.5)  # settle window for late EA arrival
+                _post = mt5.positions_get(symbol=self.symbol)
+                if _post:
+                    for _p in _post:
+                        if (_p.magic == self.magic and _p.ticket != result.order
+                                and _p.ticket not in pre_tickets_direct):
+                            _dm = ((_p.type == mt5.POSITION_TYPE_BUY and direction.upper() == "BUY")
+                                   or (_p.type == mt5.POSITION_TYPE_SELL and direction.upper() == "SELL"))
+                            if _dm:
+                                log.warning(
+                                    f"GHOST_GUARD_B | duplicate detected ticket=#{_p.ticket} "
+                                    f"(kept=#{result.order}); closing duplicate"
+                                )
+                                _close_req = {
+                                    "action": mt5.TRADE_ACTION_DEAL,
+                                    "symbol": self.symbol,
+                                    "volume": _p.volume,
+                                    "type": mt5.ORDER_TYPE_SELL if _p.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY,
+                                    "position": _p.ticket,
+                                    "deviation": config.MAX_SLIPPAGE_PIPS,
+                                    "magic": self.magic,
+                                    "comment": "ghost_guard_b_dup_close",
+                                    "type_filling": mt5.ORDER_FILLING_IOC,
+                                }
+                                _cr = mt5.order_send(_close_req)
+                                _ok = bool(_cr and getattr(_cr, "retcode", 0) == mt5.TRADE_RETCODE_DONE)
+                                alert_error(
+                                    "Ghost Guard B: Duplicate Closed" if _ok else "Ghost Guard B: Close FAILED",
+                                    f"Duplicate ticket #{_p.ticket} ({direction}) detected after direct "
+                                    f"fallback; close={'OK' if _ok else 'FAILED retcode=' + str(getattr(_cr, 'retcode', '?'))}. "
+                                    f"Kept ticket #{result.order}.",
+                                    severity="warning",
+                                )
+            except Exception as e_b:
+                log.warning(f"GHOST_GUARD_B | scan failed (non-blocking): {e_b}")
+
         return OrderResult(
             success=True,
             ticket=result.order,

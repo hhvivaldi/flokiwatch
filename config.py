@@ -558,4 +558,8 @@ REX_MONITOR_ENABLED = os.environ.get("REX_MONITOR_ENABLED", "true").lower() in (
 REX_MONITOR_INTERVAL = int(os.environ.get("REX_MONITOR_INTERVAL", "1800"))                  # 30 min during market hours
 REX_MONITOR_INTERVAL_CLOSED = int(os.environ.get("REX_MONITOR_INTERVAL_CLOSED", "3600"))    # 60 min when market closed
 
+# FLO-338: ghost-trade guards (emergency kill-switch; default on)
+# Gates C.1 (agent_tools insert), C.2 (main.py verify+alert), B (post-fill duplicate scan).
+GHOST_GUARDS_ENABLED = os.environ.get("GHOST_GUARDS_ENABLED", "true").lower() in ("true", "1", "yes")
+
 # ============================================================================
