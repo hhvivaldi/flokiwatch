@@ -126,6 +126,14 @@ def main() -> int:
     # ---- Pre-flight: ensure no leftover diagnostic positions ----
     all_pos = raw_mt5.positions_get(symbol="XAUUSD") or []
     leftover = [p for p in all_pos if (p.comment or "").startswith(TEST_COMMENT)]
+    # FLO-352 lesson: close requests MUST include type_filling or MT5 returns
+    # retcode 10030 (TRADE_RETCODE_INVALID_FILL). Pick from symbol bitmask.
+    _si = raw_mt5.symbol_info("XAUUSD")
+    _fill_mask = int(_si.filling_mode) if _si else 2
+    CLOSE_FILLING = (raw_mt5.ORDER_FILLING_IOC if _fill_mask & 2
+                     else raw_mt5.ORDER_FILLING_FOK if _fill_mask & 1
+                     else raw_mt5.ORDER_FILLING_RETURN)
+
     if leftover:
         print(f"CLEANUP: {len(leftover)} leftover {TEST_COMMENT} positions — closing first")
         for p in leftover:
@@ -137,9 +145,13 @@ def main() -> int:
                 "type": raw_mt5.ORDER_TYPE_SELL if p.type == 0 else raw_mt5.ORDER_TYPE_BUY,
                 "price": raw_mt5.symbol_info_tick("XAUUSD").bid if p.type == 0 else raw_mt5.symbol_info_tick("XAUUSD").ask,
                 "deviation": 20,
+                "type_filling": CLOSE_FILLING,
+                "type_time": raw_mt5.ORDER_TIME_GTC,
             }
             r = raw_mt5.order_send(req)
-            print(f"  leftover #{p.ticket} close: {r.retcode if r else None}")
+            ok = (r is not None and r.retcode == raw_mt5.TRADE_RETCODE_DONE)
+            print(f"  leftover #{p.ticket} close: retcode={r.retcode if r else None}  "
+                  f"{'OK' if ok else 'FAIL — position may remain open'}")
 
     # ---- Open test position ----
     _banner("Opening test position")
@@ -293,10 +305,13 @@ def main() -> int:
             "type": raw_mt5.ORDER_TYPE_SELL if p.type == 0 else raw_mt5.ORDER_TYPE_BUY,
             "price": tick_now.bid if p.type == 0 else tick_now.ask,
             "deviation": 20,
+            "type_filling": CLOSE_FILLING,
+            "type_time": raw_mt5.ORDER_TIME_GTC,
         }
         r = raw_mt5.order_send(close_req)
+        ok = (r is not None and r.retcode == raw_mt5.TRADE_RETCODE_DONE)
         print(f"  close #{p.ticket}: retcode={r.retcode if r else None}  "
-              f"last_error={raw_mt5.last_error()}")
+              f"{'OK' if ok else 'FAIL — run scripts/_investigations/flo352_cleanup_test_positions.py'}")
 
     # ---- Matrix summary ----
     _banner("DIAGNOSIS MATRIX")
