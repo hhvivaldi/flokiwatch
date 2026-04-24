@@ -164,6 +164,16 @@ def main() -> int:
         print(f"  ABORT: mt5.initialize failed; last_error={mt5.last_error()}")
         return 2
 
+    # Diagnostic: terminal + account info before any executor work
+    ti = mt5.terminal_info()
+    ai = mt5.account_info()
+    if ti is None or ai is None:
+        print(f"  ABORT: terminal_info={ti} account_info={ai}")
+        mt5.shutdown()
+        return 2
+    print(f"  terminal: {ti.name}  connected={ti.connected}  trade_allowed={ti.trade_allowed}")
+    print(f"  account:  login={ai.login}  server={ai.server}  balance=${ai.balance:.2f}")
+
     tick = mt5.symbol_info_tick("XAUUSD")
     if tick is None or tick.bid <= 0:
         print("  ABORT: no live tick for XAUUSD")
@@ -180,6 +190,17 @@ def main() -> int:
     # Lazy-import executor so the module-level singleton creates cleanly
     import executor as executor_mod
     from executor import executor, executor_lock
+
+    # CRITICAL: call executor.connect() explicitly.
+    # MT5Executor.__init__ sets self.connected=False; only executor.connect()
+    # flips it to True. In production, main.py calls this during startup.
+    # Standalone test scripts MUST do it manually or execute_trade short-
+    # circuits at its is_connected() guard with "MT5 not connected".
+    if not executor.connect():
+        print(f"  ABORT: executor.connect() returned False")
+        mt5.shutdown()
+        return 2
+    print(f"  executor.connected = {executor.is_connected()}")
 
     pre_test_positions = executor.get_open_positions() or []
     existing_test = [p for p in pre_test_positions
@@ -234,30 +255,18 @@ def main() -> int:
         _assert(ok and tk, f"thread {tid} execute_trade success",
                 f"result={r}")
 
-    # Serialisation evidence: every 'enter' must be matched by its own 'exit'
-    # before the other thread's 'enter' (under executor_lock).
-    # With only 2 threads, the expected order is:
-    #   t=0  enter(A)   OR   enter(B)
-    #   t=1  exit(A)          exit(B)
-    #   t=2  enter(B)          enter(A)
-    #   t=3  exit(B)           exit(A)
+    # Serialisation evidence (timing): the two call-windows overlap WALL-CLOCK-WISE
+    # (both threads were alive between their own enter/exit pairs), but the
+    # executor_lock serialises the INTERNAL critical section. We can't instrument
+    # from outside the lock without modifying executor.py. The load-bearing proof
+    # is below: both threads produced DISTINCT, VALID tickets with no broker
+    # error — which would not hold if the lock were broken (MT5 would either
+    # reject the race with a retcode error, or return the same ticket twice,
+    # or leak state in a way that the second thread sees corrupted data).
     if len(enter_times) == 2 and len(exit_times) == 2:
-        # Build chronological timeline of events
-        events = []
-        for tid, t in enter_times: events.append(("enter", tid, t))
-        for tid, t in exit_times: events.append(("exit", tid, t))
-        events.sort(key=lambda e: e[2])
-        # Compute concurrency balance; max 1 under mutual exclusion
-        bal = 0
-        max_bal = 0
-        for kind, _, _ in events:
-            bal += 1 if kind == "enter" else -1
-            max_bal = max(max_bal, bal)
-        # NOTE: because enter_times is logged BEFORE the lock is acquired
-        # (enter_times.append runs pre-executor_lock), this test is a weak
-        # indicator. Stronger evidence is that both trades opened on
-        # DISTINCT tickets with no broker-side race error.
-        print(f"  timeline max_concurrent_events={max_bal} (note: loose; see comment)")
+        dur1 = exit_times[0][1] - enter_times[0][1]
+        dur2 = exit_times[1][1] - enter_times[1][1]
+        print(f"  wall-clock durations: thread1={dur1*1000:.0f}ms  thread2={dur2*1000:.0f}ms")
 
     tickets = sorted({getattr(r, "ticket", None) for r in results.values()})
     _assert(len([t for t in tickets if t]) == 2 and tickets[0] != tickets[1],
@@ -287,7 +296,11 @@ def main() -> int:
     if acc:
         print(f"  account balance: ${acc.get('balance')}  equity: ${acc.get('equity')}")
 
-    mt5.shutdown()
+    # Symmetric teardown — disconnect via executor (internally calls mt5.shutdown)
+    try:
+        executor.disconnect()
+    except Exception:
+        mt5.shutdown()
 
     print("\n" + "=" * 60)
     if _FAILURES:
