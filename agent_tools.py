@@ -4465,6 +4465,260 @@ class AgentTools:
             self._log_tool("write_trading_journal", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
+    # ---------------------------------------------------------------------
+    # Snow plan-management tools (FLO-347 Phase 6)
+    #
+    # IMPORTANT — BEHAVIOUR DURING OBSERVATION WINDOW:
+    # These tools ship BEFORE Floki's system prompt is updated to describe
+    # Snow. The 4 methods below are fully functional and tested, but Floki
+    # has no prompt-level guidance telling him when to call them, so in
+    # practice he will not invoke them. This is intentional — we want the
+    # mechanics shipped, tested, and auditable before the prompt change
+    # flips Floki's behaviour. Phase 6.5/7 updates the prompt and starts
+    # the evidence window. If you see an empty `snow_plans` table after
+    # restart, that is expected until then, not a bug.
+    # ---------------------------------------------------------------------
+
+    def submit_plan_to_snow(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit a contingency plan to Snow for autonomous monitoring.
+
+        Snow evaluates the plan's conditions on a 5 s cadence and fires
+        the associated actions when all-true. During DRY RUN mode
+        (`config.SNOW_DRY_RUN=true`, default) fires are logged as
+        `*_would_fire` events in `snow_evaluations` — NO real orders hit
+        MT5. When `SNOW_DRY_RUN=false`, fires dispatch to the real
+        executor under `executor_lock`.
+
+        Returns:
+          {"success": True,  "plan_id": "PLAN-YYYYMMDD-NNN",
+           "validation_errors": None}
+          {"success": False, "plan_id": None,
+           "validation_errors": [str, ...]}
+          {"success": False, "reason": "...internal error..."}
+
+        The `plan` dict's `id`, `created_by`, and `created_at` fields are
+        ALWAYS overwritten by the tool — Floki cannot spoof them. All
+        other fields come from Floki.
+        """
+        start = time.time()
+        try:
+            from snow import db as _snow_db
+            from snow.validator import validate_plan as _validate
+        except Exception as e:
+            self._log_tool("submit_plan_to_snow", start, f"import_error={e}")
+            return {"success": False, "reason": f"snow import failed: {e}"}
+
+        if not isinstance(plan, dict):
+            self._log_tool("submit_plan_to_snow", start, "non_dict_input")
+            return {
+                "success": False, "plan_id": None,
+                "validation_errors": ["plan must be a dict"],
+            }
+
+        # Collision retry — two concurrent callers might compute the same
+        # NNN before either has inserted. PRIMARY KEY rejects the second;
+        # regenerate and retry up to 3 times. Under Floki's cadence this
+        # is exceedingly unlikely to fire even once.
+        import sqlite3 as _sql
+        last_err: Optional[str] = None
+        for attempt in range(1, 4):
+            try:
+                plan_id = _snow_db.generate_plan_id()
+                candidate = dict(plan)
+                candidate["id"] = plan_id
+                candidate["created_by"] = "floki"  # schema Literal; locked
+                candidate["created_at"] = utc_iso()
+                # status is set by Plan schema default (PENDING); if the
+                # caller passed something else, overwrite to be safe.
+                candidate["status"] = "pending"
+
+                ok, parsed, errors = _validate(candidate)
+                if not ok:
+                    self._log_fail(
+                        "submit_plan_to_snow",
+                        start,
+                        f"validation_failed errors={len(errors)}",
+                    )
+                    return {
+                        "success": False, "plan_id": None,
+                        "validation_errors": list(errors),
+                    }
+                _snow_db.insert_plan(parsed)
+                self._log_tool(
+                    "submit_plan_to_snow", start,
+                    f"ok plan_id={plan_id} attempt={attempt}",
+                )
+                return {
+                    "success": True, "plan_id": plan_id,
+                    "validation_errors": None,
+                }
+            except _sql.IntegrityError as e:
+                # Primary-key collision on plan_id. Retry with a fresh id.
+                last_err = f"id_collision: {e}"
+                continue
+            except Exception as e:
+                self._log_fail("submit_plan_to_snow", start, f"error={e}")
+                return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+        self._log_fail(
+            "submit_plan_to_snow", start,
+            f"id_collision_retries_exhausted last={last_err}",
+        )
+        return {"success": False, "reason": "plan_id collision retry exhausted"}
+
+    def cancel_plan(self, plan_id: str, reason: str) -> Dict[str, Any]:
+        """Cancel a PENDING Snow plan.
+
+        Only plans in PENDING state can be cancelled via this tool. Plans
+        in TRIGGERED / ACTIVE / CLOSING are rejected — an ACTIVE plan
+        corresponds to a real broker position; close the position via
+        `close_trade(ticket)` instead. Terminal statuses (CLOSED /
+        CANCELLED / EXPIRED / FAILED) are also rejected as no-ops.
+
+        `reason` must be a non-empty string (audit requirement).
+        """
+        start = time.time()
+        try:
+            from snow import db as _snow_db
+        except Exception as e:
+            return {"success": False, "reason": f"snow import failed: {e}"}
+
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return {"success": False, "reason": "plan_id must be a non-empty string"}
+        if not isinstance(reason, str) or not reason.strip():
+            return {"success": False, "reason": "reason must be a non-empty string (audit)"}
+
+        try:
+            row = _snow_db.get_plan(plan_id)
+            if row is None:
+                self._log_fail("cancel_plan", start, f"plan_not_found={plan_id}")
+                return {"success": False, "reason": f"plan {plan_id} not found"}
+            current_status = row.get("status")
+            if current_status != "pending":
+                if current_status in ("triggered", "active", "closing"):
+                    msg = (
+                        f"plan {plan_id} is {current_status}; cannot cancel an "
+                        f"active plan — close the broker position via "
+                        f"close_trade(ticket) if needed"
+                    )
+                else:
+                    msg = (
+                        f"plan {plan_id} is {current_status} (terminal); "
+                        f"nothing to cancel"
+                    )
+                self._log_fail("cancel_plan", start, f"bad_state={current_status}")
+                return {
+                    "success": False, "reason": msg,
+                    "current_status": current_status,
+                }
+
+            _snow_db.update_plan_status(plan_id, "cancelled")
+            # Audit row — tracks WHO cancelled WHEN with WHICH reason.
+            try:
+                _snow_db.record_trigger(
+                    plan_id=plan_id,
+                    contingency_name="_user_cancel",
+                    contingency_kind="entry",
+                    action_type="cancel_plan",
+                    execution_status="success",
+                    action_params={"reason": reason.strip()},
+                )
+            except Exception as audit_err:
+                # Audit failure should NOT hide a successful state change
+                # from Floki; log + continue. Plan IS cancelled.
+                log.error(f"cancel_plan audit row failed: {audit_err}")
+
+            self._log_tool("cancel_plan", start, f"ok plan_id={plan_id}")
+            return {
+                "success": True, "plan_id": plan_id,
+                "new_status": "cancelled", "reason": reason.strip(),
+            }
+        except Exception as e:
+            self._log_fail("cancel_plan", start, f"error={e}")
+            return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
+    def get_plan_status(self, plan_id: str) -> Dict[str, Any]:
+        """Return a summary of a Snow plan's current state.
+
+        Returns the mutable DB-column fields only (status, ticket,
+        timestamps, outcome) — NOT the full plan_json, which is frozen
+        at submit time and consumes significant context. For the full
+        plan schema, Floki already submitted it; he knows what he wrote.
+        """
+        start = time.time()
+        try:
+            from snow import db as _snow_db
+        except Exception as e:
+            return {"success": False, "reason": f"snow import failed: {e}"}
+
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return {"success": False, "reason": "plan_id must be a non-empty string"}
+
+        try:
+            row = _snow_db.get_plan(plan_id)
+            if row is None:
+                self._log_no_cache("get_plan_status", start, f"not_found={plan_id}")
+                return {"success": False, "reason": f"plan {plan_id} not found"}
+            summary = {
+                "plan_id": row.get("id"),
+                "status": row.get("status"),
+                "created_at": row.get("created_at"),
+                "expires_at": row.get("expires_at"),
+                "trade_ticket": row.get("trade_ticket"),
+                "entered_at": row.get("entered_at"),
+                "closed_at": row.get("closed_at"),
+                "outcome_pips": row.get("outcome_pips"),
+                "outcome_usd": row.get("outcome_usd"),
+                "last_evaluated_at": row.get("last_evaluated_at"),
+            }
+            self._log_tool("get_plan_status", start, f"ok plan_id={plan_id}")
+            return {"success": True, **summary}
+        except Exception as e:
+            self._log_fail("get_plan_status", start, f"error={e}")
+            return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
+    def list_active_plans(self, ticket: Optional[int] = None) -> Dict[str, Any]:
+        """List all Snow plans in non-terminal states.
+
+        Returns summaries (id, status, trade_ticket, created_at,
+        last_evaluated_at), NOT full plans. Optional `ticket` filter
+        narrows to plans attached to a specific broker ticket.
+        """
+        start = time.time()
+        try:
+            from snow import db as _snow_db
+        except Exception as e:
+            return {"success": False, "reason": f"snow import failed: {e}"}
+
+        try:
+            rows = _snow_db.get_active_plans()
+            if ticket is not None:
+                try:
+                    t = int(ticket)
+                    rows = [r for r in rows if r.get("trade_ticket") == t]
+                except (TypeError, ValueError):
+                    return {
+                        "success": False,
+                        "reason": f"ticket must be an int, got {type(ticket).__name__}",
+                    }
+            plans = [
+                {
+                    "plan_id": r.get("id"),
+                    "status": r.get("status"),
+                    "trade_ticket": r.get("trade_ticket"),
+                    "created_at": r.get("created_at"),
+                    "last_evaluated_at": r.get("last_evaluated_at"),
+                }
+                for r in rows
+            ]
+            self._log_tool(
+                "list_active_plans", start,
+                f"ok count={len(plans)}" + (f" ticket={ticket}" if ticket else ""),
+            )
+            return {"success": True, "count": len(plans), "plans": plans}
+        except Exception as e:
+            self._log_fail("list_active_plans", start, f"error={e}")
+            return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
     def _agent_monitor_events_path(self) -> str:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")

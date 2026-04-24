@@ -1206,6 +1206,101 @@ class AIAgent:
                     "additionalProperties": False,
                 },
             },
+            # FLO-347 Phase 6 — Snow plan-management tools. Ship ahead of
+            # prompt changes; Floki has no prompt guidance to use these
+            # yet, so in practice they remain uninvoked until Phase 6.5
+            # updates `agent_prompts.py`. Schema + mechanics land now so
+            # the evidence window can start cleanly once the prompt flips.
+            {
+                "name": "submit_plan_to_snow",
+                "description": (
+                    "Submit a contingency plan to Snow for autonomous monitoring. "
+                    "Snow evaluates the plan's conditions every 5 seconds and fires "
+                    "the associated actions when conditions go all-true. "
+                    "While SNOW_DRY_RUN=true (default), fires are logged as "
+                    "'*_would_fire' events in the snow_evaluations table — NO real "
+                    "orders hit MT5. Plan shape: {analysis, entry, management, "
+                    "exit, emergency}. See snow/schema.py for the full Pydantic "
+                    "model; the validator returns structured errors so you can "
+                    "revise and retry. The tool overwrites id/created_by/created_at "
+                    "on submit — Floki-supplied values for those fields are ignored."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "plan": {
+                            "type": "object",
+                            "description": (
+                                "A complete plan dict. Fields: analysis, entry, "
+                                "management, exit, emergency, expires_at. See "
+                                "snow.schema.Plan for all constraints."
+                            ),
+                            "additionalProperties": True,
+                        },
+                    },
+                    "required": ["plan"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "cancel_plan",
+                "description": (
+                    "Cancel a PENDING Snow plan. Only works for plans that have "
+                    "not yet fired their entry (status=PENDING). ACTIVE plans have "
+                    "a real broker position attached — close via close_trade(ticket) "
+                    "instead. Terminal plans (CLOSED/CANCELLED/EXPIRED/FAILED) are "
+                    "no-ops and return an error. `reason` is required for audit."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "plan_id": {"type": "string", "description": "e.g. PLAN-20260424-001"},
+                        "reason": {
+                            "type": "string",
+                            "description": "Why you are cancelling (audit trail; non-empty).",
+                        },
+                    },
+                    "required": ["plan_id", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_plan_status",
+                "description": (
+                    "Return the current DB state of a Snow plan: status, "
+                    "trade_ticket, entered_at, closed_at, outcome_pips/usd, "
+                    "last_evaluated_at. Does NOT return the full plan_json "
+                    "(you already submitted it)."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "plan_id": {"type": "string", "description": "e.g. PLAN-20260424-001"},
+                    },
+                    "required": ["plan_id"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "list_active_plans",
+                "description": (
+                    "List all Snow plans currently in non-terminal states "
+                    "(PENDING, TRIGGERED, ACTIVE, CLOSING). Returns summaries "
+                    "(id, status, trade_ticket, timestamps) — not full plans. "
+                    "Optional `ticket` filter narrows to plans attached to a "
+                    "specific broker ticket."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket": {
+                            "type": "integer",
+                            "description": "Optional broker-ticket filter.",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
         ]
 
     def _openai_tools(self) -> List[Dict[str, Any]]:

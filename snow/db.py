@@ -178,6 +178,43 @@ _LIVE_PLAN_STATUSES: tuple[str, ...] = (
 )
 
 
+def generate_plan_id(date: Optional[str] = None) -> str:
+    """Generate a new plan_id of the form `PLAN-YYYYMMDD-NNN`.
+
+    NNN is a daily monotonic counter — the highest existing NNN for
+    `date` plus 1, or 001 if none exist yet. `date` defaults to the
+    current UTC calendar day via `tz_utils.trading_day_utc()` (stripped
+    to YYYYMMDD).
+
+    Concurrency: two simultaneous callers COULD race and receive the same
+    NNN. The caller (submit_plan_to_snow tool) must treat that as a
+    collision and retry — SQLite's PRIMARY KEY enforces uniqueness, so
+    the loser sees `IntegrityError` on insert. This is acceptable at
+    Floki's submission cadence (a handful per day).
+    """
+    from tz_utils import trading_day_utc
+    date = date or trading_day_utc().replace("-", "")
+    prefix = f"PLAN-{date}-"
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM snow_plans WHERE id LIKE ? ORDER BY id DESC LIMIT 1",
+            (prefix + "%",),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        next_n = 1
+    else:
+        try:
+            next_n = int(str(row["id"]).rsplit("-", 1)[-1]) + 1
+        except (ValueError, IndexError):
+            # Malformed existing id — fall back to fresh sequence. Logged
+            # by caller if it actually hits the DB layer somehow.
+            next_n = 1
+    return f"{prefix}{next_n:03d}"
+
+
 def insert_plan(plan: Plan) -> None:
     """Persist a validated Plan at status=PENDING (or whatever the Plan
     carries — validator sets PENDING by default).
