@@ -413,19 +413,25 @@ class TestPromptExamplePlan:
 
 
 # =============================================================================
-# FLO-347 Phase 7 (v3.2) — mandatory-plan pivot regression guards
+# FLO-347 Phase 7+ — mandatory-plan pivot regression guards (v3.2 + v3.3)
 # =============================================================================
 
-class TestPromptV3_2MandatoryPlan:
-    """Forcing functions for the Escola 2 / v3.2 pivot. If future edits
-    accidentally soften the mandatory-plan framing back toward the v3.1
-    permissive style, these tests flip red."""
+class TestPromptMandatoryPlan:
+    """Forcing functions for the Escola 2 mandatory-plan pivot. If future
+    edits accidentally soften the mandatory-plan framing back toward the
+    v3.1 permissive style, these tests flip red. Version-agnostic class
+    name — the mandate carries across v3.2+ revisions. Only the version
+    assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
+    bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    def test_prompt_version_bumped_to_3_2(self):
+    EXPECTED_VERSION = "3.3"
+
+    def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""
         from agent_prompts import get_prompt_version
-        assert get_prompt_version() == "3.2", (
-            f"prompt version drift: got {get_prompt_version()!r}, expected '3.2'"
+        assert get_prompt_version() == self.EXPECTED_VERSION, (
+            f"prompt version drift: got {get_prompt_version()!r}, "
+            f"expected {self.EXPECTED_VERSION!r}"
         )
 
     def test_v3_2_mandatory_plan_framing_present(self):
@@ -469,3 +475,83 @@ class TestPromptV3_2MandatoryPlan:
                 or "observation plan" in SYSTEM_PROMPT.lower()), (
             "v3.2 ambiguous-market / observation-plan guidance missing"
         )
+
+
+# =============================================================================
+# FLO-347 Phase 7.1 (v3.3) — chart-suite + Luna-distinctness regressions
+# =============================================================================
+
+class TestPromptV3_3ChartSuite:
+    """v3.3 tightens the FULL ANALYTICAL SUITE paragraph after observing
+    that Floki's first post-v3.2 plan only requested 4 of 6 chart
+    timeframes and skipped get_luna_brief. These guards prevent the
+    tightening from being silently softened later."""
+
+    def test_all_six_chart_timeframes_enumerated(self):
+        """Prompt must name all 6 TFs (D1, H4, H1, M15, M5, M1) in the
+        context of get_chart_screenshots — not just 'multi-TF'."""
+        from agent_prompts import SYSTEM_PROMPT
+        # Must mention get_chart_screenshots AND each of the 6 TF tokens
+        # in a proximity consistent with the requirement (all 6 named).
+        assert "get_chart_screenshots" in SYSTEM_PROMPT
+        for tf in ("D1", "H4", "H1", "M15", "M5", "M1"):
+            assert tf in SYSTEM_PROMPT, (
+                f"v3.3 chart-suite mandate missing timeframe {tf!r}"
+            )
+        # Explicit "ALL 6 timeframes" anchor — catches a soft edit that
+        # keeps the TF list but drops the enumeration imperative.
+        assert ("ALL 6 timeframes" in SYSTEM_PROMPT
+                or "all 6 timeframes" in SYSTEM_PROMPT), (
+            "v3.3 chart-suite mandate missing the 'all 6 timeframes' anchor"
+        )
+
+    def test_chart_endpoints_explicitly_called_out(self):
+        """D1 (week's structural frame) and M1 (live test of level) MUST
+        be mentioned as rationale, not left to inference. Catches an edit
+        that lists the 6 TFs but doesn't explain why endpoints matter."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert ("week's structural frame" in SYSTEM_PROMPT
+                or "week" in SYSTEM_PROMPT and "structural" in SYSTEM_PROMPT), (
+            "v3.3: D1 rationale (week's structural frame) missing"
+        )
+        assert ("live test" in SYSTEM_PROMPT or "level under" in SYSTEM_PROMPT), (
+            "v3.3: M1 rationale (live test of level) missing"
+        )
+
+    def test_luna_distinctness_from_market_context_called_out(self):
+        """Luna is NOT a price feed. v3.3 adds an explicit note so Floki
+        stops substituting get_market_context for get_luna_brief."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "get_luna_brief" in SYSTEM_PROMPT
+        assert "get_market_context" in SYSTEM_PROMPT
+        # The distinction sentence — Luna != market_context.
+        assert "NOT duplicated" in SYSTEM_PROMPT or "not duplicated" in SYSTEM_PROMPT, (
+            "v3.3: Luna/market_context distinctness language missing"
+        )
+        # The WHY — Luna returns patterns, not just prices.
+        assert ("correlation-break" in SYSTEM_PROMPT
+                or "safe-haven" in SYSTEM_PROMPT
+                or "risk-flow" in SYSTEM_PROMPT), (
+            "v3.3: Luna's distinctive content (pattern analysis) not named"
+        )
+
+    def test_scope_limiter_preserves_agent_autonomy(self):
+        """The mandatory-suite rule applies ONLY when the mandatory
+        workflow is active (no position + no active plan). Outside that
+        state, Floki retains normal agent-first autonomy. This scope
+        limiter MUST be explicit — without it, the suite enumeration
+        becomes a prescriptive always-rule that contradicts the agent-
+        first principles captured in the owner's memories."""
+        from agent_prompts import SYSTEM_PROMPT
+        # Look for the "autonomy returns" / "suite is not mandatory"
+        # escape-hatch phrasing.
+        assert ("not mandatory" in SYSTEM_PROMPT
+                or "autonomy returns" in SYSTEM_PROMPT
+                or "your normal autonomy" in SYSTEM_PROMPT), (
+            "v3.3: scope-limiter missing — suite tightening must be scoped "
+            "to the mandatory-workflow state only"
+        )
+        # And the triggering condition for the scope — open position
+        # OR active plan
+        assert "open position" in SYSTEM_PROMPT
+        assert "active plan" in SYSTEM_PROMPT

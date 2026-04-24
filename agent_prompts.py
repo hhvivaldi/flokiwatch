@@ -97,7 +97,12 @@ CYCLE-START CHECK \u2014 first action every cycle: call list_active_plans(). Two
 
 If you have an open broker position, manage it via the existing tools (adjust_trade, close_trade, set_watch_conditions) as usual \u2014 Snow management-only plans land in a later phase. Plan-submission mandate applies to no-position + no-active-plan cycles.
 
-FULL ANALYTICAL SUITE before submission \u2014 you already do this naturally (charts across multiple timeframes, get_sr_zones, get_indicators, get_market_regime, get_volume_profile, get_tick_pressure, get_luna_brief, get_chart_patterns). The v3.2 mandate codifies the shape: plan quality is a direct product of analytical depth. A plan drafted on one indicator read is a weak plan. A plan drafted after you've seen H4+D1 structure, H1+M15 momentum, M5 entry timing, regime label, and macro context is the plan the cycle should actually produce.
+FULL ANALYTICAL SUITE \u2014 when the mandatory workflow is in effect (no position + no active plan), the walk is required, not optional. Before submit_plan_to_snow:
+- get_chart_screenshots with ALL 6 timeframes in a single call: D1, H4, H1, M15, M5, M1. D1 gives the week's structural frame, M1 gives the live test of the level under attack, H4/H1/M15/M5 give your working read. Skipping the endpoints produces a blind spot either at the macro anchor or at the level currently being tested.
+- get_market_regime, get_sr_zones, get_indicators, get_fibonacci_levels, get_chart_patterns, get_tick_pressure.
+- get_luna_brief. Luna is NOT duplicated by get_market_context \u2014 get_market_context returns cross-market prices + 24h/3d change, while get_luna_brief returns Python-validated correlation-break / safe-haven / risk-flow patterns. Call BOTH in the mandatory workflow.
+
+When you already have an open position OR an active plan, the suite is not mandatory \u2014 use the tools the cycle needs. The mandate protects PLAN QUALITY at the moment a plan is being drafted; your normal autonomy returns once a plan exists.
 
 AMBIGUOUS MARKETS \u2014 observation plans with conditional branches. When no single directional scenario is clearly best, write a plan whose entry conditions describe the branch you'd actually take IF the market resolves: "price_above 4730 AND rsi(H1) above 45 \u2192 SELL" articulates one leg. Pair it with an expiry (4h is fine). If the market does not resolve that way, the plan expires and cost you nothing but the thinking exercise \u2014 the thinking is the point. If the market does resolve that way, Snow fires. You get projective practice AND potential auto-execution from the same artifact.
 
@@ -314,6 +319,12 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.3 — FLO-347 Phase 7.1 (targeted suite tightening): in the
+          mandatory-workflow state, `get_chart_screenshots` requires
+          all 6 timeframes (D1/H4/H1/M15/M5/M1) and `get_luna_brief`
+          is explicitly distinguished from `get_market_context`.
+          Autonomy returns once a plan exists or a position is open.
+          Previous: 3.2.
     3.2 — FLO-347 Phase 7 (Escola 2 pivot): plan submission becomes the
           primary deliverable on no-position + no-active-plan cycles.
           list_active_plans() is called at cycle start. Validation retry
@@ -323,7 +334,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.2"
+    return "3.3"
 
 
 def get_prompt_hash() -> str:
