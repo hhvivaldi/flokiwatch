@@ -65,6 +65,14 @@ CAVEATS
        on the proxy's instance dict). For the full MT5 API surface,
        use `dir(mt5_safe._mt5_raw)` or consult the MetaTrader5 docs.
        No correctness impact; debugging convenience only.
+    5. (FLO-352) MT5's `order_send` — and any other METH_O-style C
+       binding — refuses empty kwargs (fails with `(-2, "Unnamed
+       arguments not allowed")` and returns None). The proxy guards
+       against this by only forwarding kwargs when the caller
+       actually provided some; positional-only calls dispatch as
+       `raw(*args)` not `raw(*args, **{})`. Read-path functions like
+       `symbol_info_tick` tolerate either convention, so the guard
+       is free for them.
 """
 
 from __future__ import annotations
@@ -95,8 +103,16 @@ class _MT5SafeProxy:
         raw = getattr(_mt5_raw, name)
         if callable(raw):
             def _wrapped(*args, **kwargs):
+                # FLO-352: some MT5 C bindings (notably order_send) use METH_O
+                # (single positional arg, NO kwargs). Forwarding an empty
+                # kwargs dict to those triggers (-2, "Unnamed arguments not
+                # allowed") and returns None. Guard: only pass kwargs when
+                # the caller actually provided some. Read-path functions
+                # accept either convention, so this never harms them.
                 with mt5_lock:
-                    return raw(*args, **kwargs)
+                    if kwargs:
+                        return raw(*args, **kwargs)
+                    return raw(*args)
             _wrapped.__name__ = name
             _wrapped.__doc__ = getattr(raw, "__doc__", None)
             _wrapped.__wrapped__ = raw  # inspect-friendly

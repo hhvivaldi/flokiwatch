@@ -67,6 +67,73 @@ def test_proxy_wraps_callables() -> None:
     _assert(mt5.symbol_info_tick is mt5.symbol_info_tick, "wrapper cached on instance dict")
 
 
+def test_proxy_handles_meth_o_callables() -> None:
+    """FLO-352 regression: proxy must NOT pass empty **kwargs to METH_O-style C fns.
+
+    Reproduces the bug via a mock callable whose signature accepts exactly one
+    positional argument and raises on kwargs (matches MT5's order_send
+    behaviour with error code -2 'Unnamed arguments not allowed').
+
+    Before the fix, the proxy's `_wrapped(*args, **kwargs): raw(*args, **kwargs)`
+    forwarded the empty kwargs dict and triggered the rejection even for
+    positional-only calls. Fix: forward kwargs only when non-empty.
+    """
+    _section("1b. Proxy METH_O compatibility (FLO-352 regression)")
+    import mt5_safe
+    from mt5_safe import mt5
+
+    # Inject a METH_O-style callable into the raw namespace for this test
+    recorded_calls: list[tuple[tuple, dict]] = []
+
+    def meth_o_like(*args, **kwargs):
+        # Match MT5's semantics: refuse if kwargs dict is present at all,
+        # even if empty (some C bindings distinguish the calling convention).
+        if kwargs:
+            # Simulate MT5's (-2, 'Unnamed arguments not allowed') + None return
+            raise TypeError("Unnamed arguments not allowed (simulated METH_O)")
+        recorded_calls.append((args, kwargs))
+        return {"ok": True, "args": args}
+
+    # Flush proxy cache for this name so __getattr__ re-resolves
+    try:
+        delattr(mt5, "_flo352_meth_o_probe")
+    except AttributeError:
+        pass
+
+    setattr(mt5_safe._mt5_raw, "_flo352_meth_o_probe", meth_o_like)
+    try:
+        # Positional-only call through proxy: MUST NOT leak empty kwargs
+        result = mt5._flo352_meth_o_probe({"dummy": 1})
+        _assert(result["ok"] is True, "positional-only call through proxy succeeds")
+        _assert(len(recorded_calls) == 1, "raw fn called exactly once")
+        _assert(recorded_calls[0][0] == ({"dummy": 1},), "args forwarded intact")
+        _assert(recorded_calls[0][1] == {}, "kwargs empty at raw call site")
+
+        # Verify the proxy STILL forwards real kwargs when caller provides them
+        # (we need a different fn that accepts kwargs for this check)
+        def keyword_ok(*args, **kwargs):
+            return {"args": args, "kwargs": kwargs}
+        try:
+            delattr(mt5, "_flo352_kw_probe")
+        except AttributeError:
+            pass
+        setattr(mt5_safe._mt5_raw, "_flo352_kw_probe", keyword_ok)
+        kw_result = mt5._flo352_kw_probe("a", x=1, y=2)
+        _assert(kw_result["args"] == ("a",), "kwargs-case: args forwarded")
+        _assert(kw_result["kwargs"] == {"x": 1, "y": 2}, "kwargs-case: kwargs forwarded")
+    finally:
+        # Cleanup injected probes
+        for name in ("_flo352_meth_o_probe", "_flo352_kw_probe"):
+            try:
+                delattr(mt5_safe._mt5_raw, name)
+            except AttributeError:
+                pass
+            try:
+                delattr(mt5, name)
+            except AttributeError:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # 2. mt5_lock re-entrance
 # ---------------------------------------------------------------------------
@@ -273,6 +340,7 @@ def main() -> int:
 
     tests = [
         test_proxy_wraps_callables,
+        test_proxy_handles_meth_o_callables,   # FLO-352 regression
         test_mt5_lock_reentrant,
         test_executor_lock_serialises_writes,
         test_executor_lock_is_rlock_for_method_composition,
