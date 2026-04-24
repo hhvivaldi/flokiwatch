@@ -321,3 +321,92 @@ class TestMultipleErrors:
         ok, plan, errors = validate_plan(valid_plan_dict)
         assert not ok
         assert len(errors) >= 3
+
+
+# =============================================================================
+# FLO-347 Phase 6.5 — prompt-example drift guard
+# =============================================================================
+
+class TestPromptExamplePlan:
+    """Forcing function: the canonical plan example shown inside Floki's
+    SYSTEM_PROMPT (<plans> section, MINIMAL PLAN EXAMPLE) must validate
+    cleanly. If the schema drifts, this test fails BEFORE Floki sees the
+    broken example at runtime and loops on validation errors.
+
+    When the prompt example is updated, update this dict in lockstep.
+    """
+
+    def _prompt_example_plan(self) -> dict:
+        # Match the JSON shown in agent_prompts.py SYSTEM_PROMPT <plans>
+        # verbatim (field-for-field). expires_at resolved at runtime to
+        # a future timestamp so the validator's "expires > created" rule
+        # passes regardless of wall clock at test time. The rest of the
+        # dict mirrors the prompt byte-for-byte.
+        import datetime as _dt
+        exp = (_dt.datetime.now(_dt.timezone.utc)
+               + _dt.timedelta(hours=6)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        created = _dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        return {
+            "schema_version": 1,
+            "id": "PLAN-20260424-001",
+            "created_by": "floki",
+            "created_at": created,
+            "expires_at": exp,
+            "status": "pending",
+            "analysis": {"thesis": "H1 pullback to 4720 support with trend intact",
+                         "key_levels": [4735.0, 4720.0, 4707.0],
+                         "confidence": 72,
+                         "regime_assumed": "TRENDING_BEARISH"},
+            "entry":    {"direction": "SELL", "volume": 0.02,
+                         "conditions": [{"type": "price_above", "level": 4730.0},
+                                        {"type": "rsi", "tf": "H1", "op": "above",
+                                         "threshold": 70}],
+                         "initial_sl": 4740.0, "initial_tp": 4710.0},
+            "management": [{"name": "lock_be_at_10_profit",
+                            "priority": 7,
+                            "conditions": [{"type": "profit_pips", "op": "above",
+                                            "threshold": 10}],
+                            "action": {"type": "move_sl_to_breakeven",
+                                       "offset_pips": 0},
+                            "fires": "once"}],
+            "exit": [{"name": "rsi_exit",
+                      "priority": 9,
+                      "conditions": [{"type": "rsi", "tf": "H1", "op": "below",
+                                      "threshold": 40}],
+                      "action": {"type": "close_full"},
+                      "fires": "once"}],
+            "emergency": {"max_loss_pips": 150, "max_duration_minutes": 480,
+                          "on_broker_error": "alert_floki"},
+        }
+
+    def test_example_in_prompt_validates_clean(self):
+        ok, parsed, errors = validate_plan(self._prompt_example_plan())
+        assert ok, f"prompt example does not validate: {errors}"
+        assert parsed is not None
+        assert errors == []
+
+    def test_example_appears_in_system_prompt(self):
+        """The example text fragment (MINIMAL PLAN EXAMPLE) must appear
+        in SYSTEM_PROMPT. Catches accidental prompt deletion / rename."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "MINIMAL PLAN EXAMPLE:" in SYSTEM_PROMPT, (
+            "prompt example marker missing — drift from Phase 6.5 state"
+        )
+
+    def test_prompt_example_key_fields_match_example(self):
+        """Spot-check that the literal JSON fragment in the prompt contains
+        the distinctive field strings this test uses. If someone edits the
+        prompt to change field names without updating this test, catch it."""
+        from agent_prompts import SYSTEM_PROMPT
+        for marker in (
+            '"initial_sl": 4740.0',
+            '"initial_tp": 4710.0',
+            '"direction": "SELL"',
+            '"regime_assumed": "TRENDING_BEARISH"',
+            '"type": "rsi"',
+            '"type": "move_sl_to_breakeven"',
+            '"type": "close_full"',
+        ):
+            assert marker in SYSTEM_PROMPT, (
+                f"prompt example missing expected marker: {marker}"
+            )
