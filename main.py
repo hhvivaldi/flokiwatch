@@ -1196,20 +1196,23 @@ class TradingBot:
         # Gated behind SNOW_ENABLED (default False) + SNOW_DRY_RUN (default True).
         # Thread is daemon=True so it never blocks process shutdown; exits
         # when self.running flips to False (stop() or kill signal).
+        # init_snow_tables() is idempotent (CREATE TABLE IF NOT EXISTS) —
+        # safe to call on every bot start when SNOW_ENABLED.
         if bool(getattr(config, "SNOW_ENABLED", False)):
             try:
+                from snow import db as _snow_db
                 from snow import snow_loop as _snow_loop
+                _snow_db.init_snow_tables()
                 self._snow_thread = threading.Thread(
                     target=_snow_loop.run_forever, args=(self,),
                     name="SnowLoop", daemon=True,
                 )
                 self._snow_thread.start()
-                log.info(
-                    "Snow loop spawned (DRY_RUN=%s)",
-                    bool(getattr(config, "SNOW_DRY_RUN", True)),
-                )
-            except Exception:
-                log.exception("snow.loop.spawn_failed")
+                _dry = bool(getattr(config, "SNOW_DRY_RUN", True))
+                log.info(f"Snow loop spawned (DRY_RUN={_dry})")
+            except Exception as e:
+                log.error(f"snow.loop.spawn_failed: {e}")
+                log.error(traceback.format_exc())
 
         write_state(self)
 
