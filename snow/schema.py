@@ -1,0 +1,456 @@
+"""Snow schema — Pydantic v2 models for plans, contingencies, conditions, actions.
+
+Spec: `data/_design/FLO-347_Snow_RFC_v1.md` §2 and §8.
+
+Design decisions (CTO-approved, frozen 2026-04-23):
+  - Pydantic v2 with discriminated unions for Condition / Action zoos
+  - 14 condition primitives for v1 (stateful `price_crosses_*` deferred to v2)
+  - Priority formula: effective = base + min(base-1, override*10)
+    with power-of-2 action bases (128/64/32/16/8/4) — see §8.1
+  - Timestamps: ISO-8601 UTC with 'Z' suffix (Rule 22)
+  - Plan ID pattern: "PLAN-YYYYMMDD-NNN"
+
+This module is PURE data/validation — no MT5 imports, no executor
+imports, no side effects. Dependency graph:
+  snow.schema ← snow.validator ← (later: snow.evaluator.*, snow.actions, …)
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Annotated, Literal, Optional, Union
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from . import SCHEMA_VERSION
+
+
+# =============================================================================
+# Enums
+# =============================================================================
+
+class PlanStatus(str, Enum):
+    """Lifecycle states (RFC §3.1)."""
+    PENDING   = "pending"
+    TRIGGERED = "triggered"    # transient; entry fired, broker call in flight
+    ACTIVE    = "active"
+    CLOSING   = "closing"      # transient; exit fired, close call in flight
+    CLOSED    = "closed"       # terminal
+    CANCELLED = "cancelled"    # terminal
+    EXPIRED   = "expired"      # terminal
+    FAILED    = "failed"       # terminal
+
+
+class ContingencyState(str, Enum):
+    """Per-contingency lifecycle within a plan (RFC §3.3)."""
+    ARMED       = "armed"
+    FIRED       = "fired"
+    FAILED      = "failed"
+    DEACTIVATED = "deactivated"    # fires=once and already fired
+
+
+class ContingencyFires(str, Enum):
+    ONCE       = "once"
+    EVERY_TIME = "every_time"
+
+
+class Direction(str, Enum):
+    BUY  = "BUY"
+    SELL = "SELL"
+
+
+# MT5 timeframes used by indicator conditions.
+Timeframe = Literal["M1", "M5", "M15", "H1", "H4", "D1"]
+# Comparison operator for threshold-style conditions.
+ComparisonOp = Literal["above", "below"]
+
+
+# =============================================================================
+# Condition primitives (14 for v1 — RFC §2.5)
+#
+# All concrete condition classes carry a `type: Literal[...]` tag for the
+# discriminated union. Any new primitive must add its class below AND to
+# the `Condition` union at the bottom of this section.
+# =============================================================================
+
+class _Cond(BaseModel):
+    """Shared config for all condition models."""
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+
+# --- §2.5 #1-#2: price-based ---
+
+class PriceAbove(_Cond):
+    type: Literal["price_above"] = "price_above"
+    level: float = Field(description="Target price; condition true if market > level")
+
+
+class PriceBelow(_Cond):
+    type: Literal["price_below"] = "price_below"
+    level: float = Field(description="Target price; condition true if market < level")
+
+
+# --- §2.5 #3: momentum / RSI ---
+
+class RSI(_Cond):
+    type: Literal["rsi"] = "rsi"
+    tf: Timeframe
+    op: ComparisonOp
+    threshold: float = Field(ge=0, le=100)
+
+
+# --- §2.5 #4: momentum / MACD histogram ---
+
+class MACDHistogram(_Cond):
+    type: Literal["macd_histogram"] = "macd_histogram"
+    tf: Timeframe
+    op: ComparisonOp
+    threshold: float
+
+
+# --- §2.5 #5: trend / EMA relation ---
+
+EMARelationKind = Literal[
+    "price_above",       # price above the EMA line
+    "price_below",       # price below the EMA line
+    "aligned_bull",      # fast > slow > …  (9 > 21 > 50 > 200)
+    "aligned_bear",      # fast < slow < …
+]
+
+
+class EMARelation(_Cond):
+    type: Literal["ema_relation"] = "ema_relation"
+    tf: Timeframe
+    period: Literal[9, 21, 50, 200]
+    relation: EMARelationKind
+
+
+# --- §2.5 #6: volatility / ATR ---
+
+class ATR(_Cond):
+    type: Literal["atr"] = "atr"
+    tf: Timeframe
+    op: ComparisonOp
+    multiplier: float = Field(gt=0, description="ATR > multiplier × baseline_pips?")
+    baseline_pips: float = Field(gt=0)
+
+
+# --- §2.5 #7: structural / S/R zone ---
+
+ZoneKind = Literal["support", "resistance", "any"]
+
+
+class PriceAtSRZone(_Cond):
+    type: Literal["price_at_sr_zone"] = "price_at_sr_zone"
+    zone_type: ZoneKind = "any"
+    tolerance_pips: float = Field(gt=0)
+
+
+# --- §2.5 #8: structural / Fibonacci ---
+
+# Level is a float literal, not a string: Floki will pass JSON numbers
+# like 0.618, not quoted "0.618". Pydantic accepts numeric literals
+# and rejects any out-of-enum value.
+FibLevel = Literal[0.382, 0.5, 0.618, 0.786]
+
+
+class PriceAtFibonacci(_Cond):
+    type: Literal["price_at_fibonacci"] = "price_at_fibonacci"
+    level: FibLevel
+
+
+# --- §2.5 #9: position-state / profit in pips ---
+
+class ProfitPips(_Cond):
+    type: Literal["profit_pips"] = "profit_pips"
+    op: ComparisonOp
+    threshold: float
+
+
+# --- §2.5 #10: position-state / MFE reached ---
+
+class MFEReached(_Cond):
+    type: Literal["mfe_reached"] = "mfe_reached"
+    pips: float = Field(gt=0)
+
+
+# --- §2.5 #11: position-state / MAE reached ---
+
+class MAEReached(_Cond):
+    type: Literal["mae_reached"] = "mae_reached"
+    pips: float = Field(gt=0)
+
+
+# --- §2.5 #12: position-state / profit retraced from peak ---
+
+class ProfitRetracedFromPeak(_Cond):
+    type: Literal["profit_retraced_from_peak"] = "profit_retraced_from_peak"
+    pips: float = Field(gt=0)
+
+
+# --- §2.5 #13: time / trade age ---
+
+class DurationExceeds(_Cond):
+    type: Literal["duration_exceeds"] = "duration_exceeds"
+    minutes: int = Field(gt=0)
+
+
+# --- §2.5 #14: time / UTC window ---
+
+_HHMM_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
+
+
+class TimeBetween(_Cond):
+    type: Literal["time_between"] = "time_between"
+    start_utc: str = Field(pattern=_HHMM_PATTERN, description="HH:MM UTC, inclusive start")
+    end_utc:   str = Field(pattern=_HHMM_PATTERN, description="HH:MM UTC, inclusive end")
+
+
+# --- Discriminated union ---
+
+Condition = Annotated[
+    Union[
+        PriceAbove, PriceBelow,
+        RSI, MACDHistogram, EMARelation, ATR,
+        PriceAtSRZone, PriceAtFibonacci,
+        ProfitPips, MFEReached, MAEReached, ProfitRetracedFromPeak,
+        DurationExceeds, TimeBetween,
+    ],
+    Field(discriminator="type"),
+]
+
+
+# =============================================================================
+# Action primitives (RFC §2.6)
+#
+# Each action maps 1:1 to an executor call or a Snow-internal state
+# transition. The `base` for priority resolution is determined by action
+# type — see snow.priority (Phase 4). Phase 1 only enforces type
+# well-formedness via the discriminated union.
+# =============================================================================
+
+class _Action(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+
+class ActionExecuteMarket(_Action):
+    """Market-order entry. Applicable to entry reification only; NEVER used
+    in management/exit contingencies. Validator enforces placement."""
+    type: Literal["execute_market"] = "execute_market"
+
+
+class ActionAdjustSL(_Action):
+    type: Literal["adjust_sl"] = "adjust_sl"
+    price: float
+
+
+class ActionAdjustTP(_Action):
+    type: Literal["adjust_tp"] = "adjust_tp"
+    price: float
+
+
+class ActionMoveSLToBreakeven(_Action):
+    type: Literal["move_sl_to_breakeven"] = "move_sl_to_breakeven"
+    offset_pips: float = 0.0
+
+
+class ActionMoveSLToPrice(_Action):
+    type: Literal["move_sl_to_price"] = "move_sl_to_price"
+    price: float
+
+
+class ActionTrailSL(_Action):
+    type: Literal["trail_sl"] = "trail_sl"
+    trail_pips: float = Field(gt=0)
+
+
+class ActionCloseFull(_Action):
+    type: Literal["close_full"] = "close_full"
+
+
+class ActionClosePartial(_Action):
+    type: Literal["close_partial"] = "close_partial"
+    percent: float = Field(gt=0, lt=100, description="Percent of current position to close (0,100)")
+
+
+class ActionCancelPlan(_Action):
+    type: Literal["cancel_plan"] = "cancel_plan"
+
+
+class ActionAlertFloki(_Action):
+    type: Literal["alert_floki"] = "alert_floki"
+    message: str = Field(max_length=500)
+
+
+class ActionEscalateToFloki(_Action):
+    type: Literal["escalate_to_floki"] = "escalate_to_floki"
+    message: str = Field(max_length=500)
+
+
+Action = Annotated[
+    Union[
+        ActionExecuteMarket,
+        ActionAdjustSL, ActionAdjustTP, ActionMoveSLToBreakeven,
+        ActionMoveSLToPrice, ActionTrailSL,
+        ActionCloseFull, ActionClosePartial,
+        ActionCancelPlan,
+        ActionAlertFloki, ActionEscalateToFloki,
+    ],
+    Field(discriminator="type"),
+]
+
+
+# =============================================================================
+# Contingency + guards
+# =============================================================================
+
+class ContingencyGuards(BaseModel):
+    """Opt-in per-contingency guards (CTO decision CK-4).
+
+    Enforced in snow.actions at dispatch time, NOT in executor.py.
+    The executor remains permissive per FLO-200; guards are plan-level
+    policy Floki chooses into.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    only_if_tighter_sl: bool = False
+    cooldown_seconds: int = Field(default=0, ge=0)
+    min_mfe_pips_required: Optional[float] = Field(default=None, ge=0)
+    max_adjustments_total: Optional[int] = Field(default=None, ge=1)
+
+
+class Contingency(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(max_length=40, min_length=1)
+    priority: int = Field(default=5, ge=1, le=10,
+                          description="Floki override (1-10). Default 5. "
+                                      "Combined with action_base in snow.priority.")
+    conditions: list[Condition] = Field(min_length=1, max_length=8)
+    action: Action
+    fires: ContingencyFires = ContingencyFires.ONCE
+    state: ContingencyState = ContingencyState.ARMED
+    fired_at: Optional[str] = None
+    evaluated_count: int = Field(default=0, ge=0)
+    guards: Optional[ContingencyGuards] = None
+
+    @field_validator("fired_at")
+    @classmethod
+    def _utc_suffix(cls, v):
+        if v is not None and not v.endswith("Z"):
+            raise ValueError("fired_at must end with 'Z' (UTC)")
+        return v
+
+
+# =============================================================================
+# Plan structural blocks
+# =============================================================================
+
+class PlanAnalysis(BaseModel):
+    """Free-text rationale from Floki — audit trail, not evaluated."""
+    model_config = ConfigDict(extra="forbid")
+
+    thesis: str = Field(max_length=2000, min_length=1)
+    key_levels: list[float] = Field(default_factory=list, max_length=10)
+    confidence: int = Field(ge=0, le=100)
+    regime_assumed: Optional[str] = Field(default=None, max_length=40)
+
+
+class EntryBlock(BaseModel):
+    """Entry spec — conditions + order params. The implicit entry action is
+    a market order in `direction` at `volume` size. `initial_sl` and
+    `initial_tp` are absolute prices."""
+    model_config = ConfigDict(extra="forbid")
+
+    direction: Direction
+    volume: float = Field(gt=0, le=2.0, description="Lot size (0,2.0]; XAUUSD demo typical 0.01-0.1")
+    conditions: list[Condition] = Field(min_length=1, max_length=8)
+    initial_sl: float = Field(gt=0)
+    initial_tp: float = Field(gt=0)
+    reason_for_direct_action: Optional[str] = Field(default=None, max_length=500)
+
+
+class EmergencyBlock(BaseModel):
+    """Snow-level safeguards; evaluated loop-level, bypass contingency priority
+    (RFC §11.5). NEVER use as a normal contingency."""
+    model_config = ConfigDict(extra="forbid")
+
+    max_loss_pips: float = Field(default=150.0, gt=0, le=1000)
+    max_duration_minutes: int = Field(default=480, gt=0, le=10080)  # ≤7 days
+    on_broker_error: Literal["alert_floki", "close_full", "cancel_plan"] = "alert_floki"
+
+
+# =============================================================================
+# Top-level Plan
+# =============================================================================
+
+PLAN_ID_PATTERN = r"^PLAN-\d{8}-\d{3}$"
+
+
+class Plan(BaseModel):
+    """Top-level Plan model. Submitted via `submit_plan_to_snow`; validated
+    at submit-time by snow.validator.validate_plan; persisted in snow_plans
+    as both a typed row AND `plan_json` (for schema evolution).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Identity + versioning
+    schema_version: int = Field(default=SCHEMA_VERSION, ge=1)
+    id: str = Field(pattern=PLAN_ID_PATTERN,
+                    description="PLAN-YYYYMMDD-NNN; daily counter")
+    created_by: Literal["floki"] = "floki"
+
+    # Timestamps (Rule 22: UTC, Z-suffixed ISO-8601)
+    created_at: str
+    expires_at: Optional[str] = None
+    entered_at: Optional[str] = None
+    closed_at: Optional[str] = None
+
+    # Lifecycle
+    status: PlanStatus = PlanStatus.PENDING
+
+    # Core spec
+    analysis: PlanAnalysis
+    entry: EntryBlock
+    management: list[Contingency] = Field(default_factory=list, max_length=10)
+    exit: list[Contingency] = Field(default_factory=list, max_length=10)
+    emergency: EmergencyBlock = Field(default_factory=EmergencyBlock)
+
+    # Outcome fields (populated as plan progresses)
+    trade_ticket: Optional[int] = Field(default=None, gt=0)
+    outcome_pips: Optional[float] = None
+    outcome_usd: Optional[float] = None
+
+    @field_validator("created_at", "expires_at", "entered_at", "closed_at")
+    @classmethod
+    def _utc_suffix(cls, v):
+        if v is not None and not v.endswith("Z"):
+            raise ValueError("all timestamps must end with 'Z' (UTC per Rule 22)")
+        return v
+
+
+__all__ = [
+    # Enums
+    "PlanStatus", "ContingencyState", "ContingencyFires", "Direction",
+    "Timeframe", "ComparisonOp", "EMARelationKind", "ZoneKind", "FibLevel",
+    # Conditions
+    "Condition",
+    "PriceAbove", "PriceBelow",
+    "RSI", "MACDHistogram", "EMARelation", "ATR",
+    "PriceAtSRZone", "PriceAtFibonacci",
+    "ProfitPips", "MFEReached", "MAEReached", "ProfitRetracedFromPeak",
+    "DurationExceeds", "TimeBetween",
+    # Actions
+    "Action",
+    "ActionExecuteMarket",
+    "ActionAdjustSL", "ActionAdjustTP",
+    "ActionMoveSLToBreakeven", "ActionMoveSLToPrice", "ActionTrailSL",
+    "ActionCloseFull", "ActionClosePartial",
+    "ActionCancelPlan", "ActionAlertFloki", "ActionEscalateToFloki",
+    # Contingency
+    "Contingency", "ContingencyGuards",
+    # Plan
+    "Plan", "PlanAnalysis", "EntryBlock", "EmergencyBlock",
+    # Constants
+    "PLAN_ID_PATTERN", "SCHEMA_VERSION",
+]
