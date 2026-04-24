@@ -562,4 +562,12 @@ REX_MONITOR_INTERVAL_CLOSED = int(os.environ.get("REX_MONITOR_INTERVAL_CLOSED", 
 # Gates C.1 (agent_tools insert), C.2 (main.py verify+alert), B (post-fill duplicate scan).
 GHOST_GUARDS_ENABLED = os.environ.get("GHOST_GUARDS_ENABLED", "true").lower() in ("true", "1", "yes")
 
+# FLO-347 Phase 4 — Snow event-driven trade execution loop.
+# SNOW_ENABLED gates the thread spawn in main.py (wired in Phase 4.5, not yet).
+# SNOW_DRY_RUN is a hard guard: the loop refuses to boot when False until
+# Phase 5's action module (snow/actions.py) is in place. The loop only logs
+# would-fire events to the snow_evaluations table; no executor calls.
+SNOW_ENABLED = os.environ.get("SNOW_ENABLED", "false").lower() in ("true", "1", "yes")
+SNOW_DRY_RUN = os.environ.get("SNOW_DRY_RUN", "true").lower() in ("true", "1", "yes")
+
 # ============================================================================
