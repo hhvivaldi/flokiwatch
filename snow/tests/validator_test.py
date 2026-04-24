@@ -410,3 +410,62 @@ class TestPromptExamplePlan:
             assert marker in SYSTEM_PROMPT, (
                 f"prompt example missing expected marker: {marker}"
             )
+
+
+# =============================================================================
+# FLO-347 Phase 7 (v3.2) — mandatory-plan pivot regression guards
+# =============================================================================
+
+class TestPromptV3_2MandatoryPlan:
+    """Forcing functions for the Escola 2 / v3.2 pivot. If future edits
+    accidentally soften the mandatory-plan framing back toward the v3.1
+    permissive style, these tests flip red."""
+
+    def test_prompt_version_bumped_to_3_2(self):
+        """Guards against forgotten version bump alongside a prompt edit."""
+        from agent_prompts import get_prompt_version
+        assert get_prompt_version() == "3.2", (
+            f"prompt version drift: got {get_prompt_version()!r}, expected '3.2'"
+        )
+
+    def test_v3_2_mandatory_plan_framing_present(self):
+        """The mandatory-plan mandate lives near submit_plan_to_snow. A
+        future edit that accidentally softens it back to 'when you want
+        a plan' must fail this test.
+
+        Checks:
+          * `submit_plan_to_snow` is still referenced in the prompt
+          * `list_active_plans` appears as a cycle-start action
+          * The 'primary deliverable' (or equivalent) language is present
+        """
+        from agent_prompts import SYSTEM_PROMPT
+        assert "submit_plan_to_snow" in SYSTEM_PROMPT
+        # Cycle-start list-active-plans action — codified in v3.2 but not v3.1.
+        assert "CYCLE-START" in SYSTEM_PROMPT or "cycle start" in SYSTEM_PROMPT, (
+            "v3.2 cycle-start mandate missing"
+        )
+        # Deliverable / projective framing — the chosen phrasing for
+        # 'must submit a plan' without a prescriptive MUST.
+        assert ("primary deliverable" in SYSTEM_PROMPT
+                or "MUST submit" in SYSTEM_PROMPT), (
+            "v3.2 mandatory framing missing — plan submission must be "
+            "described as the cycle's deliverable or a MUST"
+        )
+        # Worked flow marker
+        assert "WORKED FLOW" in SYSTEM_PROMPT, (
+            "v3.2 WORKED FLOW example missing"
+        )
+        # Validation retry pedagogy — max 3 attempts
+        assert "3 attempts" in SYSTEM_PROMPT or "3 tries" in SYSTEM_PROMPT or "Maximum 3" in SYSTEM_PROMPT, (
+            "v3.2 validation retry (max 3) pedagogy missing"
+        )
+
+    def test_v3_2_observation_plans_mentioned(self):
+        """Observation / conditional-branch plans for ambiguous markets
+        are a key v3.2 addition — sharpens market read when no clear
+        directional scenario exists."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert ("AMBIGUOUS" in SYSTEM_PROMPT or "ambiguous" in SYSTEM_PROMPT
+                or "observation plan" in SYSTEM_PROMPT.lower()), (
+            "v3.2 ambiguous-market / observation-plan guidance missing"
+        )

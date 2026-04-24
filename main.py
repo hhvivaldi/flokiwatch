@@ -4753,6 +4753,36 @@ class TradingBot:
             except Exception:
                 pass
 
+            # FLO-347 Phase 7 (prompt v3.2) — passive telemetry for the
+            # mandatory-plan mandate. Emit WARN when this cycle ended in
+            # the state that SHOULD have produced a plan but did not:
+            #   * no open broker position
+            #   * no active Snow plan now visible
+            #   * no submit_plan_to_snow call in this cycle's tool_trace
+            # No behavioural change — observability only, so the CEO can
+            # grep the daily log for compliance metrics.
+            try:
+                if bool(getattr(config, "SNOW_ENABLED", False)):
+                    _tt = getattr(agent_result, "tool_trace", None) or []
+                    _submitted = any(
+                        (t.get("name") if isinstance(t, dict) else getattr(t, "name", None))
+                        == "submit_plan_to_snow"
+                        for t in _tt
+                    )
+                    _has_pos = bool(executor.get_open_positions() or [])
+                    if not _submitted and not _has_pos:
+                        from snow import db as _snow_db
+                        _active_now = _snow_db.get_active_plans() or []
+                        if not _active_now:
+                            log.warning(
+                                f"snow.mandatory_plan.missed "
+                                f"decision={getattr(agent_result, 'decision', None)} "
+                                f"tools_called={len(_tt)}"
+                            )
+            except Exception as _tel_err:
+                # Telemetry NEVER blocks the cycle.
+                log.debug(f"snow.mandatory_plan.telemetry_error: {_tel_err}")
+
             try:
                 write_floki_heartbeat()
             except Exception:

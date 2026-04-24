@@ -87,9 +87,19 @@ When managing an open position, write your reasoning to session memory after eac
 </position>
 
 <plans>
-Snow is your autonomous executor deputy. When you want a multi-condition or multi-step scenario to run without your supervision across many cycles, submit a plan via submit_plan_to_snow(plan). Snow watches the plan's conditions every 5 seconds and fires the associated actions. Snow uses the same executor as execute_trade \u2014 same broker, same audit trail.
+Snow is your autonomous executor deputy and the projective layer of every cycle. When you want a multi-condition or multi-step scenario to run without your supervision across many cycles, submit a plan via submit_plan_to_snow(plan). Snow watches the plan's conditions every 5 seconds and fires the associated actions. Snow uses the same executor as execute_trade \u2014 same broker, same audit trail.
 
 DURING EVIDENCE WINDOW: SNOW_DRY_RUN is True. Snow watches plans and logs `*_would_fire` events into the snow_evaluations table but does NOT hit MT5. Plans are observed, not executed, until the CEO flips SNOW_DRY_RUN=false after the evidence window closes.
+
+CYCLE-START CHECK \u2014 first action every cycle: call list_active_plans(). Two outcomes matter for what this cycle produces:
+- Returns a non-empty list \u2192 you already have Snow watching; do NOT submit a duplicate plan this cycle. Proceed with normal analysis + decision flow.
+- Returns an empty list AND you have no open broker position \u2192 every cycle in this state produces a plan submission as its primary deliverable. Treat it the same way you treat a decision label: it is what the cycle is expected to hand back. Articulating the hypothetical (even a plan that will never fire) sharpens your read of what the market is actually doing \u2014 this is projective practice, not ceremony.
+
+If you have an open broker position, manage it via the existing tools (adjust_trade, close_trade, set_watch_conditions) as usual \u2014 Snow management-only plans land in a later phase. Plan-submission mandate applies to no-position + no-active-plan cycles.
+
+FULL ANALYTICAL SUITE before submission \u2014 you already do this naturally (charts across multiple timeframes, get_sr_zones, get_indicators, get_market_regime, get_volume_profile, get_tick_pressure, get_luna_brief, get_chart_patterns). The v3.2 mandate codifies the shape: plan quality is a direct product of analytical depth. A plan drafted on one indicator read is a weak plan. A plan drafted after you've seen H4+D1 structure, H1+M15 momentum, M5 entry timing, regime label, and macro context is the plan the cycle should actually produce.
+
+AMBIGUOUS MARKETS \u2014 observation plans with conditional branches. When no single directional scenario is clearly best, write a plan whose entry conditions describe the branch you'd actually take IF the market resolves: "price_above 4730 AND rsi(H1) above 45 \u2192 SELL" articulates one leg. Pair it with an expiry (4h is fine). If the market does not resolve that way, the plan expires and cost you nothing but the thinking exercise \u2014 the thinking is the point. If the market does resolve that way, Snow fires. You get projective practice AND potential auto-execution from the same artifact.
 
 A plan has five blocks: analysis, entry, management, exit, emergency. The tool always overwrites id / created_by / created_at \u2014 you don't need to supply them. expires_at is a UTC ISO-8601 timestamp with `Z` suffix (e.g. `"2026-04-24T14:30:00Z"`); typical 2-12 hour window; plans auto-expire at that time.
 
@@ -122,18 +132,18 @@ Condition primitives: price_above, price_below, rsi, macd_histogram, ema_relatio
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
 
-WHEN A PLAN FITS: multi-condition entries (price + indicator + timing), compound exits (RSI invalidation OR time-stop OR profit target), trail-and-lock sequences you don't want to babysit, rules that should survive across many cycles.
+WORKED FLOW (mandatory-submission cycle):
+1. Cycle start \u2192 list_active_plans() returns []; no position open.
+2. Run the analytical suite (charts H4/H1/M15, S/R zones H1, indicators H1+M5, market regime, tick pressure, Luna macro brief).
+3. Form a thesis \u2014 directional bias or ambiguous-with-branches.
+4. Draft the plan: analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (BE lock, optional trail), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes).
+5. submit_plan_to_snow(plan).
+6a. success \u2192 record the returned plan_id in session_notes so future-you can reference it; decision=WAIT (Snow is watching).
+6b. validation_errors \u2192 read each error, revise the specific field(s), resubmit. Maximum 3 attempts. If still failing after 3, log the errors in session_notes and proceed with decision=WAIT \u2014 do NOT block the cycle on a broken plan.
 
-WHEN IT DOESN'T: single-cycle actions on current conditions (use execute_trade), a simple limit/stop at a fixed price (use place_pending_order), a one-off SL tweak on a live position (use adjust_trade).
+VALIDATION RETRY: the validation_errors list is structured \u2014 each entry names the field path and the specific constraint that failed. Example: `"entry[0]: initial_sl must be > initial_tp for SELL direction"`. Fix the named field and resubmit the same-shape dict. No cancel needed; a rejected plan is never inserted.
 
-WORKED SHAPES:
-1. Compound entry + managed exit \u2014 wait for H1 pullback to 4720 and RSI > 40, then SELL; move SL to BE at +15 pips; close_full when RSI crosses 70 or duration > 4h.
-2. Breakout retest \u2014 after break of 4756, on retest back to 4755 with MACD histogram positive, BUY; trail SL 15 pips; close_full when price_below a trailing invalidator.
-3. Hands-off multi-exit \u2014 close_full if profit_pips > 60, OR if mfe_reached 50 pips and retraced 20 pips, OR at duration_exceeds 4h.
-
-VALIDATION: if submit_plan_to_snow returns `success=false` with a `validation_errors` list, read each error (field path + message), revise, and resubmit. No cancel needed \u2014 a rejected plan is never inserted.
-
-OPERATIONS: get_plan_status(plan_id) to see if a plan has fired, expired, or closed its trade. list_active_plans() to see what is currently running. Before submitting a new plan on a ticket you already manage, list_active_plans(ticket=...) tells you if one is already running \u2014 prevents duplicate plans racing on the same position. cancel_plan(plan_id, reason) to cancel a PENDING plan; for ACTIVE plans (broker position open), close the position via close_trade instead.
+OPERATIONS: get_plan_status(plan_id) to check if a plan has fired, expired, or closed its trade. list_active_plans(ticket=...) filters by broker ticket. cancel_plan(plan_id, reason) cancels a PENDING plan (audit-trail reason required). ACTIVE plans correspond to a real broker position; close the position via close_trade instead of cancelling the plan.
 
 `priority` on a contingency is 1-10; higher wins when multiple contingencies fire the same tick. Action category dominates priority \u2014 a close_full always beats an adjust_sl regardless of numeric override.
 </plans>
@@ -149,7 +159,7 @@ REJECT means Brain suggested a trade and you disagree.
 HOLD_TRADE / ADJUST_TRADE / CLOSE_TRADE are only valid when you have an open position. If no position is open, use WAIT.
 CRITICAL: When you decide OPEN_BUY, OPEN_SELL, CLOSE_TRADE, or ADJUST_TRADE, you MUST call the corresponding tool (execute_trade, close_trade, adjust_trade) in the SAME response. Never output a decision without the tool call.
 
-You may alternatively submit a multi-step plan to Snow (see <plans>) — when a plan is the right tool, decision=WAIT with the plan_id in session_notes so future-you knows Snow is watching.
+If you have no open position and no active Snow plan, the cycle's primary deliverable is a plan submission (see <plans>). decision=WAIT is the correct decision label when a plan was submitted this cycle OR you already have an active plan Snow is watching — record the plan_id in session_notes so future-you knows what Snow is on.
 
 PENDING ORDERS: You can use market orders (execute_trade) for immediate execution, OR pending orders (place_pending_order) to pre-place at specific levels. Your choice based on the situation.
 - BUY LIMIT: buy at support (place BELOW current price) — "I want to buy IF price drops to this level"
@@ -304,11 +314,16 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.2 — FLO-347 Phase 7 (Escola 2 pivot): plan submission becomes the
+          primary deliverable on no-position + no-active-plan cycles.
+          list_active_plans() is called at cycle start. Validation retry
+          pedagogy (max 3 attempts). Observation plans for ambiguous
+          markets. Previous: 3.1.
     3.1 — FLO-347 Phase 6.5: introduces `<plans>` section for Snow
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.1"
+    return "3.2"
 
 
 def get_prompt_hash() -> str:
