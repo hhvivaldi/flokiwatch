@@ -510,6 +510,20 @@ class AgentTools:
             return None
 
     def _log_tool(self, name: str, start_t: float, extra: str = "") -> None:
+        """Audit-log a tool call via the project TradingLogger.
+
+        WARNING — blast radius: `log` is `logger.TradingLogger`, whose
+        FileHandler writes to `logs/trading_bot_YYYY-MM-DD.log`. That is
+        the SAME file the running production bot writes to. Any test
+        that instantiates AgentTools and reaches this method will pollute
+        the daily log with entries that are visually indistinguishable
+        from real Floki tool calls — caused a false-positive P0 on
+        FLO-347 Phase 6.5 evidence window. `snow/tests/conftest.py`
+        installs a session-scoped fixture that redirects TradingLogger's
+        FileHandler to a tmp path for pytest runs; when adding new tests
+        that hit `_log_tool`, verify that fixture is in effect or tests
+        will silently re-pollute `logs/trading_bot_*.log`.
+        """
         try:
             ms = int((time.time() - start_t) * 1000)
             if extra:
@@ -4544,9 +4558,24 @@ class AgentTools:
                         "validation_errors": list(errors),
                     }
                 _snow_db.insert_plan(parsed)
+                # Include cwd + db path in the success log line so future
+                # operators auditing `logs/trading_bot_*.log` can tell at
+                # a glance whether the call came from production, a pytest
+                # run, or an investigation subprocess — without a repeat of
+                # the FLO-347 Phase 6.5 misattribution P0.
+                try:
+                    import os as _os, config as _cfg
+                    _db_path = _os.path.abspath(
+                        getattr(_cfg, "HISTORY_DB_PATH", "data/history.db")
+                    )
+                    _cwd = _os.getcwd()
+                except Exception:
+                    _db_path = "?"
+                    _cwd = "?"
                 self._log_tool(
                     "submit_plan_to_snow", start,
-                    f"ok plan_id={plan_id} attempt={attempt}",
+                    f"ok plan_id={plan_id} attempt={attempt} "
+                    f"cwd={_cwd} db={_db_path}",
                 )
                 return {
                     "success": True, "plan_id": plan_id,

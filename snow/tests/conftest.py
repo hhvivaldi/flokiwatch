@@ -229,3 +229,78 @@ def eval_ctx(sample_plan, tracker):
             now=now,
         )
     return _make
+
+
+# =============================================================================
+# FLO-347 post-investigation — redirect TradingLogger file handler to tmp
+#
+# Problem this fixture solves:
+#   `logger.TradingLogger` (imported as `from logger import log` everywhere
+#   in the project) attaches a FileHandler to `logs/trading_bot_YYYY-MM-DD.log`
+#   unconditionally on first instantiation. Pytest runs that touch AgentTools
+#   (e.g. tools_test.py) call the real _log_tool — those log lines land in
+#   the same daily log file the running production bot writes to.
+#
+#   An operator greping `logs/trading_bot_YYYY-MM-DD.log` for e.g. a tool-call
+#   audit trail cannot visually distinguish test-generated entries from real
+#   Floki tool calls. This caused a false-positive P0 during the FLO-347
+#   Phase 6.5 evidence window.
+#
+# Fix:
+#   Session-scoped autouse fixture that swaps the TradingLogger's FileHandler
+#   for one pointing at a pytest-owned tmp path for the whole session, then
+#   restores the original handlers on teardown. All existing tests keep their
+#   logging behaviour (log.info etc. still work) — only the file destination
+#   changes.
+# =============================================================================
+
+@pytest.fixture(scope="session", autouse=True)
+def _redirect_tradinglogger_to_tmp(tmp_path_factory):
+    """Keep `logs/trading_bot_*.log` free of pytest-generated noise."""
+    import logging as _logging
+
+    # Force the TradingLogger module to initialise (attaches handlers on first
+    # instantiation). Safe if already imported elsewhere — idempotent handler
+    # guard inside TradingLogger.__init__.
+    import logger as _project_logger
+    _ = _project_logger.log
+
+    trading_logger = _logging.getLogger("TradingBot")
+    tmp_dir = tmp_path_factory.mktemp("tradinglog")
+    test_log_path = tmp_dir / "test.log"
+
+    # Remove any FileHandler pointing at the production daily log.
+    removed_handlers: list[_logging.Handler] = []
+    for h in list(trading_logger.handlers):
+        if isinstance(h, _logging.FileHandler):
+            trading_logger.removeHandler(h)
+            removed_handlers.append(h)
+            # Flush + close so no buffered bytes leak to the production file.
+            try:
+                h.flush()
+                h.close()
+            except Exception:
+                pass
+
+    # Install tmp-path handler with the same formatter as production.
+    test_handler = _logging.FileHandler(str(test_log_path), encoding="utf-8")
+    test_handler.setLevel(_logging.DEBUG)
+    test_handler.setFormatter(_logging.Formatter(
+        "%(asctime)s | %(levelname)-8s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    trading_logger.addHandler(test_handler)
+
+    yield test_log_path
+
+    # Teardown: remove tmp handler and reinstate any production handlers
+    # we removed. Strictly optional (pytest session is ending), but keeps
+    # post-run state clean if tests are re-entered in the same process.
+    trading_logger.removeHandler(test_handler)
+    try:
+        test_handler.flush()
+        test_handler.close()
+    except Exception:
+        pass
+    for h in removed_handlers:
+        trading_logger.addHandler(h)
