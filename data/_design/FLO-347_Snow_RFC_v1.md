@@ -1,10 +1,10 @@
 # FLO-347 — Snow Implementation RFC v1
 
-**Status:** **FROZEN** (approved by Hermano, 2026-04-23 Opção A integral). Editorial edits applied: Phase 4.5 gate, §13.4 caveat, §4.1.1 schema_version cross-ref.
+**Status:** **FROZEN** (approved by Hermano, 2026-04-23 Opção A integral). Editorial edits applied: Phase 4.5 gate, §13.4 caveat, §4.1.1 schema_version cross-ref. **2026-04-24 addendum:** §12.5 added after FLO-352 (METH_O calling-convention regression) — surfaces proxy-level test requirement for Snow write paths.
 **Author:** DEV
-**Date:** 2026-04-23
+**Date:** 2026-04-23 (RFC v1 frozen); 2026-04-24 (§12.5 addendum)
 **Companion:** `FLO-347_Snow_Research_v1.md` (CTO-authored research & schema reference)
-**Dependency:** **FLO-348** (thread-safety hardening: executor_lock + mt5_lock + call-site audit) ships BEFORE Phase 2 implementation. All §5/§7 references assume FLO-348 landed.
+**Dependency:** **FLO-348** (thread-safety hardening: executor_lock + mt5_lock + call-site audit) ships BEFORE Phase 2 implementation. All §5/§7 references assume FLO-348 landed. **FLO-352** (mt5_safe METH_O compatibility) shipped 2026-04-24 as hotfix; no RFC changes required beyond §12.5.
 **Tickets opened alongside:** FLO-349 (Simba coexistence audit, P2), FLO-350 (dashboard history view, P2), FLO-351 (dashboard auth audit, P2, parallel).
 
 ---
@@ -1327,6 +1327,30 @@ Each implementation phase (§15) requires:
 - 100% of its own unit tests passing
 - 0 regressions in prior phases' tests
 - Manual smoke-test dry-run with a single dummy plan before PR merge
+
+### 12.5 Calling-convention trap — mt5_safe proxy coverage (FLO-352 lesson)
+
+**Discovered during FLO-348 production soak:** the MT5 Python binding is not uniform in its C calling conventions. Most read-path functions (`symbol_info_tick`, `copy_rates_range`, `positions_get`, `history_deals_get`, `terminal_info`, …) use `METH_VARARGS | METH_KEYWORDS` and tolerate an empty kwargs dict. A subset — confirmed for `order_send`, likely others — uses `METH_O` and rejects ANY kwargs (including empty `{}`) with `last_error() == (-2, "Unnamed arguments not allowed")` and returns `None`.
+
+The original FLO-348 `mt5_safe._MT5SafeProxy` wrapped every callable as:
+
+```python
+def _wrapped(*args, **kwargs):
+    with mt5_lock:
+        return raw(*args, **kwargs)   # ← empty kwargs still forwarded
+```
+
+This is silent-failure for `order_send` (→ `None` → executor retcode `-1` → `"Unknown error (-1)"`), while passing for read-paths. **Commit `8d1fd2c` fixes the proxy** to dispatch positional-only when kwargs is empty, and adds a permanent regression test (`flo348_thread_safety_tests.py §1b`) that injects a METH_O-style mock and asserts positional dispatch.
+
+**Implications for Snow implementation:**
+
+- **Snow's `live_data.py` exercises read-path calls** (`symbol_info_tick`, `copy_rates_from_pos`) which are METH_VARARGS|METH_KEYWORDS — safe under either dispatch.
+- **Snow's `actions.py` calls `executor.execute_trade` / `modify_position` / `close_position`** which internally use `order_send` (METH_O). Must be covered by:
+  1. The existing FLO-352 regression test in `flo348_thread_safety_tests.py §1b` (already permanent; runs pre-deploy).
+  2. At least one Snow integration test that fires a write action end-to-end against a demo position (matching `flo348_real_order_test.py` pattern but targeting a Snow plan).
+- **Any new mt5.* call surface added in Snow v2+** must pass through the proxy and be covered by `flo348_thread_safety_tests.py` before merge. If a new callable is METH_O, the `kwargs` guard in `mt5_safe._MT5SafeProxy` handles it transparently — but a test should confirm no other regressions.
+
+**Rule 18 note for Snow Phase 5 (action executor integration):** when writing `snow/actions.py`, the integration test MUST execute a real market order via the proxy-wrapped executor, not a mocked one. Mocks hide calling-convention traps.
 
 ---
 
