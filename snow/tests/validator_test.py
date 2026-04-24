@@ -207,6 +207,20 @@ class TestActionPlacement:
         assert not ok
         assert any("execute_market" in e and "exit" in e for e in errors)
 
+    def test_cancel_plan_in_management_rejected(self, valid_plan_dict):
+        """FLO-347 Phase 5b: cancel_plan is reachable only via Floki's
+        Phase 6 tool, NOT as a contingency action. Validator rejects it."""
+        valid_plan_dict["management"][0]["action"] = {"type": "cancel_plan"}
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("cancel_plan" in e and "management" in e for e in errors)
+
+    def test_cancel_plan_in_exit_rejected(self, valid_plan_dict):
+        valid_plan_dict["exit"][0]["action"] = {"type": "cancel_plan"}
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("cancel_plan" in e and "exit" in e for e in errors)
+
 
 # =============================================================================
 # time_between: zero-width + cross-midnight

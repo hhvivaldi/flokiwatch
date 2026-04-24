@@ -56,6 +56,7 @@ from pydantic import ValidationError
 
 from . import SCHEMA_VERSION
 from .schema import (
+    ActionCancelPlan,
     ActionExecuteMarket,
     Contingency,
     Direction,
@@ -184,6 +185,28 @@ def _check_execute_market_placement(plan: Plan) -> list[str]:
     return errors
 
 
+def _check_cancel_plan_placement(plan: Plan) -> list[str]:
+    """`cancel_plan` must NOT appear as a management/exit contingency action.
+
+    FLO-347 Phase 5b decision: cancel_plan is reachable only via the Floki
+    tool `cancel_plan` (Phase 6), which calls the DB layer directly.
+    Allowing it as a contingency action would create two code paths to the
+    same state transition (Snow's fire dispatcher + Floki's tool) with
+    subtly different audit trails. Keeping it a Floki-tool-only action
+    makes the boundary clean.
+    """
+    errors: list[str] = []
+    for block_name, block in (("management", plan.management), ("exit", plan.exit)):
+        for ci, c in enumerate(block):
+            if isinstance(c.action, ActionCancelPlan):
+                errors.append(
+                    f"{block_name}[{ci}] ({c.name!r}): `cancel_plan` action "
+                    f"not allowed in {block_name}; invoke via Floki's "
+                    f"cancel_plan tool instead"
+                )
+    return errors
+
+
 def _check_time_between_conditions(plan: Plan) -> list[str]:
     """`TimeBetween.start_utc` should differ from `end_utc` (zero-window is
     always false); cross-midnight windows (end < start) are ALLOWED and
@@ -267,6 +290,7 @@ def validate_plan(
     errors += _check_price_bounds(plan)
     errors += _check_contingency_names_unique(plan)
     errors += _check_execute_market_placement(plan)
+    errors += _check_cancel_plan_placement(plan)
     errors += _check_time_between_conditions(plan)
 
     if errors:

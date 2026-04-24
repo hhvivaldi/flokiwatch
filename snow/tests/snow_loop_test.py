@@ -663,16 +663,29 @@ class TestDryRunMode:
             "config.SNOW_ENABLED must default False in Phase 4"
         )
 
-    def test_dry_run_false_raises_notimplemented(
+    def test_dry_run_false_is_live_mode_with_actions_dispatcher(
         self, snow_conn, fake_live, fake_semantic
     ):
-        with pytest.raises(NotImplementedError):
-            SnowLoop(
-                _FakeBot(),
-                live_data=fake_live(),
-                semantic_cache=fake_semantic(),
-                dry_run=False,
-            )
+        """Phase 5b change: dry_run=False is a valid mode (LIVE dispatch
+        via snow.actions). Tests inject a fake actions instance so no real
+        executor is touched. Phase 4's NotImplementedError guard is gone;
+        SNOW_DRY_RUN config flag is the evidence-based gate."""
+        class _FakeActions:
+            def __init__(self):
+                self.calls = []
+            def execute_action(self, fire):
+                self.calls.append(fire)
+
+        fake_actions = _FakeActions()
+        loop = SnowLoop(
+            _FakeBot(),
+            live_data=_RefreshableLive(fake_live()),
+            semantic_cache=fake_semantic(),
+            dry_run=False,
+            actions=fake_actions,
+        )
+        assert loop._dry_run is False
+        assert loop._actions is fake_actions
 
     def test_dry_run_never_mutates_plan_status(
         self, snow_conn, fake_live, fake_semantic, valid_plan_dict
@@ -710,6 +723,122 @@ class TestDryRunMode:
 # ---------------------------------------------------------------------------
 # TestBoundaryCompliance
 # ---------------------------------------------------------------------------
+
+class TestFireQueueIntegration:
+    """Phase 5b: the loop collects FireEvents and priority-resolves them
+    each tick. DRY RUN records with priority; LIVE dispatches to actions."""
+
+    def test_fire_queue_records_with_effective_priority_in_snapshot(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict
+    ):
+        _insert_plan(valid_plan_dict)
+        live = fake_live(price_mid=4731.0, rsi_by_tf={"H1": 75.0})
+        loop = _make_loop(
+            bot=_FakeBot(), live_data=live, semantic_cache=fake_semantic(),
+        )
+        loop._tick()
+
+        rows = _evaluation_rows(snow_conn)
+        would = [r for r in rows if r["event"].endswith("would_fire")]
+        assert len(would) >= 1
+        import json
+        snapshot = json.loads(would[0]["conditions_snapshot"])
+        assert "effective_priority" in snapshot
+        assert "action_type" in snapshot
+        assert "plan_list_order" in snapshot
+
+    def test_multiple_fires_recorded_in_priority_order(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict
+    ):
+        """When multiple contingencies fire same tick, DRY RUN records
+        them in priority order (highest first). The fixture's exit
+        rejection_exit (close_full, priority=9) should rank before
+        management lock_10_at_support (move_sl_to_price, priority=7)."""
+        from copy import deepcopy
+        d = deepcopy(valid_plan_dict)
+        # Set price=4716 so BOTH trigger: management price_below 4720 AND
+        # rejection_exit requires price_above 4733, which will NOT fire.
+        # Re-craft so both fire: make exit trigger when price_below 4720 too.
+        d["exit"][0]["conditions"] = [{"type": "price_below", "level": 4720.0}]
+        plan = _insert_plan(d)
+        _advance_to_active(plan.id)
+        live = fake_live(price_mid=4715.0)
+        loop = _make_loop(
+            bot=_FakeBot(), live_data=live, semantic_cache=fake_semantic(),
+        )
+        loop._tick()
+
+        rows = _evaluation_rows(snow_conn)
+        would = [r for r in rows if r["event"].endswith("would_fire")]
+        assert len(would) >= 2
+        # The exit fire (close_full eff_prio=178) must come before
+        # management (move_sl_to_price eff_prio ≈ 26)
+        names = [r["contingency_name"] for r in would]
+        assert names.index("rejection_exit") < names.index("lock_10_at_support")
+
+    def test_live_mode_dispatches_to_actions(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict
+    ):
+        """Phase 5b: when SNOW_DRY_RUN=False, loop calls actions.execute_action
+        for each fire instead of recording would_fire."""
+
+        calls: list = []
+
+        class _Actions:
+            def execute_action(self, fire):
+                calls.append(fire)
+
+        _insert_plan(valid_plan_dict)
+        live = fake_live(price_mid=4731.0, rsi_by_tf={"H1": 75.0})
+        loop = SnowLoop(
+            _FakeBot(),
+            live_data=_RefreshableLive(live),
+            semantic_cache=fake_semantic(),
+            dry_run=False,
+            actions=_Actions(),
+        )
+        loop._tick()
+        assert len(calls) >= 1
+        # No would_fire rows in LIVE mode.
+        rows = _evaluation_rows(snow_conn)
+        assert not any(r["event"].endswith("would_fire") for r in rows)
+
+    def test_live_mode_dispatch_exception_does_not_kill_loop(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict
+    ):
+        class _BadActions:
+            def execute_action(self, fire):
+                raise RuntimeError("dispatcher blew up")
+
+        _insert_plan(valid_plan_dict)
+        live = fake_live(price_mid=4731.0, rsi_by_tf={"H1": 75.0})
+        loop = SnowLoop(
+            _FakeBot(),
+            live_data=_RefreshableLive(live),
+            semantic_cache=fake_semantic(),
+            dry_run=False,
+            actions=_BadActions(),
+        )
+        # Must not raise
+        loop._tick()
+        loop._tick()
+        assert loop._tick_count == 2
+
+    def test_empty_fire_queue_does_not_call_priority_resolve(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict
+    ):
+        """Happy-path tick with no all-true plans skips the fire-queue
+        handling entirely."""
+        _insert_plan(valid_plan_dict)
+        # Price that doesn't trigger anything
+        live = fake_live(price_mid=4725.0, rsi_by_tf={"H1": 50.0})
+        loop = _make_loop(
+            bot=_FakeBot(), live_data=live, semantic_cache=fake_semantic(),
+        )
+        loop._tick()
+        rows = _evaluation_rows(snow_conn)
+        assert not any(r["event"].endswith("would_fire") for r in rows)
+
 
 class TestBoundaryCompliance:
     FORBIDDEN = (

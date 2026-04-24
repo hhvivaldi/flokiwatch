@@ -42,6 +42,7 @@ import config
 from snow import db as snow_db
 from snow.evaluators import EvalContext, PerPlanTracker, evaluate_condition
 from snow.live_data import LiveData
+from snow.priority import FireEvent, resolve as priority_resolve
 from snow.schema import (
     ContingencyState,
     Direction,
@@ -81,16 +82,12 @@ class SnowLoop:
         semantic_cache: Optional[Any] = None,
         tracker: Optional[PerPlanTracker] = None,
         dry_run: Optional[bool] = None,
+        actions: Optional[Any] = None,
     ) -> None:
         self._bot = bot
         self._symbol = symbol or getattr(config, "SYMBOL", "XAUUSD")
 
         dry = bool(getattr(config, "SNOW_DRY_RUN", True) if dry_run is None else dry_run)
-        if not dry:
-            raise NotImplementedError(
-                "Phase 4 supports DRY RUN only. "
-                "Set SNOW_DRY_RUN=True until Phase 5 ships snow/actions.py."
-            )
         self._dry_run = dry
 
         self._semantic = semantic_cache or SemanticCache(
@@ -98,6 +95,14 @@ class SnowLoop:
         )
         self._live_data = live_data or LiveData(self._symbol, self._semantic)
         self._tracker = tracker or PerPlanTracker()
+
+        # Phase 5b: action dispatcher. In DRY RUN we never call it, but
+        # constructing it is harmless (lazy executor import inside __init__).
+        # Tests inject a fake; Phase 5a's priority module stays pure.
+        if actions is None and not dry:
+            from snow.actions import SnowActions
+            actions = SnowActions()
+        self._actions = actions
 
         self._tick_count: int = 0
         # plan_id → status seen on the previous tick; used for terminal
@@ -155,8 +160,17 @@ class SnowLoop:
             log.exception("snow.loop.get_active_plans_failed")
             active_rows = []
 
+        fires: list[FireEvent] = []
         for row in active_rows:
-            self._evaluate_plan_safe(row)
+            self._evaluate_plan_safe(row, fires)
+
+        # Phase 5b: priority-resolve + dispatch (LIVE) or record-with-priority (DRY RUN).
+        if fires:
+            ordered = priority_resolve(fires)
+            if self._dry_run:
+                self._record_dry_run_fires(ordered)
+            else:
+                self._dispatch_fires(ordered)
 
         self._detect_terminal_transitions(active_rows)
 
@@ -178,10 +192,12 @@ class SnowLoop:
     # ------------------------------------------------------------------
     # Per-plan evaluation (error-isolated)
     # ------------------------------------------------------------------
-    def _evaluate_plan_safe(self, row: dict[str, Any]) -> None:
+    def _evaluate_plan_safe(
+        self, row: dict[str, Any], fires: list[FireEvent],
+    ) -> None:
         plan_id = row.get("id") or "<unknown>"
         try:
-            self._evaluate_plan(row)
+            self._evaluate_plan(row, fires)
         except Exception as exc:
             log.exception("snow.plan.evaluation_error plan_id=%s", plan_id)
             try:
@@ -206,7 +222,9 @@ class SnowLoop:
                     "snow.plan.last_evaluated_update_failed plan_id=%s", plan_id,
                 )
 
-    def _evaluate_plan(self, row: dict[str, Any]) -> None:
+    def _evaluate_plan(
+        self, row: dict[str, Any], fires: list[FireEvent],
+    ) -> None:
         plan_id = row["id"]
         plan = snow_db.get_plan_as_model(plan_id)
         if plan is None:
@@ -231,16 +249,16 @@ class SnowLoop:
                 self._tracker.update_price(plan_id, current)
 
         if status_value == PlanStatus.PENDING.value:
-            self._evaluate_entry(plan)
+            self._evaluate_entry(plan, fires)
         elif status_value == PlanStatus.ACTIVE.value:
-            self._evaluate_management_and_exit(plan, current_ticket)
-        # TRIGGERED and CLOSING are transient states owned by Phase 5's
-        # action module; skip them here so DRY RUN never races broker calls.
+            self._evaluate_management_and_exit(plan, current_ticket, fires)
+        # TRIGGERED and CLOSING are transient states owned by the action
+        # module; skip them here so the loop never races the retry loop.
 
     # ------------------------------------------------------------------
     # Entry-conditions path
     # ------------------------------------------------------------------
-    def _evaluate_entry(self, plan: Plan) -> None:
+    def _evaluate_entry(self, plan: Plan, fires: list[FireEvent]) -> None:
         ctx = EvalContext(
             live_data=self._live_data,
             semantic_cache=self._semantic,
@@ -248,25 +266,39 @@ class SnowLoop:
             plan=plan,
             ticket=None,  # pre-entry → no ticket
         )
-        fires, snapshot = self._evaluate_conditions(plan.entry.conditions, ctx, plan.id, "_entry")
-        if fires:
-            _record_safely(
-                snow_db.record_evaluation,
-                plan_id=plan.id,
-                contingency_name="_entry",
-                event="entry_would_fire",
-                conditions_snapshot=snapshot,
-            )
-            log.info(
-                "snow.entry.would_fire plan_id=%s direction=%s dry_run=True",
-                plan.id, _direction_label(plan.entry.direction),
-            )
+        all_true, snapshot = self._evaluate_conditions(
+            plan.entry.conditions, ctx, plan.id, "_entry",
+        )
+        if not all_true:
+            return
+        # Build a FirePayload. actions.py re-hydrates the plan to read
+        # entry volume / SL / TP, so payload.action can be a bare
+        # ActionExecuteMarket sentinel.
+        from snow.actions import FirePayload
+        from snow.schema import ActionExecuteMarket
+        payload = FirePayload(
+            action=ActionExecuteMarket(),
+            kind="entry",
+            plan_direction=plan.entry.direction,
+            ticket=None,
+            guards=None,
+            entry_price=None,
+        )
+        fires.append(FireEvent(
+            plan_id=plan.id,
+            created_at=plan.created_at,
+            contingency_name="_entry",
+            action_type="execute_market",
+            override=5,  # entry has no override; use default
+            plan_list_order=-1,  # entry sorts first within a plan
+            payload=payload,
+        ))
 
     # ------------------------------------------------------------------
     # Management + exit path
     # ------------------------------------------------------------------
     def _evaluate_management_and_exit(
-        self, plan: Plan, ticket: Optional[int]
+        self, plan: Plan, ticket: Optional[int], fires: list[FireEvent],
     ) -> None:
         ctx = EvalContext(
             live_data=self._live_data,
@@ -275,37 +307,60 @@ class SnowLoop:
             plan=plan,
             ticket=ticket,
         )
-        for contingency in plan.management:
-            self._evaluate_one_contingency(plan, contingency, ctx, kind="management")
-        for contingency in plan.exit:
-            self._evaluate_one_contingency(plan, contingency, ctx, kind="exit")
+        # plan_list_order convention (see priority.py):
+        #   entry = -1, management = 0..N-1, exit = 1000..1000+M-1
+        for idx, contingency in enumerate(plan.management):
+            self._evaluate_one_contingency(
+                plan, contingency, ctx, fires,
+                kind="management", plan_list_order=idx, ticket=ticket,
+            )
+        for idx, contingency in enumerate(plan.exit):
+            self._evaluate_one_contingency(
+                plan, contingency, ctx, fires,
+                kind="exit", plan_list_order=1000 + idx, ticket=ticket,
+            )
 
     def _evaluate_one_contingency(
         self,
         plan: Plan,
         contingency: Any,
         ctx: EvalContext,
+        fires: list[FireEvent],
         *,
         kind: str,
+        plan_list_order: int,
+        ticket: Optional[int],
     ) -> None:
         state_value = _state_value(contingency.state)
         if state_value != ContingencyState.ARMED.value:
             return
-        fires, snapshot = self._evaluate_conditions(
+        all_true, snapshot = self._evaluate_conditions(
             contingency.conditions, ctx, plan.id, contingency.name,
         )
-        if fires:
-            _record_safely(
-                snow_db.record_evaluation,
-                plan_id=plan.id,
-                contingency_name=contingency.name,
-                event=f"{kind}_would_fire",
-                conditions_snapshot=snapshot,
-            )
-            log.info(
-                "snow.%s.would_fire plan_id=%s name=%s dry_run=True",
-                kind, plan.id, contingency.name,
-            )
+        if not all_true:
+            return
+        from snow.actions import FirePayload
+        # entry_price placeholder — Phase 4 tracker seed path uses live mid
+        # or plan.entry; actions.py falls back to executor.get_positions()
+        # open_price if this is None.
+        entry_price = getattr(plan, "entered_at", None)  # not a price; placeholder None
+        payload = FirePayload(
+            action=contingency.action,
+            kind=kind,
+            plan_direction=plan.entry.direction,
+            ticket=ticket,
+            guards=contingency.guards,
+            entry_price=None,  # actions.py resolves from live position
+        )
+        fires.append(FireEvent(
+            plan_id=plan.id,
+            created_at=plan.created_at,
+            contingency_name=contingency.name,
+            action_type=contingency.action.type,
+            override=int(contingency.priority),
+            plan_list_order=plan_list_order,
+            payload=payload,
+        ))
 
     def _evaluate_conditions(
         self,
@@ -400,6 +455,55 @@ class SnowLoop:
                 )
             del self._last_known_status[plan_id]
 
+    # ------------------------------------------------------------------
+    # Phase 5b: fire-queue handling
+    # ------------------------------------------------------------------
+    def _record_dry_run_fires(self, ordered: list[FireEvent]) -> None:
+        """DRY RUN mode — record each fire to snow_evaluations with its
+        effective_priority in the snapshot. Does NOT touch the executor.
+        Priority order is reflected in insertion order (snow_evaluations.id
+        is monotonic)."""
+        for fire in ordered:
+            kind = fire.payload.kind if hasattr(fire.payload, "kind") else "unknown"
+            snapshot: dict[str, Any] = {
+                "effective_priority": fire.effective_priority,
+                "plan_list_order": fire.plan_list_order,
+                "action_type": fire.action_type,
+                "override": fire.override,
+            }
+            try:
+                snow_db.record_evaluation(
+                    plan_id=fire.plan_id,
+                    contingency_name=fire.contingency_name,
+                    event=f"{kind}_would_fire",
+                    conditions_snapshot=snapshot,
+                )
+            except Exception:
+                log.exception(
+                    "snow.loop.dry_run_record_failed plan_id=%s contingency=%s",
+                    fire.plan_id, fire.contingency_name,
+                )
+            log.info(
+                "snow.%s.would_fire plan_id=%s name=%s priority=%d dry_run=True",
+                kind, fire.plan_id, fire.contingency_name, fire.effective_priority,
+            )
+
+    def _dispatch_fires(self, ordered: list[FireEvent]) -> None:
+        """LIVE mode — hand each fire to the action dispatcher in priority
+        order. The dispatcher handles guards, retry, and state transitions.
+        Per-fire errors MUST NOT kill the loop."""
+        if self._actions is None:
+            log.error("snow.loop.dispatch_without_actions — LIVE mode but no actions instance")
+            return
+        for fire in ordered:
+            try:
+                self._actions.execute_action(fire)
+            except Exception:
+                log.exception(
+                    "snow.loop.dispatch_failed plan_id=%s contingency=%s",
+                    fire.plan_id, fire.contingency_name,
+                )
+
     def _orphan_sweep(self, active_rows: list[dict[str, Any]]) -> None:
         """Defensive cleanup — drop tracker state for any plan not in the
         active set. Catches whatever the primary `_detect_terminal_transitions`
@@ -434,17 +538,6 @@ def _state_value(state: Any) -> str:
 
 def _direction_label(direction: Any) -> str:
     return direction.value if isinstance(direction, Direction) else str(direction)
-
-
-def _record_safely(fn, **kwargs) -> None:
-    """record_evaluation wrapper — loop survives audit-log failures."""
-    try:
-        fn(**kwargs)
-    except Exception:
-        log.exception(
-            "snow.loop.record_evaluation_failed plan_id=%s event=%s",
-            kwargs.get("plan_id"), kwargs.get("event"),
-        )
 
 
 def run_forever(bot: Any, symbol: Optional[str] = None) -> None:
