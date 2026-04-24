@@ -106,3 +106,126 @@ def patch_plan(valid_plan_dict):
             out[k] = v
         return out
     return _patch
+
+
+# -----------------------------------------------------------------------------
+# Evaluator test helpers (Phase 3b)
+# -----------------------------------------------------------------------------
+
+class FakeLiveData:
+    """Minimal LiveData stand-in for evaluator tests.
+
+    Each indicator accessor returns the value configured via the
+    matching `set_*` or via constructor kwargs. Missing configuration
+    → returns None (matches real LiveData's failure mode).
+    """
+
+    def __init__(
+        self,
+        *,
+        price_mid: Any = None,
+        price_bid: Any = None,
+        price_ask: Any = None,
+        rsi_by_tf: dict = None,
+        macd_hist_by_tf: dict = None,
+        ema_by_key: dict = None,       # key: (tf, period) → float
+        atr_by_tf: dict = None,
+    ):
+        self._price_mid = price_mid
+        self._price_bid = price_bid
+        self._price_ask = price_ask
+        self._rsi = rsi_by_tf or {}
+        self._macd_hist = macd_hist_by_tf or {}
+        self._ema = ema_by_key or {}
+        self._atr = atr_by_tf or {}
+
+    def price(self, side: str = "mid"):
+        if side == "mid":
+            return self._price_mid
+        if side == "bid":
+            return self._price_bid
+        if side == "ask":
+            return self._price_ask
+        return None
+
+    def rsi(self, tf: str = "M1", period: int = 14):
+        return self._rsi.get(tf)
+
+    def macd_histogram(self, tf: str = "M1"):
+        return self._macd_hist.get(tf)
+
+    def ema(self, tf: str = "M1", period: int = 9):
+        return self._ema.get((tf, period))
+
+    def atr(self, tf: str = "M1", period: int = 14):
+        return self._atr.get(tf)
+
+
+class FakeSemanticCache:
+    """Minimal SemanticCache stand-in for evaluator tests."""
+
+    def __init__(self, data: Any = None):
+        self._data = data
+
+    def get(self, *path: str) -> Any:
+        node: Any = self._data
+        for key in path:
+            if not isinstance(node, dict) or key not in node:
+                return None
+            node = node[key]
+        return node
+
+
+@pytest.fixture
+def fake_live():
+    """Factory returning a FakeLiveData configured via kwargs."""
+    def _make(**kwargs) -> FakeLiveData:
+        return FakeLiveData(**kwargs)
+    return _make
+
+
+@pytest.fixture
+def fake_semantic():
+    """Factory returning a FakeSemanticCache seeded with a dict."""
+    def _make(data: Any = None) -> FakeSemanticCache:
+        return FakeSemanticCache(data=data)
+    return _make
+
+
+@pytest.fixture
+def tracker():
+    """Fresh PerPlanTracker per test — prevents state leakage."""
+    from snow.evaluators.tracker import PerPlanTracker
+    return PerPlanTracker()
+
+
+@pytest.fixture
+def sample_plan(valid_plan_dict):
+    """Parsed Plan model from the canonical fixture."""
+    from snow.schema import Plan
+    return Plan(**valid_plan_dict)
+
+
+@pytest.fixture
+def eval_ctx(sample_plan, tracker):
+    """Factory producing an EvalContext with configurable live_data /
+    semantic_cache / ticket / now. Defaults point at empty fakes."""
+    from snow.evaluators.context import EvalContext
+    def _make(
+        *,
+        live_data=None,
+        semantic_cache=None,
+        plan=None,
+        ticket=None,
+        now=None,
+    ):
+        return EvalContext(
+            live_data=live_data if live_data is not None else FakeLiveData(),
+            semantic_cache=semantic_cache if semantic_cache is not None
+                          else FakeSemanticCache(),
+            tracker=tracker,
+            plan=plan or sample_plan,
+            ticket=ticket,
+            now=now,
+        )
+    return _make
