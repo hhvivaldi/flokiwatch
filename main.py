@@ -1191,9 +1191,28 @@ class TradingBot:
 
         self.running = True
         log.success("Bot started successfully!")
-        
+
+        # FLO-347 Phase 4.5 — spawn Snow event-driven loop (DRY RUN).
+        # Gated behind SNOW_ENABLED (default False) + SNOW_DRY_RUN (default True).
+        # Thread is daemon=True so it never blocks process shutdown; exits
+        # when self.running flips to False (stop() or kill signal).
+        if bool(getattr(config, "SNOW_ENABLED", False)):
+            try:
+                from snow import snow_loop as _snow_loop
+                self._snow_thread = threading.Thread(
+                    target=_snow_loop.run_forever, args=(self,),
+                    name="SnowLoop", daemon=True,
+                )
+                self._snow_thread.start()
+                log.info(
+                    "Snow loop spawned (DRY_RUN=%s)",
+                    bool(getattr(config, "SNOW_DRY_RUN", True)),
+                )
+            except Exception:
+                log.exception("snow.loop.spawn_failed")
+
         write_state(self)
-        
+
         return True
     
     def stop(self, reason: str = "Manual"):
