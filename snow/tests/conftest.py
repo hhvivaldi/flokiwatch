@@ -130,6 +130,11 @@ class FakeLiveData:
         macd_hist_by_tf: dict = None,
         ema_by_key: dict = None,       # key: (tf, period) → float
         atr_by_tf: dict = None,
+        # Phase 7.3 (FLO-355) — Cat A indicator stubs
+        bollinger_by_tf: dict = None,
+        stochastic_by_tf: dict = None,
+        pivot_points_dict: Any = None,
+        macd_div_by_tf: dict = None,
     ):
         self._price_mid = price_mid
         self._price_bid = price_bid
@@ -138,6 +143,10 @@ class FakeLiveData:
         self._macd_hist = macd_hist_by_tf or {}
         self._ema = ema_by_key or {}
         self._atr = atr_by_tf or {}
+        self._bollinger = bollinger_by_tf or {}
+        self._stochastic = stochastic_by_tf or {}
+        self._pivot_points = pivot_points_dict
+        self._macd_div = macd_div_by_tf or {}
 
     def price(self, side: str = "mid"):
         if side == "mid":
@@ -159,6 +168,19 @@ class FakeLiveData:
 
     def atr(self, tf: str = "M1", period: int = 14):
         return self._atr.get(tf)
+
+    # -- Phase 7.3 Cat A accessors -----------------------------------------
+    def bollinger(self, tf: str = "H1"):
+        return self._bollinger.get(tf)
+
+    def stochastic(self, tf: str = "H1"):
+        return self._stochastic.get(tf)
+
+    def pivot_points(self):
+        return self._pivot_points
+
+    def macd_divergence(self, tf: str = "H1"):
+        return self._macd_div.get(tf)
 
 
 class FakeSemanticCache:

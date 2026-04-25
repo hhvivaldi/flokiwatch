@@ -135,7 +135,14 @@ MINIMAL PLAN EXAMPLE:
   "expires_at": "2026-04-24T12:00:00Z"
 }
 
-Condition primitives: price_above, price_below, rsi, macd_histogram, ema_relation, atr, price_at_sr_zone, price_at_fibonacci, profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak, duration_exceeds, time_between.
+Condition primitives:
+- Price: price_above, price_below.
+- Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).
+- Structural / level proximity: price_at_sr_zone, price_at_fibonacci (extended: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips), price_at_pivot (Classic / Fibonacci sets, levels PP/R1-R3/S1-S3, mandatory tolerance_pips).
+- Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
+- Time / clock: duration_exceeds, time_between.
+
+Critical caveats: every condition is point-in-time (current value vs threshold). NO crossover, NO "X within last N bars", NO "RSI rising vs falling". To express direction or recovery, you express the END STATE and rely on conditions reaching it. Stateful primitives (crossover, recent-history, sweep semantics) are deferred — separate RFC.
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
 
@@ -321,6 +328,14 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.5 — FLO-355 Phase 7.3 (Cat A primitive expansion): adds
+          bollinger_position, stochastic, price_at_pivot, and
+          indicator_divergence (MACD) to the condition vocabulary.
+          Extends FibLevel literal to include 0.236 / 1.0 / 1.272 /
+          1.618 plus optional tolerance_pips override on
+          price_at_fibonacci. Updates the Condition primitives list
+          in <plans> with explicit caveats on point-in-time semantics.
+          Previous: 3.4.
     3.4 — FLO-347 Phase 7.2 (paired plans): introduces PAIRED PLANS
           paragraph + WORKED FLOW step-3/4/5 update for bidirectional
           setups. Two `submit_plan_to_snow` calls per cycle is the
@@ -341,7 +356,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.4"
+    return "3.5"
 
 
 def get_prompt_hash() -> str:

@@ -12,7 +12,15 @@ from __future__ import annotations
 from typing import Optional
 
 from snow.evaluators.context import EvalContext, PIP_SIZE
-from snow.schema import ATR, EMARelation, MACDHistogram, RSI
+from snow.schema import (
+    ATR,
+    BollingerPosition,
+    EMARelation,
+    IndicatorDivergence,
+    MACDHistogram,
+    RSI,
+    Stochastic,
+)
 
 
 def _apply_op(value: float, op: str, threshold: float) -> bool:
@@ -79,3 +87,66 @@ def evaluate_atr(cond: ATR, ctx: EvalContext) -> bool:
         return False
     threshold_price = cond.multiplier * cond.baseline_pips * PIP_SIZE
     return _apply_op(val, cond.op, threshold_price)
+
+
+# =============================================================================
+# Phase 7.3 (FLO-355) Cat A indicator evaluators
+# =============================================================================
+
+def evaluate_bollinger_position(cond: BollingerPosition, ctx: EvalContext) -> bool:
+    """Bollinger position relations.
+
+    `position` is Brain's 0..1 normalised value (0 == lower band, 1 == upper).
+    Values >1 mean price has CLOSED above upper band; <0 below lower.
+    `above_upper` / `below_lower` use strict inequality against the
+    band itself (position > 1 / position < 0). The half-band relations
+    use 0.5 as the middle reference.
+
+    Squeeze is Brain's pre-computed bool — True iff bb_width is
+    materially compressed (Brain's threshold), False otherwise.
+    """
+    bb = ctx.live_data.bollinger(tf=cond.tf)
+    if not isinstance(bb, dict):
+        return False
+
+    if cond.relation == "in_squeeze":
+        return bool(bb.get("squeeze") is True)
+
+    pos = bb.get("position")
+    if not isinstance(pos, (int, float)):
+        return False
+    pos = float(pos)
+    if cond.relation == "above_upper":
+        return pos > 1.0
+    if cond.relation == "below_lower":
+        return pos < 0.0
+    if cond.relation == "above_middle":
+        return pos > 0.5
+    if cond.relation == "below_middle":
+        return pos < 0.5
+    return False
+
+
+def evaluate_stochastic(cond: Stochastic, ctx: EvalContext) -> bool:
+    val: Optional[float] = ctx.live_data.stochastic(tf=cond.tf)
+    if val is None:
+        return False
+    return _apply_op(val, cond.op, cond.threshold)
+
+
+def evaluate_indicator_divergence(
+    cond: IndicatorDivergence, ctx: EvalContext
+) -> bool:
+    """True iff Brain currently detects divergence on `cond.indicator`
+    matching `cond.direction`. Reads the boolean state Brain publishes;
+    Snow itself does no peak-detection."""
+    if cond.indicator == "macd":
+        div = ctx.live_data.macd_divergence(tf="H1")
+    else:
+        return False  # other indicators not yet supported by Brain
+
+    if not isinstance(div, dict):
+        return False
+    if not div.get("detected"):
+        return False
+    return str(div.get("type") or "") == str(cond.direction)

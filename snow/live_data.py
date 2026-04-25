@@ -158,6 +158,72 @@ class LiveData:
             return self._semantic_indicator("atr")
         return self._tick_cached(("M1", "atr", period), self._compute_atr, period)
 
+    # -- Phase 7.3 (FLO-355) Cat A indicator accessors ---------------------
+    # All four read from Brain's SemanticCache snapshot; no LiveData
+    # computation. Brain currently publishes these on its primary
+    # timeframe (H1) only — non-H1 calls return None (fail-safe at
+    # evaluator level: missing data → False).
+
+    def bollinger(self, tf: str = "H1") -> Optional[dict]:
+        """Return Brain's `indicators.bollinger` dict for `tf` or None.
+        Shape: {upper, middle, lower, position (0..1), squeeze (bool)}.
+        The `position` is normalised: 0 == lower band, 1 == upper band,
+        >1 == above upper, <0 == below lower. Brain handles the
+        formula in agent_data_builder."""
+        if tf != "H1":
+            return None
+        ind = self._semantic.get("indicators")
+        if not isinstance(ind, dict):
+            return None
+        bb = ind.get("bollinger")
+        return bb if isinstance(bb, dict) else None
+
+    def stochastic(self, tf: str = "H1") -> Optional[float]:
+        """Return Brain's stochastic value (0-100) for `tf` or None."""
+        if tf != "H1":
+            return None
+        ind = self._semantic.get("indicators")
+        if not isinstance(ind, dict):
+            return None
+        st = ind.get("stochastic")
+        if isinstance(st, dict):
+            v = st.get("value")
+            if isinstance(v, (int, float)):
+                return float(v)
+        return None
+
+    def pivot_points(self) -> Optional[dict]:
+        """Return Brain's daily pivot dict or None.
+        Shape: {classic: {PP,R1,R2,R3,S1,S2,S3}, fibonacci: {...}, source}.
+        Brain's `pivot_points` may be wrapped in `{daily: ...}` (multi-
+        layer) or be the dict itself; we accept both shapes."""
+        pp = self._semantic.get("pivot_points")
+        if not isinstance(pp, dict):
+            return None
+        # Multi-layer wrapper: {"daily": {...}, "weekly": {...}}
+        if isinstance(pp.get("daily"), dict):
+            return pp["daily"]
+        # Direct shape: {"classic": {...}, "fibonacci": {...}}
+        if isinstance(pp.get("classic"), dict) or isinstance(pp.get("fibonacci"), dict):
+            return pp
+        return None
+
+    def macd_divergence(self, tf: str = "H1") -> Optional[dict]:
+        """Return Brain's MACD divergence detection for `tf` or None.
+        Shape: {detected: bool, type: 'bullish'|'bearish'|None, bars_since}.
+        Computed each cycle by technical_analyzer.detect_macd_divergence."""
+        if tf != "H1":
+            return None
+        ind = self._semantic.get("indicators")
+        if not isinstance(ind, dict):
+            return None
+        macd = ind.get("macd")
+        if isinstance(macd, dict):
+            div = macd.get("divergence")
+            if isinstance(div, dict):
+                return div
+        return None
+
     # -- Internals -----------------------------------------------------------
 
     def _tick_cached(

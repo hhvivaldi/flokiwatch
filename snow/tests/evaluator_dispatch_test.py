@@ -27,17 +27,22 @@ from snow.schema import PriceAbove
 
 class TestRegistry:
 
-    def test_all_14_primitives_registered(self):
+    def test_all_primitives_registered(self):
+        """14 v1 primitives + 4 Phase 7.3 (FLO-355) Cat A additions = 18."""
         expected = {
+            # v1 (RFC §2.5)
             "price_above", "price_below",
             "rsi", "macd_histogram", "ema_relation", "atr",
             "price_at_sr_zone", "price_at_fibonacci",
             "profit_pips", "mfe_reached", "mae_reached",
             "profit_retraced_from_peak",
             "duration_exceeds", "time_between",
+            # Phase 7.3 — Cat A indicator additions
+            "bollinger_position", "stochastic",
+            "price_at_pivot", "indicator_divergence",
         }
         assert set(registered_condition_types()) == expected
-        assert len(expected) == 14
+        assert len(expected) == 18
 
     def test_registered_types_returns_copy(self):
         """Mutation of the return value must not affect the live table."""

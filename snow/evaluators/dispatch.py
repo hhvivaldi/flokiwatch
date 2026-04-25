@@ -27,9 +27,12 @@ from typing import Any, Callable
 from snow.evaluators.context import EvalContext
 from snow.evaluators.indicator import (
     evaluate_atr,
+    evaluate_bollinger_position,
     evaluate_ema_relation,
+    evaluate_indicator_divergence,
     evaluate_macd_histogram,
     evaluate_rsi,
+    evaluate_stochastic,
 )
 from snow.evaluators.position import (
     evaluate_mae_reached,
@@ -40,6 +43,7 @@ from snow.evaluators.position import (
 from snow.evaluators.price import evaluate_price_above, evaluate_price_below
 from snow.evaluators.structural import (
     evaluate_price_at_fibonacci,
+    evaluate_price_at_pivot,
     evaluate_price_at_sr_zone,
 )
 from snow.evaluators.time_window import (
@@ -74,6 +78,11 @@ _DISPATCH: dict[str, Callable[[Any, EvalContext], bool]] = {
     # time_window.py
     "duration_exceeds":       evaluate_duration_exceeds,
     "time_between":           evaluate_time_between,
+    # Phase 7.3 (FLO-355) — Cat A indicator additions
+    "bollinger_position":     evaluate_bollinger_position,
+    "stochastic":             evaluate_stochastic,
+    "price_at_pivot":         evaluate_price_at_pivot,
+    "indicator_divergence":   evaluate_indicator_divergence,
 }
 
 

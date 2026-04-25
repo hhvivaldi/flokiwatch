@@ -424,7 +424,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.4"
+    EXPECTED_VERSION = "3.5"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""

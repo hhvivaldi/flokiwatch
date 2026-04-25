@@ -27,7 +27,7 @@ from __future__ import annotations
 from typing import Optional
 
 from snow.evaluators.context import EvalContext, PIP_SIZE
-from snow.schema import PriceAtFibonacci, PriceAtSRZone
+from snow.schema import PriceAtFibonacci, PriceAtPivot, PriceAtSRZone
 
 
 # Default proximity tolerance for fibonacci (schema carries no
@@ -68,7 +68,47 @@ def evaluate_price_at_fibonacci(
     level_price = _resolve_fib_level_price(cond.level, ctx)
     if level_price is None:
         return False
-    tolerance_price = _DEFAULT_FIB_TOLERANCE_PIPS * PIP_SIZE
+    # Phase 7.3: optional explicit tolerance overrides the default.
+    tol_pips = (
+        float(cond.tolerance_pips)
+        if getattr(cond, "tolerance_pips", None) is not None
+        else _DEFAULT_FIB_TOLERANCE_PIPS
+    )
+    tolerance_price = tol_pips * PIP_SIZE
+    return abs(float(price) - float(level_price)) <= tolerance_price
+
+
+# =============================================================================
+# Phase 7.3 (FLO-355) — pivot proximity
+# =============================================================================
+
+def evaluate_price_at_pivot(cond: PriceAtPivot, ctx: EvalContext) -> bool:
+    """Proximity check against a daily pivot point (Classic or Fibonacci
+    set). Reads from LiveData.pivot_points() which delegates to the
+    SemanticCache `pivot_points` slot Brain populates each cycle.
+
+    Missing data → False (fail-safe). The two-layer lookup
+    `daily.{set}.{level}` matches Brain's published shape.
+    """
+    price = ctx.live_data.price("mid")
+    if price is None:
+        return False
+    pp = ctx.live_data.pivot_points()
+    if not isinstance(pp, dict):
+        return False
+    # Shape-tolerant: accept either the unwrapped {classic, fibonacci}
+    # form (real LiveData unwraps `daily` for us) or the wrapped
+    # {daily: {...}, weekly: {...}} form (some FakeLiveData / test
+    # paths). Defense in depth — evaluator handles both regardless.
+    if isinstance(pp.get("daily"), dict):
+        pp = pp["daily"]
+    set_dict = pp.get(cond.pivot_set)
+    if not isinstance(set_dict, dict):
+        return False
+    level_price = set_dict.get(cond.level)
+    if not isinstance(level_price, (int, float)):
+        return False
+    tolerance_price = float(cond.tolerance_pips) * PIP_SIZE
     return abs(float(price) - float(level_price)) <= tolerance_price
 
 

@@ -151,12 +151,18 @@ class PriceAtSRZone(_Cond):
 # Level is a float literal, not a string: Floki will pass JSON numbers
 # like 0.618, not quoted "0.618". Pydantic accepts numeric literals
 # and rejects any out-of-enum value.
-FibLevel = Literal[0.382, 0.5, 0.618, 0.786]
+# Phase 7.3 (FLO-355): extended to include the 0.236 retracement and
+# the 1.0 / 1.272 / 1.618 extension levels — common XAUUSD setups
+# pivot on the extensions when a swing has fully retraced.
+FibLevel = Literal[0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618]
 
 
 class PriceAtFibonacci(_Cond):
     type: Literal["price_at_fibonacci"] = "price_at_fibonacci"
     level: FibLevel
+    # Phase 7.3: optional explicit tolerance. Default None preserves
+    # backward compatibility — evaluator falls back to its 5-pip default.
+    tolerance_pips: Optional[float] = Field(default=None, gt=0)
 
 
 # --- §2.5 #9: position-state / profit in pips ---
@@ -206,6 +212,86 @@ class TimeBetween(_Cond):
     end_utc:   str = Field(pattern=_HHMM_PATTERN, description="HH:MM UTC, inclusive end")
 
 
+# =============================================================================
+# Phase 7.3 (FLO-355) — Cat A indicator primitives
+#
+# All four read pre-computed data from Brain's `_last_agent_data`
+# (via SemanticCache). No new computation in Snow / LiveData; just
+# wiring the data Brain already publishes into Floki's plan vocabulary.
+# Same fail-safe contract as the v1 primitives: missing data → False.
+# =============================================================================
+
+# --- §7.3 #15: Bollinger Bands position / squeeze ---
+
+BollingerKind = Literal[
+    "above_upper",   # current price > upper band  (touch / breach)
+    "below_lower",   # current price < lower band  (touch / breach)
+    "above_middle",  # current price > middle band (upper half)
+    "below_middle",  # current price < middle band (lower half)
+    "in_squeeze",    # bb width is below the squeeze threshold (Brain bool)
+]
+
+
+class BollingerPosition(_Cond):
+    """Bollinger Bands relation. Tf is informational; Brain currently
+    publishes BB on its primary timeframe (H1) only — non-H1 fields
+    silently return False when the data is not in the cache."""
+    type: Literal["bollinger_position"] = "bollinger_position"
+    tf: Timeframe
+    relation: BollingerKind
+
+
+# --- §7.3 #16: Stochastic ---
+
+class Stochastic(_Cond):
+    """Standard Stochastic oscillator value vs threshold. Same shape
+    semantics as RSI; reads from Brain's pre-computed indicator dict."""
+    type: Literal["stochastic"] = "stochastic"
+    tf: Timeframe
+    op: ComparisonOp
+    threshold: float = Field(ge=0, le=100)
+
+
+# --- §7.3 #17: Pivot point proximity ---
+
+PivotSet = Literal["classic", "fibonacci"]
+PivotLevel = Literal["PP", "R1", "R2", "R3", "S1", "S2", "S3"]
+
+
+class PriceAtPivot(_Cond):
+    """Proximity to a daily pivot point (Classic or Fibonacci set).
+    Brain computes daily pivots from the previous-day candle and exposes
+    them via `pivot_points.daily.{classic,fibonacci}.{PP,R1..R3,S1..S3}`.
+
+    `pivot_set` is the column choice; `level` is the row choice. Field
+    is named `pivot_set` (not the Python builtin `set`) to avoid
+    confusion in plan dicts."""
+    type: Literal["price_at_pivot"] = "price_at_pivot"
+    pivot_set: PivotSet = "classic"
+    level: PivotLevel
+    tolerance_pips: float = Field(gt=0)
+
+
+# --- §7.3 #18: Indicator divergence ---
+
+DivergenceIndicator = Literal["macd"]
+DivergenceDirection = Literal["bullish", "bearish"]
+
+
+class IndicatorDivergence(_Cond):
+    """Brain detects price-vs-indicator divergence each cycle (see
+    technical_analyzer.detect_macd_divergence) and publishes the result
+    as `indicators.macd.divergence = {detected, type, bars_since}`.
+    This primitive returns True iff `detected==True AND type==direction`.
+
+    v1 supports `macd` only; RSI divergence requires a parallel detector
+    in Brain (deferred to a follow-up). When that lands, extend
+    `DivergenceIndicator` to include "rsi"."""
+    type: Literal["indicator_divergence"] = "indicator_divergence"
+    indicator: DivergenceIndicator
+    direction: DivergenceDirection
+
+
 # --- Discriminated union ---
 
 Condition = Annotated[
@@ -215,6 +301,8 @@ Condition = Annotated[
         PriceAtSRZone, PriceAtFibonacci,
         ProfitPips, MFEReached, MAEReached, ProfitRetracedFromPeak,
         DurationExceeds, TimeBetween,
+        # Phase 7.3 (FLO-355) — Cat A additions
+        BollingerPosition, Stochastic, PriceAtPivot, IndicatorDivergence,
     ],
     Field(discriminator="type"),
 ]
