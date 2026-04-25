@@ -24,4 +24,9 @@ thread-safety layer that FLO-347 Phase 2+ builds on.
 """
 
 __version__ = "0.1.0"
-SCHEMA_VERSION = 1  # bumped on any breaking schema change
+SCHEMA_VERSION = 2  # bumped on any breaking schema change
+# v1 → v2 (FLO-359 Phase 8b commit 1): adds `state_cache_json` column to
+# snow_plans + introduces the stateful primitive class (indicator_crossover,
+# indicator_was, price_crossed_level — land in commits 3-5). v1 plans
+# remain valid (validator accepts schema_version ∈ {1, 2}); the validator
+# only rejects v1 plans that *reference* a stateful primitive.

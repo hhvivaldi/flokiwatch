@@ -21,7 +21,7 @@ import pytest
 # -----------------------------------------------------------------------------
 
 _BASE_PLAN: dict[str, Any] = {
-    "schema_version": 1,
+    "schema_version": 2,
     "id": "PLAN-20260424-001",
     "created_by": "floki",
     "created_at": "2026-04-24T08:00:00Z",
@@ -82,12 +82,25 @@ _BASE_PLAN: dict[str, Any] = {
 
 @pytest.fixture
 def valid_plan_dict() -> dict[str, Any]:
-    """Return a deep-copied canonical valid plan dict.
+    """Return a deep-copied canonical valid plan dict (current schema_version).
 
     Tests may freely mutate the returned dict; each invocation yields a
     fresh copy so test isolation holds.
     """
     return deepcopy(_BASE_PLAN)
+
+
+@pytest.fixture
+def valid_plan_dict_v1() -> dict[str, Any]:
+    """Canonical valid plan pinned to schema_version=1.
+
+    Use for backward-compat regression tests (FLO-359 Phase 8b).
+    Stateless primitives only — `_check_stateful_in_v1` rejects v1
+    plans referencing stateful types.
+    """
+    out = deepcopy(_BASE_PLAN)
+    out["schema_version"] = 1
+    return out
 
 
 @pytest.fixture

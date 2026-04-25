@@ -154,15 +154,51 @@ def init_snow_tables() -> None:
     """Create Snow tables + indexes if they don't exist. Idempotent.
 
     Called once from main.py startup AFTER `db_writer.init_db()` (Phase 4
-    wiring). Safe to call repeatedly — every statement is `IF NOT EXISTS`.
+    wiring). Safe to call repeatedly — every statement is `IF NOT EXISTS`,
+    and additive ALTER TABLE migrations are wrapped in a duplicate-column
+    guard so re-running on an already-migrated DB is a no-op.
     """
     conn = _connect()
     try:
         for stmt in _DDL_STATEMENTS:
             conn.execute(stmt)
+        _apply_additive_migrations(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+# =============================================================================
+# Additive migrations — null-safe ALTER TABLE
+# =============================================================================
+#
+# SQLite supports ADD COLUMN; older code reading a migrated DB simply
+# ignores the new column. The wrapper below catches the
+# "duplicate column name" OperationalError so init_snow_tables() stays
+# idempotent across restarts. Down-migrations are NOT supported here —
+# revert path is "restore from data/history.db.backup-pre-phase8b" or
+# accept the additive column as a benign artefact (NULL-safe for v1).
+
+# (column_name, ddl_fragment) — checked in order on every init.
+_ADDITIVE_COLUMNS: tuple[tuple[str, str], ...] = (
+    # FLO-359 Phase 8b commit 1: state cache column for stateful primitives.
+    # NULL for v1 plans and for any v2 plan that has not yet flushed state.
+    ("state_cache_json", "ALTER TABLE snow_plans ADD COLUMN state_cache_json TEXT"),
+)
+
+
+def _apply_additive_migrations(conn: sqlite3.Connection) -> None:
+    """Run idempotent ALTER TABLE statements. Each ADD COLUMN is wrapped
+    in an `OperationalError` guard so re-running is a no-op."""
+    for col_name, ddl in _ADDITIVE_COLUMNS:
+        try:
+            conn.execute(ddl)
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            # Two SQLite phrasings: "duplicate column name: X" / "column X already exists"
+            if "duplicate column" in msg or "already exists" in msg:
+                continue
+            raise
 
 
 # =============================================================================

@@ -629,3 +629,129 @@ class TestConcurrentInserts:
         assert _count_rows(snow_conn, "snow_plans") == 2
         assert snow_db.get_plan("PLAN-20260424-101") is not None
         assert snow_db.get_plan("PLAN-20260424-102") is not None
+
+
+# =============================================================================
+# FLO-359 Phase 8b commit 1 — state_cache_json additive migration
+# =============================================================================
+#
+# Verifies the v1 → v2 schema upgrade path:
+#   * `init_snow_tables()` adds `state_cache_json TEXT` once and is
+#     idempotent on re-run
+#   * Old code that doesn't reference the new column keeps working
+#     against a migrated DB (rollback-safety = revert the code, leave
+#     the column)
+#   * NULL is the default for v1 plans persisted before the migration
+#     and for v2 plans whose state cache has not yet flushed
+# =============================================================================
+
+
+def _column_names(db_path, table: str) -> list[str]:
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    finally:
+        conn.close()
+
+
+class TestStateCacheJsonMigration:
+
+    def test_fresh_init_creates_column(self, snow_conn):
+        cols = _column_names(snow_conn, "snow_plans")
+        assert "state_cache_json" in cols, (
+            f"state_cache_json missing on fresh init; got {cols}"
+        )
+
+    def test_init_is_idempotent_after_migration(self, snow_conn):
+        snow_db.init_snow_tables()
+        snow_db.init_snow_tables()
+        snow_db.init_snow_tables()
+        cols = _column_names(snow_conn, "snow_plans")
+        assert cols.count("state_cache_json") == 1
+
+    def test_legacy_db_without_column_migrates_in_place(self, tmp_path, monkeypatch):
+        """Simulate a v1 DB on disk: create snow_plans WITHOUT
+        state_cache_json, then init. Migration must add the column
+        without dropping rows."""
+        db_path = tmp_path / "legacy.db"
+
+        def _tmp_connect():
+            conn = sqlite3.connect(str(db_path), timeout=5)
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.row_factory = sqlite3.Row
+            return conn
+
+        monkeypatch.setattr(snow_db, "_connect", _tmp_connect)
+        legacy_conn = _tmp_connect()
+        legacy_conn.execute("""
+            CREATE TABLE snow_plans (
+                id                TEXT PRIMARY KEY,
+                schema_version    INTEGER NOT NULL,
+                created_by        TEXT NOT NULL,
+                created_at        TEXT NOT NULL,
+                expires_at        TEXT,
+                status            TEXT NOT NULL,
+                plan_json         TEXT NOT NULL,
+                trade_ticket      INTEGER,
+                entered_at        TEXT,
+                closed_at         TEXT,
+                outcome_pips      REAL,
+                outcome_usd       REAL,
+                last_evaluated_at TEXT
+            )
+        """)
+        legacy_conn.execute(
+            "INSERT INTO snow_plans (id, schema_version, created_by, "
+            "created_at, status, plan_json) VALUES (?, 1, 'floki', ?, "
+            "'pending', '{}')",
+            ("PLAN-LEGACY-001", "2026-04-24T00:00:00Z"),
+        )
+        legacy_conn.commit()
+        legacy_conn.close()
+
+        assert "state_cache_json" not in _column_names(db_path, "snow_plans")
+
+        snow_db.init_snow_tables()
+
+        assert "state_cache_json" in _column_names(db_path, "snow_plans")
+        check_conn = sqlite3.connect(str(db_path))
+        try:
+            row = check_conn.execute(
+                "SELECT id, state_cache_json FROM snow_plans WHERE id = ?",
+                ("PLAN-LEGACY-001",),
+            ).fetchone()
+        finally:
+            check_conn.close()
+        assert row is not None, "legacy row dropped during migration"
+        assert row[1] is None, (
+            f"legacy row state_cache_json should default NULL; got {row[1]!r}"
+        )
+
+    def test_v2_plan_persists_with_null_state_cache(self, snow_conn, sample_plan):
+        """Backward-read regression: code that doesn't reference
+        state_cache_json keeps working against a migrated DB. The
+        existing insert_plan path doesn't write the column, so it
+        stays NULL — and reading the plan back via get_plan succeeds."""
+        snow_db.insert_plan(sample_plan)
+        loaded = snow_db.get_plan(sample_plan.id)
+        assert loaded is not None
+        assert loaded["id"] == sample_plan.id
+
+        check_conn = sqlite3.connect(str(snow_conn))
+        try:
+            row = check_conn.execute(
+                "SELECT state_cache_json FROM snow_plans WHERE id = ?",
+                (sample_plan.id,),
+            ).fetchone()
+        finally:
+            check_conn.close()
+        assert row[0] is None
+
+    def test_other_tables_unchanged_by_migration(self, snow_conn):
+        """Sibling tables (snow_triggers, snow_evaluations) must not have
+        the new column — it's specific to snow_plans."""
+        for sibling in ("snow_triggers", "snow_evaluations"):
+            cols = _column_names(snow_conn, sibling)
+            assert "state_cache_json" not in cols, (
+                f"unexpected column on {sibling}: {cols}"
+            )

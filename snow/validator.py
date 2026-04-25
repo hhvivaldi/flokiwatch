@@ -249,6 +249,56 @@ def _check_schema_version(plan: Plan) -> list[str]:
     return []
 
 
+# Stateful primitive type-strings introduced in schema_version=2 (FLO-359
+# Phase 8b). Defined as a string set rather than imported from
+# `snow.schema` so this gate ships in commit 1 ahead of the primitive
+# class definitions (commits 3-5). A v1 plan that references any of
+# these is rejected up-front; a v2 plan reaches the discriminated-union
+# parser, which itself rejects unknown types until the matching commit
+# lands.
+_STATEFUL_PRIMITIVES: frozenset[str] = frozenset({
+    "indicator_crossover",
+    "indicator_was",
+    "price_crossed_level",
+})
+
+
+def _iter_plan_conditions(plan: Plan):
+    """Yield (block_label, condition_index, condition) for every condition
+    on the plan."""
+    for ci, c in enumerate(plan.entry.conditions):
+        yield "entry", ci, c
+    for mi, mgmt in enumerate(plan.management):
+        for ci, c in enumerate(mgmt.conditions):
+            yield f"management[{mi}]", ci, c
+    for ei, ex in enumerate(plan.exit):
+        for ci, c in enumerate(ex.conditions):
+            yield f"exit[{ei}]", ci, c
+
+
+def _check_stateful_in_v1(plan: Plan) -> list[str]:
+    """v1 plans MUST NOT reference stateful primitives.
+
+    Stateful primitives need the `state_cache_json` column + the
+    in-memory PerConditionStateCache (commit 2) + per-class evaluators
+    (commits 3-5) — all v2-schema infrastructure. A plan declaring
+    `schema_version=1` while embedding a stateful primitive type would
+    silently bypass that machinery. Reject at submit-time with a
+    structured error naming the field path.
+    """
+    if plan.schema_version >= 2:
+        return []
+    errors: list[str] = []
+    for label, ci, c in _iter_plan_conditions(plan):
+        ctype = getattr(c, "type", None)
+        if isinstance(ctype, str) and ctype in _STATEFUL_PRIMITIVES:
+            errors.append(
+                f"{label}.conditions[{ci}]: {ctype!r} requires "
+                f"schema_version >= 2; got {plan.schema_version}"
+            )
+    return errors
+
+
 # =============================================================================
 # Public entry point
 # =============================================================================
@@ -285,6 +335,7 @@ def validate_plan(
     # --- 2. Business-rule checks ---
     errors: list[str] = []
     errors += _check_schema_version(plan)
+    errors += _check_stateful_in_v1(plan)
     errors += _check_timestamps(plan)
     errors += _check_entry_sl_tp(plan)
     errors += _check_price_bounds(plan)
