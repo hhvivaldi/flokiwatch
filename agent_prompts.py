@@ -142,6 +142,8 @@ Condition primitives:
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.
 
+For exact parameter shapes, enum values, and numeric bounds, call get_snow_primitives_reference(category=...) — Pydantic-derived, never drifts from the schema. Categories: price | indicator | structural | position_state | time.
+
 Critical caveats: every condition is point-in-time (current value vs threshold). NO crossover, NO "X within last N bars", NO "RSI rising vs falling". To express direction or recovery, you express the END STATE and rely on conditions reaching it. Stateful primitives (crossover, recent-history, sweep semantics) are deferred — separate RFC.
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
@@ -328,6 +330,13 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.6 — FLO-357 Phase 7.4 (vocabulary discoverability): cross-
+          references get_snow_primitives_reference(category=...) for
+          exact param shapes / enum values / numeric bounds. The tool
+          is Pydantic-derived from snow.schema and cannot drift.
+          Replaces the dead "see snow/schema.py" pointer in
+          submit_plan_to_snow's tool description with a runtime-
+          callable reference. Previous: 3.5.
     3.5 — FLO-355 Phase 7.3 (Cat A primitive expansion): adds
           bollinger_position, stochastic, price_at_pivot, and
           indicator_divergence (MACD) to the condition vocabulary.
@@ -356,7 +365,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.5"
+    return "3.6"
 
 
 def get_prompt_hash() -> str:

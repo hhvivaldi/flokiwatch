@@ -4493,6 +4493,57 @@ class AgentTools:
     # restart, that is expected until then, not a bug.
     # ---------------------------------------------------------------------
 
+    def get_snow_primitives_reference(
+        self, category: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Return the Pydantic-derived schema for Snow plan condition
+        primitives — names, parameter shapes, enum values, numeric
+        bounds. Use this when drafting a plan and you need to confirm
+        the exact field shape for a primitive.
+
+        FLO-357 Phase 7.4. Source of truth: `snow.schema.Condition`.
+        Schema and reference cannot drift — both are extracted from the
+        Pydantic models at import time.
+
+        Args:
+          category: Optional filter. One of "price" | "indicator" |
+            "structural" | "position_state" | "time". None returns all
+            18 primitives (~5 KB JSON, ~1500 tokens). With a filter,
+            output is 300–800 tokens. Prefer the filter when you know
+            which family you want.
+
+        Returns:
+          {"success": True, "categories": [...], "filter": str|None,
+           "count": int, "primitives": [{name, category, description,
+            params: {field: {type, values?, required, ...}}}, ...]}
+          {"success": False, "error": "...", "categories": [...]}
+        """
+        start = time.time()
+        try:
+            from snow.reference import get_primitive_reference
+        except Exception as e:
+            self._log_fail(
+                "get_snow_primitives_reference", start, f"import_error={e}"
+            )
+            return {
+                "success": False,
+                "error": f"snow.reference import failed: {e}",
+            }
+        try:
+            result = get_primitive_reference(category)
+            cat_str = category or "all"
+            count = result.get("count", 0)
+            self._log_tool(
+                "get_snow_primitives_reference", start,
+                f"category={cat_str} count={count}",
+            )
+            return result
+        except Exception as e:
+            self._log_fail(
+                "get_snow_primitives_reference", start, f"error={e}"
+            )
+            return {"success": False, "error": f"{type(e).__name__}: {e}"}
+
     def submit_plan_to_snow(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Submit a contingency plan to Snow for autonomous monitoring.
 
