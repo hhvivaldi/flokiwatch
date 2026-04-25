@@ -657,10 +657,21 @@ class TestDryRunMode:
             "config.SNOW_DRY_RUN must default True in Phase 4"
         )
 
-    def test_config_default_snow_enabled_false(self):
+    def test_config_snow_enabled_state(self):
+        """Originally a Phase 4 baseline guard (SNOW_ENABLED defaulted
+        False so an unconfigured deploy could not spawn the Snow loop).
+        Updated for the v3.x evidence window: `.env` now sets
+        `SNOW_ENABLED=true` to persist Snow across restarts. This test
+        asserts the runtime value matches `.env` (whatever it currently
+        contains) — catches a desync where someone toggles `.env` but
+        config.py reads False."""
+        import os
         import config
-        assert getattr(config, "SNOW_ENABLED", False) is False, (
-            "config.SNOW_ENABLED must default False in Phase 4"
+        env_raw = os.environ.get("SNOW_ENABLED", "false").lower()
+        env_truthy = env_raw in ("true", "1", "yes")
+        assert getattr(config, "SNOW_ENABLED", False) is env_truthy, (
+            f"config.SNOW_ENABLED ({config.SNOW_ENABLED}) does not match "
+            f"env SNOW_ENABLED ({env_raw!r}) — .env / config drift"
         )
 
     def test_dry_run_false_is_live_mode_with_actions_dispatcher(

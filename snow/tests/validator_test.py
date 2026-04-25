@@ -424,7 +424,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.3"
+    EXPECTED_VERSION = "3.4"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""
@@ -555,3 +555,76 @@ class TestPromptV3_3ChartSuite:
         # OR active plan
         assert "open position" in SYSTEM_PROMPT
         assert "active plan" in SYSTEM_PROMPT
+
+
+# =============================================================================
+# FLO-347 Phase 7.2 (v3.4) — paired-plans regression guards
+# =============================================================================
+
+class TestPromptV3_4PairedPlans:
+    """v3.4 introduces PAIRED PLANS — submit TWO plans (one BUY-leg, one
+    SELL-leg) in the same cycle for genuinely bidirectional setups
+    (pre-event, undecided breakout, post-news whip). Empirically motivated:
+    PLAN-20260424-001 was a unidirectional BUY plan in a setup whose
+    own thesis enumerated 5 bearish + 1 bullish + 1 neutral signals —
+    the missing SELL-leg plan was a v3.x prompt gap, not a Floki failure.
+    These tests pin the v3.4 fix so a future edit can't silently drop it."""
+
+    def test_paired_plans_section_present(self):
+        from agent_prompts import SYSTEM_PROMPT
+        assert "PAIRED PLANS" in SYSTEM_PROMPT, (
+            "v3.4: PAIRED PLANS section header missing"
+        )
+
+    def test_paired_plans_describes_two_plans_one_per_direction(self):
+        """The mechanic: two plans per cycle, one BUY-leg + one SELL-leg.
+        Catches an edit that keeps the section header but softens the
+        two-plans-per-cycle rule."""
+        from agent_prompts import SYSTEM_PROMPT
+        # "TWO plans" wording (case-insensitive, allows future copy edits).
+        assert ("TWO plans" in SYSTEM_PROMPT
+                or "two plans" in SYSTEM_PROMPT), (
+            "v3.4: 'two plans' core mechanic missing from PAIRED PLANS"
+        )
+        # Both leg directions must be named.
+        assert "BUY scenario" in SYSTEM_PROMPT or "BUY-leg" in SYSTEM_PROMPT, (
+            "v3.4: BUY-leg not explicitly named in PAIRED PLANS"
+        )
+        assert "SELL scenario" in SYSTEM_PROMPT or "SELL-leg" in SYSTEM_PROMPT, (
+            "v3.4: SELL-leg not explicitly named in PAIRED PLANS"
+        )
+
+    def test_paired_plans_use_cases_present(self):
+        """Three triggering use-cases must be enumerated so Floki recognises
+        when a paired plan is the right shape vs a single-direction plan."""
+        from agent_prompts import SYSTEM_PROMPT
+        # At least two of the three use-case keywords must be present.
+        markers = ("pre-event", "undecided breakout", "whip", "balanced",
+                   "inflection")
+        hits = sum(1 for m in markers if m in SYSTEM_PROMPT)
+        assert hits >= 2, (
+            f"v3.4: PAIRED PLANS use-case examples insufficient "
+            f"(found {hits}/{len(markers)} markers; need >=2)"
+        )
+
+    def test_paired_plans_independence_described(self):
+        """Critical to teach: paired plans don't interfere with each other.
+        Snow watches them independently; the loser expires harmlessly."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert ("do not interfere" in SYSTEM_PROMPT
+                or "watches both independently" in SYSTEM_PROMPT
+                or "the other expires" in SYSTEM_PROMPT), (
+            "v3.4: paired-plan independence / harmless-expiry semantics "
+            "must be taught explicitly"
+        )
+
+    def test_worked_flow_acknowledges_paired_option(self):
+        """WORKED FLOW step that frames the thesis must offer the
+        bidirectional option alongside directional bias and observation."""
+        from agent_prompts import SYSTEM_PROMPT
+        # Look for "bidirectional" mentioned somewhere in the WORKED FLOW
+        # neighbourhood.
+        assert "bidirectional" in SYSTEM_PROMPT, (
+            "v3.4: WORKED FLOW or PAIRED PLANS must name 'bidirectional' "
+            "as a thesis shape"
+        )

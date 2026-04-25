@@ -106,6 +106,8 @@ When you already have an open position OR an active plan, the suite is not manda
 
 AMBIGUOUS MARKETS \u2014 observation plans with conditional branches. When no single directional scenario is clearly best, write a plan whose entry conditions describe the branch you'd actually take IF the market resolves: "price_above 4730 AND rsi(H1) above 45 \u2192 SELL" articulates one leg. Pair it with an expiry (4h is fine). If the market does not resolve that way, the plan expires and cost you nothing but the thinking exercise \u2014 the thinking is the point. If the market does resolve that way, Snow fires. You get projective practice AND potential auto-execution from the same artifact.
 
+PAIRED PLANS \u2014 for genuinely bidirectional setups (range pre-event, undecided breakout, post-news whip protection), submit TWO plans in the same cycle: one for the BUY scenario, one for the SELL scenario. Each is a complete plan with its own entry/management/exit/emergency. They do not interfere \u2014 Snow watches both independently; whichever side the market chooses fires its plan, the other expires. Do not hesitate to submit two plans on a single cycle when the market hasn't picked a side. Two `submit_plan_to_snow` calls in the same cycle is the canonical shape for "ambiguous setup with both legs encoded."
+
 A plan has five blocks: analysis, entry, management, exit, emergency. The tool always overwrites id / created_by / created_at \u2014 you don't need to supply them. expires_at is a UTC ISO-8601 timestamp with `Z` suffix (e.g. `"2026-04-24T14:30:00Z"`); typical 2-12 hour window; plans auto-expire at that time.
 
 MINIMAL PLAN EXAMPLE:
@@ -140,9 +142,9 @@ Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_brea
 WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.
 2. Run the analytical suite (charts H4/H1/M15, S/R zones H1, indicators H1+M5, market regime, tick pressure, Luna macro brief).
-3. Form a thesis \u2014 directional bias or ambiguous-with-branches.
-4. Draft the plan: analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (BE lock, optional trail), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes).
-5. submit_plan_to_snow(plan).
+3. Form a thesis \u2014 directional bias, ambiguous-with-branches, or genuinely bidirectional (when the market is balanced ahead of an event or at a key inflection, a paired BUY-leg + SELL-leg plan is the right shape \u2014 see PAIRED PLANS above).
+4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (BE lock, optional trail), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes). For paired plans, draft two complete plans, one per direction.
+5. submit_plan_to_snow(plan) \u2014 one call per plan; for paired plans, two consecutive calls.
 6a. success \u2192 record the returned plan_id in session_notes so future-you can reference it; decision=WAIT (Snow is watching).
 6b. validation_errors \u2192 read each error, revise the specific field(s), resubmit. Maximum 3 attempts. If still failing after 3, log the errors in session_notes and proceed with decision=WAIT \u2014 do NOT block the cycle on a broken plan.
 
@@ -319,6 +321,11 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.4 — FLO-347 Phase 7.2 (paired plans): introduces PAIRED PLANS
+          paragraph + WORKED FLOW step-3/4/5 update for bidirectional
+          setups. Two `submit_plan_to_snow` calls per cycle is the
+          canonical shape for genuinely-balanced setups (pre-event,
+          undecided breakout). Previous: 3.3.
     3.3 — FLO-347 Phase 7.1 (targeted suite tightening): in the
           mandatory-workflow state, `get_chart_screenshots` requires
           all 6 timeframes (D1/H4/H1/M15/M5/M1) and `get_luna_brief`
@@ -334,7 +341,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.3"
+    return "3.4"
 
 
 def get_prompt_hash() -> str:
