@@ -1,21 +1,35 @@
-"""Indicator evaluators: rsi, macd_histogram, ema_relation, atr.
+"""Indicator evaluators.
 
-All delegate to LiveData for the current value; LiveData in turn
-delegates H1+ timeframes to SemanticCache per RFC §6.1. Missing
-data (None from LiveData) → False (fail-safe, RFC §6.5).
+Stateless: rsi, macd_histogram, ema_relation, atr, bollinger_position,
+stochastic, indicator_divergence — delegate to LiveData for the
+current value; LiveData in turn delegates H1+ timeframes to
+SemanticCache per RFC §6.1. Missing data (None from LiveData) →
+False (fail-safe, RFC §6.5).
+
+Stateful (FLO-359 Phase 8b commit 3): indicator_crossover — reads
+prev_value / prev_above_threshold from a `ConditionStateRow`,
+detects the crossing, then writes back the new prev for the next
+tick. Cold-start (no prev) seeds + reports no crossing on the first
+tick (RFC §3.1 false-negative window).
 
 `ComparisonOp` is `Literal["above", "below"]`; we treat "above" as
 strict > and "below" as strict <. Equality never fires either side.
+The crossover evaluator additionally treats `curr == threshold` as
+ambiguous and preserves the last definite state per RFC §3.1.
 """
 from __future__ import annotations
 
 from typing import Optional
+
+from logger import log
+from tz_utils import utc_iso
 
 from snow.evaluators.context import EvalContext, PIP_SIZE
 from snow.schema import (
     ATR,
     BollingerPosition,
     EMARelation,
+    IndicatorCrossover,
     IndicatorDivergence,
     MACDHistogram,
     RSI,
@@ -150,3 +164,83 @@ def evaluate_indicator_divergence(
     if not div.get("detected"):
         return False
     return str(div.get("type") or "") == str(cond.direction)
+
+
+# =============================================================================
+# Stateful: indicator_crossover (FLO-359 Phase 8b commit 3)
+# =============================================================================
+
+def _read_indicator(name: str, tf: str, ctx: EvalContext) -> Optional[float]:
+    """Resolve a CrossoverIndicator literal to a current scalar value.
+
+    Returns None on missing data — the crossover evaluator preserves
+    state across a missing tick rather than treating the gap as a
+    crossing event."""
+    if name == "rsi":
+        return ctx.live_data.rsi(tf=tf, period=14)
+    if name == "macd_histogram":
+        return ctx.live_data.macd_histogram(tf=tf)
+    if name == "stochastic":
+        return ctx.live_data.stochastic(tf=tf)
+    return None
+
+
+def evaluate_indicator_crossover(
+    cond: IndicatorCrossover,
+    ctx: EvalContext,
+    state,  # ConditionStateRow — non-typed import to avoid module cycle
+) -> bool:
+    """Fire on the FIRST tick after `cond.indicator` crosses
+    `cond.threshold` in `cond.direction`.
+
+    Detection rule (RFC §3.1):
+      curr_above = curr_value > threshold        # strict
+      curr_below = curr_value < threshold        # strict
+      direction == "above": fires iff (not prev_above) AND curr_above
+      direction == "below": fires iff prev_above AND curr_below
+
+    Equality (`curr == threshold`): ambiguous; the state row's
+    `prev_above_threshold` is NOT updated, so the next definite
+    reading still has the old prev as its reference. This avoids
+    spurious fires when a value parks exactly on the threshold.
+
+    Cold-start (`state.prev_above_threshold is None`): seed
+    state.prev_value / state.prev_above_threshold from the current
+    reading and return False. The documented one-tick false-negative
+    window after a fresh allocation OR a stale-rehydrate drop.
+
+    Missing live data (`curr_value is None`): return False AND do
+    NOT mutate state. Preserves prev for the next tick when data
+    is back.
+    """
+    curr = _read_indicator(cond.indicator, cond.tf, ctx)
+    if curr is None:
+        return False
+
+    curr_above = curr > cond.threshold
+    curr_below = curr < cond.threshold
+    is_definite = curr_above or curr_below  # False iff curr == threshold
+
+    # Cold-start path — seed and report no crossing.
+    if state.prev_above_threshold is None:
+        if is_definite:
+            state.prev_value = float(curr)
+            state.prev_above_threshold = bool(curr_above)
+            state.last_seen_at = utc_iso()
+        return False
+
+    prev_above = bool(state.prev_above_threshold)
+    fired = False
+    if cond.direction == "above":
+        fired = (not prev_above) and curr_above
+    elif cond.direction == "below":
+        fired = prev_above and curr_below
+
+    # Update prev only on a definite reading. Equality preserves the
+    # last definite state.
+    if is_definite:
+        state.prev_value = float(curr)
+        state.prev_above_threshold = bool(curr_above)
+    state.last_seen_at = utc_iso()
+
+    return fired

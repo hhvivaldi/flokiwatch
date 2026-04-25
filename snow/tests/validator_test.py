@@ -760,3 +760,56 @@ class TestStatefulInV1Gate:
         # stateful conditions so only the version error is expected.
         assert any("schema_version=999" in e for e in errors)
         assert not any("indicator_crossover" in e for e in errors)
+
+
+# =============================================================================
+# End-to-end gate exercise — uses real `indicator_crossover` from the
+# union (added in commit 3). These complement the model_construct
+# tests above, which had to fake the type before the class existed.
+# =============================================================================
+
+
+class TestStatefulGateEndToEnd:
+
+    def _crossover_cond_dict(self) -> dict:
+        return {
+            "type": "indicator_crossover",
+            "indicator": "rsi",
+            "tf": "H1",
+            "direction": "above",
+            "threshold": 70.0,
+        }
+
+    def test_v1_plan_with_real_indicator_crossover_rejected(
+        self, valid_plan_dict_v1
+    ):
+        """End-to-end: a v1 plan dict containing a real
+        indicator_crossover condition (the type now exists in the
+        Pydantic union after commit 3) goes through validate_plan and
+        is rejected with a gate error naming the field path."""
+        valid_plan_dict_v1["entry"]["conditions"] = [self._crossover_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict_v1)
+        assert ok is False
+        # plan parsed (Pydantic accepts the type); gate flagged it.
+        assert plan is not None
+        assert plan.schema_version == 1
+        assert any("indicator_crossover" in e for e in errors)
+        assert any("schema_version >= 2" in e for e in errors)
+
+    def test_v2_plan_with_indicator_crossover_validates(
+        self, valid_plan_dict
+    ):
+        """v2 plan with the same condition validates cleanly. Other
+        rules (entry SL/TP, timestamps, etc.) keep applying — the
+        canonical fixture already supplies a valid SELL entry; just
+        replace the condition list."""
+        assert valid_plan_dict["schema_version"] == 2
+        valid_plan_dict["entry"]["conditions"] = [self._crossover_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is True, f"v2 plan rejected: {errors}"
+        assert plan is not None
+        # First entry condition is the parsed crossover.
+        c0 = plan.entry.conditions[0]
+        assert c0.type == "indicator_crossover"
+        assert c0.indicator == "rsi"
+        assert c0.threshold == 70.0

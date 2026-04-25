@@ -16,7 +16,7 @@ from typing import get_args
 import pytest
 
 from snow import reference as _ref
-from snow.evaluators.dispatch import _DISPATCH
+from snow.evaluators.dispatch import registered_condition_types
 from snow.schema import Condition
 
 
@@ -92,7 +92,9 @@ def test_three_way_drift_categories_vs_union_vs_dispatch():
     """
     cats = set(_ref.categorized_types().keys())
     union = _union_types()
-    dispatch = set(_DISPATCH.keys())
+    # `registered_condition_types()` unions stateless `_DISPATCH` and
+    # stateful `_DISPATCH_STATEFUL` (FLO-359 Phase 8b commit 3).
+    dispatch = set(registered_condition_types())
 
     if not (cats == union == dispatch):
         missing_from_cats = (union | dispatch) - cats

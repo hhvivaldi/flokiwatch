@@ -15,6 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only import avoids cycles
     from snow.semantic_cache import SemanticCache
     from snow.evaluators.tracker import PerPlanTracker
     from snow.schema import Plan
+    from snow.state import PerConditionStateCache
 
 
 # XAUUSD pip size. Matches capture.py:19 and is the one magic number
@@ -48,3 +49,9 @@ class EvalContext:
     plan: "Plan"
     ticket: Optional[int] = None
     now: Optional[datetime] = None
+    # FLO-359 Phase 8b commit 3 — stateful primitives need per-condition
+    # memory across ticks. Stateless evaluators ignore this field;
+    # stateful evaluators short-circuit to False (with WARN) if it is
+    # None, so plan eval stays fail-safe even when a caller forgot to
+    # plumb the cache through.
+    state_cache: Optional["PerConditionStateCache"] = None

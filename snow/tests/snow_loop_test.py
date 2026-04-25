@@ -93,6 +93,7 @@ def _make_loop(
     live_data,
     semantic_cache,
     tracker=None,
+    state_cache=None,
 ) -> SnowLoop:
     """Build a SnowLoop with injected fakes; DRY RUN forced on."""
     return SnowLoop(
@@ -102,6 +103,7 @@ def _make_loop(
         semantic_cache=semantic_cache,
         tracker=tracker,
         dry_run=True,
+        state_cache=state_cache,
     )
 
 
@@ -883,3 +885,122 @@ class TestBoundaryCompliance:
             assert name not in ns, (
                 f"snow_loop imported `{name}` into its namespace"
             )
+
+
+# ---------------------------------------------------------------------------
+# TestStateCacheWiring — FLO-359 Phase 8b commit 3
+# ---------------------------------------------------------------------------
+#
+# Verifies the loop's hooks into the per-condition state cache:
+#   * Constructor accepts an injected `state_cache`; defaults to the
+#     module-level singleton when None
+#   * `_detect_terminal_transitions` calls `state_cache.forget_plan` on
+#     plans dropping out of the active set
+#   * Flush only fires every STATE_FLUSH_INTERVAL_TICKS, not every tick
+#   * EvalContext built by entry / management+exit paths carries the
+#     loop's state_cache
+# ---------------------------------------------------------------------------
+
+class TestStateCacheWiring:
+
+    def _fresh_cache(self):
+        from snow.state import PerConditionStateCache
+        return PerConditionStateCache()
+
+    def test_constructor_uses_singleton_when_none(
+        self, snow_conn, fake_live, fake_semantic
+    ):
+        from snow.state import state_cache as singleton
+        loop = _make_loop(
+            bot=_FakeBot(),
+            live_data=fake_live(price_mid=4725.0),
+            semantic_cache=fake_semantic(),
+            state_cache=None,
+        )
+        assert loop._state_cache is singleton
+
+    def test_constructor_accepts_injected_cache(
+        self, snow_conn, fake_live, fake_semantic
+    ):
+        cache = self._fresh_cache()
+        loop = _make_loop(
+            bot=_FakeBot(),
+            live_data=fake_live(price_mid=4725.0),
+            semantic_cache=fake_semantic(),
+            state_cache=cache,
+        )
+        assert loop._state_cache is cache
+
+    def test_terminal_transition_calls_forget_on_state_cache(
+        self, snow_conn, fake_live, fake_semantic, valid_plan_dict, tracker
+    ):
+        plan = _insert_plan(valid_plan_dict)
+        _advance_to_active(plan.id)
+        cache = self._fresh_cache()
+        # Pre-populate a row for the plan so we can prove forget cleared it.
+        cache.get_or_create(
+            plan.id, "_entry", 0, "indicator_crossover"
+        )
+        loop = _make_loop(
+            bot=_FakeBot(),
+            live_data=fake_live(price_mid=4725.0),
+            semantic_cache=fake_semantic(),
+            tracker=tracker,
+            state_cache=cache,
+        )
+        loop._tick()  # observe ACTIVE
+        assert cache.get(plan.id, "_entry", 0) is not None
+
+        _set_status(plan.id, PlanStatus.CLOSED.value)
+        loop._tick()  # detect terminal transition
+        assert cache.get(plan.id, "_entry", 0) is None, (
+            "state cache row must be cleared on terminal transition"
+        )
+
+    def test_flush_only_on_interval_boundary(
+        self, snow_conn, fake_live, fake_semantic
+    ):
+        """Flush MUST be called only on tick % STATE_FLUSH_INTERVAL_TICKS == 0,
+        not every tick. Drives the loop forward without a real plan and
+        counts flush_to_db calls via a wrapper."""
+        from snow.state import PerConditionStateCache
+        from snow.snow_loop import STATE_FLUSH_INTERVAL_TICKS
+
+        class _CountingCache(PerConditionStateCache):
+            def __init__(self) -> None:
+                super().__init__()
+                self.flush_calls: int = 0
+
+            def flush_to_db(self, plan_ids=None) -> int:
+                self.flush_calls += 1
+                return super().flush_to_db(plan_ids)
+
+        cache = _CountingCache()
+        loop = _make_loop(
+            bot=_FakeBot(),
+            live_data=fake_live(price_mid=4725.0),
+            semantic_cache=fake_semantic(),
+            state_cache=cache,
+        )
+
+        # Run exactly STATE_FLUSH_INTERVAL_TICKS ticks. flush_to_db must
+        # be called exactly once (on the boundary tick).
+        for _ in range(STATE_FLUSH_INTERVAL_TICKS):
+            loop._tick()
+        assert cache.flush_calls == 1, (
+            f"expected 1 flush in {STATE_FLUSH_INTERVAL_TICKS} ticks, "
+            f"got {cache.flush_calls}"
+        )
+
+        # Run STATE_FLUSH_INTERVAL_TICKS - 1 more ticks → no additional flush.
+        for _ in range(STATE_FLUSH_INTERVAL_TICKS - 1):
+            loop._tick()
+        assert cache.flush_calls == 1
+
+        # One more tick crosses the next boundary.
+        loop._tick()
+        assert cache.flush_calls == 2
+
+    def test_flush_interval_constant_is_60(self):
+        from snow.snow_loop import STATE_FLUSH_INTERVAL_TICKS
+        assert STATE_FLUSH_INTERVAL_TICKS == 60

@@ -292,6 +292,32 @@ class IndicatorDivergence(_Cond):
     direction: DivergenceDirection
 
 
+# --- §8b #19: indicator crossover (FLO-359 Phase 8b commit 3 — STATEFUL) ---
+#
+# First stateful primitive. Fires on the FIRST tick where `indicator`
+# crosses `threshold` in `direction`. State carried on the per-condition
+# state row (`prev_value`, `prev_above_threshold`); equality at the
+# threshold is treated as ambiguous and preserves the last definite
+# state per RFC §3.1. Cold-start (no prev) seeds prev=current and
+# reports no crossing on that tick — the documented one-tick false-
+# negative window after a restart.
+
+CrossoverIndicator = Literal["rsi", "macd_histogram", "stochastic"]
+
+
+class IndicatorCrossover(_Cond):
+    """Crossover detection. State-bearing — requires schema_version >= 2.
+
+    `indicator` selects the LiveData accessor; `threshold` is the level
+    that must be crossed; `direction` is the side the crossover travels.
+    """
+    type: Literal["indicator_crossover"] = "indicator_crossover"
+    indicator: CrossoverIndicator
+    tf: Timeframe
+    direction: ComparisonOp
+    threshold: float
+
+
 # --- Discriminated union ---
 
 Condition = Annotated[
@@ -303,6 +329,8 @@ Condition = Annotated[
         DurationExceeds, TimeBetween,
         # Phase 7.3 (FLO-355) — Cat A additions
         BollingerPosition, Stochastic, PriceAtPivot, IndicatorDivergence,
+        # Phase 8b (FLO-359) — stateful additions
+        IndicatorCrossover,
     ],
     Field(discriminator="type"),
 ]

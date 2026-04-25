@@ -50,6 +50,7 @@ from snow.schema import (
     PlanStatus,
 )
 from snow.semantic_cache import SemanticCache
+from snow.state import PerConditionStateCache
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +60,12 @@ SHUTDOWN_POLL_SECONDS: float = 1.0
 TIMING_LOG_INTERVAL_TICKS: int = 60         # 5 minutes at 5s cadence
 TIMING_WARN_THRESHOLD_MS: float = 200.0
 ORPHAN_SWEEP_INTERVAL_TICKS: int = 60
+# FLO-359 Phase 8b commit 3 — flush the per-condition state cache to
+# `snow_plans.state_cache_json` every N ticks. 60 ticks at 5 s = 5 min,
+# matching the orphan-sweep cadence. Trade-off: more frequent = more DB
+# writes; less frequent = larger restart-recovery loss window. Stale
+# threshold (15 min) is the upper bound on this cadence.
+STATE_FLUSH_INTERVAL_TICKS: int = 60
 
 
 class SnowLoop:
@@ -83,6 +90,7 @@ class SnowLoop:
         tracker: Optional[PerPlanTracker] = None,
         dry_run: Optional[bool] = None,
         actions: Optional[Any] = None,
+        state_cache: Optional[PerConditionStateCache] = None,
     ) -> None:
         self._bot = bot
         self._symbol = symbol or getattr(config, "SYMBOL", "XAUUSD")
@@ -104,6 +112,16 @@ class SnowLoop:
             actions = SnowActions()
         self._actions = actions
 
+        # FLO-359 Phase 8b commit 3 — per-condition state cache.
+        # Production reuses the module-level singleton; tests inject
+        # fresh instances for isolation. Rehydrate happens at
+        # run_forever() start so a fresh `SnowLoop()` for tests does
+        # not touch DB until tests opt into it.
+        if state_cache is None:
+            from snow.state import state_cache as _global_state_cache
+            state_cache = _global_state_cache
+        self._state_cache = state_cache
+
         self._tick_count: int = 0
         # plan_id → status seen on the previous tick; used for terminal
         # transition detection (plan drops out of the active set).
@@ -118,6 +136,19 @@ class SnowLoop:
             "snow.loop.start symbol=%s dry_run=%s cycle_s=%.1f",
             self._symbol, self._dry_run, CYCLE_INTERVAL_SECONDS,
         )
+        # FLO-359 Phase 8b commit 3 — restore per-condition state from
+        # disk before evaluating any condition. Stale rows (last_seen_at
+        # older than STALE_STATE_THRESHOLD_MINUTES) drop here; first
+        # tick after rehydrate may see one false-negative on stateful
+        # conditions whose state was dropped (RFC §5.2).
+        try:
+            n_loaded = self._state_cache.rehydrate_from_db()
+            log.info(
+                "snow.state.rehydrate loaded=%d cache_size=%d",
+                n_loaded, len(self._state_cache),
+            )
+        except Exception:
+            log.exception("snow.state.rehydrate_failed")
         try:
             while self._is_running():
                 try:
@@ -126,6 +157,15 @@ class SnowLoop:
                     log.exception("snow.loop.tick_uncaught tick=%d", self._tick_count)
                 self._interruptible_sleep(CYCLE_INTERVAL_SECONDS)
         finally:
+            # Best-effort final flush so a clean shutdown persists the
+            # latest state. Crashes still rely on the periodic flush
+            # cadence — final flush is a nicety, not a guarantee.
+            try:
+                n_flushed = self._state_cache.flush_to_db()
+                if n_flushed:
+                    log.info("snow.state.final_flush plans=%d", n_flushed)
+            except Exception:
+                log.exception("snow.state.final_flush_failed")
             log.info("snow.loop.stop ticks=%d", self._tick_count)
 
     def _is_running(self) -> bool:
@@ -176,6 +216,17 @@ class SnowLoop:
 
         if self._tick_count % ORPHAN_SWEEP_INTERVAL_TICKS == 0:
             self._orphan_sweep(active_rows)
+
+        if self._tick_count % STATE_FLUSH_INTERVAL_TICKS == 0:
+            try:
+                n = self._state_cache.flush_to_db()
+                if n:
+                    log.debug(
+                        "snow.state.flush plans=%d tick=%d",
+                        n, self._tick_count,
+                    )
+            except Exception:
+                log.exception("snow.state.flush_failed tick=%d", self._tick_count)
 
         duration_ms = (time.monotonic() - t0) * 1000.0
         if self._tick_count % TIMING_LOG_INTERVAL_TICKS == 0:
@@ -265,6 +316,7 @@ class SnowLoop:
             tracker=self._tracker,
             plan=plan,
             ticket=None,  # pre-entry → no ticket
+            state_cache=self._state_cache,
         )
         all_true, snapshot = self._evaluate_conditions(
             plan.entry.conditions, ctx, plan.id, "_entry",
@@ -306,6 +358,7 @@ class SnowLoop:
             tracker=self._tracker,
             plan=plan,
             ticket=ticket,
+            state_cache=self._state_cache,
         )
         # plan_list_order convention (see priority.py):
         #   entry = -1, management = 0..N-1, exit = 1000..1000+M-1
@@ -380,7 +433,12 @@ class SnowLoop:
         for idx, cond in enumerate(conditions):
             key = f"c{idx}_{type(cond).__name__}"
             try:
-                result = bool(evaluate_condition(cond, ctx))
+                result = bool(evaluate_condition(
+                    cond, ctx,
+                    plan_id=plan_id,
+                    contingency_name=label,
+                    condition_index=idx,
+                ))
             except Exception:
                 log.exception(
                     "snow.condition.eval_error plan_id=%s label=%s idx=%d",
@@ -452,6 +510,20 @@ class SnowLoop:
                 self._tracker.forget(plan_id)
                 log.info(
                     "snow.tracker.forget plan_id=%s reason=terminal", plan_id,
+                )
+            # FLO-359 Phase 8b commit 3 — symmetrical state-cache cleanup.
+            # Terminal plans never re-enter `_LIVE_PLAN_STATUSES`, so any
+            # state cached for them is dead memory.
+            try:
+                forgot = self._state_cache.forget_plan(plan_id)
+                if forgot:
+                    log.info(
+                        "snow.state.forget plan_id=%s rows=%d reason=terminal",
+                        plan_id, forgot,
+                    )
+            except Exception:
+                log.exception(
+                    "snow.state.forget_failed plan_id=%s", plan_id,
                 )
             del self._last_known_status[plan_id]
 
