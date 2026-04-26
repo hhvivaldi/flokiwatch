@@ -24,6 +24,8 @@ from typing import Optional
 from logger import log
 from tz_utils import utc_iso
 
+import datetime as _dt
+
 from snow.evaluators.context import EvalContext, PIP_SIZE
 from snow.schema import (
     ATR,
@@ -31,6 +33,7 @@ from snow.schema import (
     EMARelation,
     IndicatorCrossover,
     IndicatorDivergence,
+    IndicatorWas,
     MACDHistogram,
     RSI,
     Stochastic,
@@ -244,3 +247,109 @@ def evaluate_indicator_crossover(
     state.last_seen_at = utc_iso()
 
     return fired
+
+
+# =============================================================================
+# Stateful: indicator_was (FLO-359 Phase 8b commit 4)
+# =============================================================================
+#
+# "Was the indicator value `op threshold` within the last `within_bars`
+# closed bars on `tf`?" Sliding window updated on bar boundaries via
+# `prev_bar_close_at` (ISO-8601 UTC-Z timestamp of the bar's open
+# instant). 5 ticks within one bar → 1 append; bar rolls → 1 append +
+# pop oldest if at capacity. Cold-start has empty history → False
+# until the first bar boundary is observed (RFC §3.2 + §7.3 contract).
+
+_TF_SECONDS: dict[str, int] = {
+    "M1":      60,
+    "M5":      5 * 60,
+    "M15":     15 * 60,
+    "H1":      3600,
+    "H4":      4 * 3600,
+    "D1":      86400,
+}
+
+
+def _bar_open_iso(tf: str, now: _dt.datetime) -> str:
+    """Floor `now` (UTC) to the bar boundary for `tf` and return the
+    bar-open instant as ISO-8601 UTC-Z. Bars roll on integer multiples
+    of `_TF_SECONDS[tf]` past the Unix epoch (matches MT5 convention
+    for sub-daily TFs; D1 happens to land on UTC midnight)."""
+    seconds = _TF_SECONDS.get(tf, 60)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_dt.timezone.utc)
+    epoch = int(now.timestamp())
+    floored = (epoch // seconds) * seconds
+    dt = _dt.datetime.fromtimestamp(floored, tz=_dt.timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _now_utc(ctx: EvalContext) -> _dt.datetime:
+    """Resolve the wall clock for bar-id computation. `ctx.now` lets
+    tests inject a deterministic time."""
+    if ctx.now is not None:
+        return ctx.now
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def evaluate_indicator_was(
+    cond: IndicatorWas,
+    ctx: EvalContext,
+    state,  # ConditionStateRow
+) -> bool:
+    """Sliding-window check on closed-bar values of `cond.indicator`.
+
+    Algorithm (RFC §3.2 + §7.3):
+      1. Read curr indicator value. None → return False (preserve state).
+      2. Compute `bar_id` = floor-to-tf(now). If
+         `state.prev_bar_close_at is None`: cold-start, seed
+         `prev_bar_close_at = bar_id` and return False (RFC §7.3
+         "cold start with no history: condition False").
+      3. If `bar_id != prev_bar_close_at`: a bar just rolled. Append
+         `curr` (the indicator value at bar boundary reflects the
+         just-closed bar for RSI / MACD / Stochastic) to
+         `bar_history`. Cap at `cond.within_bars` by popping oldest.
+         Update `prev_bar_close_at = bar_id`.
+      4. Evaluate: `True` iff any value in `bar_history` satisfies
+         `op threshold`.
+
+    `state.bar_history_max_n` is set on first allocation so the cache's
+    JSON snapshot includes the cap; rehydrate restores it.
+    """
+    curr = _read_indicator(cond.indicator, cond.tf, ctx)
+    if curr is None:
+        return False
+
+    bar_id = _bar_open_iso(cond.tf, _now_utc(ctx))
+
+    # Cold start — record the boundary, no satisfaction yet.
+    if state.prev_bar_close_at is None:
+        state.prev_bar_close_at = bar_id
+        state.bar_history_max_n = int(cond.within_bars)
+        state.last_seen_at = utc_iso()
+        return False
+
+    # New bar? Dedupe by bar_id; multiple ticks within one bar produce
+    # exactly one append.
+    if bar_id != state.prev_bar_close_at:
+        state.bar_history.append(float(curr))
+        cap = max(1, int(cond.within_bars))
+        # Defensive: keep capacity authoritative even if caller
+        # supplies a smaller `within_bars` than what the cached row
+        # was originally allocated against.
+        state.bar_history_max_n = cap
+        while len(state.bar_history) > cap:
+            state.bar_history.pop(0)
+        state.prev_bar_close_at = bar_id
+
+    state.last_seen_at = utc_iso()
+
+    if not state.bar_history:
+        return False
+    op = cond.op
+    threshold = cond.threshold
+    if op == "above":
+        return any(v > threshold for v in state.bar_history)
+    if op == "below":
+        return any(v < threshold for v in state.bar_history)
+    return False

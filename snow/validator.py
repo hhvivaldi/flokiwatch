@@ -257,9 +257,9 @@ def _check_schema_version(plan: Plan) -> list[str]:
 # parser, which itself rejects unknown types until the matching commit
 # lands.
 _STATEFUL_PRIMITIVES: frozenset[str] = frozenset({
-    "indicator_crossover",
-    "indicator_was",
-    "price_crossed_level",
+    "indicator_crossover",   # commit 3
+    "indicator_was",         # commit 4
+    "price_crossed_level",   # commit 5 (placeholder until that commit lands)
 })
 
 

@@ -318,6 +318,32 @@ class IndicatorCrossover(_Cond):
     threshold: float
 
 
+# --- §8b #20: indicator was (FLO-359 Phase 8b commit 4 — STATEFUL) ---
+#
+# Recent-history sliding-window primitive. Fires while ANY of the last
+# `within_bars` closed-bar values for `indicator` satisfied
+# `op threshold`. Updated on bar-close (deduped via
+# `prev_bar_close_at`); cold-start has empty history → False until the
+# first bar boundary observed. CEO cap on `within_bars` is 20 (Q2
+# decision) — bounds the per-row memory at ~20 floats.
+
+
+class IndicatorWas(_Cond):
+    """Did `indicator` value satisfy `op threshold` in any of the most
+    recent `within_bars` closed bars on `tf`?
+
+    Use case: 'RSI was below 30 within last 4 H1 bars' — true even if
+    RSI has now recovered to 40+. Combined via AND with other
+    primitives, expresses 'recovering from oversold' setups.
+    """
+    type: Literal["indicator_was"] = "indicator_was"
+    indicator: CrossoverIndicator
+    tf: Timeframe
+    op: ComparisonOp
+    threshold: float
+    within_bars: int = Field(ge=1, le=20)
+
+
 # --- Discriminated union ---
 
 Condition = Annotated[
@@ -330,7 +356,7 @@ Condition = Annotated[
         # Phase 7.3 (FLO-355) — Cat A additions
         BollingerPosition, Stochastic, PriceAtPivot, IndicatorDivergence,
         # Phase 8b (FLO-359) — stateful additions
-        IndicatorCrossover,
+        IndicatorCrossover, IndicatorWas,
     ],
     Field(discriminator="type"),
 ]

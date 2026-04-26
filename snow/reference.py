@@ -41,8 +41,9 @@ _CATEGORIES: Dict[str, str] = {
     "bollinger_position": "indicator",
     "stochastic": "indicator",
     "indicator_divergence": "indicator",
-    # Phase 8b (FLO-359) — stateful indicator
+    # Phase 8b (FLO-359) — stateful indicators
     "indicator_crossover": "indicator",
+    "indicator_was": "indicator",
     # Structural / level proximity
     "price_at_sr_zone": "structural",
     "price_at_fibonacci": "structural",

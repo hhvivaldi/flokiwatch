@@ -813,3 +813,50 @@ class TestStatefulGateEndToEnd:
         assert c0.type == "indicator_crossover"
         assert c0.indicator == "rsi"
         assert c0.threshold == 70.0
+
+    # --- indicator_was (Phase 8b commit 4) ---
+
+    def _was_cond_dict(self) -> dict:
+        return {
+            "type": "indicator_was",
+            "indicator": "rsi",
+            "tf": "H1",
+            "op": "below",
+            "threshold": 30.0,
+            "within_bars": 4,
+        }
+
+    def test_v1_plan_with_real_indicator_was_rejected(
+        self, valid_plan_dict_v1
+    ):
+        valid_plan_dict_v1["entry"]["conditions"] = [self._was_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict_v1)
+        assert ok is False
+        assert plan is not None
+        assert plan.schema_version == 1
+        assert any("indicator_was" in e for e in errors)
+        assert any("schema_version >= 2" in e for e in errors)
+
+    def test_v2_plan_with_indicator_was_validates(
+        self, valid_plan_dict
+    ):
+        valid_plan_dict["entry"]["conditions"] = [self._was_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is True, f"v2 plan rejected: {errors}"
+        c0 = plan.entry.conditions[0]
+        assert c0.type == "indicator_was"
+        assert c0.within_bars == 4
+
+    def test_v2_plan_with_within_bars_above_cap_rejected(
+        self, valid_plan_dict
+    ):
+        """Pydantic schema-level cap (within_bars ≤ 20) enforced at
+        parse time. Errors land in the schema-error list, not the
+        gate's stateful-in-v1 list."""
+        cond = self._was_cond_dict()
+        cond["within_bars"] = 21
+        valid_plan_dict["entry"]["conditions"] = [cond]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        assert plan is None  # Pydantic parse failed; gate never reached.
+        assert any("within_bars" in e or "20" in e for e in errors)

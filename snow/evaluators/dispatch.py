@@ -31,6 +31,7 @@ from snow.evaluators.indicator import (
     evaluate_ema_relation,
     evaluate_indicator_crossover,
     evaluate_indicator_divergence,
+    evaluate_indicator_was,
     evaluate_macd_histogram,
     evaluate_rsi,
     evaluate_stochastic,
@@ -93,6 +94,7 @@ _DISPATCH: dict[str, Callable[[Any, EvalContext], bool]] = {
 # their own table so stateless evaluators stay 2-arg and untouched.
 _DISPATCH_STATEFUL: dict[str, Callable[[Any, EvalContext, Any], bool]] = {
     "indicator_crossover":    evaluate_indicator_crossover,
+    "indicator_was":          evaluate_indicator_was,
 }
 
 
