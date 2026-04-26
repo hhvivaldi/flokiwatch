@@ -38,13 +38,22 @@ from snow.schema import Plan, PlanStatus
 
 @dataclass
 class FakeDeal:
-    """MT5-shaped deal. `entry` 0=IN, 1=OUT, 2=INOUT. `type` 0=BUY, 1=SELL."""
+    """MT5-shaped deal. `entry` 0=IN, 1=OUT, 2=INOUT. `type` 0=BUY, 1=SELL.
+
+    `position_id` defaults to the ticket so existing tests keep working;
+    the position_id-filter test sets a mismatching value explicitly.
+    """
     ticket: int
     entry: int
     type: int
     price: float
     volume: float
     profit: float
+    position_id: int = -1
+
+    def __post_init__(self):
+        if self.position_id < 0:
+            self.position_id = self.ticket
 
 
 class FakeMT5:
@@ -183,6 +192,82 @@ class TestHappyPath:
 # =============================================================================
 # Partial closes
 # =============================================================================
+
+class TestPositionIdFilter:
+    """FLO-353 production bug — MT5's `position=ticket` query param is
+    documented as a hint, not a guarantee. The first live trade
+    (PLAN-20260426-002, ticket=1612264515) saw MT5 return 202 deals,
+    of which only 2 actually had `position_id == ticket`. Without
+    the defensive filter, backfill aggregated 95× the plan's volume
+    into a fictional +$234 outcome on a 0.02-lot SELL whose actual
+    close was at MT5 TP=4680.
+
+    This test class pins the filter so the bug cannot regress."""
+
+    def test_filter_drops_deals_with_mismatched_position_id(
+        self, snow_conn, closed_plan,
+    ):
+        """Real shape from production: 1 IN + 1 OUT for OUR ticket,
+        plus N+M unrelated deals MT5 surfaced under
+        `position=our_ticket`. After the filter, only the 2
+        matching deals contribute to the outcome computation."""
+        ours = [
+            FakeDeal(
+                ticket=99991, entry=0, type=1, price=4693.0,
+                volume=0.02, profit=0.0, position_id=99991,
+            ),
+            FakeDeal(
+                ticket=99991, entry=1, type=0, price=4680.0,
+                volume=0.02, profit=2.6, position_id=99991,
+            ),
+        ]
+        # Noise: 50 IN + 50 OUT deals from a totally different
+        # position. MT5 returns them under our `position=` query for
+        # reasons known only to MetaQuotes; without the filter they
+        # would corrupt the outcome.
+        noise = []
+        for i in range(50):
+            noise.append(FakeDeal(
+                ticket=99991, entry=0, type=0, price=4645.0,
+                volume=0.02, profit=0.0, position_id=11111,
+            ))
+            noise.append(FakeDeal(
+                ticket=99991, entry=1, type=1, price=4760.0,
+                volume=0.02, profit=2.3, position_id=11111,
+            ))
+        all_deals = ours + noise
+        mt5p = FakeMT5(deal_history={99991: all_deals})
+
+        result = backfill_outcome(closed_plan.id, 99991, mt5_proxy=mt5p)
+        assert result.success is True
+        # Direction = SELL (from our IN deal), not BUY (from noise).
+        # Pips = (4680 - 4693) * -1 / 0.1 = 130 pips profit on the SELL.
+        assert result.outcome_pips == pytest.approx(130.0)
+        assert result.outcome_usd == pytest.approx(2.6)
+        assert result.deal_count == 2  # only the matching pair
+
+    def test_filter_empty_after_drop_returns_no_deals(
+        self, snow_conn, closed_plan,
+    ):
+        """If MT5 returns deals but NONE match position_id, the
+        filter strips everything and backfill records the
+        no_deals_for_ticket failure mode (not the wrong-data
+        success that motivated this filter)."""
+        unrelated = [
+            FakeDeal(
+                ticket=99991, entry=0, type=0, price=4720.0,
+                volume=0.10, profit=0.0, position_id=22222,
+            ),
+            FakeDeal(
+                ticket=99991, entry=1, type=1, price=4730.0,
+                volume=0.10, profit=10.0, position_id=22222,
+            ),
+        ]
+        mt5p = FakeMT5(deal_history={99991: unrelated})
+        result = backfill_outcome(closed_plan.id, 99991, mt5_proxy=mt5p)
+        assert result.success is False
+        assert result.reason == "no_deals_for_ticket"
+
 
 class TestPartialClose:
 

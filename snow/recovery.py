@@ -236,30 +236,43 @@ def fetch_deal_history(
     mt5_proxy=None,
     lookback_days: int = _DEAL_HISTORY_LOOKBACK_DAYS,
 ) -> Optional[list]:
-    """Query MT5 deal history for a position ticket with retry+backoff.
+    """Query MT5 deal history for a position ticket with retry+backoff
+    AND a defensive `position_id == ticket` re-filter.
 
     Returns:
       `list` (possibly empty): MT5 returned a definitive answer.
-        Empty list = no deals exist for the ticket. Non-empty = the
-        ticket has trades in history.
+        Empty list = no deals exist FOR THIS TICKET (after filter).
+        Non-empty = the ticket has trades in history.
       `None`: All retries returned None (transient MT5 error).
         Caller should NOT mark as FAILED; leave the plan for the
         next startup pass.
 
-    Reused by FLO-353's outcome backfill — same retry pattern.
+    Defensive position_id filter (FLO-373/observation):
+      MT5's `position=ticket` parameter is documented as a hint, not
+      a guarantee. In practice it can return deals where
+      `deal.position_id != ticket` — the same workaround
+      `executor._search_deal_by_position_param` already applies. This
+      function therefore re-filters the returned list to only deals
+      whose `position_id` matches `ticket`. A non-matching deal is
+      dropped silently; if the entire list filters away to empty,
+      that's the genuine "no deals for this ticket" answer.
+
+    Reused by FLO-353's outcome backfill — same retry pattern, same
+    filter.
     """
     proxy = mt5_proxy if mt5_proxy is not None else _default_mt5
     date_from = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=lookback_days)
     date_to = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=1)
+    ticket_int = int(ticket)
 
     for attempt, backoff in enumerate(_DEAL_HISTORY_RETRY_BACKOFFS, start=1):
         try:
             deals = proxy.history_deals_get(
-                date_from, date_to, position=ticket
+                date_from, date_to, position=ticket_int
             )
         except Exception as e:
             log.warning(
-                f"snow.recovery.deal_history_error ticket={ticket} "
+                f"snow.recovery.deal_history_error ticket={ticket_int} "
                 f"attempt={attempt} error={type(e).__name__}: {e}"
             )
             deals = None
@@ -268,11 +281,25 @@ def fetch_deal_history(
                 _time.sleep(backoff)
                 continue
             log.warning(
-                f"snow.recovery.deal_history_exhausted ticket={ticket} "
+                f"snow.recovery.deal_history_exhausted ticket={ticket_int} "
                 f"attempts={attempt}"
             )
             return None
-        return list(deals)
+        # Defensive position_id filter — drop any deal MT5 surfaced
+        # whose position_id doesn't match the ticket we asked for.
+        raw = list(deals)
+        filtered = [
+            d for d in raw
+            if int(getattr(d, "position_id", -1)) == ticket_int
+        ]
+        if len(filtered) != len(raw):
+            log.warning(
+                f"snow.recovery.deal_history_filtered "
+                f"ticket={ticket_int} raw={len(raw)} kept={len(filtered)} "
+                f"dropped={len(raw) - len(filtered)} "
+                f"reason=position_id_mismatch"
+            )
+        return filtered
     return None
 
 

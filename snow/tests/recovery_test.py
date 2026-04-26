@@ -54,6 +54,15 @@ class FakePosition:
 class FakeDeal:
     ticket: int
     profit: float = 0.0
+    # FLO-353 follow-up — `position_id` matches the ticket we asked
+    # for; `fetch_deal_history` filters out any deal whose
+    # `position_id` does NOT match (defensive against MT5's
+    # documented unreliability of the `position=` query param).
+    position_id: int = -1
+
+    def __post_init__(self):
+        if self.position_id < 0:
+            self.position_id = self.ticket
 
 
 class FakeMT5:
@@ -183,7 +192,7 @@ def _read_evaluations(plan_id: str) -> list[dict]:
 class TestFetchDealHistory:
 
     def test_returns_list_on_first_success(self):
-        deals = [FakeDeal(ticket=1)]
+        deals = [FakeDeal(ticket=111, position_id=111)]
         mt5p = FakeMT5(deal_history={111: deals})
         out = fetch_deal_history(111, mt5_proxy=mt5p)
         assert out == deals
@@ -198,7 +207,7 @@ class TestFetchDealHistory:
         """First two attempts return None; third returns a non-empty
         list. Sleep is monkeypatched out so the test runs fast."""
         monkeypatch.setattr(snow_recovery._time, "sleep", lambda _s: None)
-        deals = [FakeDeal(ticket=2)]
+        deals = [FakeDeal(ticket=222, position_id=222)]
         mt5p = FakeMT5(
             deal_history_attempts={222: [None, None, deals]},
         )
