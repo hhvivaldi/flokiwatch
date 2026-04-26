@@ -505,7 +505,25 @@ class SnowActions:
     def _dispatch_close_partial(
         self, fire: FireEvent, payload: FirePayload
     ) -> ActionResult:
-        """Partial close. No plan-state transition (plan stays ACTIVE)."""
+        """Partial close. No plan-state transition (plan stays ACTIVE).
+
+        Outcome backfill: NOT called here. Backfill runs on the
+        CLOSED transition, which `close_partial` does not perform.
+        Two coverage paths for a fully-closed-via-partials position:
+
+          1. The remaining volume is closed via `close_full` later —
+             the close_full success branch backfills as normal.
+          2. The plan is left in ACTIVE with no MT5 position until the
+             next bot restart, at which point `snow.recovery`'s
+             ACTIVE → CLOSED bucket transitions the plan AND calls
+             `backfill_outcome` itself (FLO-354 + FLO-353 wiring).
+
+        A chain of close_partial calls that drives volume to zero
+        without a final close_full will therefore leave outcome
+        columns NULL until the next restart, when recovery catches
+        it. Acceptable: this is observability, not correctness, and
+        recovery's ACTIVE → CLOSED detection is the safety net.
+        """
         ticket = payload.ticket
         action = payload.action
         if ticket is None:
