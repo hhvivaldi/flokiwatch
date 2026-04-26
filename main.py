@@ -1199,20 +1199,48 @@ class TradingBot:
         # init_snow_tables() is idempotent (CREATE TABLE IF NOT EXISTS) —
         # safe to call on every bot start when SNOW_ENABLED.
         if bool(getattr(config, "SNOW_ENABLED", False)):
+            from snow import db as _snow_db
+            from snow import recovery as _snow_recovery
+            from snow import snow_loop as _snow_loop
+
+            _snow_db.init_snow_tables()
+
+            # FLO-354 — startup reconciliation. MUST complete before
+            # the loop spawns; on RecoveryAborted (MT5 disconnect /
+            # DB read failure) we deliberately fail-loud and refuse
+            # to spawn. Operator handles it; a fresh restart with MT5
+            # connected reconciles correctly.
+            self._snow_thread = None
             try:
-                from snow import db as _snow_db
-                from snow import snow_loop as _snow_loop
-                _snow_db.init_snow_tables()
-                self._snow_thread = threading.Thread(
-                    target=_snow_loop.run_forever, args=(self,),
-                    name="SnowLoop", daemon=True,
+                _summary = _snow_recovery.reconcile_on_startup(
+                    tracker=None,
                 )
-                self._snow_thread.start()
-                _dry = bool(getattr(config, "SNOW_DRY_RUN", True))
-                log.info(f"Snow loop spawned (DRY_RUN={_dry})")
+                log.info(f"snow.recovery.complete {_summary.as_log_kvs()}")
+                _spawn_loop = True
+            except _snow_recovery.RecoveryAborted as e:
+                log.error(
+                    f"snow.recovery.aborted refusing to spawn SnowLoop: {e}"
+                )
+                _spawn_loop = False
             except Exception as e:
-                log.error(f"snow.loop.spawn_failed: {e}")
+                log.error(
+                    f"snow.recovery.unhandled {type(e).__name__}: {e}"
+                )
                 log.error(traceback.format_exc())
+                _spawn_loop = False
+
+            if _spawn_loop:
+                try:
+                    self._snow_thread = threading.Thread(
+                        target=_snow_loop.run_forever, args=(self,),
+                        name="SnowLoop", daemon=True,
+                    )
+                    self._snow_thread.start()
+                    _dry = bool(getattr(config, "SNOW_DRY_RUN", True))
+                    log.info(f"Snow loop spawned (DRY_RUN={_dry})")
+                except Exception as e:
+                    log.error(f"snow.loop.spawn_failed: {e}")
+                    log.error(traceback.format_exc())
 
         write_state(self)
 
