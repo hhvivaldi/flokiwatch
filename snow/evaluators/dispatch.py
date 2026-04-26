@@ -42,7 +42,11 @@ from snow.evaluators.position import (
     evaluate_profit_pips,
     evaluate_profit_retraced_from_peak,
 )
-from snow.evaluators.price import evaluate_price_above, evaluate_price_below
+from snow.evaluators.price import (
+    evaluate_price_above,
+    evaluate_price_below,
+    evaluate_price_crossed_level,
+)
 from snow.evaluators.structural import (
     evaluate_price_at_fibonacci,
     evaluate_price_at_pivot,
@@ -95,6 +99,7 @@ _DISPATCH: dict[str, Callable[[Any, EvalContext], bool]] = {
 _DISPATCH_STATEFUL: dict[str, Callable[[Any, EvalContext, Any], bool]] = {
     "indicator_crossover":    evaluate_indicator_crossover,
     "indicator_was":          evaluate_indicator_was,
+    "price_crossed_level":    evaluate_price_crossed_level,
 }
 
 

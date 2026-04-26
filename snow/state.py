@@ -110,6 +110,10 @@ class ConditionStateRow:
     bar_history: list[float] = field(default_factory=list)
     bar_history_max_n: int = 0
     prev_bar_close_at: Optional[str] = None
+    # FLO-359 Phase 8b commit 5 — one-shot latch flag for
+    # `price_crossed_level`. Stays None for crossover / indicator_was
+    # rows; True once the level has been crossed and persisted.
+    latched: Optional[bool] = None
     last_seen_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -136,6 +140,7 @@ class ConditionStateRow:
             bar_history=list(d.get("bar_history", [])),
             bar_history_max_n=int(d.get("bar_history_max_n", 0)),
             prev_bar_close_at=d.get("prev_bar_close_at"),
+            latched=d.get("latched"),
             last_seen_at=str(d.get("last_seen_at", "")),
         )
 

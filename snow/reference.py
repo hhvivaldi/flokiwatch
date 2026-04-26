@@ -48,6 +48,8 @@ _CATEGORIES: Dict[str, str] = {
     "price_at_sr_zone": "structural",
     "price_at_fibonacci": "structural",
     "price_at_pivot": "structural",
+    # Phase 8b (FLO-359) — stateful price-level latch
+    "price_crossed_level": "price",
     # Position-state — require ACTIVE plan (a real broker ticket)
     "profit_pips": "position_state",
     "mfe_reached": "position_state",

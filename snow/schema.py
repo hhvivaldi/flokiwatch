@@ -344,6 +344,32 @@ class IndicatorWas(_Cond):
     within_bars: int = Field(ge=1, le=20)
 
 
+# --- §8b #21: price crossed level (FLO-359 Phase 8b commit 5 — STATEFUL) ---
+#
+# One-shot latch. Once price has crossed `level` in `direction`, the
+# condition stays True for the rest of the plan's lifetime (until the
+# plan transitions to a terminal status, at which point
+# `state_cache.forget_plan` clears the row). Per CEO Q3 decision: no
+# mid-plan reset — operators express "fire on each cross" via paired
+# plans, not by resetting a single plan's latch.
+
+
+class PriceCrossedLevel(_Cond):
+    """Latch on the first price-vs-level crossing. State-bearing —
+    requires schema_version >= 2.
+
+    `direction` is the side the crossing must travel:
+      "above" — price moves from at-or-below to strictly above `level`
+      "below" — price moves from at-or-above to strictly below `level`
+
+    Building block for sweep / tag detection: combine with
+    `price_above`/`price_below` for "tagged-then-bounced" semantics.
+    """
+    type: Literal["price_crossed_level"] = "price_crossed_level"
+    direction: ComparisonOp
+    level: float
+
+
 # --- Discriminated union ---
 
 Condition = Annotated[
@@ -356,7 +382,7 @@ Condition = Annotated[
         # Phase 7.3 (FLO-355) — Cat A additions
         BollingerPosition, Stochastic, PriceAtPivot, IndicatorDivergence,
         # Phase 8b (FLO-359) — stateful additions
-        IndicatorCrossover, IndicatorWas,
+        IndicatorCrossover, IndicatorWas, PriceCrossedLevel,
     ],
     Field(discriminator="type"),
 ]

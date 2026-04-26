@@ -860,3 +860,34 @@ class TestStatefulGateEndToEnd:
         assert ok is False
         assert plan is None  # Pydantic parse failed; gate never reached.
         assert any("within_bars" in e or "20" in e for e in errors)
+
+    # --- price_crossed_level (Phase 8b commit 5) ---
+
+    def _crossed_cond_dict(self) -> dict:
+        return {
+            "type": "price_crossed_level",
+            "direction": "above",
+            "level": 4720.0,
+        }
+
+    def test_v1_plan_with_real_price_crossed_level_rejected(
+        self, valid_plan_dict_v1
+    ):
+        valid_plan_dict_v1["entry"]["conditions"] = [self._crossed_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict_v1)
+        assert ok is False
+        assert plan is not None
+        assert plan.schema_version == 1
+        assert any("price_crossed_level" in e for e in errors)
+        assert any("schema_version >= 2" in e for e in errors)
+
+    def test_v2_plan_with_price_crossed_level_validates(
+        self, valid_plan_dict
+    ):
+        valid_plan_dict["entry"]["conditions"] = [self._crossed_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is True, f"v2 plan rejected: {errors}"
+        c0 = plan.entry.conditions[0]
+        assert c0.type == "price_crossed_level"
+        assert c0.direction == "above"
+        assert c0.level == 4720.0
