@@ -424,7 +424,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.6"
+    EXPECTED_VERSION = "3.7"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""
@@ -891,3 +891,125 @@ class TestStatefulGateEndToEnd:
         assert c0.type == "price_crossed_level"
         assert c0.direction == "above"
         assert c0.level == 4720.0
+
+
+# =============================================================================
+# v3.7 prompt regression — exposes stateful primitives to Floki
+# =============================================================================
+#
+# v3.7 lifts the "no crossover / no recent-history / no direction"
+# caveat that v3.5 codified, since Phase 8b (FLO-359) shipped the
+# three stateful primitives that exception was placeholding for. These
+# tests pin the new wording so a future edit can't silently lose:
+#   * the per-primitive descriptions (indicator_crossover,
+#     indicator_was, price_crossed_level)
+#   * the scoped memory-model paragraph that explains which primitives
+#     carry state vs which don't
+#   * the dead "deferred — separate RFC" sentence (must be removed)
+# =============================================================================
+
+
+class TestPromptV3_7Stateful:
+
+    def test_three_stateful_primitives_named(self):
+        from agent_prompts import SYSTEM_PROMPT
+        for prim in (
+            "indicator_crossover",
+            "indicator_was",
+            "price_crossed_level",
+        ):
+            assert prim in SYSTEM_PROMPT, (
+                f"v3.7: stateful primitive {prim!r} missing from prompt"
+            )
+
+    def test_stateful_section_exists_under_condition_primitives(self):
+        """Use-case framing — the Stateful sub-bullet should appear in
+        the same neighbourhood as the other category bullets. We check
+        for the section header AND the specific keyword 'memory'
+        (the Stateful section's distinguishing marker)."""
+        from agent_prompts import SYSTEM_PROMPT
+        # Locate the Condition primitives section.
+        idx = SYSTEM_PROMPT.find("Condition primitives:")
+        assert idx >= 0, "Condition primitives section missing"
+        section = SYSTEM_PROMPT[idx:idx + 4000]
+        assert "Stateful" in section, (
+            "v3.7: Stateful sub-bullet missing from Condition primitives"
+        )
+        assert "memory" in section.lower(), (
+            "v3.7: Stateful section should describe carry-memory semantics"
+        )
+
+    def test_v35_deferred_caveat_removed(self):
+        """The v3.5 sentence framing stateful primitives as deferred to
+        a separate RFC is no longer accurate post-FLO-359. It must be
+        replaced (not duplicated alongside the new framing)."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "deferred — separate RFC" not in SYSTEM_PROMPT, (
+            "v3.7: stale 'deferred — separate RFC' caveat from v3.5 still "
+            "present; the stateful primitives shipped"
+        )
+        # Hard "NO crossover / NO 'X within last N bars'" framing also
+        # stale — Floki now has both.
+        assert "NO crossover" not in SYSTEM_PROMPT, (
+            "v3.7: stale 'NO crossover' caveat from v3.5 still present"
+        )
+        assert 'NO "X within last N bars"' not in SYSTEM_PROMPT, (
+            "v3.7: stale 'NO X within last N bars' caveat still present"
+        )
+
+    def test_memory_model_paragraph_explains_cold_start(self):
+        """Operators should know that a long-outage rehydrate may
+        produce a single cold-start false-negative. The phrase must be
+        somewhere in the prompt so Floki can read it when drafting."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "cold-start" in SYSTEM_PROMPT or "cold start" in SYSTEM_PROMPT, (
+            "v3.7: cold-start window not documented in prompt"
+        )
+        assert "15 min" in SYSTEM_PROMPT or "15 minutes" in SYSTEM_PROMPT, (
+            "v3.7: 15-minute stale-state threshold not surfaced"
+        )
+
+    def test_schema_version_2_promotion_documented(self):
+        """Floki should not have to think about schema_version — but
+        when reading the prompt he should at least know stateful
+        primitives are gated on v2, and that submit_plan_to_snow does
+        the bump for him."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "schema_version" in SYSTEM_PROMPT
+        # Look for the auto-stamp framing in proximity.
+        # (The exact phrasing is "auto-stamps v2" or similar; check
+        # both common forms.)
+        assert ("auto-stamps" in SYSTEM_PROMPT
+                or "automatically" in SYSTEM_PROMPT
+                or "invisible" in SYSTEM_PROMPT), (
+            "v3.7: prompt should make clear stateful primitives are "
+            "available without per-plan schema_version handling"
+        )
+
+    def test_use_case_framing_per_stateful_primitive(self):
+        """Each stateful primitive should have at least one use-case
+        anchor in the prompt — without prescribing how to combine them."""
+        from agent_prompts import SYSTEM_PROMPT
+        # indicator_crossover → "crossing event" or "first tick" framing
+        assert ("crossing event" in SYSTEM_PROMPT
+                or "FIRST tick" in SYSTEM_PROMPT
+                or "first tick" in SYSTEM_PROMPT), (
+            "v3.7: indicator_crossover use-case framing missing"
+        )
+        # indicator_was → "recent" or "within the last" framing
+        assert ("within the last" in SYSTEM_PROMPT
+                or "recent" in SYSTEM_PROMPT.lower()), (
+            "v3.7: indicator_was recent-history framing missing"
+        )
+        # price_crossed_level → "tagged" or "latch" framing
+        assert ("latch" in SYSTEM_PROMPT.lower()
+                or "tagged" in SYSTEM_PROMPT), (
+            "v3.7: price_crossed_level latch / tag framing missing"
+        )
+
+    def test_get_snow_primitives_reference_still_referenced(self):
+        """v3.6's cross-reference to the schema-introspection tool
+        should survive — it's the operator's escape hatch for exact
+        parameter shapes including the new within_bars bound."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "get_snow_primitives_reference" in SYSTEM_PROMPT

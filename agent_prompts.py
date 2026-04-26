@@ -136,15 +136,19 @@ MINIMAL PLAN EXAMPLE:
 }
 
 Condition primitives:
-- Price: price_above, price_below.
+- Price (point-in-time): price_above, price_below.
 - Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).
-- Structural / level proximity: price_at_sr_zone, price_at_fibonacci (extended: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips), price_at_pivot (Classic / Fibonacci sets, levels PP/R1-R3/S1-S3, mandatory tolerance_pips).
+- Structural / level proximity (point-in-time): price_at_sr_zone, price_at_fibonacci (extended: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips), price_at_pivot (Classic / Fibonacci sets, levels PP/R1-R3/S1-S3, mandatory tolerance_pips).
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.
+- Stateful (carry memory across ticks — Phase 8b additions):
+  - indicator_crossover — fires on the FIRST tick an indicator (rsi / macd_histogram / stochastic) crosses a threshold in the named direction. Use when you want the crossing event itself, not a sustained state. Example: "fire when RSI H1 crosses below 30" (oversold trigger, not "RSI is below 30 right now").
+  - indicator_was — true if the indicator was {op} {threshold} in any of the last `within_bars` closed bars on `tf` (1 ≤ within_bars ≤ 20). Sliding window updated on bar-close. Useful for "RSI reached oversold within the last 4 H1 bars" recovery setups, where the qualifying event has already passed by the time you want to act.
+  - price_crossed_level — one-shot latch on price-vs-level crossing. Once price crosses `level` in `direction`, the condition stays True for the rest of the plan's lifetime (no mid-plan reset; a new plan starts the latch fresh). Useful for "tagged then bounced" patterns: AND it with price_above/price_below to express "price visited 4720 from above and is now back above 4725."
 
 For exact parameter shapes, enum values, and numeric bounds, call get_snow_primitives_reference(category=...) — Pydantic-derived, never drifts from the schema. Categories: price | indicator | structural | position_state | time.
 
-Critical caveats: every condition is point-in-time (current value vs threshold). NO crossover, NO "X within last N bars", NO "RSI rising vs falling". To express direction or recovery, you express the END STATE and rely on conditions reaching it. Stateful primitives (crossover, recent-history, sweep semantics) are deferred — separate RFC.
+Memory model: most primitives are point-in-time (current value vs threshold) and carry no memory across ticks — to express direction or recovery with those, encode the END STATE you want and rely on conditions reaching it. The three stateful primitives above are the explicit exceptions: they observe transitions (indicator_crossover), recent history (indicator_was), or a one-shot crossing event (price_crossed_level). Stateful conditions are restored across a bot restart from `state_cache_json`; if state is older than 15 minutes (e.g., long outage), the condition cold-starts on its next tick and may report a single false-negative before the next observation re-seeds it. Stateful primitives are also restricted to schema_version >= 2 plans — submit_plan_to_snow auto-stamps v2 so this is invisible day-to-day.
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
 
@@ -330,6 +334,16 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.7 — FLO-359 Phase 8b (stateful primitive vocabulary): exposes
+          indicator_crossover, indicator_was, and price_crossed_level
+          to Floki. Replaces the v3.5 "every condition is point-in-
+          time / NO crossover / NO recent-history" caveat with a
+          scoped memory-model paragraph that names which primitives
+          carry state vs which don't. Adds a "Stateful" sub-bullet to
+          the Condition primitives list with one-line use-case framing
+          per primitive. Documents the 15-min cold-start window after
+          long outages and the implicit schema_version=2 promotion.
+          Previous: 3.6.
     3.6 — FLO-357 Phase 7.4 (vocabulary discoverability): cross-
           references get_snow_primitives_reference(category=...) for
           exact param shapes / enum values / numeric bounds. The tool
@@ -365,7 +379,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.6"
+    return "3.7"
 
 
 def get_prompt_hash() -> str:
