@@ -147,6 +147,44 @@ _DDL_STATEMENTS: tuple[str, ...] = (
     CREATE INDEX IF NOT EXISTS idx_snow_evaluations_plan_time
         ON snow_evaluations(plan_id, evaluated_at DESC)
     """,
+
+    # --- snow_execution_quality (FLO-365) -----------------------------------
+    # One row per dispatched FireEvent. PK is the snow_triggers row that
+    # records the same dispatch — they're 1:1, so we share IDs. Slippage,
+    # latency, and tick-snapshot fields are NULL for non-fill paths
+    # (modify/adjust dispatches) so a single table covers all action types.
+    """
+    CREATE TABLE IF NOT EXISTS snow_execution_quality (
+        id              INTEGER PRIMARY KEY,
+        plan_id         TEXT NOT NULL,
+        action_type     TEXT NOT NULL,
+        fired_at        TEXT,
+        executed_at     TEXT NOT NULL,
+        latency_ms      INTEGER,
+        plan_volume     REAL,
+        plan_price      REAL,
+        actual_volume   REAL,
+        actual_price    REAL,
+        slippage_pips   REAL,
+        bid_at_fire     REAL,
+        ask_at_fire     REAL,
+        mid_at_fire     REAL,
+        status          TEXT NOT NULL,
+        ticket          INTEGER,
+        attempts        INTEGER,
+        error_message   TEXT,
+        FOREIGN KEY (id)      REFERENCES snow_triggers(id),
+        FOREIGN KEY (plan_id) REFERENCES snow_plans(id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_snow_exec_quality_plan
+        ON snow_execution_quality(plan_id, executed_at DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_snow_exec_quality_action
+        ON snow_execution_quality(action_type, executed_at DESC)
+    """,
 )
 
 
@@ -636,5 +674,74 @@ def record_trigger_and_transition(
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# Execution quality (FLO-365)
+# =============================================================================
+
+def insert_execution_quality(
+    *,
+    trigger_id: int,
+    plan_id: str,
+    action_type: str,
+    fired_at: Optional[str],
+    executed_at: str,
+    latency_ms: Optional[int],
+    plan_volume: Optional[float],
+    plan_price: Optional[float],
+    actual_volume: Optional[float],
+    actual_price: Optional[float],
+    slippage_pips: Optional[float],
+    bid_at_fire: Optional[float],
+    ask_at_fire: Optional[float],
+    mid_at_fire: Optional[float],
+    status: str,
+    ticket: Optional[int],
+    attempts: Optional[int],
+    error_message: Optional[str],
+) -> None:
+    """Append a snow_execution_quality row keyed to a snow_triggers id.
+
+    Best-effort: the caller has already recorded the trigger and (if a
+    fill) updated the plan; a failure here must not propagate up and
+    abort the dispatch. Logs and swallows.
+    """
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO snow_execution_quality (
+                id, plan_id, action_type, fired_at, executed_at,
+                latency_ms, plan_volume, plan_price,
+                actual_volume, actual_price, slippage_pips,
+                bid_at_fire, ask_at_fire, mid_at_fire,
+                status, ticket, attempts, error_message
+            ) VALUES (?, ?, ?, ?, ?,  ?, ?, ?,  ?, ?, ?,  ?, ?, ?,  ?, ?, ?, ?)
+            """,
+            (
+                int(trigger_id), plan_id, action_type, fired_at, executed_at,
+                latency_ms, plan_volume, plan_price,
+                actual_volume, actual_price, slippage_pips,
+                bid_at_fire, ask_at_fire, mid_at_fire,
+                status, ticket, attempts, error_message,
+            ),
+        )
+        conn.commit()
+    except Exception as e:
+        # Best-effort observability: don't let an FK / disk hiccup abort
+        # the dispatch. Logged once via the project logger; the missing
+        # row will surface to operators when an aggregate query comes up
+        # short.
+        try:
+            from logger import log as _log
+            _log.warning(
+                f"snow.db.insert_execution_quality_failed trigger_id={trigger_id} "
+                f"plan={plan_id} action={action_type}: {type(e).__name__}: {e}"
+            )
+        except Exception:
+            pass
     finally:
         conn.close()

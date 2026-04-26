@@ -39,6 +39,7 @@ import time
 from typing import Any, Optional
 
 import config
+from tz_utils import utc_iso
 from snow import db as snow_db
 from snow.evaluators import EvalContext, PerPlanTracker, evaluate_condition
 from snow.live_data import LiveData
@@ -344,6 +345,7 @@ class SnowLoop:
             override=5,  # entry has no override; use default
             plan_list_order=-1,  # entry sorts first within a plan
             payload=payload,
+            fired_at=utc_iso(),
         ))
 
     # ------------------------------------------------------------------
@@ -413,6 +415,7 @@ class SnowLoop:
             override=int(contingency.priority),
             plan_list_order=plan_list_order,
             payload=payload,
+            fired_at=utc_iso(),
         ))
 
     def _evaluate_conditions(

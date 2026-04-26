@@ -40,6 +40,7 @@ from logger import log
 from tz_utils import utc_iso
 
 from snow import db as snow_db
+from snow import execution_quality as _eq
 from snow.priority import FireEvent
 from snow.schema import (
     ActionAdjustSL,
@@ -222,6 +223,12 @@ class SnowActions:
         direction = entry.direction.value  # "BUY" or "SELL"
         comment = f"snow:{fire.plan_id}"
 
+        # FLO-365: tick snapshot taken once, immediately before broker call.
+        # Reference price = ask for BUY / bid for SELL — what the fill is
+        # measured against to compute slippage.
+        tick = _eq.capture_tick(getattr(config, "SYMBOL", "XAUUSDm"))
+        ref_price = _eq.entry_reference_price(direction, tick)
+
         t0 = time.monotonic()
         result, attempts = self._call_with_retry(
             lambda: self._executor.execute_trade(
@@ -233,9 +240,10 @@ class SnowActions:
             )
         )
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        executed_at = utc_iso()
 
         if result is None or not result.success:
-            snow_db.record_trigger_and_transition(
+            trigger_id = snow_db.record_trigger_and_transition(
                 fire.plan_id,
                 contingency_name="_entry",
                 contingency_kind="entry",
@@ -247,6 +255,14 @@ class SnowActions:
                 execution_result=_order_result_to_dict(result),
                 cycle_duration_ms=elapsed_ms,
             )
+            self._record_execution_quality(
+                trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+                action_type="execute_market", direction=direction,
+                plan_volume=float(entry.volume), plan_price=ref_price,
+                tick=tick, result=result,
+                status=STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT,
+                attempts=attempts,
+            )
             return ActionResult(
                 status=STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT,
                 plan_id=fire.plan_id, action_type="execute_market",
@@ -254,7 +270,7 @@ class SnowActions:
                 attempts=attempts, elapsed_ms=elapsed_ms,
             )
 
-        snow_db.record_trigger_and_transition(
+        trigger_id = snow_db.record_trigger_and_transition(
             fire.plan_id,
             contingency_name="_entry",
             contingency_kind="entry",
@@ -266,6 +282,13 @@ class SnowActions:
             execution_result=_order_result_to_dict(result),
             cycle_duration_ms=elapsed_ms,
             trade_ticket=result.ticket,
+        )
+        self._record_execution_quality(
+            trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+            action_type="execute_market", direction=direction,
+            plan_volume=float(entry.volume), plan_price=ref_price,
+            tick=tick, result=result,
+            status=STATUS_SUCCESS, attempts=attempts,
         )
         # Attach trade_ticket on the plan row (record_trigger_and_transition
         # may or may not — use explicit call to be safe).
@@ -323,15 +346,19 @@ class SnowActions:
                 fire, STATUS_SKIPPED_GUARD, reason=reason,
             )
 
+        # FLO-365: tick snapshot for dashboard context (no slippage on modify).
+        tick = _eq.capture_tick(getattr(config, "SYMBOL", "XAUUSDm"))
+
         t0 = time.monotonic()
         result, attempts = self._call_with_retry(
             lambda: self._executor.modify_position(ticket, new_sl=new_sl, new_tp=new_tp)
         )
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        executed_at = utc_iso()
 
         status = (STATUS_SUCCESS if (result and result.success)
                   else (STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT))
-        snow_db.record_trigger(
+        trigger_id = snow_db.record_trigger(
             plan_id=fire.plan_id,
             contingency_name=fire.contingency_name,
             contingency_kind=payload.kind,
@@ -340,6 +367,17 @@ class SnowActions:
             action_params={"ticket": ticket, "new_sl": new_sl, "new_tp": new_tp},
             execution_result=_order_result_to_dict(result),
             cycle_duration_ms=elapsed_ms,
+        )
+        # plan_price = the SL/TP target the action carried; modify is not
+        # a fill, so actual_price/slippage stay NULL via result=None.
+        plan_price = new_sl if new_sl is not None else new_tp
+        self._record_execution_quality(
+            trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+            action_type=action_type,
+            direction=payload.plan_direction.value,
+            plan_volume=None, plan_price=plan_price,
+            tick=tick, result=None,  # modify is not a fill
+            status=status, attempts=attempts,
         )
         return ActionResult(
             status=status, plan_id=fire.plan_id, action_type=action_type,
@@ -411,14 +449,17 @@ class SnowActions:
                 announced_action_type=announced_action_type,
             )
 
+        tick = _eq.capture_tick(getattr(config, "SYMBOL", "XAUUSDm"))
+
         t0 = time.monotonic()
         result, attempts = self._call_with_retry(
             lambda: self._executor.modify_position(ticket, new_sl=new_sl, new_tp=new_tp)
         )
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        executed_at = utc_iso()
         status = (STATUS_SUCCESS if (result and result.success)
                   else (STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT))
-        snow_db.record_trigger(
+        trigger_id = snow_db.record_trigger(
             plan_id=fire.plan_id,
             contingency_name=fire.contingency_name,
             contingency_kind=payload.kind,
@@ -427,6 +468,14 @@ class SnowActions:
             action_params={"ticket": ticket, "new_sl": new_sl},
             execution_result=_order_result_to_dict(result),
             cycle_duration_ms=elapsed_ms,
+        )
+        self._record_execution_quality(
+            trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+            action_type=announced_action_type,
+            direction=payload.plan_direction.value,
+            plan_volume=None, plan_price=new_sl,
+            tick=tick, result=None,
+            status=status, attempts=attempts,
         )
         return ActionResult(
             status=status, plan_id=fire.plan_id,
@@ -451,11 +500,14 @@ class SnowActions:
 
         snow_db.update_plan_status(fire.plan_id, PlanStatus.CLOSING.value)
 
+        tick = _eq.capture_tick(getattr(config, "SYMBOL", "XAUUSDm"))
+
         t0 = time.monotonic()
         result, attempts = self._call_with_retry(
             lambda: self._executor.close_position(ticket)
         )
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        executed_at = utc_iso()
 
         if result and result.success:
             # FLO-353 — backfill outcome columns inline. update_plan_outcome
@@ -485,7 +537,7 @@ class SnowActions:
             snow_db.update_plan_status(fire.plan_id, PlanStatus.FAILED.value)
             status = STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT
 
-        snow_db.record_trigger(
+        trigger_id = snow_db.record_trigger(
             plan_id=fire.plan_id,
             contingency_name=fire.contingency_name,
             contingency_kind=payload.kind,
@@ -494,6 +546,17 @@ class SnowActions:
             action_params={"ticket": ticket},
             execution_result=_order_result_to_dict(result),
             cycle_duration_ms=elapsed_ms,
+        )
+        # FLO-365: close has no plan-side target price; record fill price
+        # via result. Slippage stays NULL (close has no expected price).
+        # Pass result through on failure too so error_message survives.
+        self._record_execution_quality(
+            trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+            action_type="close_full",
+            direction=payload.plan_direction.value,
+            plan_volume=None, plan_price=None,
+            tick=tick, result=result,
+            status=status, attempts=attempts,
         )
         return ActionResult(
             status=status, plan_id=fire.plan_id, action_type="close_full",
@@ -542,14 +605,17 @@ class SnowActions:
                 reason=f"close_partial: computed volume {volume_to_close} <= 0",
             )
 
+        tick = _eq.capture_tick(getattr(config, "SYMBOL", "XAUUSDm"))
+
         t0 = time.monotonic()
         result, attempts = self._call_with_retry(
             lambda: self._executor.close_position(ticket, volume=volume_to_close)
         )
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        executed_at = utc_iso()
         status = (STATUS_SUCCESS if (result and result.success)
                   else (STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT))
-        snow_db.record_trigger(
+        trigger_id = snow_db.record_trigger(
             plan_id=fire.plan_id,
             contingency_name=fire.contingency_name,
             contingency_kind=payload.kind,
@@ -559,6 +625,14 @@ class SnowActions:
                            "percent": action.percent},
             execution_result=_order_result_to_dict(result),
             cycle_duration_ms=elapsed_ms,
+        )
+        self._record_execution_quality(
+            trigger_id=trigger_id, fire=fire, executed_at=executed_at,
+            action_type="close_partial",
+            direction=payload.plan_direction.value,
+            plan_volume=volume_to_close, plan_price=None,
+            tick=tick, result=result,
+            status=status, attempts=attempts,
         )
         return ActionResult(
             status=status, plan_id=fire.plan_id, action_type="close_partial",
@@ -754,6 +828,60 @@ class SnowActions:
                         break
                     time.sleep(min(wait, remaining))
         return last_result, attempts
+
+    # ----- Execution-quality recording (FLO-365) --------------------------
+    def _record_execution_quality(
+        self,
+        *,
+        trigger_id: int,
+        fire: FireEvent,
+        executed_at: str,
+        action_type: str,
+        direction: str,
+        plan_volume: Optional[float],
+        plan_price: Optional[float],
+        tick: "_eq.TickSnapshot",
+        result: Any,
+        status: str,
+        attempts: int,
+    ) -> None:
+        """Persist one snow_execution_quality row. Best-effort — any
+        failure is swallowed inside snow_db.insert_execution_quality.
+
+        For non-fill paths (modify/adjust), pass result=None and the
+        actual_price / slippage_pips columns will land as NULL.
+        """
+        actual_price: Optional[float] = None
+        actual_volume: Optional[float] = None
+        error_message: Optional[str] = None
+        ticket: Optional[int] = None
+        if result is not None:
+            actual_price = getattr(result, "price", None)
+            actual_volume = getattr(result, "volume", None)
+            error_message = getattr(result, "error_message", None)
+            ticket = getattr(result, "ticket", None)
+
+        slippage = _eq.compute_slippage_pips(direction, plan_price, actual_price)
+        snow_db.insert_execution_quality(
+            trigger_id=trigger_id,
+            plan_id=fire.plan_id,
+            action_type=action_type,
+            fired_at=getattr(fire, "fired_at", None),
+            executed_at=executed_at,
+            latency_ms=_eq.latency_ms(getattr(fire, "fired_at", None), executed_at),
+            plan_volume=plan_volume,
+            plan_price=plan_price,
+            actual_volume=(float(actual_volume) if actual_volume is not None else None),
+            actual_price=(float(actual_price) if actual_price is not None else None),
+            slippage_pips=slippage,
+            bid_at_fire=tick.bid,
+            ask_at_fire=tick.ask,
+            mid_at_fire=tick.mid,
+            status=status,
+            ticket=(int(ticket) if ticket is not None else None),
+            attempts=attempts,
+            error_message=error_message,
+        )
 
     def _record_and_return(
         self, fire: FireEvent, status: str,

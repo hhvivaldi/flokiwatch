@@ -24,7 +24,7 @@ Tie-break (RFC §8.3), applied in order:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +119,9 @@ class FireEvent:
                          exit = 1000 + 0..N-1 (management fires before exit
                          at identical priority, per RFC §3 lifecycle).
       payload          — opaque; action dispatcher reads
+      fired_at         — ISO-8601 UTC timestamp captured when the AND-fold
+                         flipped True (FLO-365 execution-quality input).
+                         None for legacy callers / pre-stamp sources.
     """
     plan_id:         str
     created_at:      str
@@ -127,6 +130,7 @@ class FireEvent:
     override:        int
     plan_list_order: int
     payload:         Any = None
+    fired_at:        Optional[str] = None
 
     @property
     def effective_priority(self) -> int:
