@@ -403,6 +403,31 @@ def update_plan_outcome(
         conn.close()
 
 
+def update_plan_outcome_columns_only(
+    plan_id: str,
+    outcome_pips: float,
+    outcome_usd: float,
+) -> None:
+    """FLO-353 — backfill `outcome_pips` / `outcome_usd` WITHOUT changing
+    `status` or `closed_at`. Caller has already transitioned the plan;
+    this just fills observability columns. Distinct from
+    `update_plan_outcome` which is a one-shot close + outcome stamp."""
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE snow_plans
+               SET outcome_pips = ?,
+                   outcome_usd  = ?
+             WHERE id = ?
+            """,
+            (outcome_pips, outcome_usd, plan_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_plan_last_evaluated(plan_id: str) -> None:
     """Bookkeeping — stamps last_evaluated_at with the current UTC time.
     Called by the Snow loop at the end of each tick per plan (Phase 4)."""

@@ -389,9 +389,13 @@ class TestClosing:
         assert _read_status("PLAN-20260424-402") == PlanStatus.CLOSED.value
         assert summary.closing_to_closed == 1
         evals = _read_evaluations("PLAN-20260424-402")
-        evt = next(e for e in evals if e["event"] == "recovery_closing_to_closed")
-        # Confirm outcome backfill is flagged as deferred to FLO-353.
-        assert "deferred_to_FLO-353" in (evt["conditions_snapshot"] or "")
+        # recovery_closing_to_closed event written; outcome backfill
+        # also attempted (best-effort — fakes here lack deal shape, so
+        # backfill records an `outcome_backfill_failed` audit row but
+        # does not raise; CLOSED transition is independent of backfill
+        # outcome).
+        events = [e["event"] for e in evals]
+        assert "recovery_closing_to_closed" in events
 
 
 # =============================================================================

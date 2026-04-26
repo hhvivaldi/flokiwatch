@@ -411,7 +411,6 @@ def _reconcile_closing(
         conditions_snapshot={
             "ticket": ticket,
             "reconciled_at": utc_iso(),
-            "outcome_backfill": "deferred_to_FLO-353",
         },
     )
     summary.closing_to_closed += 1
@@ -419,6 +418,11 @@ def _reconcile_closing(
         f"snow.recovery.closing_to_closed plan_id={plan_id} "
         f"ticket={ticket}"
     )
+    # FLO-353 — backfill outcome columns from MT5 deal history.
+    # Best-effort; never raises.
+    if ticket is not None:
+        from snow.outcome import backfill_outcome
+        backfill_outcome(plan_id, int(ticket), mt5_proxy=mt5_proxy)
 
 
 def _reconcile_active(
@@ -474,7 +478,6 @@ def _reconcile_active(
                 "ticket": int(ticket),
                 "deal_count": len(deals),
                 "reconciled_at": utc_iso(),
-                "outcome_backfill": "deferred_to_FLO-353",
             },
         )
         summary.active_to_closed += 1
@@ -482,6 +485,13 @@ def _reconcile_active(
             f"snow.recovery.active_to_closed plan_id={plan_id} "
             f"ticket={ticket} deals={len(deals)}"
         )
+        # FLO-353 — backfill outcome columns. Reuses the deals we just
+        # fetched conceptually, but `backfill_outcome` re-queries to
+        # apply its own retry logic + handle direction inference. The
+        # extra MT5 call is the price of a clean module boundary; it's
+        # rare (only on recovery-CLOSED) and capped at 3 retries.
+        from snow.outcome import backfill_outcome
+        backfill_outcome(plan_id, int(ticket), mt5_proxy=mt5_proxy)
         return
     # Definitive empty list — position never existed (or older than
     # lookback window). Mark FAILED so the operator notices.

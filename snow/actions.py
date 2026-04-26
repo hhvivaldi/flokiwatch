@@ -458,19 +458,28 @@ class SnowActions:
         elapsed_ms = int((time.monotonic() - t0) * 1000)
 
         if result and result.success:
-            # Mark CLOSED with outcome_* None (backfill in follow-up).
+            # FLO-353 — backfill outcome columns inline. update_plan_outcome
+            # transitions CLOSING → CLOSED with NULL outcome columns first,
+            # then backfill_outcome populates them from MT5 deal history.
+            # Best-effort: never raises; on failure leaves outcome_* NULL
+            # with an audit row so the close itself isn't blocked.
             snow_db.update_plan_outcome(
                 fire.plan_id, outcome_pips=None, outcome_usd=None,
                 new_status=PlanStatus.CLOSED.value,
             )
+            from snow.outcome import backfill_outcome
+            backfill_outcome(fire.plan_id, ticket)
             status = STATUS_SUCCESS
         elif _looks_like_position_gone(result):
             # External close (TP/SL already hit). Per RFC §7.5, treat as
-            # success. Outcome_* still None; same backfill pass resolves.
+            # success. Same backfill — deal history captures the external
+            # close as cleanly as a Snow-initiated one.
             snow_db.update_plan_outcome(
                 fire.plan_id, outcome_pips=None, outcome_usd=None,
                 new_status=PlanStatus.CLOSED.value,
             )
+            from snow.outcome import backfill_outcome
+            backfill_outcome(fire.plan_id, ticket)
             status = STATUS_NO_POSITION
         else:
             snow_db.update_plan_status(fire.plan_id, PlanStatus.FAILED.value)
