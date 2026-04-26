@@ -2140,6 +2140,7 @@ class AgentTools:
             out_positions = []
             for p in positions:
                 try:
+                    _comment = str(getattr(p, "comment", "") or "")
                     out_positions.append(
                         {
                             "ticket": int(getattr(p, "ticket", 0)),
@@ -2149,6 +2150,14 @@ class AgentTools:
                             "tp": float(getattr(p, "tp", 0.0)),
                             "current_pnl": float(getattr(p, "profit", 0.0)),
                             "phase": "OPEN",
+                            # FLO-361 — surface MT5 comment so Floki can
+                            # distinguish Snow-managed positions
+                            # (comment starts with "snow:") from his own.
+                            "comment": _comment,
+                            "managed_by": (
+                                "snow" if _comment.startswith("snow:")
+                                else "floki"
+                            ),
                         }
                     )
                 except Exception:

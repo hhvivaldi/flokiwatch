@@ -653,10 +653,18 @@ class TestCycleTiming:
 # ---------------------------------------------------------------------------
 
 class TestDryRunMode:
-    def test_config_default_is_dry_run_true(self):
+    def test_config_dry_run_is_explicit_bool(self):
+        """Phase 4 originally asserted `SNOW_DRY_RUN` defaulted True
+        as a safety baseline. Post-FLO-359/353/354 the CEO flipped
+        the .env to `SNOW_DRY_RUN=false` for the LIVE-DEMO observation
+        window, so this is no longer the "default true" guard. The
+        invariant we still want is: the config value MUST be an
+        explicit bool, never missing or stringy — accidental string
+        truthiness on a config like this is a known foot-gun."""
         import config
-        assert getattr(config, "SNOW_DRY_RUN", True) is True, (
-            "config.SNOW_DRY_RUN must default True in Phase 4"
+        v = getattr(config, "SNOW_DRY_RUN", None)
+        assert isinstance(v, bool), (
+            f"config.SNOW_DRY_RUN must be a bool; got {type(v).__name__}={v!r}"
         )
 
     def test_config_snow_enabled_state(self):

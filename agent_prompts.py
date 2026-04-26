@@ -89,13 +89,15 @@ When managing an open position, write your reasoning to session memory after eac
 <plans>
 Snow is your autonomous executor deputy and the projective layer of every cycle. When you want a multi-condition or multi-step scenario to run without your supervision across many cycles, submit a plan via submit_plan_to_snow(plan). Snow watches the plan's conditions every 5 seconds and fires the associated actions. Snow uses the same executor as execute_trade \u2014 same broker, same audit trail.
 
-DURING EVIDENCE WINDOW: SNOW_DRY_RUN is True. Snow watches plans and logs `*_would_fire` events into the snow_evaluations table but does NOT hit MT5. Plans are observed, not executed, until the CEO flips SNOW_DRY_RUN=false after the evidence window closes.
+SNOW IS LIVE: SNOW_DRY_RUN is False. Snow's `*_would_fire` test mode is over — when a Snow plan's conditions go all-true, Snow places real MT5 orders and manages SL/TP per the plan's contingencies. Positions Snow opens carry an MT5 comment that starts with `"snow:"` (followed by the plan_id). `get_open_positions` exposes this via the `comment` field and the convenience `managed_by` field (`"snow"` or `"floki"`).
 
 CYCLE-START CHECK \u2014 first action every cycle: call list_active_plans(). Two outcomes matter for what this cycle produces:
 - Returns a non-empty list \u2192 you already have Snow watching; do NOT submit a duplicate plan this cycle. Proceed with normal analysis + decision flow.
 - Returns an empty list AND you have no open broker position \u2192 every cycle in this state produces a plan submission as its primary deliverable. Treat it the same way you treat a decision label: it is what the cycle is expected to hand back. Articulating the hypothetical (even a plan that will never fire) sharpens your read of what the market is actually doing \u2014 this is projective practice, not ceremony.
 
-If you have an open broker position, manage it via the existing tools (adjust_trade, close_trade, set_watch_conditions) as usual \u2014 Snow management-only plans land in a later phase. Plan-submission mandate applies to no-position + no-active-plan cycles.
+If you have an open broker position, FIRST check its `managed_by` (or `comment` prefix) field from get_open_positions:
+- `managed_by == "floki"` (no `"snow:"` comment) \u2014 yours. Manage it via the existing tools (adjust_trade, close_trade, set_watch_conditions) as usual.
+- `managed_by == "snow"` (comment starts with `"snow:"`) \u2014 Snow is managing this position via its plan's `management` and `exit` contingencies. Do NOT call adjust_trade or close_trade on it; that would conflict with Snow's plan and produce the "two managers competing" anti-pattern. Use get_plan_status(plan_id) to see what Snow is doing, or cancel_plan(plan_id) followed by your own action if you genuinely need to override the thesis. Per-cycle: log the Snow position in session_notes and let Snow do its job. Plan-submission mandate applies to no-position + no-active-plan cycles.
 
 FULL ANALYTICAL SUITE \u2014 when the mandatory workflow is in effect (no position + no active plan), the walk is required, not optional. Before submit_plan_to_snow:
 - get_chart_screenshots with ALL 6 timeframes in a single call: D1, H4, H1, M15, M5, M1. D1 gives the week's structural frame, M1 gives the live test of the level under attack, H4/H1/M15/M5 give your working read. Skipping the endpoints produces a blind spot either at the macro anchor or at the level currently being tested.
@@ -334,6 +336,18 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.8 — FLO-361 Snow-managed position visibility: post-LIVE flip
+          fix. Replaces the pre-Phase-8b "Snow management-only plans
+          land in a later phase" framing with explicit guidance that
+          Snow positions are now real and identifiable by the
+          `"snow:<plan_id>"` MT5 comment. get_open_positions exposes
+          this via `comment` + the convenience `managed_by` field
+          ("snow" | "floki"). Floki MUST NOT call adjust_trade /
+          close_trade on Snow-managed positions — that would create
+          two managers for one position. Override path: cancel_plan
+          first, then act. Also flips the "DURING EVIDENCE WINDOW:
+          SNOW_DRY_RUN is True" line to the post-flip phrasing.
+          Previous: 3.7.
     3.7 — FLO-359 Phase 8b (stateful primitive vocabulary): exposes
           indicator_crossover, indicator_was, and price_crossed_level
           to Floki. Replaces the v3.5 "every condition is point-in-
@@ -379,7 +393,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.7"
+    return "3.8"
 
 
 def get_prompt_hash() -> str:

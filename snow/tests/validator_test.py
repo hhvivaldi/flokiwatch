@@ -424,7 +424,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.7"
+    EXPECTED_VERSION = "3.8"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""
@@ -1013,3 +1013,78 @@ class TestPromptV3_7Stateful:
         parameter shapes including the new within_bars bound."""
         from agent_prompts import SYSTEM_PROMPT
         assert "get_snow_primitives_reference" in SYSTEM_PROMPT
+
+
+# =============================================================================
+# v3.8 prompt regression — Snow-managed position visibility (FLO-361)
+# =============================================================================
+#
+# v3.8 is the post-LIVE-flip fix. The pre-Phase-8b "Snow management-
+# only plans land in a later phase" framing was wrong once Phase 8b
+# shipped real Snow management; v3.8 replaces it with explicit
+# guidance that Snow positions are real, identifiable by the
+# "snow:<plan_id>" MT5 comment, and Floki MUST NOT call
+# adjust_trade / close_trade on them. These tests pin that wording
+# so a future edit can't silently regress it.
+# =============================================================================
+
+
+class TestPromptV3_8SnowPositionVisibility:
+
+    def test_snow_dry_run_evidence_window_phrasing_updated(self):
+        from agent_prompts import SYSTEM_PROMPT
+        # The pre-flip "DURING EVIDENCE WINDOW: SNOW_DRY_RUN is True"
+        # phrasing is now stale — Snow is LIVE. The replacement must
+        # signal the post-flip state.
+        assert "SNOW IS LIVE" in SYSTEM_PROMPT, (
+            "v3.8: prompt should signal post-flip Snow state"
+        )
+        assert "SNOW_DRY_RUN is True" not in SYSTEM_PROMPT, (
+            "v3.8: pre-flip 'SNOW_DRY_RUN is True' framing still present"
+        )
+
+    def test_snow_comment_prefix_documented(self):
+        from agent_prompts import SYSTEM_PROMPT
+        assert '"snow:' in SYSTEM_PROMPT, (
+            "v3.8: prompt should explain the 'snow:<plan_id>' comment "
+            "convention so Floki knows how to identify Snow positions"
+        )
+
+    def test_managed_by_field_documented(self):
+        """`get_open_positions` returns a `managed_by` field so Floki
+        doesn't have to parse comment strings. The prompt should
+        reference it explicitly."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "managed_by" in SYSTEM_PROMPT
+
+    def test_do_not_touch_snow_positions_directive(self):
+        """The directive must explicitly forbid adjust_trade /
+        close_trade on Snow-managed positions to prevent the two-
+        manager anti-pattern."""
+        from agent_prompts import SYSTEM_PROMPT
+        # Locate the directive section.
+        text = SYSTEM_PROMPT
+        assert "Do NOT call adjust_trade or close_trade" in text, (
+            "v3.8: explicit prohibition missing"
+        )
+
+    def test_cancel_plan_override_path_documented(self):
+        """If Floki genuinely needs to override a Snow plan (rare),
+        the path is cancel_plan first, then own action — the prompt
+        should name that path so Floki has a release valve."""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "cancel_plan" in SYSTEM_PROMPT
+        # And the override framing — at least the keyword "override"
+        # somewhere near the directive.
+        assert "override" in SYSTEM_PROMPT.lower(), (
+            "v3.8: override path framing missing"
+        )
+
+    def test_existing_floki_management_path_preserved(self):
+        """Backward compat: positions Floki opened directly (no
+        snow: comment) still get the existing tool guidance. The
+        adjust_trade / close_trade / set_watch_conditions trio
+        should still be named for the Floki-managed branch."""
+        from agent_prompts import SYSTEM_PROMPT
+        # The Floki-managed branch still names the trio.
+        assert "adjust_trade, close_trade, set_watch_conditions" in SYSTEM_PROMPT
