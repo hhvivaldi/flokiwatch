@@ -235,6 +235,7 @@ def fetch_deal_history(
     *,
     mt5_proxy=None,
     lookback_days: int = _DEAL_HISTORY_LOOKBACK_DAYS,
+    max_attempts: Optional[int] = None,
 ) -> Optional[list]:
     """Query MT5 deal history for a position ticket with retry+backoff
     AND a defensive `position_id == ticket` re-filter.
@@ -265,7 +266,18 @@ def fetch_deal_history(
     date_to = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=1)
     ticket_int = int(ticket)
 
-    for attempt, backoff in enumerate(_DEAL_HISTORY_RETRY_BACKOFFS, start=1):
+    # FLO-379: optional retry budget cap. Runtime callers pass
+    # `max_attempts=1` to avoid blocking the Snow tick for up to 3.5s
+    # on a transient MT5 None response — at runtime the next
+    # reconcile pass is 60s away, so retrying immediately buys
+    # nothing. Startup recovery keeps the full 3-attempt policy
+    # because boot is one-shot and tolerates the wait.
+    backoffs = (
+        _DEAL_HISTORY_RETRY_BACKOFFS[:max_attempts]
+        if max_attempts is not None
+        else _DEAL_HISTORY_RETRY_BACKOFFS
+    )
+    for attempt, backoff in enumerate(backoffs, start=1):
         try:
             deals = proxy.history_deals_get(
                 date_from, date_to, position=ticket_int
@@ -277,7 +289,7 @@ def fetch_deal_history(
             )
             deals = None
         if deals is None:
-            if attempt < len(_DEAL_HISTORY_RETRY_BACKOFFS):
+            if attempt < len(backoffs):
                 _time.sleep(backoff)
                 continue
             log.warning(
@@ -299,8 +311,45 @@ def fetch_deal_history(
                 f"dropped={len(raw) - len(filtered)} "
                 f"reason=position_id_mismatch"
             )
+        # FLO-379 fallback: when `position=ticket` + tz-aware datetimes
+        # filters to empty despite raw deals existing, retry without
+        # the position hint and filter manually. Same tier-2 strategy
+        # monitor.py uses. Documented MT5 quirk surfaced by
+        # PLAN-20260427-004.
+        if not filtered and len(raw) > 0:
+            fallback = _fetch_deal_history_no_hint(
+                proxy, date_from, date_to, ticket_int,
+            )
+            if fallback:
+                log.info(
+                    f"snow.recovery.deal_history_fallback_hit "
+                    f"ticket={ticket_int} found={len(fallback)}"
+                )
+                return fallback
         return filtered
     return None
+
+
+def _fetch_deal_history_no_hint(
+    proxy, date_from, date_to, ticket_int: int,
+) -> list:
+    """FLO-379 fallback path. Drops the `position=ticket` hint and
+    filters manually. Returns [] on any MT5 error — caller treats
+    that as the same "no match" signal."""
+    try:
+        deals = proxy.history_deals_get(date_from, date_to)
+    except Exception as e:
+        log.warning(
+            f"snow.recovery.deal_history_fallback_error "
+            f"ticket={ticket_int} error={type(e).__name__}: {e}"
+        )
+        return []
+    if not deals:
+        return []
+    return [
+        d for d in deals
+        if int(getattr(d, "position_id", -1)) == ticket_int
+    ]
 
 
 # =============================================================================

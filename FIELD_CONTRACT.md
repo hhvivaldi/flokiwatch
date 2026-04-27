@@ -1097,3 +1097,22 @@ confidence_reason"`) and points Floki at
 `get_snow_tags_reference()` in the same message. The
 `news_session` contradiction validator names BOTH offending values
 in the error.
+
+## Snow Reconciliation Audit Events (FLO-379)
+
+Source of truth: `snow_evaluations.event` column. Distinguishes
+how a plan landed in a terminal status — startup recovery, runtime
+catcher, or manual intervention.
+
+| `event` | Emitter | Trigger | `closed_at` source |
+|---------|---------|---------|--------------------|
+| `recovery_active_to_closed` | `snow.recovery.reconcile_on_startup` | Plan was ACTIVE at boot, position absent in MT5, deal history found close | Detection time (`utc_iso()` now) — pre-FLO-379 startup behavior preserved |
+| `runtime_active_to_closed` | `snow.runtime_reconcile.reconcile_runtime` | In-loop pass (60s cadence) found ACTIVE plan whose position closed mid-run | **Broker close time** from latest `entry==1` deal |
+| `manual_reconciliation_pre_FLO-379` | One-shot stop-gap (PLAN-20260427-004 only) | Manual operator intervention before FLO-379 shipped | Broker close time hard-coded from MT5 deal |
+| `recovery_failed` | `snow.recovery.reconcile_on_startup` | ACTIVE without ticket OR position vanished + empty deal history | Detection time (status=FAILED) |
+| `outcome_backfill_failed` | `snow.outcome.backfill_outcome` | Deal history unavailable / no deals / parse error | N/A (no status change) |
+
+`runtime_active_to_closed` rows include
+`conditions_snapshot.broker_close_time_utc` (same value as the
+plan's `closed_at`) so audit queries can join on both columns
+without re-extracting from `plan_json`.

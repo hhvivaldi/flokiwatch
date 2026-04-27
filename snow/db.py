@@ -444,6 +444,8 @@ def update_plan_outcome(
 def mark_plan_terminal(
     plan_id: str,
     new_status: str,
+    *,
+    closed_at: Optional[str] = None,
 ) -> None:
     """FLO-374: transition a plan to a terminal status (CLOSED /
     EXPIRED / CANCELLED / FAILED) AND stamp `closed_at` with the
@@ -462,6 +464,14 @@ def mark_plan_terminal(
     exists so callers that DON'T have outcome figures yet (recovery
     runs before backfill_outcome; cancel_plan never has outcome)
     can still close the audit gap.
+
+    FLO-379: optional `closed_at` lets callers stamp the broker-side
+    close time (from MT5 deal history) instead of the detection
+    moment. Audit accuracy beats convention — queries asking "what
+    closed at 13:11Z" expect broker time, not when Snow noticed.
+    When omitted, behavior is unchanged (`utc_iso()` now). The
+    `COALESCE` protection still applies: a previously-stamped
+    `closed_at` always wins.
     """
     if new_status not in {
         PlanStatus.CLOSED.value,
@@ -477,6 +487,7 @@ def mark_plan_terminal(
             f"status. Use update_plan_status for non-terminal "
             f"transitions."
         )
+    stamp = closed_at if closed_at else utc_iso()
     conn = _connect()
     try:
         conn.execute(
@@ -486,7 +497,7 @@ def mark_plan_terminal(
                    closed_at = COALESCE(closed_at, ?)
              WHERE id = ?
             """,
-            (new_status, utc_iso(), plan_id),
+            (new_status, stamp, plan_id),
         )
         conn.commit()
     finally:

@@ -62,6 +62,13 @@ SHUTDOWN_POLL_SECONDS: float = 1.0
 TIMING_LOG_INTERVAL_TICKS: int = 60         # 5 minutes at 5s cadence
 TIMING_WARN_THRESHOLD_MS: float = 200.0
 ORPHAN_SWEEP_INTERVAL_TICKS: int = 60
+# FLO-379 — runtime reconciliation cadence. Catches plans whose
+# broker positions closed outside Snow's dispatch path (broker SL,
+# broker TP, manual close). 12 ticks at 5s = 60s. Quick enough that
+# Floki sees `list_active_plans` reflect reality within one of his
+# typical cycle intervals; rare enough that the extra MT5 batch query
+# is negligible loop overhead.
+RUNTIME_RECONCILE_INTERVAL_TICKS: int = 12
 # FLO-359 Phase 8b commit 3 — flush the per-condition state cache to
 # `snow_plans.state_cache_json` every N ticks. 60 ticks at 5 s = 5 min,
 # matching the orphan-sweep cadence. Trade-off: more frequent = more DB
@@ -218,6 +225,9 @@ class SnowLoop:
 
         if self._tick_count % ORPHAN_SWEEP_INTERVAL_TICKS == 0:
             self._orphan_sweep(active_rows)
+
+        if self._tick_count % RUNTIME_RECONCILE_INTERVAL_TICKS == 0:
+            self._runtime_reconcile_safe()
 
         if self._tick_count % STATE_FLUSH_INTERVAL_TICKS == 0:
             try:
@@ -591,6 +601,24 @@ class SnowLoop:
                     "snow.loop.dispatch_failed plan_id=%s contingency=%s",
                     fire.plan_id, fire.contingency_name,
                 )
+
+    def _runtime_reconcile_safe(self) -> None:
+        """FLO-379 — call into runtime_reconcile.reconcile_runtime
+        without ever propagating a failure into the loop. Logs the
+        summary only when transitions actually happened, to keep
+        steady-state log noise minimal (the no-op case fires every
+        60s)."""
+        try:
+            from snow.runtime_reconcile import reconcile_runtime
+            summary = reconcile_runtime()
+        except Exception:
+            log.exception("snow.runtime_reconcile.uncaught")
+            return
+        if summary.active_to_closed > 0 or summary.active_left_for_retry > 0:
+            log.info(
+                "snow.runtime_reconcile.summary %s tick=%d",
+                summary.as_log_kvs(), self._tick_count,
+            )
 
     def _orphan_sweep(self, active_rows: list[dict[str, Any]]) -> None:
         """Defensive cleanup — drop tracker state for any plan not in the
