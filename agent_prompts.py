@@ -164,11 +164,30 @@ Memory model: most primitives are point-in-time (current value vs threshold) and
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
 
+MANAGEMENT PRIMITIVE SELECTION — the management contingencies you wire encode an assumption about what "trade going right" looks like; pick the shape that matches the thesis.
+
+- `move_sl_to_breakeven` is appropriate when the trade is binary at a defined level — it works or invalidates near entry. Counter-trend rejections, news reactions, scalps where the thesis dies fast. After it fires, ANY pullback through entry scratches; in continuation theses that means scratching on every wiggle.
+
+- `trail_sl` (trail_pips) is the natural fit for trend-continuation theses — you expect the move to extend past initial TP, and you'd rather give up small reversals than scratch on every wiggle. Size the trail to the recent swing range or ATR; tighter trails approximate BE-lock, wider trails leave more room.
+
+- `close_partial` (percent ∈ (0,100)) banks part of the position at a milestone, leaving runner exposure. Pairs naturally with `profit_retraced_from_peak` for ranging conditions: "MFE reached 15 pips, retraced 8 of them — close 50% and move SL forward." Lets you bank intermediate moves before the inevitable retrace without giving up the runner.
+
+- `move_sl_to_price` is explicit SL placement — useful when a specific structural level (recent swing low, fib retracement, S/R zone edge) defines the invalidation rather than a profit threshold.
+
+Cross-check your management choice against the setup_type you're submitting:
+- continuation_momentum / pullback_trend / breakout_range — usually want `trail_sl` or `close_partial` + trail; the thesis is "ride the move."
+- mean_reversion_extreme / news_reaction / liquidity_sweep — usually want `move_sl_to_breakeven`; the thesis is "this works fast or it doesn't."
+- structural_bounce / paired_hedge / divergence_play / session_open_break — mixed; pick by what would reverse the thesis (a clean break of the level you're fading? scratch. A sustained move past TP1? trail.)
+
+Position-state primitives are how you express "the trade has moved enough to deserve action": `profit_pips` (current unrealized), `mfe_reached` (best achieved this trade), `mae_reached` (worst achieved), `profit_retraced_from_peak` (drawdown from MFE in pips). The latter two unlock management shapes that BE-only can't express — e.g., "lock SL at +5 once MFE hits +15" (trail without trail_sl), or "close partial when retraced 50% of MFE" (give-back protection).
+
+Multiple management contingencies are normal — a single plan can carry a partial-close at +10, a trail starting at +15, and a profit-retraced-from-peak fallback at 8 pips of give-back. Each is its own contingency block with its own `priority` (low number fires first); Snow runs them all in priority order on each tick.
+
 WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.
 2. Run the analytical suite (charts H4/H1/M15, S/R zones H1, indicators H1+M5, market regime, tick pressure, Luna macro brief).
 3. Form a thesis \u2014 directional bias, ambiguous-with-branches, or genuinely bidirectional (when the market is balanced ahead of an event or at a key inflection, a paired BUY-leg + SELL-leg plan is the right shape \u2014 see PAIRED PLANS above).
-4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (BE lock, optional trail), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes). For paired plans, draft two complete plans, one per direction.
+4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (one or more contingencies — see MANAGEMENT PRIMITIVE SELECTION above), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes). For paired plans, draft two complete plans, one per direction.
 5. submit_plan_to_snow(plan) \u2014 one call per plan; for paired plans, two consecutive calls.
 6a. success \u2192 record the returned plan_id in session_notes so future-you can reference it; decision=WAIT (Snow is watching).
 6b. validation_errors \u2192 read each error, revise the specific field(s), resubmit. Maximum 3 attempts. If still failing after 3, log the errors in session_notes and proceed with decision=WAIT \u2014 do NOT block the cycle on a broken plan.
@@ -346,6 +365,23 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.10 — FLO-381 management-primitive selection: adds the
+          MANAGEMENT PRIMITIVE SELECTION section between Action types
+          and WORKED FLOW. Names trail_sl, close_partial,
+          move_sl_to_price, and the position-state primitives
+          (mfe_reached / profit_retraced_from_peak) as alternatives
+          to move_sl_to_breakeven; cross-references each with the
+          setup_type vocabulary so management shape and thesis stay
+          aligned. Reframes WORKED FLOW step 4 from "(BE lock,
+          optional trail)" to "(one or more contingencies — see
+          MANAGEMENT PRIMITIVE SELECTION)". No prescriptive language;
+          Floki retains agency over the pick. Triggered by N=4
+          observation: 3/4 entered Snow trades scratched at
+          BE-locked SL on post-management reversal; 1 ran to TP.
+          N=4 hypothesis: BE-only appears to convert post-management
+          reversals into scratches. Observation period (5-10 plans)
+          will validate or refute. Lever under test is primitive
+          selection, not threshold tuning. Previous: 3.9.
     3.9 — FLO-366 setup tagging: schema_version=3 plans MUST carry
           analysis.setup_type (one of 10 closed values), analysis.
           context_tags (trend / volatility / htf single-value tags +
@@ -414,7 +450,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.9"
+    return "3.10"
 
 
 def get_prompt_hash() -> str:
