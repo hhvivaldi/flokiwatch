@@ -1109,6 +1109,7 @@ catcher, or manual intervention.
 | `recovery_active_to_closed` | `snow.recovery.reconcile_on_startup` | Plan was ACTIVE at boot, position absent in MT5, deal history found close | Detection time (`utc_iso()` now) — pre-FLO-379 startup behavior preserved |
 | `runtime_active_to_closed` | `snow.runtime_reconcile.reconcile_runtime` | In-loop pass (60s cadence) found ACTIVE plan whose position closed mid-run | **Broker close time** from latest `entry==1` deal |
 | `manual_reconciliation_pre_FLO-379` | One-shot stop-gap (PLAN-20260427-004 only) | Manual operator intervention before FLO-379 shipped | Broker close time hard-coded from MT5 deal |
+| `manual_reconciliation_post_FLO-379_pre_FLO-380` | One-shot stop-gap (PLAN-20260427-005 only) | Manual reconcile after FLO-379 shipped but before FLO-380 fixed the underlying tz-aware datetime bug. Recovery had mis-classified the plan as FAILED/position_vanished | Broker close time hard-coded from MT5 deal |
 | `recovery_failed` | `snow.recovery.reconcile_on_startup` | ACTIVE without ticket OR position vanished + empty deal history | Detection time (status=FAILED) |
 | `outcome_backfill_failed` | `snow.outcome.backfill_outcome` | Deal history unavailable / no deals / parse error | N/A (no status change) |
 

@@ -461,6 +461,137 @@ class TestRuntimeReconcileDefensive:
 # fetch_deal_history fallback (FLO-379 MT5 quirk)
 # ---------------------------------------------------------------------------
 
+class TestFLO380BrokerNaiveDatetimes:
+    """FLO-380 regression: fetch_deal_history must convert tz-aware
+    UTC datetimes to broker-naive before calling history_deals_get.
+    Pre-FLO-380 caused MT5 to mis-classify the query window,
+    dropping recent deals — canary PLAN-20260427-005 returned 0
+    matches at restart even though deals existed."""
+
+    def test_history_deals_get_receives_naive_datetime_not_tz_aware(
+        self, snow_conn, monkeypatch,
+    ):
+        """The PRIMARY fix: history_deals_get must receive naive
+        datetimes. A fake proxy records what it gets and asserts."""
+        from snow import recovery as snow_recovery
+        monkeypatch.setattr(snow_recovery._time, "sleep", lambda _s: None)
+
+        captured = {"date_from": None, "date_to": None}
+
+        class _FakeTick:
+            time = int(__import__("time").time()) + 10800  # +3h offset
+
+        class _Proxy:
+            def symbol_info_tick(self, symbol):
+                return _FakeTick()
+            def history_deals_get(self, df, dt, **kw):
+                captured["date_from"] = df
+                captured["date_to"] = dt
+                return ()  # empty is fine for this assertion
+
+        snow_recovery.fetch_deal_history(
+            555_888, mt5_proxy=_Proxy(), max_attempts=1,
+        )
+        assert captured["date_from"] is not None
+        assert captured["date_to"] is not None
+        # Pre-FLO-380: tz-aware (had .tzinfo). Post-fix: naive.
+        assert captured["date_from"].tzinfo is None, (
+            "fetch_deal_history must pass NAIVE datetime to MT5; "
+            f"got tzinfo={captured['date_from'].tzinfo!r}"
+        )
+        assert captured["date_to"].tzinfo is None
+
+    def test_simulated_mt5_tz_quirk_now_resolves(
+        self, snow_conn, monkeypatch,
+    ):
+        """End-to-end: a fake MT5 that returns deals ONLY when
+        called with broker-naive datetimes (modeling the real
+        production quirk). Pre-FLO-380 fetch_deal_history would
+        return [] for these; post-fix it returns the deals."""
+        from snow import recovery as snow_recovery
+        monkeypatch.setattr(snow_recovery._time, "sleep", lambda _s: None)
+
+        ticket = 555_889
+        real_deal = _FakeDeal(
+            position_id=ticket, entry=1, time_=1714000000,
+        )
+
+        class _FakeTick:
+            time = int(__import__("time").time()) + 10800
+
+        class _QuirkyProxy:
+            """Simulates real MT5: tz-aware datetimes return wrong
+            deals (or none); naive datetimes return correctly."""
+            def symbol_info_tick(self, symbol):
+                return _FakeTick()
+            def history_deals_get(self, df, dt, **kw):
+                # If caller passed tz-aware, simulate MT5 dropping
+                # the matching deal entirely.
+                if df.tzinfo is not None or dt.tzinfo is not None:
+                    return ()
+                return (real_deal,)
+
+        result = snow_recovery.fetch_deal_history(
+            ticket, mt5_proxy=_QuirkyProxy(), max_attempts=1,
+        )
+        assert result is not None
+        assert len(result) == 1
+        assert int(result[0].position_id) == ticket
+
+    def test_proxy_without_symbol_info_tick_falls_back_to_naive_utc(
+        self, snow_conn, monkeypatch,
+    ):
+        """Defensive: if proxy has no symbol_info_tick (or it raises),
+        the helper falls back to naive UTC. Window is misclassified
+        by the broker offset, but at least no tz-aware leaks to MT5."""
+        from snow import recovery as snow_recovery
+        monkeypatch.setattr(snow_recovery._time, "sleep", lambda _s: None)
+
+        captured = {"date_from": None}
+
+        class _MinimalProxy:
+            def symbol_info_tick(self, symbol):
+                raise RuntimeError("simulated tick unavailable")
+            def history_deals_get(self, df, dt, **kw):
+                captured["date_from"] = df
+                return ()
+
+        snow_recovery.fetch_deal_history(
+            555_890, mt5_proxy=_MinimalProxy(), max_attempts=1,
+        )
+        assert captured["date_from"] is not None
+        assert captured["date_from"].tzinfo is None  # naive
+
+    def test_helper_offset_math_matches_canonical_pattern(self):
+        """Direct unit test of the helper math. Should mirror
+        mfe_backfill._utc_to_broker_naive output for the same
+        offset."""
+        import datetime as dt
+        from snow import recovery as snow_recovery
+
+        class _FakeTick:
+            # Broker is +10800s ahead of real UTC.
+            pass
+
+        class _Proxy:
+            def symbol_info_tick(self, symbol):
+                t = _FakeTick()
+                t.time = int(__import__("time").time()) + 10800
+                return t
+
+        utc = dt.datetime(2026, 4, 27, 14, 29, 42, tzinfo=dt.timezone.utc)
+        result = snow_recovery._utc_to_broker_naive(utc, _Proxy())
+        assert result.tzinfo is None
+        # Expected: broker_unix = utc_unix + 10800 → fromtimestamp
+        # in the test box's local timezone equals the broker wall
+        # clock. We can't assert exact wall time without knowing
+        # the test box tz, but we can assert the unix delta.
+        delta_s = int(result.timestamp()) - int(utc.timestamp())
+        assert delta_s == 10800, (
+            f"Expected +10800s broker offset; got {delta_s}s"
+        )
+
+
 class TestFetchDealHistoryFallback:
     def test_position_filter_empty_triggers_no_hint_fallback(
         self, snow_conn, monkeypatch,

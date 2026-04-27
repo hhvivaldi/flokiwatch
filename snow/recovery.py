@@ -262,8 +262,20 @@ def fetch_deal_history(
     filter.
     """
     proxy = mt5_proxy if mt5_proxy is not None else _default_mt5
-    date_from = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=lookback_days)
-    date_to = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=1)
+    _date_from_utc = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=lookback_days)
+    _date_to_utc = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=1)
+    # FLO-380: MT5 stores deal.time as broker-wall-clock-as-unix
+    # (broker_local treated as UTC), and history_deals_get interprets
+    # naive datetime args as box-local time. Tz-aware UTC datetimes
+    # therefore mis-classify the query window — recent deals drop out
+    # entirely. Canary PLAN-20260427-005 (entry/close 14:27/14:29 UTC)
+    # returned 0 matches with tz-aware lookups, 2 matches once
+    # converted to broker-naive. mfe_backfill._utc_to_broker_naive
+    # and regime_detector._broker_offset_s established the canonical
+    # pattern; recovery.fetch_deal_history was the outlier still
+    # passing tz-aware datetimes.
+    date_from = _utc_to_broker_naive(_date_from_utc, proxy)
+    date_to = _utc_to_broker_naive(_date_to_utc, proxy)
     ticket_int = int(ticket)
 
     # FLO-379: optional retry budget cap. Runtime callers pass
@@ -305,17 +317,25 @@ def fetch_deal_history(
             if int(getattr(d, "position_id", -1)) == ticket_int
         ]
         if len(filtered) != len(raw):
-            log.warning(
+            _filt_logfn = log.info if filtered else log.warning
+            _filt_logfn(
                 f"snow.recovery.deal_history_filtered "
                 f"ticket={ticket_int} raw={len(raw)} kept={len(filtered)} "
                 f"dropped={len(raw) - len(filtered)} "
                 f"reason=position_id_mismatch"
             )
-        # FLO-379 fallback: when `position=ticket` + tz-aware datetimes
-        # filters to empty despite raw deals existing, retry without
-        # the position hint and filter manually. Same tier-2 strategy
-        # monitor.py uses. Documented MT5 quirk surfaced by
-        # PLAN-20260427-004.
+        # FLO-379 fallback retained as defense-in-depth. Originally
+        # added on the wrong root cause — I assumed `position=ticket`
+        # was the bug. FLO-380 revealed the real culprit was
+        # tz-aware datetimes (now converted upstream via
+        # _utc_to_broker_naive). With broker-naive datetimes
+        # `position=ticket` works correctly: production verification
+        # shows kept=2 dropped=191 on PLAN-005 (was kept=0 dropped=193
+        # pre-FLO-380). The fallback is not dead code — dropped > 0
+        # in production indicates MT5 position filter is still
+        # imperfect (returns deals for unrelated tickets in the same
+        # symbol), so re-querying without the hint is a useful
+        # last-resort safety net.
         if not filtered and len(raw) > 0:
             fallback = _fetch_deal_history_no_hint(
                 proxy, date_from, date_to, ticket_int,
@@ -328,6 +348,47 @@ def fetch_deal_history(
                 return fallback
         return filtered
     return None
+
+
+def _utc_to_broker_naive(
+    dt_utc: _dt.datetime, mt5_proxy,
+) -> _dt.datetime:
+    """FLO-380: convert tz-aware UTC datetime to broker-naive for
+    MT5 history_deals_get / copy_rates_range.
+
+    MT5's server-side `deal.time` is stored as
+    `mktime(broker_local_struct)` — broker wall-clock seconds, NOT
+    real UTC seconds. The Python API in turn converts a naive
+    datetime arg by treating it as box-local time. So to select a
+    moment at real UTC `T`, the naive datetime we pass must render
+    via `fromtimestamp` as the broker-stored unix for that moment
+    (= utc_unix + broker_offset_s).
+
+    Falls back to a naive UTC datetime if the MT5 tick is
+    unavailable. That fallback misclassifies the window by the
+    broker offset (~3h) but is still better than passing tz-aware,
+    which causes MT5 to drop recent deals entirely. Production
+    paths always have a live tick; the fallback only fires in unit
+    tests with a fake proxy that omits `symbol_info_tick`.
+
+    Mirrors `mfe_backfill._utc_to_broker_naive` and
+    `regime_detector._broker_offset_s` — established codebase
+    pattern. Local copy keeps `snow.recovery` self-contained
+    (no cross-module dependency to a non-snow file).
+    """
+    try:
+        tick = mt5_proxy.symbol_info_tick("XAUUSD")
+        tick_time = int(getattr(tick, "time", 0)) if tick else 0
+        if tick_time:
+            offset_s = tick_time - int(_time.time())
+            broker_unix = int(dt_utc.timestamp()) + offset_s
+            return _dt.datetime.fromtimestamp(broker_unix)
+    except Exception as e:
+        log.warning(
+            f"snow.recovery.broker_offset_unavailable "
+            f"{type(e).__name__}: {e} — falling back to naive UTC"
+        )
+    return dt_utc.replace(tzinfo=None)
 
 
 def _fetch_deal_history_no_hint(
