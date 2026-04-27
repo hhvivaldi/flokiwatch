@@ -1100,6 +1100,7 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
   <link rel="icon" type="image/png" href="/image/flokiwatch.png">
   <script src="/static/tz.js"></script>
   <script src="/static/maintenance.js"></script>
+  <script src="/static/snow_page.js" defer></script>
 </head>
 <body data-variant="A">
 
@@ -1881,6 +1882,71 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
         </table>
       </div>
       <div id="journal-empty" hidden></div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────
+       SNOW PLANS (FLO-377) — full inspection: active + history
+       ───────────────────────────────────────────────────────────── -->
+  <section class="tier" id="snow-section" data-tier="t-snow" data-screen-label="05 Snow Plans">
+    <div class="panel" style="padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:800;letter-spacing:1px;color:#38bdf8">SNOW</span>
+          <span id="snow-tab-meta" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#64748b">—</span>
+        </div>
+        <div role="tablist" aria-label="Snow views" style="display:flex;gap:4px">
+          <button id="snow-tab-active"  type="button" role="tab" aria-selected="true"  data-view="active"
+                  style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px 12px;border-radius:4px;border:1px solid rgba(56,189,248,0.3);background:rgba(56,189,248,0.12);color:#38bdf8;cursor:pointer">ACTIVE</button>
+          <button id="snow-tab-history" type="button" role="tab" aria-selected="false" data-view="history"
+                  style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px 12px;border-radius:4px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#94a3b8;cursor:pointer">HISTORY</button>
+        </div>
+      </div>
+
+      <!-- Active view (default visible). 5s polling. -->
+      <div id="snow-active-view" role="tabpanel">
+        <div id="snow-active-empty" hidden style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.08);border-radius:10px;padding:18px;text-align:center;color:#64748b;font-size:11px">
+          No active Snow plans. Floki has not submitted a contingency plan in the current cycle.
+        </div>
+        <div id="snow-active-list" style="display:grid;grid-template-columns:1fr;gap:10px"></div>
+      </div>
+
+      <!-- History view (lazy-loaded on first switch). -->
+      <div id="snow-history-view" hidden role="tabpanel">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <select id="snow-filter-direction" style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#e2e8f0;border-radius:4px">
+            <option value="">all directions</option>
+            <option value="BUY">BUY</option>
+            <option value="SELL">SELL</option>
+          </select>
+          <select id="snow-filter-setup" style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#e2e8f0;border-radius:4px">
+            <option value="">all setups</option>
+          </select>
+          <input id="snow-filter-search" type="search" placeholder="filter id / thesis…" style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#e2e8f0;border-radius:4px;flex:1;min-width:160px"/>
+          <button id="snow-history-refresh" type="button" style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#94a3b8;cursor:pointer">↻</button>
+        </div>
+        <div id="snow-history-empty" hidden style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.08);border-radius:10px;padding:14px;text-align:center;color:#64748b;font-size:11px">
+          No closed plans match the current filters.
+        </div>
+        <div style="overflow-x:auto">
+          <table id="snow-history-table" style="width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:10px">
+            <thead>
+              <tr style="text-align:left;color:#64748b;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <th style="padding:6px 8px">ID</th>
+                <th style="padding:6px 8px">DIR</th>
+                <th style="padding:6px 8px">STATUS</th>
+                <th style="padding:6px 8px">SETUP</th>
+                <th style="padding:6px 8px;text-align:right">PIPS</th>
+                <th style="padding:6px 8px;text-align:right">USD</th>
+                <th style="padding:6px 8px">CLOSED AT</th>
+              </tr>
+            </thead>
+            <tbody id="snow-history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="snow-error" hidden style="margin-top:10px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:8px;padding:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#f87171"></div>
     </div>
   </section>
 

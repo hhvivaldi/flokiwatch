@@ -204,6 +204,62 @@ the Trade Room Snow page (FLO-377).
 
 ---
 
+### `/api/snow/plans` and `/api/snow/plan/{id}` (FLO-377 Trade Room Snow page)
+
+REST endpoints exposed by `dashboard/server.py`. Reused by both the
+Trade Room Snow section (5s polling on the active view) and any future
+read-only Snow integrations. All shaping is done via
+`_snow_summarize_plan_row` so the home-card payload (FLO-376) and
+these endpoints carry the same per-plan shape.
+
+#### `GET /api/snow/plans`
+
+| Query param | Type | Default | Notes |
+|---|---|---|---|
+| `status` | string | `"active"` | `"active"` (group: pending/triggered/active/closing), `"terminal"` (closed/expired/cancelled/failed), `"all"`, or any single status value (e.g. `"closed"`). Group aliases match BEFORE single-status check, so `?status=active` returns the group, not just literal "active" rows. |
+| `limit` | int | `50` | Clamped to `[1, 200]`. |
+| `offset` | int | `0` | In-memory slice (acceptable for current dashboard use; push to SQL when histories grow). |
+
+Response (200):
+```json
+{ "success": true, "count": N, "plans": [<summary>, ...] }
+```
+Each `<summary>` carries the same fields as `state["snow"].active_plans[]`
+(see Snow Card FIELD_CONTRACT entry) plus `closed_at`, `outcome_pips`,
+and `outcome_usd` when terminal.
+
+Response (400) — unknown status filter; (500) — DB / shaping error.
+
+#### `GET /api/snow/plan/{plan_id}`
+
+Plan id format: `PLAN-YYYYMMDD-NNN`. Anything else → 400.
+
+Response (200):
+```json
+{
+  "success": true,
+  "summary": { ...same shape as /api/snow/plans entry... },
+  "plan": { ...full validated plan dict from snow_plans.plan_json... },
+  "triggers": [ ...up to limit_audit snow_triggers rows newest-first... ],
+  "evaluations": [ ...up to limit_audit snow_evaluations rows; conditions_snapshot parsed back to dict... ],
+  "execution_quality": [ ...snow_execution_quality rows, FLO-365 (may be empty)... ]
+}
+```
+
+| Query param | Type | Default | Notes |
+|---|---|---|---|
+| `limit_audit` | int | `50` | Cap on triggers / evaluations / execution_quality each. |
+
+Response codes:
+- `200` — plan exists.
+- `400` — malformed plan id.
+- `404` — plan id not in DB.
+- `500` — DB error.
+
+**Tests:** `dashboard/test_snow_api.py` (11 tests; httpx ASGI transport).
+
+---
+
 ### `data/agent_watch_conditions.json` (FLO-301 Simba Compound Conditions)
 
 Simba monitors these conditions every 30s for open positions. Written by `agent_tools.set_watch_conditions`; read and evaluated by `agent_monitor._evaluate_watch_conditions_for_position`.
@@ -605,6 +661,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### Snow Card (FLO-376)
 `snow-card`, `snow-active-count`, `snow-schema-badge`, `snow-detail-link`, `snow-active-list`, `snow-empty`, `snow-last-closed-wrap`, `snow-last-closed-when`, `snow-last-closed-id`, `snow-last-closed-direction`, `snow-last-closed-pips`, `snow-last-closed-usd`, `snow-last-closed-duration`
+
+### Snow Trade Room Page (FLO-377)
+`snow-section`, `snow-tab-meta`, `snow-tab-active`, `snow-tab-history`, `snow-active-view`, `snow-active-empty`, `snow-active-list`, `snow-history-view`, `snow-filter-direction`, `snow-filter-setup`, `snow-filter-search`, `snow-history-refresh`, `snow-history-empty`, `snow-history-table`, `snow-history-tbody`, `snow-error`
 
 ### Trade Room Agent Grid (FLO-33)
 `sage-card`, `sage-status`, `sage-summary`, `sage-last-run`, `sage-report-period`, `sage-report-trades`, `sage-report-win-rate`, `sage-report-profit-factor`, `sage-report-recommendations`

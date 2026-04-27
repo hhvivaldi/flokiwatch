@@ -881,6 +881,200 @@ def trade_room_api(limit: int = 50):
         return JSONResponse({"messages": [], "journal": []})
 
 
+# ──────────────────────────────────────────────────────────────────
+# Snow plan inspection endpoints (FLO-377)
+# ──────────────────────────────────────────────────────────────────
+
+# Statuses considered "active" for the default Snow plans listing.
+# Mirrors snow.snow_loop's get_active_plans contract.
+_SNOW_ACTIVE_STATUSES = ("pending", "triggered", "active", "closing")
+_SNOW_TERMINAL_STATUSES = ("closed", "expired", "cancelled", "failed")
+_SNOW_ALL_STATUSES = _SNOW_ACTIVE_STATUSES + _SNOW_TERMINAL_STATUSES
+
+
+def _snow_summarize_plan_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Pure shaping helper — same fields as state_writer's summary so
+    the dashboard can reuse rendering across the home card and the
+    Trade Room page. Adds outcome columns when present.
+    """
+    try:
+        pj = json.loads(row.get("plan_json") or "{}")
+    except Exception:
+        pj = {}
+    analysis = pj.get("analysis") or {}
+    entry = pj.get("entry") or {}
+    thesis = str(analysis.get("thesis") or "")
+    return {
+        "id": row.get("id"),
+        "status": row.get("status"),
+        "schema_version": row.get("schema_version"),
+        "direction": entry.get("direction"),
+        "volume": entry.get("volume"),
+        "initial_sl": entry.get("initial_sl"),
+        "initial_tp": entry.get("initial_tp"),
+        "created_at": row.get("created_at"),
+        "expires_at": row.get("expires_at"),
+        "entered_at": row.get("entered_at"),
+        "closed_at": row.get("closed_at"),
+        "trade_ticket": row.get("trade_ticket"),
+        "outcome_pips": row.get("outcome_pips"),
+        "outcome_usd": row.get("outcome_usd"),
+        "thesis_short": (thesis[:140] + "…") if len(thesis) > 140 else thesis,
+        "confidence": analysis.get("confidence"),
+        "regime_assumed": analysis.get("regime_assumed"),
+        "setup_type": analysis.get("setup_type"),
+        "context_tags": analysis.get("context_tags"),
+        "n_management": len(pj.get("management") or []),
+        "n_exit": len(pj.get("exit") or []),
+    }
+
+
+@app.get("/api/snow/plans")
+def snow_plans_api(
+    status: str = "active",
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List Snow plans for dashboard inspection.
+
+    Query parameters:
+      status: "active" (default — pending/triggered/active/closing),
+              "terminal" (closed/expired/cancelled/failed), or
+              "all". Single status names also accepted (e.g. "pending").
+      limit:  1-200 (default 50). Plans are returned newest-first.
+      offset: pagination offset.
+    """
+    try:
+        from snow import db as snow_db
+        s = (status or "active").lower()
+        if s == "active":
+            statuses = _SNOW_ACTIVE_STATUSES
+        elif s == "terminal":
+            statuses = _SNOW_TERMINAL_STATUSES
+        elif s == "all":
+            statuses = _SNOW_ALL_STATUSES
+        elif s in _SNOW_ALL_STATUSES:
+            statuses = (s,)
+        else:
+            return JSONResponse(
+                {"success": False,
+                 "error": f"unknown status filter: {status!r}. Use "
+                          f"'active' | 'terminal' | 'all' or one of "
+                          f"{_SNOW_ALL_STATUSES}."},
+                status_code=400,
+            )
+        limit = max(1, min(200, int(limit)))
+        # Clamp offset so a malicious ?limit=200&offset=99999 can't pull
+        # 100k rows from SQLite per request. 10k is generous for the
+        # current Snow retention; revisit when policy changes.
+        offset = max(0, min(10_000, int(offset)))
+
+        # snow.db.list_plans_by_status doesn't support offset — fetch
+        # limit+offset and slice. The dashboard rarely paginates past
+        # a few hundred rows; if that changes, push offset into the SQL.
+        rows = snow_db.list_plans_by_status(statuses, limit=limit + offset)
+        rows = rows[offset:offset + limit]
+        plans = [_snow_summarize_plan_row(r) for r in rows]
+        return JSONResponse(_sanitize_for_json({
+            "success": True, "count": len(plans), "plans": plans,
+        }))
+    except Exception as e:
+        return JSONResponse(
+            {"success": False, "error": f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+
+
+@app.get("/api/snow/plan/{plan_id}")
+def snow_plan_detail_api(plan_id: str, limit_audit: int = 50):
+    """Full detail for one plan: the parsed plan JSON, recent
+    snow_triggers rows, recent snow_evaluations rows, and (if
+    available) recent snow_execution_quality rows.
+
+    Plan id format: ``PLAN-YYYYMMDD-NNN``. Unknown id → 404.
+    """
+    try:
+        from snow import db as snow_db
+        import re as _re
+        if not _re.match(r"^PLAN-\d{8}-\d{3}$", plan_id or ""):
+            return JSONResponse(
+                {"success": False,
+                 "error": f"invalid plan_id format: {plan_id!r}. "
+                          f"Expected PLAN-YYYYMMDD-NNN."},
+                status_code=400,
+            )
+
+        row = snow_db.get_plan(plan_id)
+        if row is None:
+            return JSONResponse(
+                {"success": False, "error": f"plan {plan_id} not found"},
+                status_code=404,
+            )
+
+        try:
+            plan_full = json.loads(row.get("plan_json") or "{}")
+        except Exception:
+            plan_full = {}
+
+        triggers = snow_db.list_triggers(plan_id=plan_id, limit=int(limit_audit))
+
+        # Pull evaluations + execution_quality directly — both indexed on
+        # plan_id, both small per plan.
+        evaluations: List[Dict[str, Any]] = []
+        execution_quality: List[Dict[str, Any]] = []
+        try:
+            conn = snow_db._connect()
+            try:
+                e_rows = conn.execute(
+                    "SELECT id, plan_id, contingency_name, evaluated_at, "
+                    "       event, conditions_snapshot "
+                    "  FROM snow_evaluations "
+                    " WHERE plan_id = ? "
+                    " ORDER BY evaluated_at DESC, id DESC "
+                    " LIMIT ?",
+                    (plan_id, int(limit_audit)),
+                ).fetchall()
+                for r in e_rows:
+                    d = dict(r)
+                    try:
+                        d["conditions_snapshot"] = (
+                            json.loads(d["conditions_snapshot"])
+                            if d.get("conditions_snapshot") else None
+                        )
+                    except Exception:
+                        pass
+                    evaluations.append(d)
+                try:
+                    eq_rows = conn.execute(
+                        "SELECT * FROM snow_execution_quality "
+                        " WHERE plan_id = ? "
+                        " ORDER BY id DESC "
+                        " LIMIT ?",
+                        (plan_id, int(limit_audit)),
+                    ).fetchall()
+                    execution_quality = [dict(r) for r in eq_rows]
+                except Exception:
+                    execution_quality = []
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+        return JSONResponse(_sanitize_for_json({
+            "success": True,
+            "summary": _snow_summarize_plan_row(row),
+            "plan": plan_full,
+            "triggers": triggers,
+            "evaluations": evaluations,
+            "execution_quality": execution_quality,
+        }))
+    except Exception as e:
+        return JSONResponse(
+            {"success": False, "error": f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+
+
 @app.get("/api/agent-watch-conditions")
 def agent_watch_conditions():
     try:
