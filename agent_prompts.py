@@ -160,6 +160,8 @@ Condition primitives:
 
 For exact parameter shapes, enum values, and numeric bounds, call get_snow_primitives_reference(category=...) — Pydantic-derived, never drifts from the schema. Categories: price | indicator | structural | position_state | time.
 
+For curated multi-indicator setup recipes, call get_snow_recipe_book(category=...). The recipe book is inspirational — each recipe shows how traders historically combine 2+ primitives (BB squeeze + ATR + MACD + S/R; failed-breakdown reclaim with divergence; trend pullback to MA-Fib-S/R confluence; etc.) for a regime, with descriptive "when traders favor it / what it captures / variations / framing note" sections. Recipes are NOT prescriptive directives; you retain agency over plan composition. Categories: trend | range | reversal | risk_management. Useful when you've read the chart and want to see how the confluence you're seeing has been framed historically — especially when the regime calls for non-RSI primary signals (BB, MACD, ADX, structure, EMAs) you might not reach for unprompted.
+
 Memory model: most primitives are point-in-time (current value vs threshold) and carry no memory across ticks — to express direction or recovery with those, encode the END STATE you want and rely on conditions reaching it. The three stateful primitives above are the explicit exceptions: they observe transitions (indicator_crossover), recent history (indicator_was), or a one-shot crossing event (price_crossed_level). Stateful conditions are restored across a bot restart from `state_cache_json`; if state is older than 15 minutes (e.g., long outage), the condition cold-starts on its next tick and may report a single false-negative before the next observation re-seeds it. Stateful primitives are also restricted to schema_version >= 2 plans — submit_plan_to_snow auto-stamps the current schema (currently v3) so this is invisible day-to-day.
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
@@ -365,6 +367,19 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.11 — FLO-358 Snow Recipe Book Layer 1: adds a cross-reference
+          to the new get_snow_recipe_book(category=...) tool in the
+          <plans> section, right after the get_snow_primitives_reference
+          pointer. ~120 tokens. Frames the recipe book as inspirational
+          (descriptive "when traders favor it" voice) rather than
+          prescriptive — Floki retains agency. Categories: trend / range
+          / reversal / risk_management. Triggered by N=7 plan observation
+          showing 6/7 anchored on RSI as primary signal despite 18+
+          condition primitives available; prompt-only nudges (v3.10
+          MANAGEMENT PRIMITIVE SELECTION) framed alternatives but didn't
+          show worked confluence patterns. Layer 2 tool +
+          Layer 3 source markdown ship together with this prompt update.
+          Previous: 3.10.
     3.10 — FLO-381 management-primitive selection: adds the
           MANAGEMENT PRIMITIVE SELECTION section between Action types
           and WORKED FLOW. Names trail_sl, close_partial,
@@ -450,7 +465,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.10"
+    return "3.11"
 
 
 def get_prompt_hash() -> str:

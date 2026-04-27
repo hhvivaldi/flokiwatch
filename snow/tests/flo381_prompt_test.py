@@ -21,8 +21,18 @@ from agent_prompts import SYSTEM_PROMPT, get_prompt_version
 
 
 class TestV310PromptVersion:
-    def test_version_returns_3_10(self):
-        assert get_prompt_version() == "3.10"
+    def test_version_returns_current(self):
+        """v3.10 logic ships and persists; subsequent versions
+        (v3.11+) build on it additively. This test asserts the
+        version is at-least 3.10 — i.e., the FLO-381 framing is
+        live. The exact-version pin lives in
+        validator_test.TestPromptMandatoryPlan.EXPECTED_VERSION."""
+        v = get_prompt_version()
+        # Parse "X.Y" → tuple for comparison
+        parts = tuple(int(p) for p in v.split("."))
+        assert parts >= (3, 10), (
+            f"prompt version regressed below 3.10 (FLO-381 frame): {v}"
+        )
 
 
 class TestV310ManagementSection:

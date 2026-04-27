@@ -1117,3 +1117,74 @@ catcher, or manual intervention.
 `conditions_snapshot.broker_close_time_utc` (same value as the
 plan's `closed_at`) so audit queries can join on both columns
 without re-extracting from `plan_json`.
+
+
+## Snow Recipe Book (FLO-358)
+
+Source file: `data/_design/snow_recipe_book.md`. Parsed by
+`snow.recipe_book.load_recipe_book()` (cached by mtime). Tool
+entry: `get_snow_recipe_book(category=None)`.
+
+### Categories (closed enum)
+
+`trend` | `range` | `reversal` | `risk_management`
+
+### Tool return shape
+
+```json
+{
+  "success": true,
+  "version": "1.0.0",
+  "source_note": "Recipes curated from established TA methodology...",
+  "category_filter": "trend" | null,
+  "count": 14,
+  "recipes": [
+    {
+      "id": "bb_squeeze_breakout",
+      "title": "Bollinger Squeeze Breakout (Volatility Expansion)",
+      "category": "trend",
+      "primary_signal": "bollinger_position",
+      "setup_type_alignment": ["breakout_range", "continuation_momentum"],
+      "common_ingredients": [{"primitive": "bollinger_position", "role": "..."}, ...],
+      "when_traders_favor_it": "...",
+      "what_it_captures": "...",
+      "variations": ["...", "..."],
+      "framing_note": "..."
+    },
+    ...
+  ]
+}
+```
+
+On failure (unknown category): `{"success": false, "reason": "Unknown category 'X'..."}`. On source missing: `{"success": false, "reason": "recipe book source missing..."}`.
+
+### Recipe field contract
+
+| Field | Type | Constraint | Purpose |
+|-------|------|------------|---------|
+| `id` | str | snake_case unique | Stable identifier — FLO-378 sub-utilization tracking keys on this |
+| `title` | str | 5-120 chars | Human-readable header |
+| `category` | enum | one of RECIPE_CATEGORIES | Tool filter axis |
+| `primary_signal` | str | matches a real `Condition.type` literal | The dominant primitive that anchors the setup |
+| `setup_type_alignment` | list[str] | optional, may be empty | FLO-366 setup_type values this recipe naturally aligns with |
+| `common_ingredients` | list[Ingredient] | min 2 | Multi-indicator confluence — single-primitive recipes rejected by validator |
+| `when_traders_favor_it` | str | min 40 chars | Descriptive voice describing the regime / context |
+| `what_it_captures` | str | min 40 chars | Edge / behavior the setup targets |
+| `variations` | list[str] | optional | Adjustments preserving Floki's agency |
+| `framing_note` | str | min 40 chars | Connects to thesis shape + setup_type + management primitive |
+
+`Ingredient` shape: `{"primitive": <Condition.type literal>, "role": <3-200 char prose>}`.
+
+### CI guards (snow/tests/recipe_book_test.py)
+
+19 tests across 6 classes:
+- **Schema integrity**: every recipe has required fields populated above min lengths; ids unique; categories cover ≥3.
+- **Primitive existence**: every recipe `primitive` references a real `snow.schema` Condition `type` literal. Drift guard.
+- **No prescriptive directives**: regex scan blocks "you must use", "always use", "never use", "required to use" in directive position. Aligned with `feedback_no_prescriptive_rules`.
+- **Diversification**: ≥70% non-RSI primary_signal floor; ≥3 distinct primary_signals across cohort.
+- **Tool entry point**: AgentTools surface, category filter, invalid category, full serialization shape.
+- **Parser robustness**: missing preamble / yaml block / required prose section all raise with clear messages.
+
+### Versioning
+
+Recipe-book file `version` field bumps on content edits (semver). The tool reflects whatever version is on disk; cache invalidates on mtime. The Pydantic model schema is in code (`snow.recipe_book.Recipe`) and bumps on field changes — track separately.

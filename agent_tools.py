@@ -4553,6 +4553,67 @@ class AgentTools:
             )
             return {"success": False, "error": f"{type(e).__name__}: {e}"}
 
+    def get_snow_recipe_book(
+        self, category: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """FLO-358 — return curated multi-indicator setup recipes.
+
+        The recipe book is the inspirational layer of the management /
+        confluence vocabulary. Each recipe combines two or more Snow
+        Condition primitives into a setup pattern drawn from
+        established TA methodology (CMT body, classical chart
+        patterns, candlestick literature, regime-based confluence).
+        Recipes describe how traders historically frame setups —
+        descriptive voice, NOT prescriptive directives. You retain
+        full agency over plan composition.
+
+        Args:
+          category: Filter to one of "trend", "range", "reversal",
+            "risk_management". None returns all recipes.
+
+        Returns:
+          {"success": True, "version": str, "source_note": str,
+           "category_filter": str|None, "count": int,
+           "recipes": [{id, title, category, primary_signal,
+                        setup_type_alignment, common_ingredients,
+                        when_traders_favor_it, what_it_captures,
+                        variations, framing_note}, ...]}
+          {"success": False, "reason": "..."}
+
+        Source of truth: `data/_design/snow_recipe_book.md` parsed
+        by `snow.recipe_book.load_recipe_book` (cached by mtime).
+        """
+        start = time.time()
+        try:
+            from snow.recipe_book import get_recipes_by_category
+        except Exception as e:
+            self._log_fail(
+                "get_snow_recipe_book", start, f"import_error={e}",
+            )
+            return {
+                "success": False,
+                "reason": f"snow.recipe_book import failed: {e}",
+            }
+        try:
+            result = get_recipes_by_category(category=category)
+            count = result.get("count", 0)
+            self._log_tool(
+                "get_snow_recipe_book", start,
+                f"category={category!r} count={count}",
+            )
+            return result
+        except FileNotFoundError as e:
+            self._log_fail(
+                "get_snow_recipe_book", start, f"source_missing={e}",
+            )
+            return {
+                "success": False,
+                "reason": f"recipe book source missing: {e}",
+            }
+        except Exception as e:
+            self._log_fail("get_snow_recipe_book", start, f"error={e}")
+            return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
     def get_snow_tags_reference(self) -> Dict[str, Any]:
         """Return the FLO-366 setup-tagging vocabulary required for
         schema_version >= 3 plans.

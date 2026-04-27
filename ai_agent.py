@@ -1287,6 +1287,37 @@ class AIAgent:
                 },
             },
             {
+                "name": "get_snow_recipe_book",
+                "description": (
+                    "FLO-358 — return curated multi-indicator setup recipes "
+                    "from established TA methodology. Each recipe combines "
+                    "two or more Snow Condition primitives into a confluence "
+                    "pattern with 'when traders favor it / what it captures / "
+                    "variations / framing note' sections. Inspirational, NOT "
+                    "prescriptive — you retain full agency. Useful when "
+                    "drafting a plan and you want to see how professionals "
+                    "frame multi-indicator confluence for the regime you're "
+                    "reading. Optional category filter."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "trend", "range", "reversal",
+                                "risk_management",
+                            ],
+                            "description": (
+                                "Filter to a single category. Omit for all "
+                                "recipes."
+                            ),
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "cancel_plan",
                 "description": (
                     "Cancel a PENDING Snow plan. Only works for plans that have "
