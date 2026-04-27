@@ -385,6 +385,99 @@ def write_state(bot_instance: Any) -> None:
         except Exception:
             state["pending_orders"] = []
 
+        # FLO-376: Snow plan summary for dashboard card.
+        # Reads snow_plans directly via snow.db helpers (no schema
+        # duplication). Best-effort — any failure leaves `snow` absent
+        # and the frontend hides the card. Capped at 3 active plans
+        # (sorted newest-first) + the most-recent CLOSED plan with
+        # non-null outcome.
+        try:
+            from snow import db as _snow_db
+            from snow.schema import PlanStatus as _PlanStatus
+            import json as _json
+            _SNOW_NON_TERMINAL = (
+                _PlanStatus.PENDING.value, _PlanStatus.TRIGGERED.value,
+                _PlanStatus.ACTIVE.value, _PlanStatus.CLOSING.value,
+            )
+
+            def _snow_plan_summary(row: Dict[str, Any]) -> Dict[str, Any]:
+                try:
+                    pj = _json.loads(row.get("plan_json") or "{}")
+                except Exception:
+                    pj = {}
+                analysis = pj.get("analysis") or {}
+                entry = pj.get("entry") or {}
+                thesis = str(analysis.get("thesis") or "")
+                return {
+                    "id": row.get("id"),
+                    "status": row.get("status"),
+                    "schema_version": row.get("schema_version"),
+                    "direction": entry.get("direction"),
+                    "volume": entry.get("volume"),
+                    "initial_sl": entry.get("initial_sl"),
+                    "initial_tp": entry.get("initial_tp"),
+                    "created_at": row.get("created_at"),
+                    "expires_at": row.get("expires_at"),
+                    "entered_at": row.get("entered_at"),
+                    "trade_ticket": row.get("trade_ticket"),
+                    "thesis_short": (thesis[:140] + "…") if len(thesis) > 140 else thesis,
+                    "confidence": analysis.get("confidence"),
+                    "regime_assumed": analysis.get("regime_assumed"),
+                    "setup_type": analysis.get("setup_type"),  # v3+ only
+                    "context_tags": analysis.get("context_tags"),  # v3+ only
+                    "n_management": len(pj.get("management") or []),
+                    "n_exit": len(pj.get("exit") or []),
+                }
+
+            active_rows = _snow_db.list_plans_by_status(
+                _SNOW_NON_TERMINAL, limit=3,
+            )
+            active_summaries = [_snow_plan_summary(r) for r in active_rows]
+
+            # Most-recent CLOSED plan with a non-null outcome.
+            last_closed_summary = None
+            closed_rows = _snow_db.list_plans_by_status(
+                (_PlanStatus.CLOSED.value,), limit=10,
+            )
+            for r in closed_rows:
+                if r.get("outcome_pips") is None:
+                    continue
+                summary = _snow_plan_summary(r)
+                summary["closed_at"] = r.get("closed_at")
+                summary["outcome_pips"] = r.get("outcome_pips")
+                summary["outcome_usd"] = r.get("outcome_usd")
+                # Duration in minutes — entered_at → closed_at if both present.
+                try:
+                    from datetime import datetime as _dt
+                    def _parse(s):
+                        if s and s.endswith("Z"):
+                            s = s[:-1] + "+00:00"
+                        return _dt.fromisoformat(s) if s else None
+                    e_ts = _parse(r.get("entered_at"))
+                    c_ts = _parse(r.get("closed_at"))
+                    if e_ts and c_ts:
+                        summary["duration_min"] = round(
+                            (c_ts - e_ts).total_seconds() / 60.0, 1,
+                        )
+                    else:
+                        summary["duration_min"] = None
+                except Exception:
+                    summary["duration_min"] = None
+                last_closed_summary = summary
+                break
+
+            state["snow"] = {
+                "active_count": len(active_summaries),
+                "active_plans": active_summaries,
+                "last_closed": last_closed_summary,
+                "schema_version_current": getattr(
+                    __import__("snow"), "SCHEMA_VERSION", None,
+                ),
+            }
+        except Exception as _se:
+            log.debug(f"state_writer: snow summary skipped: {_se}")
+            # Don't surface `snow` at all — frontend hides on absence.
+
         # FLO-190: Inject debate results for dashboard
         try:
             _debate = getattr(bot_instance, "_last_debate_result", None)

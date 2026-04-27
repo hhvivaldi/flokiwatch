@@ -149,6 +149,61 @@
 | `pending_orders[].tp` | float | `executor.py` | Dashboard |
 | `pending_orders[].volume` | float | `executor.py` | Dashboard |
 
+### `snow` Object (FLO-376 Dashboard Snow Card)
+
+Summary slice of `snow_plans` for the dashboard read path. Written by
+`state_writer.py` on the same heartbeat as the rest of `bot_state.json`;
+read by `app.js → renderSnowCard`. Best-effort: if the snow.db query
+fails, the field is absent and the frontend hides the card.
+
+| Field | Type | Writer | Reader | Notes |
+|-------|------|--------|--------|-------|
+| `snow` | object \| absent | `state_writer.py` | `app.js` | Absent on read failure → frontend hides card. |
+| `snow.active_count` | int | `state_writer.py` | `app.js` | Number of non-terminal plans at write time. |
+| `snow.schema_version_current` | int | `state_writer.py` | `app.js` | Current `snow.SCHEMA_VERSION` (informational badge). |
+| `snow.active_plans` | array (≤3) | `state_writer.py` | `app.js` | Newest-first by `created_at`. |
+| `snow.active_plans[].id` | string | `state_writer.py` | `app.js` | `PLAN-YYYYMMDD-NNN`. |
+| `snow.active_plans[].status` | string | `state_writer.py` | `app.js` | `pending` \| `triggered` \| `active` \| `closing`. |
+| `snow.active_plans[].schema_version` | int | `state_writer.py` | `app.js` | Plan-side stamp (1 / 2 / 3). |
+| `snow.active_plans[].direction` | string | `state_writer.py` | `app.js` | `BUY` \| `SELL`. |
+| `snow.active_plans[].volume` | float | `state_writer.py` | `app.js` | Lots. |
+| `snow.active_plans[].initial_sl` | float | `state_writer.py` | `app.js` | Plan SL price. |
+| `snow.active_plans[].initial_tp` | float | `state_writer.py` | `app.js` | Plan TP price. |
+| `snow.active_plans[].created_at` | string (ISO UTC) | `state_writer.py` | `app.js` | Z-suffixed (Rule 22). |
+| `snow.active_plans[].expires_at` | string (ISO UTC) \| null | `state_writer.py` | `app.js` | Drives "Xh left" badge. |
+| `snow.active_plans[].entered_at` | string (ISO UTC) \| null | `state_writer.py` | `app.js` | Set when plan transitions to ACTIVE. |
+| `snow.active_plans[].trade_ticket` | int \| null | `state_writer.py` | `app.js` | MT5 ticket once active. |
+| `snow.active_plans[].thesis_short` | string | `state_writer.py` | `app.js` | First 140 chars of `analysis.thesis` + ellipsis. |
+| `snow.active_plans[].confidence` | int (0-100) | `state_writer.py` | `app.js` | From `analysis.confidence`. |
+| `snow.active_plans[].regime_assumed` | string \| null | `state_writer.py` | `app.js` | From `analysis.regime_assumed`. |
+| `snow.active_plans[].setup_type` | string \| null | `state_writer.py` | `app.js` | FLO-366 v3+; null on v1/v2. |
+| `snow.active_plans[].context_tags` | object \| null | `state_writer.py` | `app.js` | FLO-366 v3+; `{trend, volatility, htf, news_session[]}`. |
+| `snow.active_plans[].n_management` | int | `state_writer.py` | `app.js` | Count of management contingencies. |
+| `snow.active_plans[].n_exit` | int | `state_writer.py` | `app.js` | Count of exit contingencies. |
+| `snow.last_closed` | object \| null | `state_writer.py` | `app.js` | Most-recent CLOSED plan with non-null outcome. |
+| `snow.last_closed.id` | string | `state_writer.py` | `app.js` | |
+| `snow.last_closed.direction` | string | `state_writer.py` | `app.js` | |
+| `snow.last_closed.outcome_pips` | float | `state_writer.py` | `app.js` | Drives green/red coloring. |
+| `snow.last_closed.outcome_usd` | float | `state_writer.py` | `app.js` | |
+| `snow.last_closed.duration_min` | float \| null | `state_writer.py` | `app.js` | `entered_at → closed_at`; null if either is missing (FLO-374 gap). |
+| `snow.last_closed.entered_at` | string (ISO UTC) \| null | `state_writer.py` | `app.js` | |
+| `snow.last_closed.closed_at` | string (ISO UTC) \| null | `state_writer.py` | `app.js` | |
+| `snow.last_closed.setup_type` | string \| null | `state_writer.py` | `app.js` | v3+ only. |
+| `snow.last_closed.context_tags` | object \| null | `state_writer.py` | `app.js` | v3+ only. |
+
+**Polling cadence:** the Snow card reuses the existing 30s `bot_state.json`
+heartbeat. The `last_evaluated_at` per plan is NOT surfaced here (changes
+every 5s; would inflate state writes). Live per-tick inspection lives in
+the Trade Room Snow page (FLO-377).
+
+**Frontend hiding rules:**
+- `snow` absent → card hidden
+- `snow.active_count == 0` AND `snow.last_closed == null` → card hidden
+- `snow.active_count == 0` AND `snow.last_closed != null` → card visible
+  with empty-active banner + last-closed strip
+
+---
+
 ### `data/agent_watch_conditions.json` (FLO-301 Simba Compound Conditions)
 
 Simba monitors these conditions every 30s for open positions. Written by `agent_tools.set_watch_conditions`; read and evaluated by `agent_monitor._evaluate_watch_conditions_for_position`.
@@ -547,6 +602,9 @@ Any dashboard HTML redesign **must** preserve these element IDs or update `app.j
 
 ### AI Agent Card
 `agent-card`, `agent-decision`, `agent-confidence`, `agent-reasoning`, `agent-factors`, `agent-concerns`, `agent-agreement`, `agent-executed`, `agent-latency`
+
+### Snow Card (FLO-376)
+`snow-card`, `snow-active-count`, `snow-schema-badge`, `snow-detail-link`, `snow-active-list`, `snow-empty`, `snow-last-closed-wrap`, `snow-last-closed-when`, `snow-last-closed-id`, `snow-last-closed-direction`, `snow-last-closed-pips`, `snow-last-closed-usd`, `snow-last-closed-duration`
 
 ### Trade Room Agent Grid (FLO-33)
 `sage-card`, `sage-status`, `sage-summary`, `sage-last-run`, `sage-report-period`, `sage-report-trades`, `sage-report-win-rate`, `sage-report-profit-factor`, `sage-report-recommendations`

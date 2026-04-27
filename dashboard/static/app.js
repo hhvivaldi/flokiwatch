@@ -976,6 +976,7 @@ function render(state) {
   renderPositions(state.positions);
   renderTrades(state.trade_history, state.daily_stats);
   renderIntelFeed(la.intel_feed, la.mtf_trend, la.volume_gate, state.market_context);
+  renderSnowCard(state.snow);
   renderAgentCard(la.agent_decision, marketClosed);
   renderProactiveAnalysis(la.proactive_analysis, state.positions);
   renderFastTriggers(la.fast_decisions);
@@ -1561,6 +1562,162 @@ function renderIntelFeed(feed, mtfTrend, volumeGate, marketContext) {
     if (volRatioEl) { volRatioEl.className = statusColor; volRatioEl.textContent = volRatio != null ? `${volRatio.toFixed(1)}x avg` : "—"; }
     if (volStatusEl) { volStatusEl.className = statusColor; volStatusEl.textContent = statusLabel; }
     if (volAdjEl) { volAdjEl.className = adjColor; volAdjEl.textContent = adjText; }
+  }
+}
+
+/* ================================================================
+   SNOW CARD (FLO-376) — read-only summary of the autonomous executor
+   ================================================================ */
+
+function _snowEscape(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function _snowFmtTimeUntil(expiresAtIso) {
+  if (!expiresAtIso) return "";
+  try {
+    const expires = new Date(expiresAtIso);
+    const ms = expires.getTime() - Date.now();
+    if (ms <= 0) return "expired";
+    const min = Math.round(ms / 60000);
+    if (min < 60) return `${min}m left`;
+    const hr = Math.floor(min / 60);
+    const rem = min % 60;
+    return `${hr}h${rem ? rem + "m" : ""} left`;
+  } catch (e) { return ""; }
+}
+
+function _snowDirectionStyle(dir) {
+  if (dir === "BUY")  return { color: "#34d399", bg: "rgba(52,211,153,0.12)" };
+  if (dir === "SELL") return { color: "#f87171", bg: "rgba(248,113,113,0.12)" };
+  return { color: "#94a3b8", bg: "rgba(148,163,184,0.10)" };
+}
+
+function _snowStatusStyle(status) {
+  switch (status) {
+    case "pending":   return { color: "#fbbf24", label: "PENDING" };
+    case "triggered": return { color: "#f97316", label: "TRIGGERED" };
+    case "active":    return { color: "#38bdf8", label: "ACTIVE" };
+    case "closing":   return { color: "#a78bfa", label: "CLOSING" };
+    default:          return { color: "#94a3b8", label: (status || "—").toUpperCase() };
+  }
+}
+
+function _snowPlanCard(plan) {
+  const dirStyle = _snowDirectionStyle(plan.direction);
+  const stStyle = _snowStatusStyle(plan.status);
+  const tagsLine = (() => {
+    if (!plan.context_tags) return "";
+    const ct = plan.context_tags;
+    const tags = [ct.trend, ct.volatility, ct.htf]
+      .filter(Boolean)
+      .map(t => `<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#94a3b8;background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:3px;margin-right:4px">${_snowEscape(t)}</span>`)
+      .join("");
+    return tags;
+  })();
+  const setupBadge = plan.setup_type
+    ? `<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#38bdf8;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);padding:1px 6px;border-radius:3px">${_snowEscape(plan.setup_type)}</span>`
+    : "";
+
+  return `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#e2e8f0;font-weight:700">${_snowEscape(plan.id || "—")}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:${stStyle.color};background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px">${stStyle.label}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${dirStyle.color};background:${dirStyle.bg};padding:2px 6px;border-radius:3px">${_snowEscape(plan.direction || "—")}</span>
+          ${setupBadge}
+        </div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">${_snowEscape(_snowFmtTimeUntil(plan.expires_at))}</span>
+      </div>
+      <p style="font-size:11px;color:#94a3b8;line-height:1.5;margin:0 0 6px 0">${_snowEscape(plan.thesis_short || "—")}</p>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:10px;color:#64748b">
+        <span>SL <span style="color:#94a3b8">${plan.initial_sl != null ? plan.initial_sl : "—"}</span></span>
+        <span>TP <span style="color:#94a3b8">${plan.initial_tp != null ? plan.initial_tp : "—"}</span></span>
+        <span>vol <span style="color:#94a3b8">${plan.volume != null ? plan.volume : "—"}</span></span>
+        <span>conf <span style="color:#94a3b8">${plan.confidence != null ? plan.confidence : "—"}</span></span>
+        ${plan.n_management != null ? `<span>mgmt <span style="color:#94a3b8">${plan.n_management}</span></span>` : ""}
+        ${plan.n_exit != null ? `<span>exit <span style="color:#94a3b8">${plan.n_exit}</span></span>` : ""}
+      </div>
+      ${tagsLine ? `<div style="margin-top:6px">${tagsLine}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderSnowCard(snow) {
+  const card = el("snow-card");
+  if (!card) return;
+
+  // Hide entirely if backend didn't emit snow OR there are no plans AND no last_closed.
+  if (!snow || (snow.active_count === 0 && !snow.last_closed)) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  // Header counters
+  const countEl = el("snow-active-count");
+  if (countEl) countEl.textContent = `${snow.active_count || 0} ACTIVE`;
+  const schemaEl = el("snow-schema-badge");
+  if (schemaEl) schemaEl.textContent = `v${snow.schema_version_current ?? "—"}`;
+
+  // Active plans list
+  const listEl = el("snow-active-list");
+  const emptyEl = el("snow-empty");
+  if (listEl) {
+    const plans = Array.isArray(snow.active_plans) ? snow.active_plans : [];
+    if (plans.length === 0) {
+      listEl.innerHTML = "";
+      if (emptyEl) emptyEl.classList.remove("hidden");
+    } else {
+      if (emptyEl) emptyEl.classList.add("hidden");
+      listEl.innerHTML = plans.map(_snowPlanCard).join("");
+    }
+  }
+
+  // Last closed strip
+  const lc = snow.last_closed;
+  const lcWrap = el("snow-last-closed-wrap");
+  if (!lc) {
+    if (lcWrap) lcWrap.classList.add("hidden");
+  } else {
+    if (lcWrap) lcWrap.classList.remove("hidden");
+    const idEl = el("snow-last-closed-id");
+    if (idEl) idEl.textContent = lc.id || "—";
+    const dirEl = el("snow-last-closed-direction");
+    if (dirEl) {
+      dirEl.textContent = lc.direction || "—";
+      const ds = _snowDirectionStyle(lc.direction);
+      dirEl.style.color = ds.color;
+    }
+    const pipsEl = el("snow-last-closed-pips");
+    if (pipsEl) {
+      const p = (lc.outcome_pips != null) ? Number(lc.outcome_pips).toFixed(1) : "—";
+      pipsEl.textContent = `${p} pips`;
+      if (lc.outcome_pips != null) {
+        pipsEl.style.color = lc.outcome_pips >= 0 ? "#34d399" : "#f87171";
+      }
+    }
+    const usdEl = el("snow-last-closed-usd");
+    if (usdEl) {
+      const u = (lc.outcome_usd != null) ? `$${Number(lc.outcome_usd).toFixed(2)}` : "—";
+      usdEl.textContent = u;
+      if (lc.outcome_usd != null) {
+        usdEl.style.color = lc.outcome_usd >= 0 ? "#34d399" : "#f87171";
+      }
+    }
+    const durEl = el("snow-last-closed-duration");
+    if (durEl) {
+      durEl.textContent = (lc.duration_min != null) ? `${lc.duration_min}m` : "—";
+    }
+    const whenEl = el("snow-last-closed-when");
+    if (whenEl) {
+      const ts = lc.closed_at || lc.entered_at || "";
+      whenEl.textContent = (window.displayTime && ts) ? window.displayTime(ts) : (ts || "—");
+    }
   }
 }
 

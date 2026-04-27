@@ -445,6 +445,43 @@
         </div>
       </section>
 
+      <!-- ═══ SNOW CARD (FLO-376) — hidden by default; shown when bot_state.snow has data ═══ -->
+      <section id="snow-card" class="mt-5 stale-dim hidden">
+        <div class="ds-panel" style="border-color:rgba(56,189,248,0.25)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div class="section-pixel-header" style="color:#38bdf8">SNOW</div>
+              <span id="snow-active-count" class="ds-label" style="padding:2px 8px;background:rgba(0,0,0,0.3);border-radius:4px;color:#94a3b8">0 ACTIVE</span>
+              <span id="snow-schema-badge" class="ds-label" style="padding:2px 8px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);border-radius:4px;color:#38bdf8">v—</span>
+            </div>
+            <a href="/trade-room#snow" id="snow-detail-link" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b;text-decoration:none">FULL VIEW →</a>
+          </div>
+
+          <!-- Active plans list — up to 3 cards, stacked vertically; mobile-safe -->
+          <div id="snow-active-list" style="display:grid;grid-template-columns:1fr;gap:10px"></div>
+
+          <!-- Empty state -->
+          <div id="snow-empty" class="hidden" style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.08);border-radius:10px;padding:14px;text-align:center;color:#64748b;font-size:11px">
+            No active Snow plans. Floki has not submitted a contingency plan in the current cycle.
+          </div>
+
+          <!-- Last closed strip -->
+          <div id="snow-last-closed-wrap" class="hidden" style="margin-top:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+              <div class="ds-label">LAST CLOSED PLAN</div>
+              <span id="snow-last-closed-when" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b">—</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+              <span id="snow-last-closed-id" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#94a3b8">—</span>
+              <span id="snow-last-closed-direction" style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#94a3b8">—</span>
+              <span id="snow-last-closed-pips" style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:#e2e8f0">— pips</span>
+              <span id="snow-last-closed-usd" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#94a3b8">—</span>
+              <span id="snow-last-closed-duration" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#64748b">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ═══ AI AGENT CARD (Shadow Mode) — hidden by default ═══ -->
       <section id="agent-card" class="mt-5 stale-dim hidden">
         <div class="ds-panel" style="border-color:rgba(147,51,234,0.2)">
