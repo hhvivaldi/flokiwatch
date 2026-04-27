@@ -527,6 +527,53 @@ def record_trigger(
         conn.close()
 
 
+def has_contingency_fired_successfully(
+    plan_id: str, contingency_name: str
+) -> bool:
+    """FLO-373: Return True if the named contingency has already fired
+    successfully on this plan (LIVE path) OR has at least one
+    `*_would_fire` evaluation row (DRY_RUN path). Used by snow_loop to
+    enforce `fires: once` across ticks AND across bot restarts.
+
+    LIVE source of truth: snow_triggers row with execution_status =
+    'success'. DRY_RUN source of truth: snow_evaluations row with
+    event in {entry_would_fire, management_would_fire, exit_would_fire}.
+
+    The two-table check exists because LIVE dispatch writes only to
+    snow_triggers and DRY_RUN simulation writes only to
+    snow_evaluations — and a single fires:once contract should hold
+    in either mode.
+
+    Failed dispatches (retry_exhausted / timeout / error) do NOT block
+    re-evaluation: a contingency that tried-and-failed remains armed.
+    """
+    conn = _connect()
+    try:
+        # LIVE path
+        r = conn.execute(
+            "SELECT 1 FROM snow_triggers "
+            " WHERE plan_id = ? AND contingency_name = ? "
+            "   AND execution_status = 'success' "
+            " LIMIT 1",
+            (plan_id, contingency_name),
+        ).fetchone()
+        if r is not None:
+            return True
+        # DRY_RUN path
+        r = conn.execute(
+            "SELECT 1 FROM snow_evaluations "
+            " WHERE plan_id = ? AND contingency_name = ? "
+            "   AND event IN ('entry_would_fire', "
+            "                 'management_would_fire', "
+            "                 'exit_would_fire') "
+            " LIMIT 1",
+            (plan_id, contingency_name),
+        ).fetchone()
+        return r is not None
+    finally:
+        conn.close()
+
+
 def list_triggers(
     plan_id: Optional[str] = None, limit: int = 100
 ) -> list[dict[str, Any]]:

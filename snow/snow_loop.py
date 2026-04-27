@@ -45,6 +45,7 @@ from snow.evaluators import EvalContext, PerPlanTracker, evaluate_condition
 from snow.live_data import LiveData
 from snow.priority import FireEvent, resolve as priority_resolve
 from snow.schema import (
+    ContingencyFires,
     ContingencyState,
     Direction,
     Plan,
@@ -389,6 +390,18 @@ class SnowLoop:
         state_value = _state_value(contingency.state)
         if state_value != ContingencyState.ARMED.value:
             return
+        # FLO-373: enforce `fires: once` by checking the audit log.
+        # Production code never transitions in-memory state out of ARMED,
+        # so without this query a once-contingency would re-fire every
+        # tick whose conditions stayed all-true (PLAN-20260426-002 hit
+        # this 88×). The log is canonical and survives bot restart, so
+        # recovery → reload → loop also respects prior fires.
+        fires_value = _fires_value(contingency.fires)
+        if fires_value == ContingencyFires.ONCE.value:
+            if snow_db.has_contingency_fired_successfully(
+                plan.id, contingency.name,
+            ):
+                return
         all_true, snapshot = self._evaluate_conditions(
             contingency.conditions, ctx, plan.id, contingency.name,
         )
@@ -609,6 +622,10 @@ def _status_value(status: Any) -> str:
 
 def _state_value(state: Any) -> str:
     return state.value if isinstance(state, ContingencyState) else str(state)
+
+
+def _fires_value(fires: Any) -> str:
+    return fires.value if isinstance(fires, ContingencyFires) else str(fires)
 
 
 def _direction_label(direction: Any) -> str:
