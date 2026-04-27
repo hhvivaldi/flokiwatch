@@ -4745,7 +4745,8 @@ class AgentTools:
                     "current_status": current_status,
                 }
 
-            _snow_db.update_plan_status(plan_id, "cancelled")
+            # FLO-374: terminal transition stamps closed_at.
+            _snow_db.mark_plan_terminal(plan_id, "cancelled")
             # Audit row — tracks WHO cancelled WHEN with WHICH reason.
             try:
                 _snow_db.record_trigger(

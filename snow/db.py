@@ -441,6 +441,58 @@ def update_plan_outcome(
         conn.close()
 
 
+def mark_plan_terminal(
+    plan_id: str,
+    new_status: str,
+) -> None:
+    """FLO-374: transition a plan to a terminal status (CLOSED /
+    EXPIRED / CANCELLED / FAILED) AND stamp `closed_at` with the
+    current UTC time, atomically.
+
+    Use this instead of `update_plan_status` whenever the new status
+    is terminal. The `closed_at` column is the canonical "when did
+    this plan end" timestamp consumed by reporting / dashboards /
+    `outcome_pips` / `outcome_usd` joins. Pre-FLO-374 the recovery
+    sweep and several other terminal transitions stamped only
+    `status` and left `closed_at` NULL — the dashboard duration
+    column read NULL and several downstream queries had to fall back
+    to `last_evaluated_at` heuristics.
+
+    `update_plan_outcome` already stamps `closed_at`; this helper
+    exists so callers that DON'T have outcome figures yet (recovery
+    runs before backfill_outcome; cancel_plan never has outcome)
+    can still close the audit gap.
+    """
+    if new_status not in {
+        PlanStatus.CLOSED.value,
+        PlanStatus.EXPIRED.value,
+        PlanStatus.CANCELLED.value,
+        PlanStatus.FAILED.value,
+    }:
+        # Defensive: keep this helper scoped to terminal states. A
+        # caller mistakenly passing PlanStatus.ACTIVE would silently
+        # corrupt `closed_at` on a still-live plan otherwise.
+        raise ValueError(
+            f"mark_plan_terminal: {new_status!r} is not a terminal "
+            f"status. Use update_plan_status for non-terminal "
+            f"transitions."
+        )
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE snow_plans
+               SET status    = ?,
+                   closed_at = COALESCE(closed_at, ?)
+             WHERE id = ?
+            """,
+            (new_status, utc_iso(), plan_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_plan_outcome_columns_only(
     plan_id: str,
     outcome_pips: float,

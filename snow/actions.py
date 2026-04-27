@@ -534,7 +534,8 @@ class SnowActions:
             backfill_outcome(fire.plan_id, ticket)
             status = STATUS_NO_POSITION
         else:
-            snow_db.update_plan_status(fire.plan_id, PlanStatus.FAILED.value)
+            # FLO-374: terminal transition stamps closed_at.
+            snow_db.mark_plan_terminal(fire.plan_id, PlanStatus.FAILED.value)
             status = STATUS_RETRY_EXHAUSTED if result else STATUS_TIMEOUT
 
         trigger_id = snow_db.record_trigger(

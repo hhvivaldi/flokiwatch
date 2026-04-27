@@ -594,14 +594,18 @@ class TestStartupContract:
             trade_ticket=77772,
         )
 
-        original = snow_db.update_plan_status
+        # FLO-374: terminal transitions in recovery now go through
+        # `mark_plan_terminal` (which stamps `closed_at`), not
+        # `update_plan_status`. Patch the new helper so the test still
+        # exercises per-plan exception isolation.
+        original = snow_db.mark_plan_terminal
 
         def _picky(plan_id, new_status):
             if plan_id == "PLAN-20260424-701":
                 raise RuntimeError("synthetic transient error")
             return original(plan_id, new_status)
 
-        monkeypatch.setattr(snow_db, "update_plan_status", _picky)
+        monkeypatch.setattr(snow_db, "mark_plan_terminal", _picky)
         # Second plan's MT5 position exists, so it's expected to
         # transition to ACTIVE.
         pos = FakePosition(ticket=77772, open_price=4720.0)

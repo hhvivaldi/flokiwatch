@@ -340,7 +340,7 @@ def _reconcile_pending(
         return
     if expires > now:
         return  # Not yet expired.
-    snow_db.update_plan_status(plan_id, PlanStatus.EXPIRED.value)
+    snow_db.mark_plan_terminal(plan_id, PlanStatus.EXPIRED.value)
     snow_db.record_evaluation(
         plan_id=plan_id,
         contingency_name="_recovery",
@@ -386,7 +386,7 @@ def _reconcile_triggered(
         return
 
     # No matching position — crash during trigger.
-    snow_db.update_plan_status(plan_id, PlanStatus.FAILED.value)
+    snow_db.mark_plan_terminal(plan_id, PlanStatus.FAILED.value)
     snow_db.record_evaluation(
         plan_id=plan_id,
         contingency_name="_recovery",
@@ -430,7 +430,7 @@ def _reconcile_closing(
         return
 
     # Position absent — close completed during downtime.
-    snow_db.update_plan_status(plan_id, PlanStatus.CLOSED.value)
+    snow_db.mark_plan_terminal(plan_id, PlanStatus.CLOSED.value)
     snow_db.record_evaluation(
         plan_id=plan_id,
         contingency_name="_recovery",
@@ -468,7 +468,7 @@ def _reconcile_active(
     # history; retry transient MT5 errors before deciding.
     if ticket is None:
         # No ticket assigned to an ACTIVE plan — true data loss.
-        snow_db.update_plan_status(plan_id, PlanStatus.FAILED.value)
+        snow_db.mark_plan_terminal(plan_id, PlanStatus.FAILED.value)
         snow_db.record_evaluation(
             plan_id=plan_id,
             contingency_name="_recovery",
@@ -496,7 +496,7 @@ def _reconcile_active(
         return
     if deals:
         # Closed externally / SL or TP hit during downtime.
-        snow_db.update_plan_status(plan_id, PlanStatus.CLOSED.value)
+        snow_db.mark_plan_terminal(plan_id, PlanStatus.CLOSED.value)
         snow_db.record_evaluation(
             plan_id=plan_id,
             contingency_name="_recovery",
@@ -522,7 +522,7 @@ def _reconcile_active(
         return
     # Definitive empty list — position never existed (or older than
     # lookback window). Mark FAILED so the operator notices.
-    snow_db.update_plan_status(plan_id, PlanStatus.FAILED.value)
+    snow_db.mark_plan_terminal(plan_id, PlanStatus.FAILED.value)
     snow_db.record_evaluation(
         plan_id=plan_id,
         contingency_name="_recovery",
