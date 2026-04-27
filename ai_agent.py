@@ -1220,10 +1220,11 @@ class AIAgent:
                     "While SNOW_DRY_RUN=true (default), fires are logged as "
                     "'*_would_fire' events in the snow_evaluations table — NO real "
                     "orders hit MT5. Plan shape: {analysis, entry, management, "
-                    "exit, emergency}. See snow/schema.py for the full Pydantic "
-                    "model; the validator returns structured errors so you can "
-                    "revise and retry. The tool overwrites id/created_by/created_at "
-                    "on submit — Floki-supplied values for those fields are ignored."
+                    "exit, emergency}. Call get_snow_primitives_reference(category) "
+                    "for the full condition-primitive schema. The validator returns "
+                    "structured errors so you can revise and retry. The tool "
+                    "overwrites id/created_by/created_at on submit — Floki-supplied "
+                    "values for those fields are ignored."
                 ),
                 "input_schema": {
                     "type": "object",
@@ -1232,13 +1233,56 @@ class AIAgent:
                             "type": "object",
                             "description": (
                                 "A complete plan dict. Fields: analysis, entry, "
-                                "management, exit, emergency, expires_at. See "
-                                "snow.schema.Plan for all constraints."
+                                "management, exit, emergency, expires_at. Pull "
+                                "primitive shapes via get_snow_primitives_reference."
                             ),
                             "additionalProperties": True,
                         },
                     },
                     "required": ["plan"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_snow_primitives_reference",
+                "description": (
+                    "Return the schema for Snow plan condition primitives — "
+                    "names, params, enum values, numeric bounds — derived live "
+                    "from snow/schema.py. Use this while drafting a plan to "
+                    "confirm exact field shapes. Optional `category` filter "
+                    "(price | indicator | structural | position_state | time) "
+                    "trims the response from ~1500 tokens to ~300-800. With "
+                    "no filter, returns all 18 primitives."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "enum": ["price", "indicator", "structural",
+                                     "position_state", "time"],
+                            "description": (
+                                "Filter to a single primitive category. Omit "
+                                "for all 18 primitives."
+                            ),
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "get_snow_tags_reference",
+                "description": (
+                    "Return the FLO-366 setup-tagging vocabulary required for "
+                    "schema_version >= 3 plans. Three closed enum families "
+                    "(setup_type, context_tags.trend / volatility / htf, "
+                    "context_tags.news_session) plus a 20–150 char "
+                    "confidence_reason. Includes worked examples for common "
+                    "setup shapes. No arguments; ~1.5 KB JSON."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
                     "additionalProperties": False,
                 },
             },

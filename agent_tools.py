@@ -4553,6 +4553,51 @@ class AgentTools:
             )
             return {"success": False, "error": f"{type(e).__name__}: {e}"}
 
+    def get_snow_tags_reference(self) -> Dict[str, Any]:
+        """Return the FLO-366 setup-tagging vocabulary required for
+        schema_version >= 3 plans.
+
+        Three closed enum families plus a free-text confidence_reason:
+          - setup_type (10 values) — pick 1
+          - context_tags.trend / volatility / htf — pick 1 each
+          - context_tags.news_session — 0+ flags, with mutual-exclusion
+            on `near_news` ⊕ `post_news`
+          - confidence_reason — 20-150 chars
+
+        Source of truth: `snow.schema` (Pydantic Literal aliases).
+        Per-value descriptions and worked examples come from
+        `snow.tags_reference`. Adding a new enum value in the schema
+        without updating the reference shows up as `"(no description)"`.
+
+        Returns:
+          {"success": True, "schema_version": 3,
+           "setup_type": [...], "context_tags": {...},
+           "confidence_reason": {min_length, max_length},
+           "rules": [...], "examples": [...]}
+          {"success": False, "error": "..."}
+        """
+        start = time.time()
+        try:
+            from snow.tags_reference import get_tags_reference
+        except Exception as e:
+            self._log_fail(
+                "get_snow_tags_reference", start, f"import_error={e}"
+            )
+            return {
+                "success": False,
+                "error": f"snow.tags_reference import failed: {e}",
+            }
+        try:
+            result = get_tags_reference()
+            count = len(result.get("setup_type", []))
+            self._log_tool(
+                "get_snow_tags_reference", start, f"setup_count={count}",
+            )
+            return result
+        except Exception as e:
+            self._log_fail("get_snow_tags_reference", start, f"error={e}")
+            return {"success": False, "error": f"{type(e).__name__}: {e}"}
+
     def submit_plan_to_snow(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Submit a contingency plan to Snow for autonomous monitoring.
 

@@ -21,7 +21,7 @@ import pytest
 # -----------------------------------------------------------------------------
 
 _BASE_PLAN: dict[str, Any] = {
-    "schema_version": 2,
+    "schema_version": 3,
     "id": "PLAN-20260424-001",
     "created_by": "floki",
     "created_at": "2026-04-24T08:00:00Z",
@@ -32,6 +32,15 @@ _BASE_PLAN: dict[str, Any] = {
         "key_levels": [4735.0, 4720.0, 4707.0],
         "confidence": 72,
         "regime_assumed": "TRENDING_BEARISH",
+        # FLO-366 tagging — required from schema_version >= 3.
+        "setup_type": "pullback_trend",
+        "context_tags": {
+            "trend": "trend_strong",
+            "volatility": "high_vol",
+            "htf": "HTF_aligned",
+            "news_session": ["session_overlap"],
+        },
+        "confidence_reason": "H4/H1 EMA stack aligned bearish; rejection wick at 4735; DXY +0.4% intraday.",
     },
     "entry": {
         "direction": "SELL",
@@ -94,12 +103,32 @@ def valid_plan_dict() -> dict[str, Any]:
 def valid_plan_dict_v1() -> dict[str, Any]:
     """Canonical valid plan pinned to schema_version=1.
 
-    Use for backward-compat regression tests (FLO-359 Phase 8b).
-    Stateless primitives only — `_check_stateful_in_v1` rejects v1
-    plans referencing stateful types.
+    Use for backward-compat regression tests (FLO-359 Phase 8b,
+    FLO-366). Stateless primitives only — `_check_stateful_in_v1`
+    rejects v1 plans referencing stateful types. Tagging fields
+    (FLO-366) are stripped because v1/v2 plans never carry them.
     """
     out = deepcopy(_BASE_PLAN)
     out["schema_version"] = 1
+    out["analysis"].pop("setup_type", None)
+    out["analysis"].pop("context_tags", None)
+    out["analysis"].pop("confidence_reason", None)
+    return out
+
+
+@pytest.fixture
+def valid_plan_dict_v2() -> dict[str, Any]:
+    """Canonical valid plan pinned to schema_version=2.
+
+    Pre-FLO-366 baseline. Tagging fields stripped because v2 plans
+    don't carry them; the version-conditional validator on Plan only
+    enforces tagging from v3 onward.
+    """
+    out = deepcopy(_BASE_PLAN)
+    out["schema_version"] = 2
+    out["analysis"].pop("setup_type", None)
+    out["analysis"].pop("context_tags", None)
+    out["analysis"].pop("confidence_reason", None)
     return out
 
 

@@ -112,12 +112,22 @@ PAIRED PLANS \u2014 for genuinely bidirectional setups (range pre-event, undecid
 
 A plan has five blocks: analysis, entry, management, exit, emergency. The tool always overwrites id / created_by / created_at \u2014 you don't need to supply them. expires_at is a UTC ISO-8601 timestamp with `Z` suffix (e.g. `"2026-04-24T14:30:00Z"`); typical 2-12 hour window; plans auto-expire at that time.
 
+SETUP TAGGING (schema_version 3 \u2014 required) \u2014 every plan's analysis MUST carry three tagging fields so reflexion / lessons / dashboards can group similar trades. The vocabulary is closed and validator-enforced; invented values are rejected.
+- `setup_type` \u2014 one of: breakout_range, pullback_trend, mean_reversion_extreme, liquidity_sweep, continuation_momentum, news_reaction, divergence_play, paired_hedge, structural_bounce, session_open_break.
+- `context_tags` \u2014 a dict with: trend (trend_strong | trend_weak | range_tight | range_wide), volatility (high_vol | low_vol), htf (HTF_aligned | HTF_counter | HTF_neutral), and news_session (list of zero or more from near_news, post_news, session_overlap, session_thin \u2014 near_news and post_news are mutually exclusive).
+- `confidence_reason` \u2014 free-text rationale, 20\u2013150 chars; specific evidence supporting the confidence score (not "looks good"; cite the indicator reading, level, or correlation that moved the score).
+Call get_snow_tags_reference() once when you need the full vocabulary + worked examples (~1.5 KB). Validation rejection messages name the offending field and \u2014 for the news_session contradiction \u2014 both conflicting values, so retry is informed.
+
 MINIMAL PLAN EXAMPLE:
 {
   "analysis": {"thesis": "H1 pullback to 4720 support with trend intact",
                "key_levels": [4735.0, 4720.0, 4707.0],
                "confidence": 72,
-               "regime_assumed": "TRENDING_BEARISH"},
+               "regime_assumed": "TRENDING_BEARISH",
+               "setup_type": "pullback_trend",
+               "context_tags": {"trend": "trend_strong", "volatility": "high_vol",
+                                "htf": "HTF_aligned", "news_session": ["session_overlap"]},
+               "confidence_reason": "H4/H1 EMA stack aligned bearish; rejection wick at 4735; DXY +0.4% intraday."},
   "entry":    {"direction": "SELL", "volume": 0.02,
                "conditions": [{"type": "price_above", "level": 4730.0},
                               {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}],
@@ -150,7 +160,7 @@ Condition primitives:
 
 For exact parameter shapes, enum values, and numeric bounds, call get_snow_primitives_reference(category=...) — Pydantic-derived, never drifts from the schema. Categories: price | indicator | structural | position_state | time.
 
-Memory model: most primitives are point-in-time (current value vs threshold) and carry no memory across ticks — to express direction or recovery with those, encode the END STATE you want and rely on conditions reaching it. The three stateful primitives above are the explicit exceptions: they observe transitions (indicator_crossover), recent history (indicator_was), or a one-shot crossing event (price_crossed_level). Stateful conditions are restored across a bot restart from `state_cache_json`; if state is older than 15 minutes (e.g., long outage), the condition cold-starts on its next tick and may report a single false-negative before the next observation re-seeds it. Stateful primitives are also restricted to schema_version >= 2 plans — submit_plan_to_snow auto-stamps v2 so this is invisible day-to-day.
+Memory model: most primitives are point-in-time (current value vs threshold) and carry no memory across ticks — to express direction or recovery with those, encode the END STATE you want and rely on conditions reaching it. The three stateful primitives above are the explicit exceptions: they observe transitions (indicator_crossover), recent history (indicator_was), or a one-shot crossing event (price_crossed_level). Stateful conditions are restored across a bot restart from `state_cache_json`; if state is older than 15 minutes (e.g., long outage), the condition cold-starts on its next tick and may report a single false-negative before the next observation re-seeds it. Stateful primitives are also restricted to schema_version >= 2 plans — submit_plan_to_snow auto-stamps the current schema (currently v3) so this is invisible day-to-day.
 
 Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
 
@@ -336,6 +346,17 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.9 — FLO-366 setup tagging: schema_version=3 plans MUST carry
+          analysis.setup_type (one of 10 closed values), analysis.
+          context_tags (trend / volatility / htf single-value tags +
+          optional news_session list), and analysis.confidence_reason
+          (20-150 char free text). Adds the SETUP TAGGING paragraph to
+          the <plans> section, extends the MINIMAL PLAN EXAMPLE with
+          tagging fields, and points Floki at the new
+          get_snow_tags_reference() tool for the closed vocabulary +
+          worked examples. Schema bump auto-stamps new plans at v3, so
+          the validator enforces tagging the moment this prompt
+          deploys. Previous: 3.8.
     3.8 — FLO-361 Snow-managed position visibility: post-LIVE flip
           fix. Replaces the pre-Phase-8b "Snow management-only plans
           land in a later phase" framing with explicit guidance that
@@ -393,7 +414,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.8"
+    return "3.9"
 
 
 def get_prompt_hash() -> str:

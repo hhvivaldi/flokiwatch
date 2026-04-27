@@ -912,3 +912,71 @@ When `USE_EA_BRIDGE = True` but EA is offline (status file > 60s old):
 - [ ] Trailing activates and follows price
 - [ ] No conflict with existing positions (same magic number)
 - [ ] Dashboard shows EA status and position phase
+
+## Snow Plan Schema (v3, FLO-366)
+
+Source of truth: `snow/schema.py` (Pydantic v2). Canonical reference
+for what Floki submits via `submit_plan_to_snow` and what the
+dashboard reads from the `snow_plans` table.
+
+### Versioning
+
+- `schema_version: int` — auto-stamped at submit time from
+  `snow.SCHEMA_VERSION` (currently `3`). Floki does not set it.
+- v1 / v2 plans persist untouched in the DB; v3+ enforcement is
+  forward-only — adding the new tagging fields does NOT invalidate
+  legacy rows.
+
+### Top-level Plan blocks
+
+`{ id, schema_version, created_by, created_at, expires_at,
+   entered_at, closed_at, status, analysis, entry, management[],
+   exit[], emergency, trade_ticket, outcome_pips, outcome_usd }`
+
+All timestamp fields are ISO-8601 UTC with explicit `Z` suffix
+(Rule 22). Validator rejects anything else.
+
+### `analysis` (FLO-366 v3)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `thesis` | `str` (1–2000) | Free text rationale. |
+| `key_levels` | `list[float]` (≤10) | Price levels referenced in the thesis. |
+| `confidence` | `int` (0–100) | Floki's self-rated probability. |
+| `regime_assumed` | `Optional[str]` (≤40) | Regime label (TRENDING_BULLISH etc.). |
+| `setup_type` | `Literal[10]` **REQUIRED v3+** | Closed enum (see below). |
+| `context_tags` | `ContextTags` **REQUIRED v3+** | Submodel (see below). |
+| `confidence_reason` | `str` (20–150) **REQUIRED v3+** | Specific evidence supporting the score. |
+
+#### `setup_type` — 10 closed values
+
+`breakout_range`, `pullback_trend`, `mean_reversion_extreme`,
+`liquidity_sweep`, `continuation_momentum`, `news_reaction`,
+`divergence_play`, `paired_hedge`, `structural_bounce`,
+`session_open_break`.
+
+#### `context_tags` — submodel
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `trend` | `Literal["trend_strong","trend_weak","range_tight","range_wide"]` | Pick exactly 1. Mutually exclusive by construction. |
+| `volatility` | `Literal["high_vol","low_vol"]` | Pick exactly 1. |
+| `htf` | `Literal["HTF_aligned","HTF_counter","HTF_neutral"]` | Pick exactly 1. |
+| `news_session` | `list[Literal["near_news","post_news","session_overlap","session_thin"]]` (max 4) | 0+ values. `near_news` and `post_news` are mutually exclusive; duplicates rejected. |
+
+### Discovery tool
+
+`get_snow_tags_reference()` returns the closed vocabulary plus
+worked example tag combinations for common setups
+(~1.5 KB JSON). Pydantic Literal aliases are the source of truth;
+descriptions live in `snow/tags_reference.py` with a drift test
+asserting every literal value has a matching description entry.
+
+### Validation messages (Rule: clear retry signal)
+
+The Plan model validator names exactly which tagging fields are
+missing on a v3 plan (e.g. `"missing field(s): context_tags,
+confidence_reason"`) and points Floki at
+`get_snow_tags_reference()` in the same message. The
+`news_session` contradiction validator names BOTH offending values
+in the error.

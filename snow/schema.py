@@ -20,7 +20,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import SCHEMA_VERSION
 
@@ -514,14 +514,121 @@ class Contingency(BaseModel):
 # Plan structural blocks
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# Setup tagging vocabulary (FLO-366) — closed enums, validator-enforced.
+# Required from schema_version >= 3 onward; v1/v2 plans omit them.
+# -----------------------------------------------------------------------------
+
+# 10 trading setups, mutually exclusive per plan.
+SetupType = Literal[
+    "breakout_range",
+    "pullback_trend",
+    "mean_reversion_extreme",
+    "liquidity_sweep",
+    "continuation_momentum",
+    "news_reaction",
+    "divergence_play",
+    "paired_hedge",
+    "structural_bounce",
+    "session_open_break",
+]
+
+# Trend / range character — one and only one per plan.
+TrendTag = Literal["trend_strong", "trend_weak", "range_tight", "range_wide"]
+
+# Volatility regime — one per plan.
+VolatilityTag = Literal["high_vol", "low_vol"]
+
+# Higher-timeframe alignment vs the plan's direction — one per plan.
+HtfTag = Literal["HTF_aligned", "HTF_counter", "HTF_neutral"]
+
+# News / session flags — zero or more, with one mutual-exclusion rule
+# (near_news ⊕ post_news, enforced by ContextTags model_validator below).
+NewsSessionTag = Literal[
+    "near_news",
+    "post_news",
+    "session_overlap",
+    "session_thin",
+]
+
+
+class ContextTags(BaseModel):
+    """Plan context tags (FLO-366). All fields except `news_session` are
+    single-value Literals so contradictions are unrepresentable. The
+    `news_session` list carries one explicit contradiction check
+    (`near_news` and `post_news` are mutually exclusive)."""
+    model_config = ConfigDict(extra="forbid")
+
+    trend: TrendTag = Field(
+        description="Trend / range character. trend_strong/weak vs "
+                    "range_tight/wide are mutually exclusive by design.",
+    )
+    volatility: VolatilityTag = Field(
+        description="Volatility regime: high_vol or low_vol.",
+    )
+    htf: HtfTag = Field(
+        description="Higher-timeframe alignment relative to the plan's "
+                    "direction: HTF_aligned, HTF_counter, or HTF_neutral.",
+    )
+    news_session: list[NewsSessionTag] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Zero or more news / session flags. `near_news` and "
+                    "`post_news` are mutually exclusive.",
+    )
+
+    @model_validator(mode="after")
+    def _check_news_session_consistency(self):
+        ns = self.news_session
+        if "near_news" in ns and "post_news" in ns:
+            raise ValueError(
+                "context_tags.news_session: 'near_news' is mutually "
+                "exclusive with 'post_news' — pick one, not both."
+            )
+        # Reject duplicates so two of the same flag don't silently survive.
+        if len(ns) != len(set(ns)):
+            seen = set()
+            dupes = sorted({x for x in ns if (x in seen or seen.add(x))})
+            raise ValueError(
+                f"context_tags.news_session: duplicate values not allowed "
+                f"(duplicates: {dupes})."
+            )
+        return self
+
+
 class PlanAnalysis(BaseModel):
-    """Free-text rationale from Floki — audit trail, not evaluated."""
+    """Free-text rationale from Floki — audit trail, not evaluated.
+
+    FLO-366 (schema_version >= 3): `setup_type`, `context_tags`, and
+    `confidence_reason` become required. They stay Optional on the model
+    so v1/v2 plans round-trip cleanly; the version-conditional check
+    lives on `Plan` (which knows its own `schema_version`).
+    """
     model_config = ConfigDict(extra="forbid")
 
     thesis: str = Field(max_length=2000, min_length=1)
     key_levels: list[float] = Field(default_factory=list, max_length=10)
     confidence: int = Field(ge=0, le=100)
     regime_assumed: Optional[str] = Field(default=None, max_length=40)
+
+    # FLO-366: required from schema_version >= 3 (enforced on Plan).
+    setup_type: Optional[SetupType] = Field(
+        default=None,
+        description="Setup family. One of 10 closed values; required for "
+                    "schema_version >= 3.",
+    )
+    context_tags: Optional[ContextTags] = Field(
+        default=None,
+        description="Trend / volatility / HTF / news-session tags; "
+                    "required for schema_version >= 3.",
+    )
+    confidence_reason: Optional[str] = Field(
+        default=None,
+        min_length=20,
+        max_length=150,
+        description="Free-text rationale supporting the confidence score "
+                    "(20-150 chars). Required for schema_version >= 3.",
+    )
 
 
 class EntryBlock(BaseModel):
@@ -596,6 +703,27 @@ class Plan(BaseModel):
             raise ValueError("all timestamps must end with 'Z' (UTC per Rule 22)")
         return v
 
+    @model_validator(mode="after")
+    def _check_v3_tagging_required(self):
+        """FLO-366: from schema_version >= 3, plans MUST carry setup_type,
+        context_tags, and confidence_reason on `analysis`. Older versions
+        round-trip unchanged (forward-only enforcement)."""
+        if self.schema_version >= 3:
+            missing = []
+            if self.analysis.setup_type is None:
+                missing.append("setup_type")
+            if self.analysis.context_tags is None:
+                missing.append("context_tags")
+            if self.analysis.confidence_reason is None:
+                missing.append("confidence_reason")
+            if missing:
+                raise ValueError(
+                    f"analysis: schema_version={self.schema_version} requires "
+                    f"setup tagging — missing field(s): {', '.join(missing)}. "
+                    f"Call get_snow_tags_reference() for the closed vocabulary."
+                )
+        return self
+
 
 __all__ = [
     # Enums
@@ -619,6 +747,9 @@ __all__ = [
     "Contingency", "ContingencyGuards",
     # Plan
     "Plan", "PlanAnalysis", "EntryBlock", "EmergencyBlock",
+    # FLO-366 setup tagging
+    "ContextTags", "SetupType", "TrendTag", "VolatilityTag", "HtfTag",
+    "NewsSessionTag",
     # Constants
     "PLAN_ID_PATTERN", "SCHEMA_VERSION",
 ]

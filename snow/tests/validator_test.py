@@ -424,7 +424,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.8"
+    EXPECTED_VERSION = "3.9"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""
@@ -703,15 +703,15 @@ class TestStatefulInV1Gate:
         errors = _check_stateful_in_v1(plan)
         assert any("price_crossed_level" in e for e in errors)
 
-    def test_v2_plan_with_stateful_type_bypasses_gate(self, valid_plan_dict):
+    def test_v2_plan_with_stateful_type_bypasses_gate(self, valid_plan_dict_v2):
         """v2 plans bypass the v1 gate. The Pydantic union itself will
         reject unknown types until the matching commit lands; this test
         just confirms the gate function returns no errors when
         schema_version >= 2."""
         from snow.schema import Plan, RSI
         from snow.validator import _check_stateful_in_v1
-        assert valid_plan_dict["schema_version"] == 2
-        plan = Plan(**valid_plan_dict)
+        assert valid_plan_dict_v2["schema_version"] == 2
+        plan = Plan(**valid_plan_dict_v2)
         plan.entry.conditions[0] = RSI.model_construct(
             type="indicator_crossover", tf="H1", op="above", threshold=70.0
         )
@@ -797,15 +797,15 @@ class TestStatefulGateEndToEnd:
         assert any("schema_version >= 2" in e for e in errors)
 
     def test_v2_plan_with_indicator_crossover_validates(
-        self, valid_plan_dict
+        self, valid_plan_dict_v2
     ):
         """v2 plan with the same condition validates cleanly. Other
         rules (entry SL/TP, timestamps, etc.) keep applying — the
         canonical fixture already supplies a valid SELL entry; just
         replace the condition list."""
-        assert valid_plan_dict["schema_version"] == 2
-        valid_plan_dict["entry"]["conditions"] = [self._crossover_cond_dict()]
-        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert valid_plan_dict_v2["schema_version"] == 2
+        valid_plan_dict_v2["entry"]["conditions"] = [self._crossover_cond_dict()]
+        ok, plan, errors = validate_plan(valid_plan_dict_v2)
         assert ok is True, f"v2 plan rejected: {errors}"
         assert plan is not None
         # First entry condition is the parsed crossover.
