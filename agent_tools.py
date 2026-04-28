@@ -32,6 +32,13 @@ class AgentTools:
         # second both see the cycle's pulls.
         from collections import deque as _deque
         self._recipe_pulls: "_deque[dict]" = _deque(maxlen=50)
+        # FLO-393: orthogonal per-Floki-cycle counter. Reset to 0 at
+        # the top of `agent_decide()` (canonical cycle start). Read by
+        # `submit_plan_to_snow` to enforce mandatory Recipe Book
+        # consultation. Coexists with the FLO-382 deque above without
+        # interference — the deque keeps its 600s recency telemetry,
+        # this counter is a hard gate.
+        self._recipe_pulls_count: int = 0
 
     def set_next_check(self, minutes: int = 5) -> Dict[str, Any]:
         start = time.time()
@@ -4614,6 +4621,14 @@ class AgentTools:
                 })
             except Exception:
                 pass
+            # FLO-393: per-cycle counter for the hard gate in
+            # submit_plan_to_snow. Increment is independent of the
+            # FLO-382 deque so the gate works even if the deque
+            # bookkeeping above raised.
+            try:
+                self._recipe_pulls_count += 1
+            except Exception:
+                pass
             self._log_tool(
                 "get_snow_recipe_book", start,
                 f"category={category!r} count={count}",
@@ -4710,6 +4725,34 @@ class AgentTools:
             return {
                 "success": False, "plan_id": None,
                 "validation_errors": ["plan must be a dict"],
+            }
+
+        # FLO-393: mandatory Recipe Book consultation gate. Reject plans
+        # submitted without at least one `get_snow_recipe_book` call
+        # earlier in the same Floki cycle. Counter is reset to 0 at the
+        # top of `agent_decide()` (canonical cycle start). Paired-hedge
+        # cycles work fine: the first submit and the second submit in
+        # the same cycle both see `count >= 1` because the counter
+        # accumulates across the cycle and only resets on the next
+        # `agent_decide()` invocation.
+        if int(getattr(self, "_recipe_pulls_count", 0)) == 0:
+            self._log_fail(
+                "submit_plan_to_snow",
+                start,
+                "no_recipe_consultation recipe_pulls_count=0",
+            )
+            return {
+                "success": False, "plan_id": None,
+                "validation_errors": [
+                    "FLO-393: plan submission requires at least one "
+                    "get_snow_recipe_book call earlier in this cycle. "
+                    "Recipe Book consultation is mandatory — call "
+                    "get_snow_recipe_book(category=...) before "
+                    "submit_plan_to_snow. Suggested categories per setup "
+                    "type: trend / range / reversal / risk_management. "
+                    "Pull whichever matches your thesis, then resubmit "
+                    "this same plan dict — no plan-shape changes needed."
+                ],
             }
 
         # Collision retry — two concurrent callers might compute the same

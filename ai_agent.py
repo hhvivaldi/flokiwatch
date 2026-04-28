@@ -2565,7 +2565,24 @@ async def agent_decide(
         AgentResult with decision
     """
     agent = get_agent()
-    
+
+    # FLO-393: reset the per-cycle Recipe Book consultation counter at
+    # the canonical cycle entry point. The counter is incremented by
+    # `get_snow_recipe_book` and read by `submit_plan_to_snow`. Reset
+    # here (NOT inside agent.decide) so the boundary is one-per-Floki-
+    # invocation regardless of whether the cycle is scheduled or
+    # proactive (PROACTIVE_H1, PROACTIVE_TICKER, etc.). Coexists with
+    # the FLO-382 `_recipe_pulls` deque (kept across cycles for the
+    # 600s telemetry recency window).
+    try:
+        if tools is not None and hasattr(tools, "_recipe_pulls_count"):
+            tools._recipe_pulls_count = 0
+    except Exception as _e:
+        try:
+            logger.warning(f"FLO-393 | recipe counter reset failed: {_e}")
+        except Exception:
+            pass
+
     # Inject memory context into trigger_context if trigger_context is a dict (backward compat)
     if trigger_type != "PROACTIVE_H1" and isinstance(trigger_context, dict):
         try:

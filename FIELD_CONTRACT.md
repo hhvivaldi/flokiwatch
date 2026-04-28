@@ -1492,3 +1492,61 @@ unreachable thresholds. To use a 200-pip mfe_reached trigger, set
 - `_REACHABILITY_BUFFER_PCT = 0.75`
 - `_REACH_TRIGGER_OPS = {"above", "gte", "gt"}`
 
+---
+
+## FLO-393 — Recipe Book mandatory consultation gate
+
+Tool-loop guard in `submit_plan_to_snow` that rejects plan submissions
+made in a Floki cycle where `get_snow_recipe_book` was never called.
+Lives at the AgentTools boundary (NOT in the validator) so the
+validator stays pure — the Recipe Book gate is a session-discipline
+rule, not a plan-shape rule.
+
+**Empirical basis:** PLAN-014 (first post-FLO-392 cycle) submitted
+with `recipe_pulls_count=0`. Compliance theatre persisted across three
+consecutive days under prompt-only "you should" guidance. Hard gate
+required.
+
+| Mechanism | Location |
+|-----------|----------|
+| Counter init | `AgentTools.__init__`: `self._recipe_pulls_count: int = 0` |
+| Increment | `AgentTools.get_snow_recipe_book` (after FLO-382 deque append) |
+| Reset | `ai_agent.agent_decide()` entry — once per Floki cycle (scheduled or proactive) |
+| Read / gate | `AgentTools.submit_plan_to_snow` — first guard, before validator delegation |
+
+**Reset anchor:** top of `agent_decide()` in `ai_agent.py`. This is
+canonical Floki cycle entry — fires exactly once per LLM invocation
+regardless of trigger type (SIGNAL / PROACTIVE_H1 / PROACTIVE_TICKER /
+etc.). NOT tied to `_last_agent_data` refresh, which is a cache-write
+side-effect.
+
+**Coexistence with FLO-382 deque:** the existing `_recipe_pulls`
+deque (maxlen=50, NOT cleared per cycle) keeps its 600s telemetry
+recency window for paired-hedge attribution. The new
+`_recipe_pulls_count` integer is orthogonal — pure per-cycle gate.
+Both increment in `get_snow_recipe_book`; only the counter resets in
+`agent_decide()`.
+
+**Paired-plan flow:** one `get_snow_recipe_book` call per cycle covers
+both `submit_plan_to_snow` calls in the same cycle (BUY leg + SELL
+leg). Counter accumulates across the cycle and only resets at the
+next `agent_decide()` invocation.
+
+**Reject shape:** identical to validator-rejection response so Floki's
+existing retry-on-validation-errors loop handles it without changes:
+```json
+{"success": false, "plan_id": null,
+ "validation_errors": ["FLO-393: plan submission requires at least
+  one get_snow_recipe_book call earlier in this cycle. ...
+  no plan-shape changes needed."]}
+```
+Error message names the remediation (call `get_snow_recipe_book(category=...)`),
+the categories (trend / range / reversal / risk_management), and
+explicitly says "no plan-shape changes needed" so Floki does not
+pointlessly redraft a valid plan.
+
+**Out of scope (per FLO-393 spec):**
+- Quality check on whether recipe matches setup
+- Multi-recipe consultation requirement
+- Recipe Book content modifications
+

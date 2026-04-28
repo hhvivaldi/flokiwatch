@@ -71,12 +71,20 @@ def tools(snow_conn):
             self.running = True
 
     _STUB = object()  # phase 6 tools never dereference these
-    return AgentTools(
+    t = AgentTools(
         bot=_FakeBot(),
         executor=_STUB,
         safety_checks_module=_STUB,
         risk_manager_module=_STUB,
     )
+    # FLO-393: pre-pump the per-cycle Recipe Book consultation counter.
+    # Tests in this file exercise plan-flow mechanics (submit / cancel /
+    # status / list / error contracts), not the FLO-393 gate. Without
+    # this, every submit_plan_to_snow call fails the new mandatory-
+    # consultation check. FLO-393's own test file explicitly sets
+    # count=0 when asserting the gate-rejection path.
+    t._recipe_pulls_count = 1
+    return t
 
 
 def _future_iso(hours: int = 6) -> str:
