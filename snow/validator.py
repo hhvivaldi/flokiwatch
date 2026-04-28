@@ -408,6 +408,97 @@ def _check_min_entry_conditions(plan: Plan) -> list[str]:
     return []
 
 
+# =============================================================================
+# FLO-391 — management primitive reachability (semantic coherence)
+# =============================================================================
+
+# PIP_SIZE for XAUUSD. Mirrors `snow.evaluators.context.PIP_SIZE` (0.1)
+# but defined locally to avoid coupling the validator to the runtime
+# evaluator package — validator runs at submit time, before evaluator
+# context exists.
+_PIP_SIZE_XAUUSD: float = 0.1
+
+# Trigger ops that imply a "fire when X reaches/exceeds threshold"
+# semantic. The inverse semantic ("below/lte/lt X") describes a
+# protective drop-trigger and has no upper-bound reachability concern.
+_REACH_TRIGGER_OPS: frozenset[str] = frozenset({"above", "gte", "gt"})
+
+
+def _plan_max_profit_pips(plan: Plan) -> float:
+    """Conservative upper bound on profit-pip distance achievable by this
+    plan, computed as the full SL→TP range in pips.
+
+    For BUY: SL < entry < TP. Max profit at TP = (TP-entry)/pip ≤ (TP-SL)/pip.
+    For SELL: TP < entry < SL. Max profit at TP = (entry-TP)/pip ≤ (SL-TP)/pip.
+    Either way `|TP - SL| / pip_size` is a hard upper bound on the
+    profit-pip distance any management trigger could observe before TP
+    closes the trade. Using this conservative bound guarantees zero
+    false positives: any threshold strictly greater than this value is
+    provably unreachable under ANY entry price.
+    """
+    return abs(plan.entry.initial_tp - plan.entry.initial_sl) / _PIP_SIZE_XAUUSD
+
+
+def _check_management_reachability(plan: Plan) -> list[str]:
+    """Reject management triggers whose threshold provably cannot fire
+    before TP closes the trade.
+
+    Empirical basis: PLAN-011 shipped with TP=26 pips and a `trail_sl`
+    contingency triggered by `mfe_reached pips=200`. Trigger unreachable
+    — trade exits at TP after at most ~26 pips of MFE. Effectively no
+    management. CEO had to defend SL manually.
+
+    Affected primitives:
+      * `mfe_reached pips=X`: peak-relative; X exceeding the SL→TP
+        range means the peak can never reach the threshold.
+      * `profit_pips op∈{above,gte,gt} threshold=X`: same logic; profit
+        cannot exceed the SL→TP range under any entry.
+
+    `profit_retraced_from_peak` is intentionally NOT gated — its
+    reachability depends on the achieved peak, which is bounded by the
+    SL→TP range but the *retracement* threshold is independent. A 50-pip
+    retracement on a plan with a 60-pip SL→TP range can fire if the
+    peak reaches 55 pips and price drops 50 pips back. Out of scope.
+
+    Floki retains agency on threshold values. Validator only enforces
+    that the threshold is not provably impossible. Fix: lower the
+    trigger threshold or widen the TP.
+    """
+    if not plan.management:
+        return []
+    max_pips = _plan_max_profit_pips(plan)
+    if max_pips <= 0:
+        # SL == TP (degenerate); _check_entry_sl_tp already rejects.
+        return []
+    errors: list[str] = []
+    for mi, mgmt in enumerate(plan.management):
+        for ci, c in enumerate(mgmt.conditions):
+            ctype = getattr(c, "type", None)
+            threshold_pips: Optional[float] = None
+            if ctype == "mfe_reached":
+                threshold_pips = float(getattr(c, "pips", 0.0) or 0.0)
+            elif ctype == "profit_pips":
+                op = str(getattr(c, "op", "") or "").lower()
+                if op in _REACH_TRIGGER_OPS:
+                    threshold_pips = float(
+                        getattr(c, "threshold", 0.0) or 0.0
+                    )
+            if threshold_pips is None or threshold_pips <= 0:
+                continue
+            if threshold_pips > max_pips:
+                errors.append(
+                    f"management[{mi}] ({mgmt.name!r}).conditions[{ci}] "
+                    f"({ctype}): threshold {threshold_pips:g} pips exceeds "
+                    f"the plan's maximum profit-pip range "
+                    f"({max_pips:g} pips = |initial_tp - initial_sl| / "
+                    f"pip_size). Trigger is provably unreachable — trade "
+                    f"closes at TP before profit/MFE can reach the "
+                    f"threshold. Either lower the trigger threshold or "
+                    f"widen TP."
+                )
+    return errors
+
+
 def _check_stateful_in_v1(plan: Plan) -> list[str]:
     """v1 plans MUST NOT reference stateful primitives.
 
@@ -477,6 +568,7 @@ def validate_plan(
     errors += _check_time_between_conditions(plan)
     errors += _check_management_threshold_floor(plan)
     errors += _check_min_entry_conditions(plan)
+    errors += _check_management_reachability(plan)
 
     if errors:
         return False, plan, errors
