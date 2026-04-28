@@ -367,6 +367,47 @@ def _check_management_threshold_floor(plan: Plan) -> list[str]:
     ]
 
 
+# =============================================================================
+# FLO-Path4 — minimum entry conditions (narrow gate)
+# =============================================================================
+
+# Empirical basis: PLAN-011 (and similar) submitted with a single
+# `price_above` entry condition — minimal-compliance schema fill that
+# produces under-conditioned setups. Forcing >= 2 entry conditions
+# catches the path-of-least-resistance pattern without dictating which
+# primitives Floki uses. Floki retains full agency on which 2+ conditions
+# qualify the entry.
+#
+# Implemented as a business rule (not a Pydantic schema change) so
+# existing test fixtures with 1-condition plans remain valid for
+# negative-test-case construction (e.g. Pydantic-level validation
+# tests that build minimal valid plans).
+_MIN_ENTRY_CONDITIONS: int = 2
+
+
+def _check_min_entry_conditions(plan: Plan) -> list[str]:
+    """Reject entry blocks with fewer than `_MIN_ENTRY_CONDITIONS`
+    conditions. Single-condition entries are typically minimal-
+    compliance schema fills (e.g. only `price_above 4575`) that do
+    not reflect the multi-indicator confluence the plan model is
+    designed to express.
+
+    Floki retains agency on which conditions qualify -- the validator
+    only enforces the count floor.
+    """
+    n = len(plan.entry.conditions)
+    if n < _MIN_ENTRY_CONDITIONS:
+        return [
+            f"entry: requires at least {_MIN_ENTRY_CONDITIONS} conditions; "
+            f"got {n}. Single-condition entries are typically minimal-"
+            f"compliance schema fills that bypass the multi-indicator "
+            f"confluence the plan is designed to express. Add a second "
+            f"condition that gates the entry meaningfully (indicator "
+            f"threshold, structural confluence, time window, etc.)."
+        ]
+    return []
+
+
 def _check_stateful_in_v1(plan: Plan) -> list[str]:
     """v1 plans MUST NOT reference stateful primitives.
 
@@ -435,6 +476,7 @@ def validate_plan(
     errors += _check_cancel_plan_placement(plan)
     errors += _check_time_between_conditions(plan)
     errors += _check_management_threshold_floor(plan)
+    errors += _check_min_entry_conditions(plan)
 
     if errors:
         return False, plan, errors

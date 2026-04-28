@@ -16,6 +16,157 @@ from logger import log
 logger = log
 
 
+# =============================================================================
+# FLO-Path4 — auto-injected <intelligence> block (Luna brief + Echo alerts)
+# =============================================================================
+#
+# Floki has historically NOT called get_luna_brief or get_echo_alerts in
+# 7 days of logs (FLO-388 diagnosis). The decision-flow ordering is:
+# read chart -> form thesis -> submit plan, with no consultation point
+# for macro/news context. Auto-injecting an observational <intelligence>
+# block at trigger_context construction time eliminates the ordering
+# friction without requiring Floki's procedural self-model to change.
+#
+# Bug G discipline: this codebase has rolled back classification labels
+# from auto-injected agent outputs three times (Luna env=DANGER, risk_level,
+# bias; Rex alert_level QUIET/CRITICAL; Session block running W/L).
+# The pattern was: classification labels in auto-injected data biased
+# Floki's decisions deterministically (caution loops, wrong-direction
+# trades from stale labels). The fix discipline below is field-by-field
+# and intentionally conservative -- observational data only.
+#
+# Field decisions (kept / stripped) -- see commit body for full
+# justification per field.
+
+_LUNA_BRIEF_PATH = "data/luna_brief.json"
+_ECHO_ALERTS_PATH = "data/echo_alerts.json"
+_ECHO_RECENT_HOURS = 6.0
+_ECHO_MAX_ALERTS = 5
+
+
+def _intel_age_minutes(ts: Optional[str]) -> Optional[float]:
+    """Compute age in minutes from an ISO-8601 timestamp string. Returns
+    None on parse failure or missing input."""
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - dt
+        return round(delta.total_seconds() / 60.0, 1)
+    except Exception:
+        return None
+
+
+def _build_luna_section(luna: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Project luna_brief.json into the auto-inject Bug-G-safe shape.
+    Empty/None input returns {available: false}."""
+    if not isinstance(luna, dict):
+        return {"available": False, "reason": "no_brief_on_disk"}
+    return {
+        "available": True,
+        "timestamp": luna.get("timestamp"),
+        "age_minutes": _intel_age_minutes(luna.get("timestamp")),
+        "key_factors": luna.get("key_factors") or [],
+        "patterns_detected": luna.get("patterns_detected") or [],
+        "pattern_details": luna.get("pattern_details") or {},
+        "next_events": luna.get("next_events") or [],
+        "data_snapshot": luna.get("data_snapshot") or {},
+        "macro_trend": luna.get("macro_trend") or {},
+        "correlations": luna.get("correlations") or {},
+    }
+
+
+def _build_echo_section(echo: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Project echo_alerts.json into the auto-inject Bug-G-safe shape.
+    Filters to unread + last `_ECHO_RECENT_HOURS` + capped to
+    `_ECHO_MAX_ALERTS` most recent, ordered newest-first.
+
+    NON-MUTATING peek -- does NOT mark alerts as read."""
+    if not isinstance(echo, list):
+        return {"available": False, "alerts": [], "unread_count": 0}
+    filtered: List[Dict[str, Any]] = []
+    for a in echo:
+        if not isinstance(a, dict):
+            continue
+        if a.get("read") is True:
+            continue
+        age = _intel_age_minutes(a.get("timestamp") or a.get("first_seen"))
+        if age is None or age > (_ECHO_RECENT_HOURS * 60):
+            continue
+        filtered.append(a)
+    filtered.sort(key=lambda a: str(a.get("timestamp") or ""), reverse=True)
+    capped = filtered[:_ECHO_MAX_ALERTS]
+    projected: List[Dict[str, Any]] = []
+    for a in capped:
+        projected.append({
+            "timestamp": a.get("timestamp"),
+            "age_minutes": _intel_age_minutes(a.get("timestamp")),
+            "classification": a.get("classification"),
+            "source": a.get("source"),
+            "title": a.get("title"),
+            "headline_count": a.get("headline_count", 1),
+            "summary": a.get("summary"),
+            # STRIPPED per Bug G discipline: gold_impact, relevance_score,
+            # read, first_seen, latest, representative_headline.
+        })
+    return {
+        "available": True,
+        "unread_count": len(filtered),
+        "shown_count": len(projected),
+        "filter_window_hours": _ECHO_RECENT_HOURS,
+        "alerts": projected,
+    }
+
+
+def build_intelligence_block(
+    luna_path: str = _LUNA_BRIEF_PATH,
+    echo_path: str = _ECHO_ALERTS_PATH,
+) -> str:
+    """Build the auto-injected `<intelligence>` XML-tagged block for
+    Floki's trigger_context. NON-MUTATING -- does NOT mark Echo alerts
+    as read.
+
+    Returns the tag-wrapped JSON payload as a single string. On any
+    error reading files, returns a graceful-degraded block with
+    available=false rather than raising. Production paths must never
+    fail because intelligence injection failed.
+    """
+    luna_data: Optional[Dict[str, Any]] = None
+    echo_data: Optional[List[Dict[str, Any]]] = None
+    try:
+        if os.path.exists(luna_path):
+            with open(luna_path, "r", encoding="utf-8") as f:
+                _raw = json.load(f)
+                if isinstance(_raw, dict):
+                    luna_data = _raw
+    except Exception as e:
+        logger.debug(f"intelligence_block: luna read failed: {e}")
+    try:
+        if os.path.exists(echo_path):
+            with open(echo_path, "r", encoding="utf-8") as f:
+                _raw = json.load(f)
+                if isinstance(_raw, list):
+                    echo_data = _raw
+    except Exception as e:
+        logger.debug(f"intelligence_block: echo read failed: {e}")
+
+    block = {
+        "luna": _build_luna_section(luna_data),
+        "echo": _build_echo_section(echo_data),
+    }
+    payload = json.dumps(block, indent=2, default=str, ensure_ascii=False)
+    return (
+        "<intelligence framing=\"observational\" "
+        "description=\"Luna macro brief + Echo unread alerts. "
+        "No environment classification, no directional bias labels. "
+        "You interpret. Stale data possible -- check age_minutes.\">\n"
+        f"{payload}\n"
+        "</intelligence>"
+    )
+
+
 def load_session_memory(path: str = "data/agent_session_memory.json") -> Optional[Dict[str, Any]]:
     try:
         abs_path = os.path.abspath(path)

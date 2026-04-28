@@ -1363,3 +1363,89 @@ completes. Defence-in-depth alongside the singleton classification of
 deferral preserves the contiguous `assistant→tool[1..N]` message
 invariant that stricter OpenAI-compat providers may require.
 
+
+
+## FLO-Path4 — Auto-injected `<intelligence>` block + min entry conditions
+
+Two coordinated additions to address the FLO-388-diagnosed
+intelligence-tool adoption gap (Luna 0/7d, Echo 0/7d, Recipe Book
+0.3/d) and the simplistic-plan pattern (PLAN-011-style single
+`price_above` entry).
+
+### `<intelligence>` block (auto-injected into Floki's user message)
+
+Source: `agent_data_builder.build_intelligence_block()`. Prepended to
+`trigger_context` inside `ai_agent._call_openai_with_tools()` — single
+integration point for all cycle types (SIGNAL, PROACTIVE, SIMBA_WAKE,
+HOLD_FORCED, etc.).
+
+**Wrapped XML tag:**
+```
+<intelligence framing="observational" description="Luna macro brief +
+Echo unread alerts. No environment classification, no directional bias
+labels. You interpret. Stale data possible — check age_minutes.">
+{ "luna": {...}, "echo": {...} }
+</intelligence>
+```
+
+**Failure mode**: file missing / parse error → `available: false` with
+`reason` field, never raises. Production trigger_context unchanged on
+intelligence-block failure.
+
+**Non-mutating peek**: Echo alerts are NOT marked as read by the
+auto-inject. The `get_echo_alerts` tool channel retains its
+mark-as-read semantics; operator audit ("did Floki actually pull?")
+via tool-log signal preserved.
+
+### Bug G compliance — field-by-field
+
+The codebase has rolled back classification labels from auto-injected
+agent outputs three times (Luna env=DANGER/risk_level/bias, Rex
+alert_level QUIET/CRITICAL, Session running W/L). The pattern was:
+classification labels in auto-injected data biased Floki's decisions
+deterministically. The field discipline below is field-by-field.
+
+| Source | Field | Status | Justification |
+|---|---|---|---|
+| Luna | `timestamp`, `age_minutes` | KEEP | Staleness signal |
+| Luna | `key_factors` | KEEP | Descriptive bullets, no labels |
+| Luna | `patterns_detected` | KEEP | Python-validated pattern names |
+| Luna | `pattern_details` | KEEP | Per-pattern data + age_minutes |
+| Luna | `next_events` | KEEP | Calendar events, observational |
+| Luna | `data_snapshot` | KEEP | Raw values + change_pct, no labels |
+| Luna | `macro_trend` | KEEP | direction (UP/DOWN/FLAT) is mechanical descriptor of 5d_change_pct sign — not interpretive label |
+| Luna | `correlations` | KEEP | Raw r values + normal_range, observational |
+| Luna | `source` | STRIP | Internal model attribution, not actionable for Floki |
+| Luna | `error` | STRIP | Internal status field, not actionable |
+| Luna | `headlines_consumed` | STRIP | Luna's own input list, not Floki's input |
+| Echo | `timestamp`, `age_minutes` | KEEP | Staleness signal |
+| Echo | `title` | KEEP | Headline text, observational |
+| Echo | `source` | KEEP | Single-source attribution string |
+| Echo | `classification` | KEEP | CRITICAL/IMPORTANT/ROUTINE priority filter — NOT directional bias. Already documented in SYSTEM_PROMPT line 30 |
+| Echo | `summary` | KEEP | Short prose summary, observational |
+| Echo | `headline_count` | KEEP | Cluster size, observational |
+| Echo | `gold_impact` | **STRIP** | BULLISH/BEARISH directional bias label — Bug G class. The whole point of prior rollbacks was to remove direction labels from auto-injected data |
+| Echo | `relevance_score` | **STRIP** | Numeric judgment by Echo's classifier; classification-adjacent. `classification` already serves the priority role |
+| Echo | `read` | STRIP | State field, not data |
+| Echo | `first_seen`, `latest`, `representative_headline` | STRIP | Redundant with `timestamp`/`title` |
+
+### Echo filtering rules
+
+- **Unread only** (`read != True`)
+- **Age window**: last `_ECHO_RECENT_HOURS = 6.0` hours
+- **Cap**: `_ECHO_MAX_ALERTS = 5`, newest-first
+
+### Validator rule: `_check_min_entry_conditions`
+
+| Property | Value |
+|---|---|
+| Floor | `_MIN_ENTRY_CONDITIONS = 2` |
+| Implementation | Business rule (NOT Pydantic schema change) |
+| Error path | Standard `validation_errors` list returned by `submit_plan_to_snow` |
+| Error message | Names concrete remediation: indicator threshold, structural confluence, time window |
+
+Single-condition entries are typically minimal-compliance schema fills
+that bypass the multi-indicator confluence the plan model is designed
+to express. Floki retains agency on which 2+ conditions qualify the
+entry — validator only enforces the count floor.
+

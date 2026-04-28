@@ -1637,6 +1637,23 @@ class AIAgent:
 
         # Build user message (text only — images available via get_chart_screenshots tool)
         _tc_text = str(trigger_context or "").strip()
+        # FLO-Path4: prepend the auto-injected <intelligence> block
+        # (Luna macro brief + Echo unread alerts, observational only,
+        # Bug-G-compliant field projection). Eliminates the decision-flow
+        # ordering friction identified in FLO-388 — Floki sees macro
+        # context before forming thesis, no tool call required. Wrapped
+        # in try/except: production paths must never fail because
+        # intelligence injection failed.
+        try:
+            from agent_data_builder import build_intelligence_block
+            _intel_block = build_intelligence_block()
+            if _intel_block:
+                _tc_text = f"{_intel_block}\n\n{_tc_text}"
+        except Exception as _intel_e:
+            try:
+                logger.warning(f"FLO-Path4 | intelligence block injection failed: {_intel_e}")
+            except Exception:
+                pass
         messages.append({"role": "user", "content": _tc_text})
 
         # Store chart_images on tools instance for get_chart_screenshots tool access

@@ -238,15 +238,20 @@ class TestTimeBetween:
 
     def test_cross_midnight_window_accepted(self, valid_plan_dict):
         """end < start is valid — wrap-around at runtime."""
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+        # Test purpose is time_between wrap-around acceptance.
         valid_plan_dict["entry"]["conditions"] = [
-            {"type": "time_between", "start_utc": "22:00", "end_utc": "06:00"}
+            {"type": "time_between", "start_utc": "22:00", "end_utc": "06:00"},
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
         ]
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok, errors
 
     def test_normal_window_accepted(self, valid_plan_dict):
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
         valid_plan_dict["entry"]["conditions"] = [
-            {"type": "time_between", "start_utc": "06:00", "end_utc": "20:00"}
+            {"type": "time_between", "start_utc": "06:00", "end_utc": "20:00"},
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
         ]
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok, errors
@@ -952,7 +957,14 @@ class TestStatefulGateEndToEnd:
         canonical fixture already supplies a valid SELL entry; just
         replace the condition list."""
         assert valid_plan_dict_v2["schema_version"] == 2
-        valid_plan_dict_v2["entry"]["conditions"] = [self._crossover_cond_dict()]
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+        # Test purpose is stateful-primitive parse + v2 acceptance — the
+        # second (rsi H1 > 50) is benign. First condition is still the
+        # crossover so c0 assertions below remain valid.
+        valid_plan_dict_v2["entry"]["conditions"] = [
+            self._crossover_cond_dict(),
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+        ]
         ok, plan, errors = validate_plan(valid_plan_dict_v2)
         assert ok is True, f"v2 plan rejected: {errors}"
         assert plan is not None
@@ -988,7 +1000,11 @@ class TestStatefulGateEndToEnd:
     def test_v2_plan_with_indicator_was_validates(
         self, valid_plan_dict
     ):
-        valid_plan_dict["entry"]["conditions"] = [self._was_cond_dict()]
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+        valid_plan_dict["entry"]["conditions"] = [
+            self._was_cond_dict(),
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+        ]
         ok, plan, errors = validate_plan(valid_plan_dict)
         assert ok is True, f"v2 plan rejected: {errors}"
         c0 = plan.entry.conditions[0]
@@ -1032,7 +1048,11 @@ class TestStatefulGateEndToEnd:
     def test_v2_plan_with_price_crossed_level_validates(
         self, valid_plan_dict
     ):
-        valid_plan_dict["entry"]["conditions"] = [self._crossed_cond_dict()]
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+        valid_plan_dict["entry"]["conditions"] = [
+            self._crossed_cond_dict(),
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+        ]
         ok, plan, errors = validate_plan(valid_plan_dict)
         assert ok is True, f"v2 plan rejected: {errors}"
         c0 = plan.entry.conditions[0]

@@ -413,8 +413,14 @@ class TestPlanIntegration:
                          "confidence": 50, "regime_assumed": "RANGING"},
             "entry": {
                 "direction": "BUY", "volume": 0.02,
-                "conditions": [{"type": "price_at_fibonacci", "level": 1.0,
-                                "tolerance_pips": 8}],
+                # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+                # Test purpose is fib-level acceptance, not entry shape — second
+                # condition (rsi H1 > 50) is benign and orthogonal.
+                "conditions": [
+                    {"type": "price_at_fibonacci", "level": 1.0,
+                     "tolerance_pips": 8},
+                    {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+                ],
                 "initial_sl": 4710.0, "initial_tp": 4730.0,
             },
             "management": [], "exit": [],

@@ -108,7 +108,13 @@ _BASE_PLAN: dict[str, Any] = {
     "entry": {
         "direction": "SELL",
         "volume": 0.02,
-        "conditions": [{"type": "price_above", "level": 4730.0}],
+        # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
+        # The second (rsi H1 > 50) is benign — these tests cover plan-flow
+        # mechanics (submit/cancel/status/list), not entry-condition shape.
+        "conditions": [
+            {"type": "price_above", "level": 4730.0},
+            {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+        ],
         "initial_sl": 4740.0,
         "initial_tp": 4710.0,
     },
