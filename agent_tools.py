@@ -25,6 +25,13 @@ class AgentTools:
         self._executor = executor
         self._safety = safety_checks_module
         self._risk = risk_manager_module
+        # FLO-382 D1: per-cycle Recipe Book pull buffer. Appended on
+        # successful get_snow_recipe_book invocations; filtered by
+        # recency window on submit_plan_to_snow emit (NOT cleared)
+        # so paired_hedge cycles that submit two plans in the same
+        # second both see the cycle's pulls.
+        from collections import deque as _deque
+        self._recipe_pulls: "_deque[dict]" = _deque(maxlen=50)
 
     def set_next_check(self, minutes: int = 5) -> Dict[str, Any]:
         start = time.time()
@@ -4597,6 +4604,16 @@ class AgentTools:
         try:
             result = get_recipes_by_category(category=category)
             count = result.get("count", 0)
+            # FLO-382 D1: track the pull for the current cycle so
+            # submit_plan_to_snow can emit recipe-adoption telemetry.
+            try:
+                self._recipe_pulls.append({
+                    "ts": utc_iso(),
+                    "category": category,
+                    "count": int(count),
+                })
+            except Exception:
+                pass
             self._log_tool(
                 "get_snow_recipe_book", start,
                 f"category={category!r} count={count}",
@@ -4743,6 +4760,56 @@ class AgentTools:
                     f"ok plan_id={plan_id} attempt={attempt} "
                     f"cwd={_cwd} db={_db_path}",
                 )
+                # FLO-382 D1: emit Recipe Book adoption diagnostic
+                # filtered to a 600s recency window. Buffer is NOT
+                # cleared so paired-hedge cycles (two submits in
+                # the same second) both see the cycle's pulls. The
+                # deque(maxlen=50) bounds memory; recency filter
+                # bounds attribution.
+                try:
+                    from snow.instrumentation import emit_recipe_pulled
+                    setup_type: Optional[str] = None
+                    try:
+                        analysis = getattr(parsed, "analysis", None)
+                        if analysis is not None:
+                            setup_type = getattr(analysis, "setup_type", None)
+                    except Exception:
+                        setup_type = None
+                    # Recency filter — recipe pulls within last 600s
+                    # of this submit count toward this plan. Floki's
+                    # cycle is typically <5min; 10min covers paired
+                    # hedge cycles + brief defer-and-resume gaps.
+                    recent_pulls: list[dict] = []
+                    try:
+                        import datetime as _dt
+                        from tz_utils import utc_now as _utc_now
+                        now_dt = _utc_now()
+                        for rp in self._recipe_pulls:
+                            ts = rp.get("ts")
+                            if not ts:
+                                continue
+                            try:
+                                ts_dt = _dt.datetime.fromisoformat(
+                                    str(ts).replace("Z", "+00:00")
+                                )
+                            except Exception:
+                                continue
+                            if (now_dt - ts_dt).total_seconds() <= 600:
+                                recent_pulls.append(rp)
+                    except Exception:
+                        recent_pulls = list(self._recipe_pulls)
+                    emit_recipe_pulled(
+                        plan_id=plan_id,
+                        recipe_pulls=recent_pulls,
+                        final_setup_type=setup_type,
+                    )
+                except Exception as _e_diag:
+                    try:
+                        log.warning(
+                            f"snow.plan.recipe_pulled hook failed: {_e_diag}"
+                        )
+                    except Exception:
+                        pass
                 return {
                     "success": True, "plan_id": plan_id,
                     "validation_errors": None,

@@ -1188,3 +1188,70 @@ On failure (unknown category): `{"success": false, "reason": "Unknown category '
 ### Versioning
 
 Recipe-book file `version` field bumps on content edits (semver). The tool reflects whatever version is on disk; cache invalidates on mtime. The Pydantic model schema is in code (`snow.recipe_book.Recipe`) and bumps on field changes — track separately.
+
+
+## FLO-382 — Diagnostic Instrumentation Events
+
+Three additive log events emitted during the 24h pilot to
+distinguish Recipe Book adoption root cause (D1), quantify the
+BE-scratch pattern (D2), and audit volume sizing (D3). All emitters
+are wrapped in try/except; failures inside emit code are caught
+and logged WARN — never propagate to production paths.
+
+### `snow.plan.recipe_pulled`
+
+Emitted by `agent_tools.submit_plan_to_snow` after a successful
+plan insert. One row per submitted plan.
+
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| `plan_id` | str | submit_plan_to_snow | New plan ID |
+| `cycle_emit_ts` | ISO-8601 UTC | tz_utils.utc_iso() | Diagnostic emit timestamp |
+| `recipe_pulls_count` | int | AgentTools._recipe_pulls buffer | get_snow_recipe_book calls in this cycle |
+| `recipe_categories_pulled` | list[str] | buffer | Distinct categories pulled |
+| `final_setup_type` | str | parsed.analysis.setup_type | May be `null` for schema_version<3 |
+| `match_status` | enum | derived | `matched` / `mismatched` / `no_pull` / `no_setup_type` / `unknown_setup_type` |
+
+Mapping is data-driven from recipe book `setup_type_alignment`
+lists (`snow.instrumentation.categories_for_setup_type`).
+
+### `snow.trade.scratch_pattern`
+
+Emitted by `snow.outcome.backfill_outcome` on success — one row
+per closed trade.
+
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| `plan_id` | str | snow_plans | |
+| `ticket` | int | broker | |
+| `entry_price` | float | first IN deal `price` | |
+| `close_price` | float | volume-weighted close | |
+| `pip_distance_from_entry` | float | outcome arithmetic | Signed by direction |
+| `close_reason` | enum | classifier | `broker_sl` / `broker_tp` / `manual_mt5` / `snow_close` / `expert_unattributed` / `no_close_deal` / `unknown_deal_reason` / `raw_<n>` |
+| `raw_deal_reason` | int | last close deal `reason` | |
+| `be_was_locked` | bool | close deal `sl` ≈ entry within 1 pip | Catches Snow + Floki + monitor.py BE moves symmetrically |
+| `sl_at_close_pips_from_entry` | float | close deal `sl` | Diagnostic granularity beyond bool |
+| `mfe_during_trade` | float | mt5.copy_rates_range(M1) | `null` if MT5 unavailable |
+| `mfe_query_status` | enum | helper | `ok` / `copy_rates_range_failed` / `empty_candle_range` / `computation_failed` / `missing_timestamps` |
+| `time_to_close_seconds` | int | close.time - in.time | |
+
+`close_reason=expert_unattributed` collapses Floki adjust_trade
+closes, monitor.py BE/drawdown closes, safety_checks closes, and
+EA Bridge closes — these are not deterministically distinguishable
+in v1. Acceptance threshold: if 24h pilot shows
+`expert_unattributed > 30%` of closes, FLO-383 needed for finer
+attribution.
+
+### `snow.trade.volume_audit`
+
+Emitted alongside `snow.trade.scratch_pattern` (same hook).
+
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| `plan_id` | str | snow_plans | |
+| `ticket` | int | broker | |
+| `planned_volume` | float | plan_json.entry.volume | |
+| `actual_volume` | float | IN deal `volume` | |
+| `mismatch` | bool | abs(planned-actual) > 0.001 | |
+| `account_balance_at_open` | float | plan_json.meta.account_balance_at_open | `null` in v1 (capture path not wired in FLO-382) |
+

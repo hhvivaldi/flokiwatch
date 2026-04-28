@@ -270,6 +270,47 @@ def _backfill_outcome_inner(
         f"pips={outcome_pips:.2f} usd={outcome_usd:.2f} "
         f"deals={len(close_deals)}"
     )
+
+    # FLO-382 D2 + D3: scratch-pattern + volume-audit instrumentation.
+    # Strictly additive — failures inside emit are caught and logged
+    # WARN; the backfill result is unaffected.
+    try:
+        from snow.instrumentation import emit_scratch_and_volume_audit
+        from snow import db as _idb
+        plan_row = _idb.get_plan(plan_id) or {}
+        close_time_iso: Optional[str] = None
+        try:
+            import datetime as _dt
+            close_epochs = [int(getattr(d, "time", 0) or 0) for d in close_deals]
+            close_epochs = [t for t in close_epochs if t > 0]
+            if close_epochs:
+                close_time_iso = _dt.datetime.utcfromtimestamp(
+                    max(close_epochs)
+                ).isoformat() + "Z"
+        except Exception:
+            close_time_iso = None
+        emit_scratch_and_volume_audit(
+            plan_id=plan_id,
+            ticket=int(ticket),
+            plan_row=plan_row,
+            in_deal=in_deals[0],
+            close_deals=list(close_deals),
+            open_price=float(open_price),
+            vw_close_price=float(vw_close),
+            direction_sign=int(sign),
+            outcome_pips=float(outcome_pips),
+            pip_size=float(PIP_SIZE),
+            close_time_iso=close_time_iso,
+        )
+    except Exception as _e_diag:
+        try:
+            log.warning(
+                f"FLO-382 instrumentation hook failed plan_id={plan_id} "
+                f"{type(_e_diag).__name__}: {_e_diag}"
+            )
+        except Exception:
+            pass
+
     return BackfillResult(
         plan_id=plan_id,
         success=True,
