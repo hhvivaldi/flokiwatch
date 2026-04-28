@@ -542,8 +542,14 @@ class AIAgent:
                 logger.info("AI Agent is disabled in config")
                 return False
 
-            # FLO-247: Qwen primary, GPT-5.4 fallback
-            _qwen_key = getattr(config, 'FLOKI_API_KEY', '') or os.environ.get("QWEN_API_KEY", "")
+            # FLO-247: Qwen primary, GPT-5.4 fallback.
+            # FLO-384: config is the SINGLE provider-resolution point —
+            # do NOT fall through to os.environ.get("QWEN_API_KEY", "")
+            # here. Under LLM_PROVIDER=kimi, FLOKI_API_KEY is empty if
+            # KIMI_API_KEY is missing; reading QWEN_API_KEY from env as
+            # a fallback would silently cross-wire DashScope credentials
+            # to the Moonshot endpoint set in FLOKI_API_BASE.
+            _qwen_key = getattr(config, 'FLOKI_API_KEY', '')
             _qwen_base = getattr(config, 'FLOKI_API_BASE', '')
             _openai_key = os.environ.get("OPENAI_API_KEY", "")
 
@@ -552,14 +558,34 @@ class AIAgent:
                 self.enabled = False
                 return False
 
+            # FLO-384: provider label resolved from base URL hostname so
+            # logs show which provider is actually live (Qwen / Kimi /
+            # OpenRouter / OpenAI) rather than the static "Qwen" string.
+            from urllib.parse import urlparse as _up_init
+            def _provider_label(_b: str) -> str:
+                _h = (_up_init(_b or "").hostname or "").lower()
+                if "moonshot" in _h:
+                    return "Kimi"
+                if "dashscope" in _h:
+                    return "Qwen"
+                if "openrouter.ai" in _h:
+                    return "OpenRouter"
+                if "openai.com" in _h:
+                    return "OpenAI"
+                return _h or "primary"
+
             try:
                 from openai import OpenAI
                 if _qwen_key and _qwen_base:
                     self.client = OpenAI(api_key=_qwen_key, base_url=_qwen_base, timeout=90, max_retries=0)
-                    logger.info(f"AI Agent: primary client = Qwen ({_qwen_base}, timeout=90s)")
+                    _primary_provider = _provider_label(_qwen_base)
+                    logger.info(
+                        f"AI Agent: primary client = {_primary_provider} "
+                        f"({_qwen_base}, timeout=90s)"
+                    )
                 else:
                     self.client = OpenAI(api_key=_openai_key)
-                    logger.info("AI Agent: primary client = OpenAI (no Qwen key)")
+                    logger.info("AI Agent: primary client = OpenAI (no Qwen/Kimi key)")
 
                 # FLO-297: Qwen-only on failure = suspend + 5min retry.
                 # FLO-299: Optional OpenRouter fallback — same Qwen 3.6-Plus
@@ -573,7 +599,13 @@ class AIAgent:
                 from urllib.parse import urlparse as _up
                 def _lbl(_b):
                     _h = (_up(_b or "").hostname or "").lower()
-                    return "OpenRouter" if "openrouter.ai" in _h else ("Alibaba" if "dashscope" in _h else (_h or "primary"))
+                    if "openrouter.ai" in _h:
+                        return "OpenRouter"
+                    if "dashscope" in _h:
+                        return "Alibaba"
+                    if "moonshot" in _h:
+                        return "Moonshot"
+                    return _h or "primary"
                 self._primary_label = _lbl(getattr(config, 'FLOKI_API_BASE', ''))
                 self._fallback_label = _lbl(getattr(config, 'FLOKI_FALLBACK_API_BASE', ''))
                 self._alibaba_cooldown_until = 0.0   # unix ts; 0 = no cooldown

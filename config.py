@@ -487,15 +487,49 @@ AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) mode
 AI_AGENT_TIMEOUT = 300                    # Timeout in seconds for API calls (300s for Qwen's slower response)
 AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
-# FLO-130 / FLO-299: Floki model — Qwen 3.6-Plus.
+# FLO-130 / FLO-299 / FLO-384: Floki model.
 # Primary: Alibaba DashScope (FLOKI_API_BASE + FLOKI_API_KEY/QWEN_API_KEY).
 # Fallback (FLO-299): OpenRouter hosting the SAME Qwen 3.6-Plus, so Floki's
 # reasoning profile is preserved when Alibaba is unavailable. Leave the
 # FLOKI_FALLBACK_* vars empty in .env to disable the fallback entirely
 # (bot falls back to the FLO-297 "Qwen unavailable" maintenance mode).
-FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "qwen3.6-plus")
-FLOKI_API_BASE = os.environ.get("FLOKI_API_BASE", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
+#
+# FLO-384: LLM_PROVIDER switch lets operators flip the primary provider
+# between Qwen (Alibaba DashScope) and Kimi (Moonshot) without renaming
+# environment keys. Default `qwen` preserves existing behavior bit-for-bit.
+# Setting LLM_PROVIDER=kimi resolves FLOKI_MODEL/FLOKI_API_BASE/FLOKI_API_KEY
+# from KIMI_* equivalents at config load — the existing OpenAI client init
+# path consumes the resolved triple unchanged. Fallback (FLO-299) is left
+# pointing at Qwen/OpenRouter regardless of primary; cross-provider
+# fallback is intentional safety-net and acceptable for the v1 pilot.
+LLM_PROVIDER = (os.environ.get("LLM_PROVIDER", "qwen") or "qwen").strip().lower()
+
+if LLM_PROVIDER == "kimi":
+    # Resolve primary triple from KIMI_* env. KIMI_API_KEY is required;
+    # base/model fall back to Moonshot defaults if unset so a minimal
+    # `LLM_PROVIDER=kimi` + `KIMI_API_KEY=...` is sufficient to flip.
+    FLOKI_MODEL = os.environ.get(
+        "KIMI_MODEL", os.environ.get("FLOKI_MODEL", "kimi-k2.5"),
+    )
+    FLOKI_API_BASE = os.environ.get(
+        "KIMI_BASE_URL",
+        os.environ.get("FLOKI_API_BASE", "https://api.moonshot.ai/v1"),
+    )
+    FLOKI_API_KEY = os.environ.get("KIMI_API_KEY", "")
+elif LLM_PROVIDER == "qwen":
+    FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "qwen3.6-plus")
+    FLOKI_API_BASE = os.environ.get(
+        "FLOKI_API_BASE",
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+    FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
+else:
+    raise ValueError(
+        f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen' or "
+        f"'kimi'). FLO-384 fails loudly to avoid silently routing Floki "
+        f"to an unintended provider."
+    )
+
 FLOKI_FALLBACK_API_BASE = os.environ.get("FLOKI_FALLBACK_API_BASE", "")
 FLOKI_FALLBACK_API_KEY = os.environ.get("FLOKI_FALLBACK_API_KEY", "")
 FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "qwen/qwen3.6-plus")

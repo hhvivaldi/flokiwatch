@@ -134,6 +134,7 @@ User skills are at: `~/.claude/skills/{skill}/SKILL.md` — invoke directly as `
 - Windows 11, Python 3.12+, MetaTrader 5 must be running
 - Home: `C:\Users\Hermano\OneDrive\Desktop\XAUUSD` | Remote: `C:\Users\hvivaldi\Desktop\DevOPS\flokiwatch`
 - Keys: `OPENAI_API_KEY` (Floki/Rex), `LUNA_API_KEY` (Echo/Luna), `GEMINI_API_KEY` (Sage), `FCS_API_KEY`
+- **Floki provider switch (FLO-384):** `LLM_PROVIDER` env (`qwen` | `kimi`, default `qwen`). When `LLM_PROVIDER=kimi`, config resolves `FLOKI_API_BASE`/`FLOKI_API_KEY`/`FLOKI_MODEL` from `KIMI_BASE_URL`/`KIMI_API_KEY`/`KIMI_MODEL` at config-load time (defaults: `https://api.moonshot.ai/v1` / required / `kimi-k2.5`). Existing OpenAI client init path consumes the resolved triple unchanged. Fallback (FLO-299) stays pointed at Qwen/OpenRouter regardless of primary — cross-provider fallback is intentional v1 safety net. Bot restart required after flipping.
 
 ## Trade Lessons Era Management (FLO-334, supersedes FLO-328)
 
