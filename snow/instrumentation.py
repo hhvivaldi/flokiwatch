@@ -73,12 +73,91 @@ def categories_for_setup_type(setup_type: str) -> list[str]:
         return []
 
 
+# FLO-395 E2: indicator-family taxonomy for entry-conditions vocabulary
+# diversity metric. Each Snow primitive type maps to one analytical
+# family. `count of distinct families in entry.conditions` is the
+# success metric for FLO-395 Phase 1 (target: 0.84 → 2.0+ over 7d).
+#
+# The taxonomy is intentionally coarse — splits on analytical role
+# (oscillator vs trend vs structural), not on indicator identity. A
+# plan with rsi+stochastic+macd_histogram counts as ONE family
+# (oscillator) because it's the same analytical signal repeated; a
+# plan with rsi+ema_relation+price_at_sr_zone counts as THREE families
+# (oscillator + trend + structural) because the analytical surface is
+# genuinely diverse.
+_PRIMITIVE_FAMILY: dict[str, str] = {
+    # oscillator family
+    "rsi": "oscillator",
+    "macd_histogram": "oscillator",
+    "stochastic": "oscillator",
+    # trend family
+    "ema_relation": "trend",
+    # structural family (price-vs-level)
+    "price_above": "structural",
+    "price_below": "structural",
+    "price_at_sr_zone": "structural",
+    "price_at_fibonacci": "structural",
+    "price_at_pivot": "structural",
+    "price_crossed_level": "structural",
+    # volatility family
+    "atr": "volatility",
+    "bollinger_position": "volatility",
+    # pattern / divergence family (transition signals)
+    "indicator_divergence": "pattern",
+    "indicator_crossover": "pattern",
+    "indicator_was": "pattern",
+    # time family (gating, not directional)
+    "time_between": "time",
+    "duration_exceeds": "time",
+}
+
+
+def _entry_vocabulary_diversity(plan: Optional[Any]) -> tuple[int, int, list[str]]:
+    """FLO-395 E2: count distinct primitive types and analytical
+    families in plan.entry.conditions.
+
+    Returns (n_distinct_types, n_distinct_families, families_sorted).
+    Returns (0, 0, []) if plan is None or has no parseable entry block.
+    """
+    try:
+        if plan is None:
+            return (0, 0, [])
+        entry = getattr(plan, "entry", None)
+        if entry is None and isinstance(plan, dict):
+            entry = plan.get("entry")
+        if entry is None:
+            return (0, 0, [])
+        if isinstance(entry, dict):
+            conditions = entry.get("conditions", [])
+        else:
+            conditions = getattr(entry, "conditions", None) or []
+        if not conditions:
+            return (0, 0, [])
+        types: set[str] = set()
+        families: set[str] = set()
+        for c in conditions:
+            ct = (
+                c.get("type") if isinstance(c, dict)
+                else getattr(c, "type", None)
+            )
+            if not ct:
+                continue
+            types.add(str(ct))
+            fam = _PRIMITIVE_FAMILY.get(str(ct))
+            if fam:
+                families.add(fam)
+        return (len(types), len(families), sorted(families))
+    except Exception:
+        return (0, 0, [])
+
+
 def emit_recipe_pulled(
     plan_id: str,
     recipe_pulls: list[dict[str, Any]],
     final_setup_type: Optional[str],
+    plan: Optional[Any] = None,
 ) -> None:
-    """Emit snow.plan.recipe_pulled diagnostic for FLO-382 D1.
+    """Emit snow.plan.recipe_pulled diagnostic for FLO-382 D1 + FLO-395 E2.
 
     Args:
       plan_id: ID of the plan that was just submitted.
@@ -87,6 +166,9 @@ def emit_recipe_pulled(
         cycle that submitted this plan.
       final_setup_type: setup_type from the submitted plan's
         analysis block. May be None on schema_version < 3 plans.
+      plan: parsed Plan model (or plan dict) — used for FLO-395 E2
+        entry-vocabulary-diversity computation. Optional for backwards
+        compatibility; when None, diversity fields emit as 0 / [].
     """
     try:
         n = len(recipe_pulls)
@@ -109,13 +191,21 @@ def emit_recipe_pulled(
                 match_status = "mismatched"
 
         cats_repr = "[" + ",".join(cats_pulled) + "]"
+
+        # FLO-395 E2: vocabulary diversity in entry.conditions.
+        n_types, n_families, families = _entry_vocabulary_diversity(plan)
+        families_repr = "[" + ",".join(families) + "]"
+
         log.info(
             f"snow.plan.recipe_pulled "
             f"plan_id={plan_id} cycle_emit_ts={utc_iso()} "
             f"recipe_pulls_count={n} "
             f"recipe_categories_pulled={cats_repr} "
             f"final_setup_type={final_setup_type or 'null'} "
-            f"match_status={match_status}"
+            f"match_status={match_status} "
+            f"entry_distinct_primitive_types={n_types} "
+            f"entry_distinct_families={n_families} "
+            f"entry_families={families_repr}"
         )
     except Exception as e:  # never fail the production caller
         try:

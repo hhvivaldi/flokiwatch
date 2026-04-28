@@ -1741,24 +1741,44 @@ def _format_candles(candles: List[Dict], limit: int = 20) -> List[Dict]:
 
 
 def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
-    """Format technical indicators for the Agent"""
+    """Format technical indicators for the Agent.
+
+    FLO-395 C3: each indicator block carries a `primitive_shape` field
+    showing the Snow primitive YAML template Floki can paste into
+    `entry.conditions`. The shape is anchored on the indicator's
+    natural threshold (e.g., RSI 70/30 for overbought/oversold) so
+    Floki has a concrete starting point — adjust threshold + op based
+    on thesis, but the structural shape is ready-to-use. Goal:
+    eliminate fact→primitive translation friction surfaced by the
+    FLO-395 audit (84% of plans articulate 3+ indicator families in
+    prose but encode ≤1 in YAML).
+    """
     indicators = {}
-    
+
     # RSI
     rsi = tech_data.get("rsi", {})
     indicators["rsi"] = {
         "value": _safe_round(rsi.get("value", 50), 1),
         "level": rsi.get("level", "neutral"),
+        "primitive_shape": (
+            '{"type": "rsi", "tf": "H1", "op": "above|below", '
+            '"threshold": <num 0-100; common: 70 overbought, 30 oversold, '
+            '50 momentum>}'
+        ),
     }
-    
+
     # MACD
     macd = tech_data.get("macd", {})
     indicators["macd"] = {
         "histogram": _safe_round(macd.get("histogram", 0), 3),
         "signal": macd.get("signal", "neutral"),
         "trend": macd.get("trend", "neutral"),
+        "primitive_shape": (
+            '{"type": "macd_histogram", "tf": "H1", '
+            '"op": "above|below", "threshold": 0.0}'
+        ),
     }
-    
+
     # EMAs
     ema = tech_data.get("ema", {})
     indicators["emas"] = {
@@ -1769,8 +1789,13 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "above_ema20": ema.get("above_ema20", False),
         "above_ema50": ema.get("above_ema50", False),
         "above_ema200": ema.get("above_ema200", False),
+        "primitive_shape": (
+            '{"type": "ema_relation", "tf": "H1", '
+            '"fast": "ema9|ema21", "slow": "ema21|ema50|ema200", '
+            '"relation": "above|below"}'
+        ),
     }
-    
+
     # Bollinger Bands
     bb = tech_data.get("bollinger", {})
     indicators["bollinger"] = {
@@ -1779,13 +1804,22 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "lower": _safe_round(bb.get("lower", 0), 2),
         "position": _safe_round(bb.get("position", 0.5), 2),  # 0-1 where price is in band
         "squeeze": bb.get("squeeze", False),
+        "primitive_shape": (
+            '{"type": "bollinger_position", "tf": "H1", '
+            '"position": "above_upper|below_lower|above_middle|below_middle"}'
+        ),
     }
-    
+
     # ATR
     atr = momentum_data.get("atr", {})
     indicators["atr"] = {
         "value": _safe_round(atr.get("atr_value", 0), 2),
         "trend": atr.get("atr_trend", "stable"),
+        "primitive_shape": (
+            '{"type": "atr", "tf": "H1", "op": "above|below", '
+            '"multiplier": <num e.g. 1.0 or 2.0>, '
+            '"baseline_pips": <reference pips>}'
+        ),
     }
     
     # ADX

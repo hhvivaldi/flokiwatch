@@ -149,6 +149,65 @@ MINIMAL PLAN EXAMPLE:
   "expires_at": "2026-04-24T12:00:00Z"
 }
 
+ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering the analytical surface beyond the rsi+price_above pattern. Pick the shape that matches what your chart-reading actually surfaced; resist the default of dropping every thesis to rsi numerics. Each example shows a complete `entry.conditions` list ready to paste — adjust thresholds and timeframes to your read, but the structural shape is correct.
+
+(1) BOLLINGER SQUEEZE BREAKOUT — volatility expansion thesis. Use when BB width has compressed and price is breaking the upper band:
+"conditions": [
+  {"type": "bollinger_position", "tf": "H1", "relation": "above_upper"},
+  {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.0},
+  {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0}
+]
+
+(2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend:
+"conditions": [
+  {"type": "ema_relation", "tf": "H1", "period": 50, "relation": "aligned_bull"},
+  {"type": "price_at_fibonacci", "level": 0.618, "tolerance_pips": 8.0},
+  {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0}
+]
+
+(3) MACD MOMENTUM CONTINUATION — histogram positive and rising; entry on hold of recent low:
+"conditions": [
+  {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.05},
+  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+  {"type": "price_above", "level": 4720.0}
+]
+
+(4) DIVERGENCE-PLAY REVERSAL — bearish MACD divergence at HTF resistance:
+"conditions": [
+  {"type": "indicator_divergence", "indicator": "macd", "direction": "bearish"},
+  {"type": "price_at_sr_zone", "zone_type": "resistance", "tolerance_pips": 5.0},
+  {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}
+]
+
+(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion:
+"conditions": [
+  {"type": "price_at_pivot", "pivot_set": "classic", "level": "R1", "tolerance_pips": 5.0},
+  {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
+  {"type": "rsi", "tf": "M15", "op": "above", "threshold": 70}
+]
+
+(6) STATEFUL CROSSOVER ENTRY — the crossing event itself, not a sustained state. Latches on first cross. Requires schema_version >= 2 (auto-stamped):
+"conditions": [
+  {"type": "indicator_crossover", "indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0},
+  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"}
+]
+
+(7) FAILED-BREAKDOWN RECLAIM — price swept a level and reclaimed (Wyckoff spring shape). Stateful — schema_version >= 2:
+"conditions": [
+  {"type": "price_crossed_level", "level": 4707.0, "direction": "below"},
+  {"type": "price_above", "level": 4710.0},
+  {"type": "indicator_was", "indicator": "rsi", "tf": "H1", "op": "below", "threshold": 30, "within_bars": 4}
+]
+
+(8) MTF TREND-ALIGNMENT ENTRY — both HTF and working-TF EMAs aligned, structural pullback:
+"conditions": [
+  {"type": "ema_relation", "tf": "H4", "period": 50, "relation": "aligned_bull"},
+  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+  {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0}
+]
+
+These eight shapes cover ~80% of the analytical surface available to you. Notice none of them rely on rsi+price_above as the sole confluence — that pattern leaves your indicator vocabulary on the table. When `get_indicators` returns its output, each indicator block now carries a `primitive_shape` field showing the YAML template for that specific primitive (FLO-395 C3) — your translation cost from "I see X in the indicator output" to "I encode X as a primitive" is one paste, not one mental compile.
+
 Condition primitives:
 - Price (point-in-time): price_above, price_below.
 - Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).

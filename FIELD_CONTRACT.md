@@ -1550,3 +1550,63 @@ pointlessly redraft a valid plan.
 - Multi-recipe consultation requirement
 - Recipe Book content modifications
 
+---
+
+## FLO-395 Phase 1 — Tool utilization gap interventions
+
+Three orthogonal changes addressing the prose-vs-YAML translation
+collapse identified by the FLO-395 audit (last 30d corpus: 3.71
+indicator families per plan in prose vs 0.84 in YAML).
+
+### B1 — Worked entry-condition YAML examples in Floki's prompt
+
+`agent_prompts.py` carries an "ENTRY-CONDITION VOCABULARY EXAMPLES
+(FLO-395)" block with 8 worked shapes covering BB squeeze, trend
+pullback, MACD continuation, divergence-play reversal, pivot
+rejection, stateful crossover, failed-breakdown reclaim, and MTF
+trend alignment. Each example round-trip-validated through
+`validate_plan()` and locked by `flo395_test.py` content anchors.
+
+### C3 — Indicator output carries `primitive_shape` field
+
+`_format_indicators` annotates each indicator block with a
+`primitive_shape` field showing the Snow primitive YAML template
+ready to paste:
+
+| Indicator | Primitive | Notes |
+|-----------|-----------|-------|
+| `rsi` | `rsi` | overbought 70 / oversold 30 / momentum 50 anchors |
+| `macd` | `macd_histogram` | threshold=0.0 boundary anchor |
+| `emas` | `ema_relation` | period ∈ {9, 21, 50, 200} |
+| `bollinger` | `bollinger_position` | relation enum (above_upper / below_lower / above_middle / below_middle / in_squeeze) |
+| `atr` | `atr` | multiplier × baseline_pips shape |
+| `adx` | (no Snow primitive) | NOT annotated |
+| `volume` | (no Snow primitive) | NOT annotated |
+
+Goal: eliminate fact→primitive translation friction.
+
+### E2 — Vocabulary diversity telemetry in FLO-382 emit
+
+`emit_recipe_pulled` extended with three fields per emit:
+- `entry_distinct_primitive_types`: count of distinct primitive
+  `type` values in entry.conditions.
+- `entry_distinct_families`: count of distinct analytical families
+  (oscillator / trend / structural / volatility / pattern / time).
+- `entry_families`: sorted list of families present.
+
+Family taxonomy in `snow.instrumentation._PRIMITIVE_FAMILY`:
+- **oscillator:** rsi, macd_histogram, stochastic
+- **trend:** ema_relation
+- **structural:** price_above, price_below, price_at_sr_zone,
+  price_at_fibonacci, price_at_pivot, price_crossed_level
+- **volatility:** atr, bollinger_position
+- **pattern:** indicator_divergence, indicator_crossover, indicator_was
+- **time:** time_between, duration_exceeds
+
+### Phase 1 stop rule (CEO-locked)
+
+7-day post-ship observation. Success metric:
+`avg(entry_distinct_families)` moves from **0.84** (current 30d
+baseline) toward **2.0+**. If unmoved at Day-7, Phase 2/3/4
+deferred and architectural-refactor decision surfaces to CEO.
+

@@ -4845,6 +4845,7 @@ class AgentTools:
                         plan_id=plan_id,
                         recipe_pulls=recent_pulls,
                         final_setup_type=setup_type,
+                        plan=parsed,
                     )
                 except Exception as _e_diag:
                     try:
