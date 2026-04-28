@@ -132,9 +132,9 @@ MINIMAL PLAN EXAMPLE:
                "conditions": [{"type": "price_above", "level": 4730.0},
                               {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}],
                "initial_sl": 4740.0, "initial_tp": 4710.0},
-  "management": [{"name": "lock_be_at_10_profit",
+  "management": [{"name": "lock_be_after_meaningful_advance",
                   "priority": 7,
-                  "conditions": [{"type": "profit_pips", "op": "above", "threshold": 10}],
+                  "conditions": [{"type": "mfe_reached", "pips": 30}],
                   "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
                   "fires": "once"}],
   "exit": [{"name": "rsi_exit",
@@ -367,6 +367,20 @@ def get_system_prompt() -> str:
 def get_prompt_version() -> str:
     """Return version identifier for the current prompt.
 
+    3.12 — FLO-383 Phase 1a: MINIMAL PLAN EXAMPLE updated to use
+          mfe_reached (peak-relative) for the management trigger
+          instead of profit_pips at noise-floor threshold. Coordinated
+          with the new validator rule that rejects management
+          contingencies whose conditions reduce to profit_pips below
+          a 30-pip sanity floor. Empirical basis: PLAN-007 322 pip
+          MFE → -0.4 outcome with lock_be_at_10 — BE-locked at noise
+          level, broker SL whipsawed the position. The example
+          change demonstrates the regime-relative idiom Floki should
+          mimic. The validator enforces noise-floor avoidance, NOT
+          a specific primitive choice — Floki may use profit_pips
+          ≥30, or mfe_reached, or profit_retraced_from_peak, or any
+          AND-gated combination with indicator/structural conditions.
+          Previous: 3.11.
     3.11 — FLO-358 Snow Recipe Book Layer 1: adds a cross-reference
           to the new get_snow_recipe_book(category=...) tool in the
           <plans> section, right after the get_snow_primitives_reference
@@ -465,7 +479,7 @@ def get_prompt_version() -> str:
           contingency plans (submit_plan_to_snow / cancel_plan /
           get_plan_status / list_active_plans). Previous: 3.0.
     """
-    return "3.11"
+    return "3.12"
 
 
 def get_prompt_hash() -> str:

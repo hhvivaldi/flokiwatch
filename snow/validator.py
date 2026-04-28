@@ -276,6 +276,97 @@ def _iter_plan_conditions(plan: Plan):
             yield f"exit[{ei}]", ci, c
 
 
+# =============================================================================
+# FLO-383 — management threshold sanity-floor (condition expressiveness)
+# =============================================================================
+
+# Pip threshold below which a profit_pips-only management trigger is
+# considered noise-floor and therefore mathematically guaranteed to
+# scratch under normal price oscillation. XAUUSD 30 pips ≈ 0.07% at
+# 4500 spot — under typical M5 ATR + spread + slippage. Empirical
+# basis: PLAN-007 (322 pip MFE → -0.4 outcome) had lock_be_at_10
+# trigger, fired correctly, then broker SL whipsawed the BE-locked
+# position. The fix is to require management triggers to either
+# (a) wait for a meaningful absolute advance (>= floor), or (b) use
+# peak-relative conditions that adapt to volatility automatically.
+_MANAGEMENT_NOISE_FLOOR_PIPS: float = 30.0
+
+# Profit-pips comparison ops that imply a "fire when profit reaches
+# this threshold" trigger. The "below" / "lte" ops describe the
+# inverse semantic ("fire when profit drops below X") which is a
+# different shape — those are typically protective triggers and
+# don't fall under the noise-floor concern.
+_PROFIT_PIPS_TRIGGER_OPS: frozenset[str] = frozenset({"above", "gte", "gt"})
+
+
+def _condition_avoids_noise_floor(c) -> bool:
+    """Return True when this condition either (a) provides peak-
+    relative semantics that adapt to volatility (mfe_reached,
+    profit_retraced_from_peak), or (b) is a profit_pips trigger
+    above the sanity floor, or (c) is any non-profit-pips condition
+    type (indicator-based, structural, time, etc. — domain-aware).
+    Returns False ONLY when the condition is a low-threshold
+    profit_pips trigger.
+    """
+    ctype = getattr(c, "type", None)
+    if ctype == "profit_pips":
+        op = str(getattr(c, "op", "") or "").lower()
+        threshold = float(getattr(c, "threshold", 0.0) or 0.0)
+        if op in _PROFIT_PIPS_TRIGGER_OPS and threshold < _MANAGEMENT_NOISE_FLOOR_PIPS:
+            return False
+        return True
+    # All other condition types qualify — including peak-relative
+    # ones (mfe_reached, profit_retraced_from_peak) and any indicator
+    # / structural / time-based conditions.
+    return True
+
+
+def _check_management_threshold_floor(plan: Plan) -> list[str]:
+    """Enforce condition-expressiveness on management contingencies.
+
+    A management contingency QUALIFIES if it has at least one
+    non-noise-floor condition. A plan PASSES if at least one
+    management contingency qualifies (or management is empty).
+
+    Plans where ALL non-empty management contingencies trigger only
+    on low-threshold profit_pips are rejected because BE-locked at
+    noise level mathematically scratches under normal oscillation
+    (PLAN-007 evidence). Floki retains agency on which qualifying
+    primitive to use — the validator only enforces the floor.
+    """
+    if not plan.management:
+        return []
+    qualifying = []
+    for mi, mgmt in enumerate(plan.management):
+        # A contingency qualifies if ANY of its conditions avoids
+        # the noise floor. A multi-condition trigger that AND-gates
+        # a low profit_pips with an indicator condition is fine —
+        # the indicator gate prevents premature noise-fire.
+        any_qualifying = any(
+            _condition_avoids_noise_floor(c) for c in mgmt.conditions
+        )
+        qualifying.append((mi, mgmt.name, any_qualifying))
+    if any(q for _, _, q in qualifying):
+        return []
+    # All management contingencies are noise-floor-violating. Reject
+    # with a message that names the alternatives so Floki can revise
+    # without guessing.
+    names = ", ".join(f"{n!r}" for _, n, _ in qualifying)
+    return [
+        f"management: every contingency ({names}) triggers only on "
+        f"profit_pips below the {int(_MANAGEMENT_NOISE_FLOOR_PIPS)}-pip "
+        f"noise floor. XAUUSD {int(_MANAGEMENT_NOISE_FLOOR_PIPS)} pips "
+        f"≈ 0.07% — below typical M5 ATR + spread + slippage, so a "
+        f"BE-or-similar trigger at this level is statistically "
+        f"guaranteed to scratch under routine pullback. Use at least "
+        f"ONE of: (a) profit_pips with threshold >= "
+        f"{int(_MANAGEMENT_NOISE_FLOOR_PIPS)} pips, (b) mfe_reached "
+        f"(peak-relative), (c) profit_retraced_from_peak (give-back "
+        f"guard), or (d) AND-gate the low profit_pips with an "
+        f"indicator/structural/time condition."
+    ]
+
+
 def _check_stateful_in_v1(plan: Plan) -> list[str]:
     """v1 plans MUST NOT reference stateful primitives.
 
@@ -343,6 +434,7 @@ def validate_plan(
     errors += _check_execute_market_placement(plan)
     errors += _check_cancel_plan_placement(plan)
     errors += _check_time_between_conditions(plan)
+    errors += _check_management_threshold_floor(plan)
 
     if errors:
         return False, plan, errors

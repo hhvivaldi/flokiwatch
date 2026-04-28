@@ -311,6 +311,154 @@ class TestReturnContract:
 # Multiple errors captured in one pass
 # =============================================================================
 
+# =============================================================================
+# FLO-383 — management threshold sanity-floor (condition expressiveness)
+# =============================================================================
+
+class TestManagementThresholdFloor:
+    """Validator rejects plans whose management contingencies all trigger
+    only on profit_pips below a 30-pip noise floor. Empirical basis:
+    PLAN-007 322 pip MFE → -0.4 outcome with lock_be_at_10. BE-locked
+    at noise level guarantees scratch under routine pullback. Floki
+    retains agency on which qualifying primitive to use — validator
+    enforces the floor only.
+    """
+
+    @staticmethod
+    def _set_management(plan: dict, contingencies: list[dict]) -> None:
+        """Replace the management array with the given contingencies,
+        each filled in with sensible defaults for unrelated fields."""
+        out = []
+        for i, c in enumerate(contingencies):
+            out.append({
+                "name": c.get("name", f"mgmt_{i}"),
+                "priority": c.get("priority", 7),
+                "conditions": c["conditions"],
+                "action": c.get("action", {
+                    "type": "move_sl_to_breakeven", "offset_pips": 0,
+                }),
+                "fires": "once",
+            })
+        plan["management"] = out
+
+    def test_reject_single_low_profit_pips(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_pips", "op": "above",
+                            "threshold": 8}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert not ok, f"expected rejection on profit_pips=8; got {errors}"
+        assert any("noise floor" in e.lower() for e in errors), errors
+
+    def test_reject_multi_all_below_floor(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [
+            {"name": "lock_be_at_10",
+             "conditions": [{"type": "profit_pips", "op": "above",
+                             "threshold": 10}]},
+            {"name": "lock_be_at_15",
+             "conditions": [{"type": "profit_pips", "op": "above",
+                             "threshold": 15}]},
+        ])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("noise floor" in e.lower() for e in errors), errors
+
+    def test_accept_profit_pips_at_floor(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_pips", "op": "above",
+                            "threshold": 30}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_profit_pips_above_floor(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_pips", "op": "above",
+                            "threshold": 50}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_mfe_reached_only(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "mfe_reached", "pips": 25}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_profit_retraced_from_peak_only(self, valid_plan_dict):
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_retraced_from_peak",
+                            "pips": 15}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_mixed_low_pips_plus_mfe(self, valid_plan_dict):
+        """Two contingencies — one is noise-floor (profit_pips=10),
+        the other uses mfe_reached. Plan accepted because at least
+        one contingency qualifies."""
+        self._set_management(valid_plan_dict, [
+            {"name": "lock_be_at_10",
+             "conditions": [{"type": "profit_pips", "op": "above",
+                             "threshold": 10}]},
+            {"name": "give_back_guard",
+             "conditions": [{"type": "mfe_reached", "pips": 30}],
+             "action": {"type": "trail_sl", "trail_pips": 8.0}},
+        ])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_and_gated_low_pips_with_indicator(self, valid_plan_dict):
+        """A contingency with profit_pips=10 AND-gated by an
+        indicator condition is acceptable — the indicator gate
+        prevents premature noise-fire. The validator's predicate
+        is per-contingency: any non-profit-pips condition lifts
+        the contingency above the floor."""
+        self._set_management(valid_plan_dict, [{
+            "conditions": [
+                {"type": "profit_pips", "op": "above", "threshold": 10},
+                {"type": "rsi", "tf": "M5", "op": "above", "threshold": 60},
+            ],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_empty_management(self, valid_plan_dict):
+        """Plans with no management contingencies are unaffected
+        (rule has no scope to enforce)."""
+        valid_plan_dict["management"] = []
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_accept_below_op_does_not_count_as_trigger(self, valid_plan_dict):
+        """profit_pips with `op=below` describes a protective trigger
+        ("fire when profit drops below X"), not a BE-arming trigger.
+        The noise-floor concern is about arming triggers — `below`
+        ops are a different shape and exempt from the floor."""
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_pips", "op": "below",
+                            "threshold": 5}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_error_message_names_alternatives(self, valid_plan_dict):
+        """Floki must be told what to do, not just what's wrong.
+        The error message names mfe_reached and
+        profit_retraced_from_peak as concrete alternatives."""
+        self._set_management(valid_plan_dict, [{
+            "conditions": [{"type": "profit_pips", "op": "above",
+                            "threshold": 8}],
+        }])
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        msg = " ".join(errors)
+        assert "mfe_reached" in msg
+        assert "profit_retraced_from_peak" in msg
+        assert "30" in msg  # the floor itself
+
+
 class TestMultipleErrors:
 
     def test_multiple_business_rule_errors_all_reported(self, valid_plan_dict):
@@ -362,10 +510,10 @@ class TestPromptExamplePlan:
                                         {"type": "rsi", "tf": "H1", "op": "above",
                                          "threshold": 70}],
                          "initial_sl": 4740.0, "initial_tp": 4710.0},
-            "management": [{"name": "lock_be_at_10_profit",
+            "management": [{"name": "lock_be_after_meaningful_advance",
                             "priority": 7,
-                            "conditions": [{"type": "profit_pips", "op": "above",
-                                            "threshold": 10}],
+                            "conditions": [{"type": "mfe_reached",
+                                            "pips": 30}],
                             "action": {"type": "move_sl_to_breakeven",
                                        "offset_pips": 0},
                             "fires": "once"}],
@@ -424,7 +572,7 @@ class TestPromptMandatoryPlan:
     assertion below (`EXPECTED_VERSION`) is version-specific and MUST be
     bumped in lockstep with `agent_prompts.get_prompt_version()`."""
 
-    EXPECTED_VERSION = "3.11"
+    EXPECTED_VERSION = "3.12"
 
     def test_prompt_version_matches_expected(self):
         """Guards against forgotten version bump alongside a prompt edit."""

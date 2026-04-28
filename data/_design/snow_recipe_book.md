@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.0.1
 source_note: |
   Recipes curated from established technical-analysis methodology — CMT
   Body of Knowledge themes (Murphy, Edwards & Magee, Schwager
@@ -136,7 +136,7 @@ The mean-reversion edge inside an established range. Trades target the BB middle
 - Continuation-protection variant: use `price_crossed_level` to disarm the recipe if price closes through the BB extreme on the prior bar — the closing penetration suggests momentum continuation, not exhaustion.
 
 **Framing note:**
-Pairs naturally with `setup_type=mean_reversion_extreme` tagging. Management favors `move_sl_to_breakeven` (small profit threshold, e.g., +5 pips) because the thesis IS binary — works fast or doesn't. `close_partial` at 50% of the way to the BB middle is a common adaptation, banking the high-probability first leg before the lower-probability extension. Trail_sl misaligns with the thesis here — the trade isn't trying to capture a trend, it's harvesting noise around the mean.
+Pairs naturally with `setup_type=mean_reversion_extreme` tagging. Management favors `move_sl_to_breakeven` armed by a peak-relative trigger (e.g., `mfe_reached pips=15`) because the thesis IS binary — works fast or doesn't. Peak-relative arming adapts to volatility and avoids BE-locking at the noise floor. `close_partial` at 50% of the way to the BB middle is a common adaptation, banking the high-probability first leg before the lower-probability extension. Trail_sl misaligns with the thesis here — the trade isn't trying to capture a trend, it's harvesting noise around the mean.
 
 
 ## RECIPE: Trend Pullback to Moving-Average Confluence
@@ -469,7 +469,7 @@ A high-conviction single-bar reversal trigger at a structural level, with natura
 - HTF-context variant: only fire if the working-TF engulfing aligns with HTF momentum (e.g., bullish engulfing on M15 within an H4 uptrend pullback) — drops counter-trend signals at the cost of fewer reversals.
 
 **Framing note:**
-Pairs with `setup_type=structural_bounce` tagging. Management favors `move_sl_to_breakeven` with a small profit threshold (e.g., +5 pips) since the thesis is fast-binary, combined with `close_partial 50%` at the prior swing point as the first profit milestone. Trail_sl misaligns with the point-trade nature of candlestick reversals (they aren't trend-capture trades). If price extends past the swing point cleanly, the trade has overdelivered relative to the recipe's thesis — further extension is bonus rather than expected.
+Pairs with `setup_type=structural_bounce` tagging. Management favors `move_sl_to_breakeven` armed by a peak-relative trigger (e.g., `mfe_reached pips=15`) since the thesis is fast-binary, combined with `close_partial 50%` at the prior swing point as the first profit milestone. Peak-relative arming keeps the BE move out of the noise band so routine pullbacks don't scratch the trade. Trail_sl misaligns with the point-trade nature of candlestick reversals (they aren't trend-capture trades). If price extends past the swing point cleanly, the trade has overdelivered relative to the recipe's thesis — further extension is bonus rather than expected.
 
 
 ## RECIPE: Multi-Timeframe Trend Alignment Entry

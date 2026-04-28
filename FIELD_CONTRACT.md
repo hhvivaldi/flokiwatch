@@ -1255,3 +1255,62 @@ Emitted alongside `snow.trade.scratch_pattern` (same hook).
 | `mismatch` | bool | abs(planned-actual) > 0.001 | |
 | `account_balance_at_open` | float | plan_json.meta.account_balance_at_open | `null` in v1 (capture path not wired in FLO-382) |
 
+
+
+## FLO-383 — Management Threshold Floor (Phase 1a)
+
+Validator-level enforcement against BE-locked-at-noise patterns
+(empirical basis: PLAN-007 322 pip MFE → -0.4 outcome with
+lock_be_at_10).
+
+### Rejection rule
+
+`snow.validator.validate_plan` rejects a plan when ALL non-empty
+management contingencies trigger only on `profit_pips` conditions
+with `op ∈ {above, gte, gt}` and `threshold < 30`.
+
+A management contingency QUALIFIES (lifts a plan above the floor)
+when it contains at least one of:
+
+| Condition shape | Rationale |
+|---|---|
+| `profit_pips` with threshold ≥ 30 pips | meaningful absolute advance, above XAUUSD M5 noise floor |
+| `mfe_reached` (any pips) | peak-relative — only fires after MFE establishes a peak |
+| `profit_retraced_from_peak` (any pips) | give-back guard — fires on retracement from MFE |
+| `profit_pips` with `op ∈ {below, lte, lt}` | protective trigger semantic, not arming-trigger |
+| Any non-`profit_pips` condition (indicator, structural, time, stateful) | non-pip-profit-based — different shape |
+
+A multi-condition contingency that AND-gates a low `profit_pips`
+trigger with an indicator/structural condition qualifies — the
+non-pip gate prevents premature noise-fire.
+
+The 30-pip floor is the **Phase 1a sanity floor**. Phase 1b
+refinement after 24-72h FLO-382 D1/D2 data may adjust the
+specific number. Phase 2 (separate ticket) adds ATR-multiple
+threshold expressiveness for full volatility adaptation.
+
+### Error message contract
+
+The validator error names concrete alternatives so Floki can
+revise without guessing:
+
+> "management: every contingency (...) triggers only on
+> profit_pips below the 30-pip noise floor. ... Use at least
+> ONE of: (a) profit_pips with threshold >= 30 pips,
+> (b) mfe_reached (peak-relative), (c) profit_retraced_from_peak
+> (give-back guard), or (d) AND-gate the low profit_pips with
+> an indicator/structural/time condition."
+
+Rejection lands in the existing `validation_errors` list returned
+by `submit_plan_to_snow`. Floki's prompt-trained retry pattern
+(agent_prompts.py:195-197, max 3 attempts then WAIT) handles
+the resubmit cycle.
+
+### Coordinated prompt change
+
+`SYSTEM_PROMPT` MINIMAL PLAN EXAMPLE bumped from `lock_be_at_10`
+(profit_pips threshold=10 → would reject under the new rule) to
+`lock_be_after_meaningful_advance` (mfe_reached pips=30) to
+demonstrate the qualifying idiom Floki should mimic.
+Prompt version 3.11 → 3.12.
+
