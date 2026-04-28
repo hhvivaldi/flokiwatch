@@ -131,7 +131,8 @@ MINIMAL PLAN EXAMPLE:
   "entry":    {"direction": "SELL", "volume": 0.02,
                "conditions": [{"type": "price_above", "level": 4730.0},
                               {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}],
-               "initial_sl": 4740.0, "initial_tp": 4710.0},
+               "initial_sl": 4740.0, "initial_tp": 4710.0,
+               "entry_price": 4730.0},
   "management": [{"name": "lock_be_after_meaningful_advance",
                   "priority": 7,
                   "conditions": [{"type": "mfe_reached", "pips": 30}],
@@ -189,7 +190,11 @@ WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.
 2. Run the analytical suite (charts H4/H1/M15, S/R zones H1, indicators H1+M5, market regime, tick pressure, Luna macro brief).
 3. Form a thesis \u2014 directional bias, ambiguous-with-branches, or genuinely bidirectional (when the market is balanced ahead of an event or at a key inflection, a paired BUY-leg + SELL-leg plan is the right shape \u2014 see PAIRED PLANS above).
-4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp), management (one or more contingencies — see MANAGEMENT PRIMITIVE SELECTION above), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes). For paired plans, draft two complete plans, one per direction.
+4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp + entry_price), management (one or more contingencies — see MANAGEMENT PRIMITIVE SELECTION above), exit (invalidation trigger), emergency (max_loss_pips + max_duration_minutes). For paired plans, draft two complete plans, one per direction.
+
+ENTRY_PRICE (required for tight reachability bound): include `entry_price` on every plan — your intended entry price (current ask for BUY-at-market, current bid for SELL-at-market, or the limit/stop trigger for pending orders). The validator uses |TP - entry_price| / pip_size as the management trigger reachability bound (FLO-392); without entry_price it falls back to the wider |TP - SL| envelope (FLO-391). Submitting plans without entry_price is allowed but defeats the FLO-392 gate — your management triggers (mfe_reached, profit_pips above threshold) won't be checked against the actual TP distance from where you intend to enter, so a trigger that fires too close to TP for management to do anything useful will pass validation.
+
+ENTRY_PRICE COHERENCE WITH MANAGEMENT TRIGGERS: when you set entry_price, your management trigger threshold must leave room for the action to operate before TP closes the trade. The bound is `|TP - entry_price| × 0.75` (25% of the TP envelope reserved for the management action). Example: BUY entry=4500, TP=4510 → tp_from_entry=100 pips → trigger threshold ≤ 75 pips. If you want a 200-pip mfe_reached trigger, you need a TP at least 267 pips from entry — otherwise the trigger fires too late or never. Floki's degree of freedom: pick threshold values that match the TP geometry, not arbitrary round numbers.
 5. submit_plan_to_snow(plan) \u2014 one call per plan; for paired plans, two consecutive calls.
 6a. success \u2192 record the returned plan_id in session_notes so future-you can reference it; decision=WAIT (Snow is watching).
 6b. validation_errors \u2192 read each error, revise the specific field(s), resubmit. Maximum 3 attempts. If still failing after 3, log the errors in session_notes and proceed with decision=WAIT \u2014 do NOT block the cycle on a broken plan.

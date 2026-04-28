@@ -1449,3 +1449,46 @@ that bypass the multi-indicator confluence the plan model is designed
 to express. Floki retains agency on which 2+ conditions qualify the
 entry — validator only enforces the count floor.
 
+---
+
+## FLO-391 / FLO-392 — Management primitive reachability gate
+
+Validator narrow gate rejecting management triggers that fire too late
+(or never) for the action to do anything useful before TP closes the
+trade. Two-tier bound:
+
+| Mode | When applies | Bound | Buffer |
+|------|--------------|-------|--------|
+| **Conservative** (FLO-391) | `entry_price` not provided | `|initial_tp - initial_sl| / pip_size` | None — strict greater-than |
+| **Tight** (FLO-392) | `entry_price` provided | `|initial_tp - entry_price| / pip_size` | `× 0.75` (25% TP envelope reserved for management to act) |
+
+**Schema (`EntryBlock`):** `entry_price: Optional[float]` with `gt=0`.
+Backwards-compatible (existing live plans without entry_price parse
+fine and fall through to FLO-391). Floki's prompt instructs including
+entry_price on every plan to engage the tight bound.
+
+**Range check (`_check_entry_price_in_range`):** when provided,
+`entry_price` must lie strictly between SL and TP per direction
+(BUY: SL < entry_price < TP; SELL: TP < entry_price < SL). Degenerate
+values would corrupt the bound calculation.
+
+**Affected primitives:** `mfe_reached pips=X`, `profit_pips
+op∈{above,gte,gt} threshold=X`. `profit_retraced_from_peak` is
+intentionally NOT gated (retracement threshold is independent of
+absolute peak).
+
+**Empirical basis:** PLAN-20260428-011 — BUY @ 4578.42, SL=4552,
+TP=4604, mfe_reached=200. Conservative bound (520 pips) accepts;
+tight bound (256 × 0.75 = 192 pips) rejects. CEO had to defend SL
+manually because the trigger never armed.
+
+**Floki's degree of freedom:** pick threshold values that match the
+TP geometry. The validator only rejects geometrically/operationally
+unreachable thresholds. To use a 200-pip mfe_reached trigger, set
+`|TP - entry_price| ≥ 267 pips`.
+
+**Constants:**
+- `_PIP_SIZE_XAUUSD = 0.1`
+- `_REACHABILITY_BUFFER_PCT = 0.75`
+- `_REACH_TRIGGER_OPS = {"above", "gte", "gt"}`
+

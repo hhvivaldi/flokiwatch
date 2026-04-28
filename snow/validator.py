@@ -409,8 +409,24 @@ def _check_min_entry_conditions(plan: Plan) -> list[str]:
 
 
 # =============================================================================
-# FLO-391 — management primitive reachability (semantic coherence)
+# FLO-391 / FLO-392 — management primitive reachability (semantic coherence)
 # =============================================================================
+#
+# FLO-391 ships the geometric reachability gate using `|TP - SL|` as a
+# conservative upper bound (no false positives, but loose).
+#
+# FLO-392 tightens the bound to `|TP - entry_price|` when the plan
+# carries the optional `entry_price` hint. This catches the structural
+# pattern where the trigger fires too close to TP for management to do
+# anything useful — the live PLAN-20260428-011 case (entry=4578.42,
+# TP=4604, mfe_reached=200; conservative bound 520 pips passes, tight
+# bound 256 pips with 0.75 buffer = 192 → REJECT).
+#
+# Buffer: when the tight bound applies, the trigger must fire with at
+# least 25% of the TP envelope still ahead of it — gives the management
+# action (BE move, trail) meaningful room to act before TP closes the
+# trade. The conservative fallback uses no buffer (FLO-391 boundary
+# semantics preserved for plans that don't carry entry_price).
 
 # PIP_SIZE for XAUUSD. Mirrors `snow.evaluators.context.PIP_SIZE` (0.1)
 # but defined locally to avoid coupling the validator to the runtime
@@ -418,58 +434,121 @@ def _check_min_entry_conditions(plan: Plan) -> list[str]:
 # context exists.
 _PIP_SIZE_XAUUSD: float = 0.1
 
+# Fraction of TP-from-entry envelope the trigger threshold must NOT
+# exceed when the tight bound applies. 0.75 leaves 25% remaining for
+# the management action to operate before TP closes the trade.
+# PLAN-011 verification: tp_from_entry=256, threshold=200, bound=192 →
+# 200 > 192 → REJECT.
+_REACHABILITY_BUFFER_PCT: float = 0.75
+
 # Trigger ops that imply a "fire when X reaches/exceeds threshold"
 # semantic. The inverse semantic ("below/lte/lt X") describes a
 # protective drop-trigger and has no upper-bound reachability concern.
 _REACH_TRIGGER_OPS: frozenset[str] = frozenset({"above", "gte", "gt"})
 
 
-def _plan_max_profit_pips(plan: Plan) -> float:
-    """Conservative upper bound on profit-pip distance achievable by this
-    plan, computed as the full SL→TP range in pips.
+def _check_entry_price_in_range(plan: Plan) -> list[str]:
+    """FLO-392: when `entry_price` is provided, it must lie strictly
+    between `initial_sl` and `initial_tp` per direction. A degenerate
+    value (entry at SL, at TP, or outside the corridor) would corrupt
+    the TP-from-entry bound calculation and silently weaken the
+    reachability gate.
 
-    For BUY: SL < entry < TP. Max profit at TP = (TP-entry)/pip ≤ (TP-SL)/pip.
-    For SELL: TP < entry < SL. Max profit at TP = (entry-TP)/pip ≤ (SL-TP)/pip.
-    Either way `|TP - SL| / pip_size` is a hard upper bound on the
-    profit-pip distance any management trigger could observe before TP
-    closes the trade. Using this conservative bound guarantees zero
-    false positives: any threshold strictly greater than this value is
-    provably unreachable under ANY entry price.
+    `entry_price` is None → no check (fallback path applies).
     """
-    return abs(plan.entry.initial_tp - plan.entry.initial_sl) / _PIP_SIZE_XAUUSD
+    ep = plan.entry.entry_price
+    if ep is None:
+        return []
+    sl = plan.entry.initial_sl
+    tp = plan.entry.initial_tp
+    if plan.entry.direction == Direction.BUY:
+        if not (sl < ep < tp):
+            return [
+                f"entry.entry_price={ep} must lie strictly between "
+                f"initial_sl ({sl}) and initial_tp ({tp}) for BUY "
+                f"(SL < entry_price < TP)"
+            ]
+    else:
+        if not (tp < ep < sl):
+            return [
+                f"entry.entry_price={ep} must lie strictly between "
+                f"initial_tp ({tp}) and initial_sl ({sl}) for SELL "
+                f"(TP < entry_price < SL)"
+            ]
+    return []
+
+
+def _plan_max_profit_pips(plan: Plan) -> float:
+    """Upper bound on profit-pip distance achievable by this plan.
+
+    FLO-392 (tight): when `plan.entry.entry_price` is provided,
+    bound = |initial_tp - entry_price| / pip_size. Exact TP distance
+    from intended entry. The 0.75 buffer is applied at the gate
+    callsite (`_check_management_reachability`), not here.
+
+    FLO-391 (conservative fallback): when `entry_price` is None, fall
+    back to |initial_tp - initial_sl| / pip_size. Hard upper bound; no
+    buffer applied at the callsite (preserves FLO-391 boundary
+    semantics for plans not yet emitting entry_price).
+    """
+    ep = plan.entry.entry_price
+    tp = plan.entry.initial_tp
+    if ep is not None:
+        return abs(tp - ep) / _PIP_SIZE_XAUUSD
+    return abs(tp - plan.entry.initial_sl) / _PIP_SIZE_XAUUSD
+
+
+def _plan_bound_mode(plan: Plan) -> str:
+    """'tight' when entry_price is provided (FLO-392), else 'conservative'
+    (FLO-391). Used by the gate to decide whether the buffer applies."""
+    return "tight" if plan.entry.entry_price is not None else "conservative"
 
 
 def _check_management_reachability(plan: Plan) -> list[str]:
     """Reject management triggers whose threshold provably cannot fire
-    before TP closes the trade.
+    before TP closes the trade (FLO-391 conservative bound), or whose
+    threshold leaves no room for management to act before TP (FLO-392
+    tight bound + 0.75 buffer).
 
-    Empirical basis: PLAN-011 shipped with TP=26 pips and a `trail_sl`
-    contingency triggered by `mfe_reached pips=200`. Trigger unreachable
-    — trade exits at TP after at most ~26 pips of MFE. Effectively no
-    management. CEO had to defend SL manually.
+    Empirical basis: PLAN-20260428-011 shipped with `mfe_reached
+    pips=200` against entry=4578.42, TP=4604 (256 pips from entry).
+    Under the conservative |TP-SL| bound (520 pips) the trigger passes
+    but is structurally useless — fires only in the last 56 pips before
+    TP, leaving no room for the trail action to do anything. CEO had
+    to defend SL manually.
 
     Affected primitives:
-      * `mfe_reached pips=X`: peak-relative; X exceeding the SL→TP
-        range means the peak can never reach the threshold.
-      * `profit_pips op∈{above,gte,gt} threshold=X`: same logic; profit
-        cannot exceed the SL→TP range under any entry.
+      * `mfe_reached pips=X`: peak-relative; gated.
+      * `profit_pips op∈{above,gte,gt} threshold=X`: profit-direction
+        trigger; gated.
 
-    `profit_retraced_from_peak` is intentionally NOT gated — its
-    reachability depends on the achieved peak, which is bounded by the
-    SL→TP range but the *retracement* threshold is independent. A 50-pip
-    retracement on a plan with a 60-pip SL→TP range can fire if the
-    peak reaches 55 pips and price drops 50 pips back. Out of scope.
+    `profit_retraced_from_peak` is intentionally NOT gated — retracement
+    threshold is independent of absolute peak.
 
-    Floki retains agency on threshold values. Validator only enforces
-    that the threshold is not provably impossible. Fix: lower the
-    trigger threshold or widen the TP.
+    Floki retains agency on threshold values. Validator only rejects
+    geometrically/operationally unreachable thresholds.
     """
     if not plan.management:
         return []
     max_pips = _plan_max_profit_pips(plan)
+    mode = _plan_bound_mode(plan)
     if max_pips <= 0:
         # SL == TP (degenerate); _check_entry_sl_tp already rejects.
         return []
+    if mode == "tight":
+        # Buffer applies: trigger must leave 25% of envelope.
+        effective_bound = max_pips * _REACHABILITY_BUFFER_PCT
+        bound_label = (
+            f"{effective_bound:g} pips (= {max_pips:g} pips TP-from-entry "
+            f"× {_REACHABILITY_BUFFER_PCT} buffer)"
+        )
+    else:
+        # Conservative fallback: no buffer (FLO-391 semantics preserved).
+        effective_bound = max_pips
+        bound_label = (
+            f"{max_pips:g} pips (= |initial_tp - initial_sl| / pip_size; "
+            f"declare entry.entry_price for tighter FLO-392 bound)"
+        )
     errors: list[str] = []
     for mi, mgmt in enumerate(plan.management):
         for ci, c in enumerate(mgmt.conditions):
@@ -485,16 +564,14 @@ def _check_management_reachability(plan: Plan) -> list[str]:
                     )
             if threshold_pips is None or threshold_pips <= 0:
                 continue
-            if threshold_pips > max_pips:
+            if threshold_pips > effective_bound:
                 errors.append(
                     f"management[{mi}] ({mgmt.name!r}).conditions[{ci}] "
                     f"({ctype}): threshold {threshold_pips:g} pips exceeds "
-                    f"the plan's maximum profit-pip range "
-                    f"({max_pips:g} pips = |initial_tp - initial_sl| / "
-                    f"pip_size). Trigger is provably unreachable — trade "
-                    f"closes at TP before profit/MFE can reach the "
-                    f"threshold. Either lower the trigger threshold or "
-                    f"widen TP."
+                    f"the plan's reachability bound {bound_label}. Trigger "
+                    f"is unreachable / leaves no room for management to "
+                    f"act before TP closes the trade. Either lower the "
+                    f"trigger threshold or widen TP."
                 )
     return errors
 
@@ -566,6 +643,7 @@ def validate_plan(
     errors += _check_execute_market_placement(plan)
     errors += _check_cancel_plan_placement(plan)
     errors += _check_time_between_conditions(plan)
+    errors += _check_entry_price_in_range(plan)
     errors += _check_management_threshold_floor(plan)
     errors += _check_min_entry_conditions(plan)
     errors += _check_management_reachability(plan)

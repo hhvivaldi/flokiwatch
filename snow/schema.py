@@ -642,6 +642,19 @@ class EntryBlock(BaseModel):
     conditions: list[Condition] = Field(min_length=1, max_length=8)
     initial_sl: float = Field(gt=0)
     initial_tp: float = Field(gt=0)
+    entry_price: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description=(
+            "FLO-392: intended entry price hint. Used by validator to "
+            "compute TP-from-entry distance for management trigger "
+            "reachability bounds. Optional for backwards compatibility "
+            "with v1/v2 plans; when omitted, validator falls back to "
+            "the |TP - SL| envelope (FLO-391 conservative bound). "
+            "Must lie strictly between initial_sl and initial_tp per "
+            "direction (BUY: SL < entry_price < TP; SELL inverted)."
+        ),
+    )
     reason_for_direct_action: Optional[str] = Field(default=None, max_length=500)
 
 
