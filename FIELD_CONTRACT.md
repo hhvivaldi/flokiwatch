@@ -1314,3 +1314,52 @@ the resubmit cycle.
 demonstrate the qualifying idiom Floki should mimic.
 Prompt version 3.11 → 3.12.
 
+
+
+## FLO-385 — Tool-call Group-by-Dependency Clamp
+
+`ai_agent.py` `_call_openai_with_tools` dispatch loop applies a
+classification-based clamp to LLM-emitted parallel tool_call batches.
+Two module-level constants drive the behaviour:
+
+### Classification sets
+
+`_SINGLETON_TOOLS` — state-mutating or post-response-side-effect tools.
+A batch containing ANY of these is capped to the first call only;
+remaining calls are dropped from this turn and the LLM re-emits them
+in the next assistant turn after seeing the singleton's result.
+
+| Category | Tools |
+|---|---|
+| Snow plan-state writes | `submit_plan_to_snow`, `cancel_plan` |
+| Bot-state writes | `write_session_memory`, `set_next_check`, `set_wake_conditions`, `set_watch_conditions` |
+| Broker side effects | `execute_trade`, `close_trade`, `adjust_trade`, `cancel_pending_order` |
+| Post-response message-sequence side effects | `get_chart_screenshots` |
+| Expensive sub-agent invocation | `debate_with_rex` |
+
+`_PARALLEL_SAFE_TOOLS` — read-only state polling tools, idempotent and
+side-effect-free. Listed explicitly (no allowlist-by-default). Adding a
+new tool requires explicit classification in either set; uncategorised
+tools fall through to singleton dispatch with a `WARNING` log
+(`FLO-385 | tool {name!r} not in _SINGLETON_TOOLS or _PARALLEL_SAFE_TOOLS`)
+so the operator notices and adds the explicit classification.
+
+### Log signatures
+
+| Event | Trigger | Level |
+|---|---|---|
+| `FLO-385 \| singleton clamp fired: batch_size=N first=X(class) dropping=[...]` | Mixed batch with ≥1 singleton tool, after clamp | INFO |
+| `FLO-385 \| tool {name!r} not in _SINGLETON_TOOLS or _PARALLEL_SAFE_TOOLS — defaulting to singleton (fail-safe). Add explicit classification.` | Tool not in either set encountered | WARNING |
+| `FLOKI \| tool batch reduced: processing N/M calls` | Existing line — relabelled from "tool budget hit" since clamp is now a second source of reduction | WARNING |
+| `FLOKI \| chart images queued (deferred to end of batch): [...]` | Replaces previous "chart images injected" — now appended after the full tool-response sequence | INFO |
+
+### Chart-image injection deferral
+
+`get_chart_screenshots`'s post-response chart-image user-message is
+collected into `_deferred_user_msgs` during the dispatch for-loop and
+appended to `messages` only after the entire tool-response sequence
+completes. Defence-in-depth alongside the singleton classification of
+`get_chart_screenshots` itself: even if classification drifts, the
+deferral preserves the contiguous `assistant→tool[1..N]` message
+invariant that stricter OpenAI-compat providers may require.
+

@@ -497,6 +497,145 @@ SUBMIT_DECISION_TOOL = {
 }
 
 
+# =============================================================================
+# FLO-385 — Group-by-dependency tool-call classification
+# =============================================================================
+#
+# When Floki emits a parallel batch of tool_calls in one assistant turn,
+# the OpenAI tool-loop protocol requires each tool_call_id to be answered
+# by a `{"role": "tool", "tool_call_id": id}` message before the next
+# assistant turn. Two failure modes have been observed or theorised:
+#
+# 1. State-mutating tools racing against concurrent reads in the same
+#    batch. Even when the protocol allows it, the side-effect ordering
+#    between e.g. submit_plan_to_snow and read-only polls is non-obvious
+#    and shouldn't be exposed to LLM batching whim.
+#
+# 2. Post-response side-effects that append non-tool messages between
+#    tool responses. get_chart_screenshots is the canonical case: after
+#    its tool response, the loop appends a {"role": "user", ...} block
+#    with the chart images. If chart_screenshots is in a parallel batch
+#    with N other tools, the message sequence becomes
+#    [assistant tool_calls=[...]] → [tool a] → [user images] → [tool b]
+#    — interrupting the contiguous tool-response sequence stricter
+#    OpenAI-compat providers require.
+#
+# Policy: if Floki's emitted batch contains ANY singleton-class tool,
+# cap the dispatch to the first call only. Floki re-emits the dropped
+# calls in the next assistant turn after seeing the singleton's result.
+# Per-batch latency cost is one extra LLM round-trip when this fires.
+#
+# Default for tools NOT in either set: singleton (fail-safe). Adding a
+# new tool requires explicit classification here; uncategorized tools
+# fall through to singleton dispatch with a WARN log so the operator
+# notices and adds the explicit classification.
+
+# State-mutating or post-response-side-effect tools. Listed with inline
+# justification per Mitigation 1 of the FLO-385 acceptance gates.
+_SINGLETON_TOOLS: frozenset = frozenset({
+    # --- Snow plan-state writes ---
+    "submit_plan_to_snow",        # writes snow_plans row + plan_json
+    "cancel_plan",                # mutates snow_plans.status to cancelled
+    # --- Bot-state writes ---
+    "write_session_memory",       # writes data/agent_session_memory.json
+    "set_next_check",             # writes data/next_check.json
+    "set_wake_conditions",        # writes wake_conditions persistent state
+    "set_watch_conditions",       # writes per-ticket watch conditions
+    # --- Broker side effects (MT5 / executor) ---
+    "execute_trade",              # opens an MT5 position
+    "close_trade",                # closes an MT5 position
+    "adjust_trade",               # modifies MT5 SL/TP on an open position
+    "cancel_pending_order",       # cancels a pending broker order
+    # --- Post-response message-sequence side effects ---
+    "get_chart_screenshots",      # FLO-262: appends user-message with
+                                  # chart images AFTER the tool response.
+                                  # Singleton dispatch keeps the
+                                  # protocol invariant (assistant→tool→
+                                  # user_images) explicit even when
+                                  # chart-inject is deferred to end of
+                                  # batch loop (defence-in-depth).
+    # --- Expensive sub-agent invocation ---
+    "debate_with_rex",            # invokes Rex full debate loop
+                                  # (3 internal tools + LLM cycles);
+                                  # shouldn't race with Floki's other
+                                  # reads in the same turn.
+})
+
+# Read-only state-polling tools, idempotent and side-effect-free. Safe
+# to dispatch in a parallel batch.
+_PARALLEL_SAFE_TOOLS: frozenset = frozenset({
+    # --- Price + market state ---
+    "get_current_price", "get_candles", "get_market_regime",
+    "get_market_context", "get_volume_profile",
+    # --- Indicators + structural (point-in-time reads) ---
+    "get_indicators", "get_sr_zones", "get_fibonacci_levels",
+    "get_pivot_points", "get_chart_patterns", "get_tick_pressure",
+    # --- Position + plan reads ---
+    "get_open_positions", "get_pending_orders", "list_active_plans",
+    "get_plan_status", "get_position_history", "get_position_events",
+    "get_account_info",
+    # --- Session + calendar reads ---
+    "get_session_context", "get_calendar",
+    # --- Memory + learning reads ---
+    "read_session_memory", "get_trade_lessons", "get_trade_patterns",
+    "get_recent_reflexions",
+    # --- Rex monitor reads (deterministic classifier; no LLM) ---
+    "get_rex_monitor", "rex_divergence_scan", "rex_correlation_check",
+    "rex_regime_history", "rex_session_performance",
+    # --- Snow reference reads (cached markdown / static maps) ---
+    "get_snow_recipe_book", "get_snow_primitives_reference",
+    "get_snow_tags_reference",
+    # --- Luna / sentinel reads ---
+    "get_luna_brief",
+})
+
+
+def _classify_tool(name: str) -> str:
+    """FLO-385 — return 'singleton' | 'parallel' for a tool name.
+
+    Tools not in either set fall through to 'singleton' (fail-safe)
+    and emit a WARN log so the operator notices and adds explicit
+    classification.
+
+    `submit_decision` is the loop terminator handled separately
+    upstream and never reaches this classifier in normal flow.
+    """
+    if name in _SINGLETON_TOOLS:
+        return "singleton"
+    if name in _PARALLEL_SAFE_TOOLS:
+        return "parallel"
+    if name == "submit_decision":
+        return "parallel"  # not actually reached — terminator path
+    logger.warning(
+        f"FLO-385 | tool {name!r} not in _SINGLETON_TOOLS or "
+        f"_PARALLEL_SAFE_TOOLS — defaulting to singleton (fail-safe). "
+        f"Add explicit classification."
+    )
+    return "singleton"
+
+
+def _apply_singleton_clamp(calls_to_process):
+    """FLO-385 — split a tool_call batch into (kept, dropped).
+
+    If the batch contains any singleton-class tool AND has more than
+    one call, kept = first call only, dropped = the rest. Floki re-emits
+    the dropped calls in the next assistant turn.
+
+    Pure function — testable without LLM/MT5/DB. Operates on objects
+    with a `.function.name` attribute (matches OpenAI SDK ChatCompletion
+    tool_call shape).
+    """
+    if len(calls_to_process) <= 1:
+        return list(calls_to_process), []
+    has_singleton = any(
+        _classify_tool(tc.function.name) == "singleton"
+        for tc in calls_to_process
+    )
+    if has_singleton:
+        return list(calls_to_process[:1]), list(calls_to_process[1:])
+    return list(calls_to_process), []
+
+
 class AIAgent:
     """
     AI Agent that makes trading decisions using Claude.
@@ -1741,16 +1880,52 @@ class AIAgent:
                 remaining_budget = int(self.max_tool_calls) - tool_calls_count
                 calls_to_process = msg.tool_calls[:remaining_budget] if remaining_budget < len(msg.tool_calls) else msg.tool_calls
 
+                # FLO-385: group-by-dependency clamp.
+                # If the batch contains any singleton-class tool, cap
+                # to the first call only. Dropped calls are re-emitted
+                # by the LLM next turn after seeing the singleton's
+                # result. Pure-function clamp (see _apply_singleton_clamp
+                # above) is testable independently of the dispatch loop.
+                _clamp_kept, _clamp_dropped = _apply_singleton_clamp(calls_to_process)
+                if _clamp_dropped:
+                    _kept_name = _clamp_kept[0].function.name
+                    _kept_class = _classify_tool(_kept_name)
+                    _dropped_names = [tc.function.name for tc in _clamp_dropped]
+                    logger.info(
+                        f"FLO-385 | singleton clamp fired: "
+                        f"batch_size={len(calls_to_process)} "
+                        f"first={_kept_name}({_kept_class}) "
+                        f"dropping={_dropped_names}"
+                    )
+                    calls_to_process = _clamp_kept
+
                 # Build assistant message with ONLY the calls we'll process (avoids orphan tool_call_ids)
                 if len(calls_to_process) < len(msg.tool_calls):
-                    logger.warning(f"FLOKI | tool budget hit: processing {len(calls_to_process)}/{len(msg.tool_calls)} calls")
-                    # Create a modified message with only the calls we process
-                    messages.append({"role": "assistant", "tool_calls": [
+                    logger.warning(f"FLOKI | tool batch reduced: processing {len(calls_to_process)}/{len(msg.tool_calls)} calls")
+                    # Create a modified message with only the calls we process.
+                    # Preserve any narrative content the model emitted alongside
+                    # tool_calls — uncommon today (logs show has_content=False
+                    # whenever tool_calls is non-empty) but not guaranteed by
+                    # the API contract; losing it on rebuild would silently
+                    # drop reasoning prose if a provider ever emits both.
+                    _rebuilt_msg = {"role": "assistant", "tool_calls": [
                         {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
                         for tc in calls_to_process
-                    ]})
+                    ]}
+                    if msg.content:
+                        _rebuilt_msg["content"] = msg.content
+                    messages.append(_rebuilt_msg)
                 else:
                     messages.append(msg)
+
+                # FLO-385: collect chart-image user-messages and append
+                # them AFTER the entire tool-response sequence completes,
+                # so the assistant→tool[1..N] block is contiguous (no
+                # interrupting user-message between tool responses). This
+                # is defence-in-depth alongside the singleton classification
+                # of get_chart_screenshots — even if classification drifts,
+                # the deferral keeps the protocol invariant.
+                _deferred_user_msgs: list = []
 
                 for tc in calls_to_process:
                     tool_calls_count += 1
@@ -1765,7 +1940,9 @@ class AIAgent:
                     tool_trace.append({"name": fname, "input": fargs, "result": result, "latency_ms": dt_ms})
                     messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False, default=str)})
 
-                    # FLO-262: Inject chart images for requested timeframes
+                    # FLO-262 / FLO-385: build chart-image user message
+                    # and DEFER appending until the full tool-response
+                    # sequence is complete (see _deferred_user_msgs).
                     if fname == "get_chart_screenshots" and isinstance(result, dict) and result.get("success"):
                         _ci = getattr(tools, '_chart_images', {}) or {}
                         _requested_tfs = result.get("timeframes", [])
@@ -1777,8 +1954,14 @@ class AIAgent:
                                 _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci[_b64_key]}", "detail": "high"}})
                                 _img_blocks.append({"type": "text", "text": f"Above: XAUUSD {_tf} ({_tf_labels.get(_tf, _tf)}) chart."})
                         if len(_img_blocks) > 1:
-                            messages.append({"role": "user", "content": _img_blocks})
-                            logger.info(f"FLOKI | chart images injected: {_requested_tfs}")
+                            _deferred_user_msgs.append({"role": "user", "content": _img_blocks})
+                            logger.info(f"FLOKI | chart images queued (deferred to end of batch): {_requested_tfs}")
+
+                # FLO-385: append deferred chart-image user messages after
+                # the full tool-response sequence — preserves the
+                # contiguous assistant→tool[1..N] invariant.
+                if _deferred_user_msgs:
+                    messages.extend(_deferred_user_msgs)
 
                 continue
 
