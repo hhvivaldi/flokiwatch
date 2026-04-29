@@ -1791,8 +1791,8 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "above_ema200": ema.get("above_ema200", False),
         "primitive_shape": (
             '{"type": "ema_relation", "tf": "H1", '
-            '"fast": "ema9|ema21", "slow": "ema21|ema50|ema200", '
-            '"relation": "above|below"}'
+            '"period": <9|21|50|200>, '
+            '"relation": "price_above|price_below|aligned_bull|aligned_bear"}'
         ),
     }
 
@@ -1806,7 +1806,7 @@ def _format_indicators(tech_data: Dict, momentum_data: Dict) -> Dict:
         "squeeze": bb.get("squeeze", False),
         "primitive_shape": (
             '{"type": "bollinger_position", "tf": "H1", '
-            '"position": "above_upper|below_lower|above_middle|below_middle"}'
+            '"relation": "above_upper|below_lower|above_middle|below_middle|in_squeeze"}'
         ),
     }
 

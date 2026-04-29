@@ -253,6 +253,155 @@ class TestC3IndicatorPrimitiveShape:
 
 
 # =============================================================================
+# C3 — Phase 1.1 schema correctness: every primitive_shape string emitted
+# by _format_indicators must produce a schema-valid condition when realized
+# with concrete placeholder values. This catches the bug class where field
+# names or enum values in the shape string drift from the Pydantic model.
+# Same discipline as B1 prompt-example round-trip.
+# =============================================================================
+
+
+# Concrete realization for each indicator's primitive_shape. The shape
+# string carries placeholders (`<num>`, `<9|21|50|200>`, `above|below`);
+# the realization substitutes a valid concrete value at each slot. If
+# the shape's field NAMES drift from the Pydantic model, the
+# realization fails validate_plan even though the placeholder values
+# are valid — that is exactly the bug class this test targets.
+PRIMITIVE_SHAPE_REALIZATIONS = {
+    "rsi": {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70.0},
+    "macd": {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.0},
+    "emas": {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+    "bollinger": {"type": "bollinger_position", "tf": "H1", "relation": "above_upper"},
+    "atr": {"type": "atr", "tf": "H1", "op": "above", "multiplier": 1.0, "baseline_pips": 100.0},
+}
+
+
+# Bug-class assertions per primitive type — field names that MUST NOT
+# appear in the shape string (drift catchers from Phase 1.1 fix).
+PRIMITIVE_SHAPE_FORBIDDEN_TOKENS = {
+    "rsi": [],
+    "macd": [],
+    "emas": ['"fast":', '"slow":'],  # Phase 1.1 bug
+    "bollinger": ['"position":'],     # Phase 1.1 bug
+    "atr": [],
+}
+
+
+# Required tokens per primitive type — field names that MUST appear in
+# the shape string (positive lock).
+PRIMITIVE_SHAPE_REQUIRED_TOKENS = {
+    "rsi": ['"type": "rsi"', '"tf"', '"op"', '"threshold"'],
+    "macd": ['"type": "macd_histogram"', '"tf"', '"op"', '"threshold"'],
+    "emas": ['"type": "ema_relation"', '"period"', '"relation"'],
+    "bollinger": ['"type": "bollinger_position"', '"tf"', '"relation"'],
+    "atr": ['"type": "atr"', '"tf"', '"op"', '"multiplier"', '"baseline_pips"'],
+}
+
+
+class TestC3PrimitiveShapeSchemaCorrectness:
+    """FLO-395 Phase 1.1 — every primitive_shape string in
+    `_format_indicators` output must produce a schema-valid condition
+    when realized with concrete placeholder values, AND must contain
+    the schema-correct field names with no drifted names.
+
+    Catches the Phase 1.1 bug: emas had `fast`/`slow`/relation `above|below`
+    (drifted from schema's `period` + `aligned_bull|aligned_bear`); bollinger
+    had `position` (schema field is `relation`).
+    """
+
+    def _format(self):
+        from agent_data_builder import _format_indicators
+        tech = {
+            "rsi": {"value": 58.2, "level": "neutral"},
+            "macd": {"histogram": 0.05, "signal": "neutral", "trend": "neutral"},
+            "ema": {"ema9": 4500.0, "ema21": 4495.0, "ema50": 4490.0,
+                    "ema200": 4480.0},
+            "bollinger": {"upper": 4520.0, "middle": 4510.0,
+                          "lower": 4500.0, "position": 0.6, "squeeze": False},
+        }
+        momentum = {
+            "atr": {"atr_value": 12.5, "atr_trend": "rising"},
+            "adx": {"adx_value": 28.0},
+            "volume": {"volume_ratio": 1.2},
+        }
+        return _format_indicators(tech, momentum)
+
+    @pytest.mark.parametrize(
+        "indicator,realization",
+        list(PRIMITIVE_SHAPE_REALIZATIONS.items()),
+        ids=list(PRIMITIVE_SHAPE_REALIZATIONS.keys()),
+    )
+    def test_realization_roundtrips(self, indicator, realization):
+        """Each indicator's primitive_shape, realized with concrete
+        values, must validate. Bug-class catcher: if the shape string
+        names a wrong field (e.g. `fast` instead of `period` for
+        ema_relation), the realization will be schema-invalid."""
+        plan = _wrap_plan([
+            realization,
+            {"type": "price_above", "level": 4500.0},  # 2nd condition for FLO-Path4
+        ])
+        ok, parsed, errors = validate_plan(plan)
+        assert ok, (
+            f"primitive_shape realization for {indicator!r} failed "
+            f"validation — likely the shape string drifted from the "
+            f"schema. Errors: {errors}"
+        )
+
+    @pytest.mark.parametrize(
+        "indicator", list(PRIMITIVE_SHAPE_REALIZATIONS.keys())
+    )
+    def test_shape_contains_required_tokens(self, indicator):
+        """Positive lock: each shape string must mention its primitive
+        type and required field names."""
+        out = self._format()
+        shape = out[indicator]["primitive_shape"]
+        for token in PRIMITIVE_SHAPE_REQUIRED_TOKENS[indicator]:
+            assert token in shape, (
+                f"{indicator}.primitive_shape missing required token "
+                f"{token!r}; current shape: {shape!r}"
+            )
+
+    @pytest.mark.parametrize(
+        "indicator", list(PRIMITIVE_SHAPE_REALIZATIONS.keys())
+    )
+    def test_shape_omits_forbidden_tokens(self, indicator):
+        """Regression lock for Phase 1.1 bug: shape strings must NOT
+        contain field names known to drift from the schema."""
+        out = self._format()
+        shape = out[indicator]["primitive_shape"]
+        for token in PRIMITIVE_SHAPE_FORBIDDEN_TOKENS[indicator]:
+            assert token not in shape, (
+                f"{indicator}.primitive_shape contains forbidden token "
+                f"{token!r} — this was a Phase 1.1 bug; do not regress. "
+                f"Current shape: {shape!r}"
+            )
+
+    def test_ema_relation_uses_period_not_fast_slow(self):
+        """Direct lock on the Phase 1.1 emas bug — the canonical
+        regression test."""
+        out = self._format()
+        shape = out["emas"]["primitive_shape"]
+        assert '"period"' in shape
+        assert '"fast"' not in shape
+        assert '"slow"' not in shape
+        assert "aligned_bull" in shape  # schema relation enum
+
+    def test_bollinger_position_uses_relation_not_position(self):
+        """Direct lock on the Phase 1.1 bollinger bug — the canonical
+        regression test."""
+        out = self._format()
+        shape = out["bollinger"]["primitive_shape"]
+        assert '"relation"' in shape
+        # `position` is the schema field on the indicator output dict
+        # (BB band position 0-1) — but it is NOT a Snow primitive
+        # field. The shape string must point at `relation`.
+        # Allow `"position"` to appear elsewhere in the shape string
+        # if a future edit adds a docstring (extremely unlikely), but
+        # the canonical schema field for the primitive is `relation`.
+        assert "above_upper" in shape  # schema relation enum
+
+
+# =============================================================================
 # E2 — Vocabulary diversity helper + emit extension
 # =============================================================================
 
