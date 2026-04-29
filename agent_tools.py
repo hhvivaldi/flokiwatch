@@ -5060,9 +5060,13 @@ class AgentTools:
     def list_active_plans(self, ticket: Optional[int] = None) -> Dict[str, Any]:
         """List all Snow plans in non-terminal states.
 
-        Returns summaries (id, status, trade_ticket, created_at,
-        last_evaluated_at), NOT full plans. Optional `ticket` filter
-        narrows to plans attached to a specific broker ticket.
+        Returns summaries — id, status, trade_ticket, created_at,
+        last_evaluated_at, plus the four FLO-404 duplicate-avoidance
+        fields (direction, entry_price, thesis, expires_at) Floki
+        asked for in his data_needs feedback. Full plan_json stays
+        out of the summary (callers that need it can use
+        get_plan_status). Optional `ticket` filter narrows to plans
+        attached to a specific broker ticket.
         """
         start = time.time()
         try:
@@ -5081,16 +5085,40 @@ class AgentTools:
                         "success": False,
                         "reason": f"ticket must be an int, got {type(ticket).__name__}",
                     }
-            plans = [
-                {
+            plans = []
+            for r in rows:
+                # Parse plan_json defensively — direction/entry_price/
+                # thesis live inside the JSON blob, not as columns.
+                # Any parse failure falls through to None per field
+                # so a corrupted row still surfaces id/status without
+                # crashing the whole list.
+                _direction: Optional[str] = None
+                _entry_price = None
+                _thesis: Optional[str] = None
+                _raw = r.get("plan_json")
+                if _raw:
+                    try:
+                        _pj = json.loads(_raw) if isinstance(_raw, str) else _raw
+                        _entry = (_pj or {}).get("entry") or {}
+                        _analysis = (_pj or {}).get("analysis") or {}
+                        _direction = _entry.get("direction")
+                        _entry_price = _entry.get("entry_price")
+                        _thesis = _analysis.get("thesis")
+                    except Exception:
+                        pass
+                plans.append({
                     "plan_id": r.get("id"),
                     "status": r.get("status"),
                     "trade_ticket": r.get("trade_ticket"),
                     "created_at": r.get("created_at"),
                     "last_evaluated_at": r.get("last_evaluated_at"),
-                }
-                for r in rows
-            ]
+                    # FLO-404 duplicate-avoidance fields (CEO directive
+                    # 2026-04-29 — Floki self-requested in data_needs).
+                    "direction": _direction,
+                    "entry_price": _entry_price,
+                    "thesis": _thesis,
+                    "expires_at": r.get("expires_at"),
+                })
             self._log_tool(
                 "list_active_plans", start,
                 f"ok count={len(plans)}" + (f" ticket={ticket}" if ticket else ""),

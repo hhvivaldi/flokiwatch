@@ -468,14 +468,73 @@ class TestListActivePlans:
         assert "int" in r["reason"].lower()
 
     def test_summary_shape_is_limited(self, snow_conn, tools):
-        """Listed plans return summaries only (no plan_json leakage)."""
+        """Listed plans return summaries only (no plan_json leakage).
+
+        FLO-404 follow-up (CEO directive 2026-04-29): summary now
+        includes direction, entry_price, thesis, expires_at to support
+        Floki's duplicate-avoidance reasoning. plan_json itself stays
+        out — callers that need it use get_plan_status."""
         tools.submit_plan_to_snow(_plan_dict())
         r = tools.list_active_plans()
         p = r["plans"][0]
         assert "plan_json" not in p
         assert set(p.keys()) == {
             "plan_id", "status", "trade_ticket", "created_at", "last_evaluated_at",
+            "direction", "entry_price", "thesis", "expires_at",
         }
+
+    def test_summary_carries_flo404_duplicate_avoidance_fields(
+        self, snow_conn, tools,
+    ):
+        """FLO-404 follow-up — direction, entry_price, thesis,
+        expires_at must populate from plan_json so Floki can compare
+        existing plans against potential new ones without calling
+        get_plan_status per id."""
+        plan = _plan_dict(
+            entry={
+                "direction": "SELL",
+                "volume": 0.02,
+                "conditions": [
+                    {"type": "price_above", "level": 4730.0},
+                    {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
+                ],
+                "initial_sl": 4740.0,
+                "initial_tp": 4710.0,
+                "entry_price": 4730.0,
+            },
+            analysis={
+                "thesis": "H1 pullback to 4730 resistance with bearish trend intact",
+                "key_levels": [4735.0, 4720.0, 4707.0],
+                "confidence": 72,
+                "regime_assumed": "TRENDING_BEARISH",
+            },
+        )
+        tools.submit_plan_to_snow(plan)
+        r = tools.list_active_plans()
+        p = r["plans"][0]
+        assert p["direction"] == "SELL"
+        assert p["entry_price"] == 4730.0
+        assert p["thesis"] == "H1 pullback to 4730 resistance with bearish trend intact"
+        assert p["expires_at"] is not None
+        assert p["expires_at"].endswith("Z")
+
+    def test_summary_handles_missing_optional_fields(
+        self, snow_conn, tools,
+    ):
+        """Older plans (no entry_price field) must still list cleanly
+        with None rather than crashing the whole call. The fixture's
+        _BASE_PLAN intentionally omits entry_price."""
+        tools.submit_plan_to_snow(_plan_dict())  # no entry_price in BASE
+        r = tools.list_active_plans()
+        assert r["success"] is True
+        p = r["plans"][0]
+        # direction + thesis populate from _BASE_PLAN
+        assert p["direction"] == "SELL"
+        assert p["thesis"] == "integration test"
+        # entry_price absent from fixture → None, not a crash
+        assert p["entry_price"] is None
+        # expires_at always set (column on row)
+        assert p["expires_at"] is not None
 
 
 # ===========================================================================
