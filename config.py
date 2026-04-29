@@ -543,11 +543,27 @@ elif LLM_PROVIDER == "qwen":
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
     FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
+elif LLM_PROVIDER == "openai":
+    # FLO-404 follow-up: temporary fallback to OpenAI/GPT-5.4 after
+    # Gemini hit the 250 req/day quota wall on 2026-04-29 (post mandatory-
+    # suite ship). The system was originally built for GPT — this is the
+    # original provider, not a new one. Reuses the OPENAI_API_KEY that
+    # Rex already consumes; no new key in .env required. Switch back to
+    # gemini once the FLO-385 parallel-batch fix lands and Gemini's
+    # per-cycle API call cost drops from ~10 to ~2-3.
+    FLOKI_MODEL = os.environ.get(
+        "OPENAI_MODEL", os.environ.get("FLOKI_MODEL", "gpt-5.4"),
+    )
+    FLOKI_API_BASE = os.environ.get(
+        "OPENAI_BASE_URL",
+        os.environ.get("FLOKI_API_BASE", "https://api.openai.com/v1"),
+    )
+    FLOKI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 else:
     raise ValueError(
         f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen', "
-        f"'kimi', or 'gemini'). FLO-384/389 fails loudly to avoid "
-        f"silently routing Floki to an unintended provider."
+        f"'kimi', 'gemini', or 'openai'). FLO-384/389 fails loudly to "
+        f"avoid silently routing Floki to an unintended provider."
     )
 
 FLOKI_FALLBACK_API_BASE = os.environ.get("FLOKI_FALLBACK_API_BASE", "")
