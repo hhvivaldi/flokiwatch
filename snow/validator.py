@@ -50,6 +50,7 @@ Usage:
 from __future__ import annotations
 
 import datetime as _dt
+import json
 from typing import Any, Optional
 
 from pydantic import ValidationError
@@ -600,6 +601,92 @@ def _check_stateful_in_v1(plan: Plan) -> list[str]:
 
 
 # =============================================================================
+# FLO-400 — pre-validation JSON-string decoder
+# =============================================================================
+
+# The four nested-object paths Gemini stringified on its first FLO-389
+# brain-comparison cycle (PLAN-005 retry, observed 2026-04-29). Pydantic
+# rejects the JSON-encoded strings with four "should be a valid dictionary"
+# errors at exactly these paths. Gemini self-corrects on the next attempt
+# from the validator's error text — but at the cost of one wasted cycle
+# (~95s, 264k input tokens) per occurrence.
+#
+# This pre-decoder handles the common-case correction in-process so the
+# first attempt validates. Targeted, NOT recursive: we touch only the four
+# known paths so a legitimate string field elsewhere (e.g. `analysis.thesis`)
+# can never be silently parsed as JSON.
+#
+# Provider-agnostic: Qwen and Kimi don't emit JSON-strings at these paths,
+# so this is a no-op for non-Gemini cycles. If Gemini ever stops emitting
+# strings (model improvement / Pydantic-aware fine-tune), this is also
+# a no-op — graceful obsolescence.
+
+# Paths we attempt to decode. Order doesn't matter; each is independent.
+_GEMINI_STRING_LEAK_PATHS: tuple[tuple[str, ...], ...] = (
+    ("analysis", "context_tags"),  # → dict
+    ("entry", "conditions", "*"),  # list-item → dict
+    ("management", "*"),           # list-item → dict
+    ("exit", "*"),                 # list-item → dict
+)
+
+
+def _try_decode_to_dict(v: Any) -> Any:
+    """Return parsed JSON dict if `v` is a string that decodes to dict;
+    otherwise return `v` unchanged. JSON parse errors are swallowed —
+    Pydantic will surface its own native error on the original value."""
+    if not isinstance(v, str):
+        return v
+    try:
+        parsed = json.loads(v)
+    except (json.JSONDecodeError, ValueError):
+        return v
+    if isinstance(parsed, dict):
+        return parsed
+    return v
+
+
+def _decode_known_string_paths(plan_dict: dict[str, Any]) -> dict[str, Any]:
+    """FLO-400: pre-validation JSON-string decoder for the four paths
+    Gemini stringifies on first attempt (analysis.context_tags,
+    entry.conditions[*], management[*], exit[*]).
+
+    Returns a NEW dict; original is untouched (only nested containers
+    along the four touched paths are shallow-copied to avoid mutating
+    caller state). Anything else passes through by reference.
+
+    Targeted by design — see _GEMINI_STRING_LEAK_PATHS comment above for
+    why we don't recursively walk.
+    """
+    if not isinstance(plan_dict, dict):
+        return plan_dict
+    out: dict[str, Any] = dict(plan_dict)
+
+    # analysis.context_tags
+    analysis = out.get("analysis")
+    if isinstance(analysis, dict):
+        analysis = dict(analysis)
+        analysis["context_tags"] = _try_decode_to_dict(analysis.get("context_tags"))
+        out["analysis"] = analysis
+
+    # entry.conditions[*]
+    entry = out.get("entry")
+    if isinstance(entry, dict):
+        entry = dict(entry)
+        conds = entry.get("conditions")
+        if isinstance(conds, list):
+            entry["conditions"] = [_try_decode_to_dict(c) for c in conds]
+        out["entry"] = entry
+
+    # management[*] and exit[*]
+    for key in ("management", "exit"):
+        items = out.get(key)
+        if isinstance(items, list):
+            out[key] = [_try_decode_to_dict(item) for item in items]
+
+    return out
+
+
+# =============================================================================
 # Public entry point
 # =============================================================================
 
@@ -622,6 +709,13 @@ def validate_plan(
     A truly malformed input (non-dict, non-utf8, etc.) will surface as a
     Pydantic ValidationError captured here.
     """
+    # --- 0. FLO-400 pre-decoder ---
+    # Gemini's first-attempt failure mode is JSON-stringifying nested
+    # objects at four known paths. Decode them here so the first call
+    # validates instead of burning a cycle on the retry. Targeted, not
+    # recursive — see _decode_known_string_paths.
+    plan_dict = _decode_known_string_paths(plan_dict)
+
     # --- 1. Pydantic parse ---
     try:
         plan = Plan(**plan_dict)
