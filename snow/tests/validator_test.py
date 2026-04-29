@@ -688,26 +688,61 @@ class TestPromptV3_3ChartSuite:
             "v3.3: Luna's distinctive content (pattern analysis) not named"
         )
 
-    def test_scope_limiter_preserves_agent_autonomy(self):
-        """The mandatory-suite rule applies ONLY when the mandatory
-        workflow is active (no position + no active plan). Outside that
-        state, Floki retains normal agent-first autonomy. This scope
-        limiter MUST be explicit — without it, the suite enumeration
-        becomes a prescriptive always-rule that contradicts the agent-
-        first principles captured in the owner's memories."""
+    def test_suite_mandatory_every_cycle(self):
+        """FLO-404 follow-up (CEO directive 2026-04-29) — INVERTED from
+        the v3.3 scope-limiter contract. Prior rule scoped the FULL
+        ANALYTICAL SUITE to the no-position + no-active-plan state only,
+        preserving agent-first autonomy outside that window. Field
+        evidence under the 30-min cadence (FLO-403 Phase 1) showed Floki
+        skipping data pulls when an active plan existed and deciding
+        WAIT on partial data ("I have the plan status and chart context
+        to confidently wait"). The CEO inverted the rule: at 30-min
+        cadence each cycle is the only window into the market until the
+        next, so the full surface must be pulled every cycle. Agent-
+        first framing is preserved on what to DO with the data — Floki
+        still decides plan/refine/hold/wait/override — but he must SEE
+        all of it before deciding.
+
+        This test pins the NEW contract. The prior "autonomy returns" /
+        "suite is not mandatory" escape hatch must NOT reappear in a
+        future edit; if it does, that edit is reverting CEO directive
+        2026-04-29 and should be surfaced explicitly."""
         from agent_prompts import SYSTEM_PROMPT
-        # Look for the "autonomy returns" / "suite is not mandatory"
-        # escape-hatch phrasing.
-        assert ("not mandatory" in SYSTEM_PROMPT
-                or "autonomy returns" in SYSTEM_PROMPT
-                or "your normal autonomy" in SYSTEM_PROMPT), (
-            "v3.3: scope-limiter missing — suite tightening must be scoped "
-            "to the mandatory-workflow state only"
+
+        # 1. Mandate present: "every cycle" applies.
+        assert "every cycle" in SYSTEM_PROMPT.lower(), (
+            "FLO-404: 'every cycle' mandate missing"
         )
-        # And the triggering condition for the scope — open position
-        # OR active plan
-        assert "open position" in SYSTEM_PROMPT
-        assert "active plan" in SYSTEM_PROMPT
+
+        # 2. Prior escape hatch must be DISAVOWED, not silently dropped.
+        # The prompt explicitly notes the old exception was removed —
+        # this catches a future edit that re-softens by simply omitting.
+        assert ("exception" in SYSTEM_PROMPT.lower()
+                and ("removed" in SYSTEM_PROMPT.lower()
+                     or "deprecated" in SYSTEM_PROMPT.lower())), (
+            "FLO-404: prior 'suite-optional-with-active-plan' exception "
+            "must be explicitly disavowed, not silently dropped"
+        )
+
+        # 3. Agent-first framing preserved: Floki retains autonomy on
+        # what to DO with the data. Catches the regression where the
+        # mandate sounds like a prescriptive workflow rather than a data
+        # surface guarantee.
+        assert ("DO with the data" in SYSTEM_PROMPT
+                or "do with the data" in SYSTEM_PROMPT), (
+            "FLO-404: agent-first framing missing — Floki must still "
+            "decide what to DO with the data; the mandate is on SEEING it"
+        )
+
+        # 4. The 30-min cadence rationale must be present — without it,
+        # the mandate reads as arbitrary procedure rather than a
+        # response to the cadence shift that motivated the change.
+        assert ("30-min" in SYSTEM_PROMPT
+                or "30 min" in SYSTEM_PROMPT
+                or "30-minute" in SYSTEM_PROMPT), (
+            "FLO-404: 30-min cadence rationale missing — mandate must "
+            "name WHY the suite is now non-negotiable"
+        )
 
 
 # =============================================================================
