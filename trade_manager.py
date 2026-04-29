@@ -292,17 +292,30 @@ class TradeManager:
             log.debug(f"TM_GATHER | get_echo_critical failed: {e}")
             ctx["market"]["echo_critical_since_open"] = []
 
-        # current_price from position (already resident; cheap)
+        # current_price — real MT5 tick. Critical for ADJUST/CLOSE
+        # decisions: TM must know where price is relative to entry/SL/TP.
+        # Use the close-side price (bid for BUY, ask for SELL) — that's
+        # the price the position would actually close at, and what
+        # MFE/MAE/PnL are computed against. Fallback to entry on tick
+        # failure (broker disconnect, weekend) — keeps prompt parseable;
+        # downstream prompt notes "approx" when fallback fires.
         try:
-            entry = float(chosen.get("entry") or 0)
-            pnl = float(chosen.get("current_pnl") or 0)
-            # Approximate; the prompt doesn't need broker-perfect price.
-            # Real current_price would require an MT5 tick fetch; the
-            # TM can ask for one via tools later if it matters for
-            # the decision. Phase 2 v1 keeps the prompt prefab simple.
-            ctx["market"]["current_price"] = entry  # placeholder — see TODO
-        except Exception:
-            pass
+            _prices = self._executor.get_current_price()  # (bid, ask) or None
+            if _prices is not None:
+                bid, ask = _prices
+                _dir = str(chosen.get("direction") or "").upper().strip()
+                ctx["market"]["current_price"] = bid if _dir == "BUY" else ask
+                ctx["market"]["current_price_source"] = "mt5_tick"
+            else:
+                ctx["market"]["current_price"] = float(chosen.get("entry") or 0)
+                ctx["market"]["current_price_source"] = "entry_fallback"
+        except Exception as e:
+            log.debug(f"TM_GATHER | current_price fetch failed: {e}")
+            try:
+                ctx["market"]["current_price"] = float(chosen.get("entry") or 0)
+            except Exception:
+                ctx["market"]["current_price"] = 0.0
+            ctx["market"]["current_price_source"] = "entry_fallback"
         # unrealised_pips — derive from current_pnl + volume if useful.
         # v1 leaves it None and the LLM works with current_pnl USD.
         ctx["position"]["unrealised_pips"] = None

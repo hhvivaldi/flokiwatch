@@ -796,16 +796,26 @@ class TestProductionMode:
 
 
 class TestConfigDefaults:
-    def test_trade_manager_enabled_default_false(self, monkeypatch):
-        """Steps 1+2 must NOT default TRADE_MANAGER_ENABLED to True —
-        bot restart picks up Phase 2 in shadow mode by default."""
-        # Re-load config with TRADE_MANAGER_ENABLED unset.
-        for k in ("TRADE_MANAGER_ENABLED",):
-            monkeypatch.delenv(k, raising=False)
-        import importlib
+    def test_trade_manager_enabled_default_false(self):
+        """Code-level default for TRADE_MANAGER_ENABLED must be False.
+
+        Source-inspection contract: config.py uses load_dotenv(override=True),
+        so env-isolation via monkeypatch.delenv is not reliable (dotenv
+        re-reads .env on import-reload). We instead pin the literal
+        default in the os.environ.get call. Operator can flip via .env
+        without changing the code default."""
+        import inspect, re
         import config as _cfg
-        _cfg = importlib.reload(_cfg)
-        assert _cfg.TRADE_MANAGER_ENABLED is False
+        src = inspect.getsource(_cfg)
+        m = re.search(
+            r'TRADE_MANAGER_ENABLED\s*=\s*os\.environ\.get\(\s*'
+            r'"TRADE_MANAGER_ENABLED"\s*,\s*"(\w+)"',
+            src,
+        )
+        assert m is not None, "TRADE_MANAGER_ENABLED os.environ.get not found"
+        assert m.group(1).lower() == "false", (
+            f"code default must be 'false', got '{m.group(1)}'"
+        )
 
     def test_trade_manager_model_default_qwen(self, monkeypatch):
         for k in ("TRADE_MANAGER_MODEL",):
