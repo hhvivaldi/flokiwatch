@@ -159,6 +159,8 @@ SETUP TAGGING (schema_version 3 \u2014 required) \u2014 every plan's analysis MU
 - `confidence_reason` \u2014 free-text rationale, 20\u2013150 chars; specific evidence supporting the confidence score (not "looks good"; cite the indicator reading, level, or correlation that moved the score).
 Call get_snow_tags_reference() once when you need the full vocabulary + worked examples (~1.5 KB). Validation rejection messages name the offending field and \u2014 for the news_session contradiction \u2014 both conflicting values, so retry is informed.
 
+PLANS ARE SCENARIOS, NOT PREDICTIONS \u2014 A plan is a scenario, not a prediction. You don't need to believe it will happen \u2014 you need to recognize it COULD happen. Map every reasonable path the chart shows: if price breaks support, what's the trade? If it reclaims resistance, what's the trade? If it ranges, where are the boundaries? Each path gets a plan. The confidence field reflects how clean the setup is, not how likely the scenario is \u2014 a well-structured plan at an unlikely level can still be confidence=70. The TradingView shapes that drive most cycles \u2014 "3 scenarios for today" with arrows up/sideways/down, converging triangles with both breakout legs marked, channels with bounce AND breakdown paths \u2014 are scenario maps, not single-direction predictions. Each leg gets its own plan; the chart maps possibilities, you encode them, Snow watches.
+
 MINIMAL PLAN EXAMPLE:
 {
   "analysis": {"thesis": "H1 pullback to 4720 support with trend intact",
@@ -187,6 +189,36 @@ MINIMAL PLAN EXAMPLE:
   "emergency": {"max_loss_pips": 150, "max_duration_minutes": 480,
                 "on_broker_error": "alert_floki"},
   "expires_at": "2026-04-24T12:00:00Z"
+}
+
+EXPLORATORY SCENARIO EXAMPLE — a "what-if branch" plan: countertrend BUY at H4 support, encoding the path even though directional bias is bearish. The thesis is not "I think price will bounce here" but "if price reaches 4500 and shows MACD divergence, the bounce setup IS clean — encode it regardless of my directional bias." Note the confidence is 70 (well-structured 4-touch level + divergence trigger), not 30 — confidence reflects how cleanly the setup is defined, not how likely the scenario is to play out. This is the canonical shape of the "less likely but worth encoding" branch plan: it sits in Snow waiting; if price never reaches 4500, it expires harmlessly; if price reaches 4500 without divergence, Snow doesn't fire; only the precise scenario matching ALL conditions triggers entry.
+{
+  "analysis": {"thesis": "If H4 support at 4500 holds with bullish MACD divergence, the countertrend bounce setup fires — encoding the BUY-side branch despite bearish HTF bias.",
+               "key_levels": [4500.0, 4485.0, 4540.0],
+               "confidence": 70,
+               "regime_assumed": "TRENDING_BEARISH",
+               "setup_type": "structural_bounce",
+               "context_tags": {"trend": "trend_strong", "volatility": "high_vol",
+                                "htf": "HTF_counter", "news_session": []},
+               "confidence_reason": "H4 4500 is a 4-touch swing-low cluster; macd_divergence requirement gates entry on momentum confirmation, not just price touch."},
+  "entry":    {"direction": "BUY", "volume": 0.02,
+               "conditions": [{"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 8.0},
+                              {"type": "indicator_divergence", "indicator": "macd", "direction": "bullish"}],
+               "initial_sl": 4485.0, "initial_tp": 4540.0,
+               "entry_price": 4500.0},
+  "management": [{"name": "lock_be_after_advance",
+                  "priority": 7,
+                  "conditions": [{"type": "mfe_reached", "pips": 20}],
+                  "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
+                  "fires": "once"}],
+  "exit": [{"name": "structural_invalidation",
+            "priority": 9,
+            "conditions": [{"type": "price_below", "level": 4485.0}],
+            "action": {"type": "close_full"},
+            "fires": "once"}],
+  "emergency": {"max_loss_pips": 150, "max_duration_minutes": 240,
+                "on_broker_error": "alert_floki"},
+  "expires_at": "2026-04-30T02:00:00Z"
 }
 
 ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering the analytical surface beyond the rsi+price_above pattern. Pick the shape that matches what your chart-reading actually surfaced; resist the default of dropping every thesis to rsi numerics. Each example shows a complete `entry.conditions` list ready to paste — adjust thresholds and timeframes to your read, but the structural shape is correct.
