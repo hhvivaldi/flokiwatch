@@ -707,6 +707,8 @@ class AIAgent:
                     return "Kimi"
                 if "dashscope" in _h:
                     return "Qwen"
+                if "googleapis.com" in _h:
+                    return "Gemini"  # FLO-389
                 if "openrouter.ai" in _h:
                     return "OpenRouter"
                 if "openai.com" in _h:
@@ -724,7 +726,7 @@ class AIAgent:
                     )
                 else:
                     self.client = OpenAI(api_key=_openai_key)
-                    logger.info("AI Agent: primary client = OpenAI (no Qwen/Kimi key)")
+                    logger.info("AI Agent: primary client = OpenAI (no Qwen/Kimi/Gemini key)")
 
                 # FLO-297: Qwen-only on failure = suspend + 5min retry.
                 # FLO-299: Optional OpenRouter fallback — same Qwen 3.6-Plus

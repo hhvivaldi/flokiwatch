@@ -494,14 +494,15 @@ AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investi
 # FLOKI_FALLBACK_* vars empty in .env to disable the fallback entirely
 # (bot falls back to the FLO-297 "Qwen unavailable" maintenance mode).
 #
-# FLO-384: LLM_PROVIDER switch lets operators flip the primary provider
-# between Qwen (Alibaba DashScope) and Kimi (Moonshot) without renaming
-# environment keys. Default `qwen` preserves existing behavior bit-for-bit.
-# Setting LLM_PROVIDER=kimi resolves FLOKI_MODEL/FLOKI_API_BASE/FLOKI_API_KEY
-# from KIMI_* equivalents at config load — the existing OpenAI client init
-# path consumes the resolved triple unchanged. Fallback (FLO-299) is left
-# pointing at Qwen/OpenRouter regardless of primary; cross-provider
-# fallback is intentional safety-net and acceptable for the v1 pilot.
+# FLO-384 / FLO-389: LLM_PROVIDER switch lets operators flip the primary
+# provider between Qwen (Alibaba DashScope), Kimi (Moonshot), and Gemini
+# (Google's OpenAI-compatible endpoint) without renaming environment keys.
+# Default `qwen` preserves existing behavior bit-for-bit. Each branch
+# resolves FLOKI_MODEL/FLOKI_API_BASE/FLOKI_API_KEY from provider-specific
+# env vars at config load — the existing OpenAI client init path consumes
+# the resolved triple unchanged. Fallback (FLO-299) is left pointing at
+# Qwen/OpenRouter regardless of primary; cross-provider fallback is
+# intentional safety-net and acceptable for the v1 pilot.
 LLM_PROVIDER = (os.environ.get("LLM_PROVIDER", "qwen") or "qwen").strip().lower()
 
 if LLM_PROVIDER == "kimi":
@@ -516,6 +517,25 @@ if LLM_PROVIDER == "kimi":
         os.environ.get("FLOKI_API_BASE", "https://api.moonshot.ai/v1"),
     )
     FLOKI_API_KEY = os.environ.get("KIMI_API_KEY", "")
+elif LLM_PROVIDER == "gemini":
+    # FLO-389: resolve primary triple from GEMINI_* env. GEMINI_API_KEY
+    # is required; base/model fall back to Google's OpenAI-compat
+    # endpoint defaults if unset so a minimal
+    # `LLM_PROVIDER=gemini` + `GEMINI_API_KEY=...` is sufficient to flip.
+    # Test protocol: same input as Qwen, different brain — empirical
+    # comparison of plan structure / entry diversity / recipe adoption /
+    # management primitives over a 24-48h observation window.
+    FLOKI_MODEL = os.environ.get(
+        "GEMINI_MODEL", os.environ.get("FLOKI_MODEL", "gemini-3.1-pro-preview"),
+    )
+    FLOKI_API_BASE = os.environ.get(
+        "GEMINI_BASE_URL",
+        os.environ.get(
+            "FLOKI_API_BASE",
+            "https://generativelanguage.googleapis.com/v1beta/openai/",
+        ),
+    )
+    FLOKI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 elif LLM_PROVIDER == "qwen":
     FLOKI_MODEL = os.environ.get("FLOKI_MODEL", "qwen3.6-plus")
     FLOKI_API_BASE = os.environ.get(
@@ -525,9 +545,9 @@ elif LLM_PROVIDER == "qwen":
     FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
 else:
     raise ValueError(
-        f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen' or "
-        f"'kimi'). FLO-384 fails loudly to avoid silently routing Floki "
-        f"to an unintended provider."
+        f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen', "
+        f"'kimi', or 'gemini'). FLO-384/389 fails loudly to avoid "
+        f"silently routing Floki to an unintended provider."
     )
 
 FLOKI_FALLBACK_API_BASE = os.environ.get("FLOKI_FALLBACK_API_BASE", "")
