@@ -400,6 +400,32 @@ class TestC3PrimitiveShapeSchemaCorrectness:
         # the canonical schema field for the primitive is `relation`.
         assert "above_upper" in shape  # schema relation enum
 
+    def test_every_primitive_shape_has_test_coverage(self):
+        """FLO-395 Phase 1.1.1 — coverage lock. Every indicator block
+        in `_format_indicators` output that carries a `primitive_shape`
+        field MUST be listed in `PRIMITIVE_SHAPE_REALIZATIONS` (and by
+        extension the REQUIRED/FORBIDDEN token dicts, which are
+        parallel-keyed). Catches the silent-coverage-gap class where a
+        future Phase 1.5+ adds a new indicator shape (e.g. stochastic)
+        without extending the test fixtures, letting the same bug
+        class (Phase 1.1) recur in the new location.
+
+        Failure mode this prevents: ship a 6th primitive_shape →
+        forget to add it to PRIMITIVE_SHAPE_REALIZATIONS → none of
+        the schema-correctness tests run on it → bug ships unguarded.
+        """
+        out = self._format()
+        shaped = {k for k, v in out.items()
+                  if isinstance(v, dict) and "primitive_shape" in v}
+        assert shaped == set(PRIMITIVE_SHAPE_REALIZATIONS), (
+            f"primitive_shape coverage gap — _format_indicators emits "
+            f"shapes for {sorted(shaped)}; tests cover "
+            f"{sorted(PRIMITIVE_SHAPE_REALIZATIONS)}. Add the missing "
+            f"indicator(s) to PRIMITIVE_SHAPE_REALIZATIONS, "
+            f"PRIMITIVE_SHAPE_REQUIRED_TOKENS, and "
+            f"PRIMITIVE_SHAPE_FORBIDDEN_TOKENS in this file."
+        )
+
 
 # =============================================================================
 # E2 — Vocabulary diversity helper + emit extension
