@@ -542,6 +542,9 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     "cancel_plan",                # mutates snow_plans.status to cancelled
     # --- Bot-state writes ---
     "write_session_memory",       # writes data/agent_session_memory.json
+    "write_trading_journal",      # writes data/trading_journal.json
+    "save_lesson",                # writes trade_lessons row
+    "forget_lesson",              # deletes trade_lessons row
     "set_next_check",             # writes data/next_check.json
     "set_wake_conditions",        # writes wake_conditions persistent state
     "set_watch_conditions",       # writes per-ticket watch conditions
@@ -554,15 +557,18 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     # is still in place — no concurrent-with-reads race window.
     "close_trade",                # closes an MT5 position
     "adjust_trade",               # modifies MT5 SL/TP on an open position
+    "place_pending_order",        # places a BUY_LIMIT/SELL_LIMIT/STOP order
     "cancel_pending_order",       # cancels a pending broker order
-    # --- Post-response message-sequence side effects ---
-    "get_chart_screenshots",      # FLO-262: appends user-message with
-                                  # chart images AFTER the tool response.
-                                  # Singleton dispatch keeps the
-                                  # protocol invariant (assistant→tool→
-                                  # user_images) explicit even when
-                                  # chart-inject is deferred to end of
-                                  # batch loop (defence-in-depth).
+    # FLO-385 follow-up (CEO directive 2026-04-29): get_chart_screenshots
+    # WAS singleton here as belt-and-suspenders alongside the FLO-262
+    # `_deferred_user_msgs` path that already protects the protocol
+    # invariant. Under the new mandatory-suite rule + GPT-5.4's
+    # aggressive parallel batching (16-18 tools per turn), the
+    # belt-and-suspenders made every batch-with-charts trigger the
+    # clamp, forcing 15+ sequential iterations and ~95s latency.
+    # Reclassified to _PARALLEL_SAFE_TOOLS below; the deferral path
+    # remains the single load-bearing protection. See
+    # snow/tests/flo385_singleton_clamp_test.py contract inversion.
     # --- Expensive sub-agent invocation ---
     "debate_with_rex",            # invokes Rex full debate loop
                                   # (3 internal tools + LLM cycles);
@@ -579,23 +585,30 @@ _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     # --- Indicators + structural (point-in-time reads) ---
     "get_indicators", "get_sr_zones", "get_fibonacci_levels",
     "get_pivot_points", "get_chart_patterns", "get_tick_pressure",
+    # --- Charts (FLO-385 follow-up): protocol invariant protected by
+    # the FLO-262 `_deferred_user_msgs` path — chart-image user-messages
+    # are appended AFTER the full tool-response sequence, so
+    # get_chart_screenshots is now safe in a parallel batch. Reclassified
+    # from singleton on 2026-04-29 to fix mandatory-suite latency.
+    "get_chart_screenshots",
     # --- Position + plan reads ---
     "get_open_positions", "get_pending_orders", "list_active_plans",
     "get_plan_status", "get_position_history", "get_position_events",
-    "get_account_info",
+    "get_account_info", "get_trade_history",
     # --- Session + calendar reads ---
     "get_session_context", "get_calendar",
     # --- Memory + learning reads ---
     "read_session_memory", "get_trade_lessons", "get_trade_patterns",
-    "get_recent_reflexions",
+    "get_recent_reflexions", "search_reflexions", "search_memory",
+    "get_trade_journal",
     # --- Rex monitor reads (deterministic classifier; no LLM) ---
     "get_rex_monitor", "rex_divergence_scan", "rex_correlation_check",
     "rex_regime_history", "rex_session_performance",
     # --- Snow reference reads (cached markdown / static maps) ---
     "get_snow_recipe_book", "get_snow_primitives_reference",
     "get_snow_tags_reference",
-    # --- Luna / sentinel reads ---
-    "get_luna_brief",
+    # --- Luna / Echo / sentinel reads ---
+    "get_luna_brief", "get_echo_alerts",
 })
 
 

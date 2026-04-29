@@ -58,18 +58,33 @@ class TestSingletonSetMembership:
         "submit_plan_to_snow",
         "cancel_plan",
         "write_session_memory",
+        "write_trading_journal",
+        "save_lesson",
+        "forget_lesson",
         "set_next_check",
         "set_wake_conditions",
         "set_watch_conditions",
         "execute_trade",
         "close_trade",
         "adjust_trade",
+        "place_pending_order",
         "cancel_pending_order",
     )
 
-    KNOWN_PROTOCOL_FRAGILE = (
-        "get_chart_screenshots",
-    )
+    # FLO-385 follow-up (CEO directive 2026-04-29) — INVERTED from the
+    # original v1 contract. KNOWN_PROTOCOL_FRAGILE used to list
+    # `get_chart_screenshots` as a singleton because it appends a
+    # post-response user-message (chart images). The FLO-262
+    # `_deferred_user_msgs` path (in ai_agent.py:1938-1981) already
+    # protects the protocol invariant by appending the user-message
+    # AFTER the full tool-response sequence — making the singleton
+    # classification belt-and-suspenders. Under the new mandatory-suite
+    # rule + GPT-5.4's 16-18-tool parallel batches, the redundancy
+    # forced ~95s/cycle and 15+ iterations. Reclassified parallel-safe;
+    # the deferral path is the single load-bearing protection.
+    # If a future edit re-adds chart_screenshots here, that edit is
+    # reverting CEO directive 2026-04-29 and must surface explicitly.
+    KNOWN_PROTOCOL_FRAGILE: tuple = ()
 
     KNOWN_EXPENSIVE_SUBAGENT = (
         "debate_with_rex",
@@ -127,6 +142,18 @@ class TestParallelSafeSetMembership:
         "get_snow_primitives_reference",
         "read_session_memory",
         "get_trade_lessons",
+        # FLO-385 follow-up (CEO directive 2026-04-29) additions —
+        # explicitly classify the read-only tools that previously fell
+        # through the fail-safe-singleton path. Each must stay
+        # parallel-safe so the mandatory-suite batch keeps its
+        # one-round-trip dispatch.
+        "get_chart_screenshots",  # protocol invariant covered by
+                                  # _deferred_user_msgs (FLO-262)
+        "get_echo_alerts",        # pure read of echo_aggregate.json
+        "get_trade_history",      # SQLite read, idempotent
+        "search_reflexions",      # vector-DB read, idempotent
+        "search_memory",          # vector-DB read, idempotent
+        "get_trade_journal",      # JSON read, idempotent
     )
 
     @pytest.mark.parametrize("tool", KNOWN_READ_ONLY)
@@ -264,19 +291,87 @@ class TestClampBehaviour:
         assert kept[0].function.name == "submit_plan_to_snow"
         assert dropped[0].function.name == "set_next_check"
 
-    def test_chart_screenshots_in_parallel_batch_caps(self):
-        """get_chart_screenshots is singleton-class because of its
-        post-response user-message inject (chart images). When it
-        appears in a parallel batch, the clamp keeps the first call
-        only — preserving the protocol invariant on stricter providers
-        as defence-in-depth alongside the chart-inject deferral."""
+    def test_chart_screenshots_in_parallel_batch_passes_through(self):
+        """FLO-385 follow-up (CEO directive 2026-04-29) — INVERTED from
+        the original v1 contract. get_chart_screenshots WAS singleton
+        because of its post-response user-message inject (chart images),
+        and the original test asserted the clamp would fire when it
+        appeared in a parallel batch. The FLO-262 `_deferred_user_msgs`
+        path already protects the protocol invariant (chart-image
+        user-message appended AFTER the full tool-response sequence),
+        making the singleton classification redundant. Reclassifying
+        chart_screenshots parallel-safe is the dominant fix for the
+        FLO-404 mandatory-suite latency (~95s → ~25s expected).
+
+        New contract: a batch of all-parallel-safe tools INCLUDING
+        chart_screenshots passes through with zero clamping."""
         batch = [
             _tc("get_indicators", "tc1"),
             _tc("get_chart_screenshots", "tc2"),
             _tc("get_sr_zones", "tc3"),
         ]
         kept, dropped = _apply_singleton_clamp(batch)
+        assert len(kept) == 3, (
+            "FLO-385 v2: chart_screenshots is parallel-safe; batch must "
+            "pass through without clamping. If this fails, someone "
+            "re-added chart_screenshots to _SINGLETON_TOOLS — that "
+            "reverts CEO directive 2026-04-29."
+        )
+        assert dropped == []
+        assert [tc.function.name for tc in kept] == [
+            "get_indicators", "get_chart_screenshots", "get_sr_zones",
+        ]
+
+    def test_full_mandatory_suite_batch_passes_through(self):
+        """FLO-385 follow-up — locks the canonical case the fix targets.
+        Under the new mandatory-suite rule (FLO-404), Floki batches
+        ~10-18 read-only tools per turn. Before the v2 reclassification
+        these batches triggered the clamp because chart_screenshots OR
+        get_echo_alerts (uncategorised → fail-safe singleton) was
+        present, forcing 15+ sequential iterations and ~95s latency.
+
+        New contract: the full mandatory suite — including
+        chart_screenshots and get_echo_alerts — dispatches in a single
+        round-trip with zero drops."""
+        batch = [
+            _tc(name, f"tc{i}")
+            for i, name in enumerate([
+                "list_active_plans",
+                "get_open_positions",
+                "get_chart_screenshots",
+                "get_market_regime",
+                "get_sr_zones",
+                "get_indicators",
+                "get_fibonacci_levels",
+                "get_chart_patterns",
+                "get_tick_pressure",
+                "get_market_context",
+                "get_luna_brief",
+                "get_echo_alerts",
+                "get_rex_monitor",
+                "get_snow_recipe_book",
+                "get_snow_tags_reference",
+            ])
+        ]
+        kept, dropped = _apply_singleton_clamp(batch)
+        assert len(kept) == 15, (
+            "FLO-385 v2: the full mandatory suite must dispatch in one "
+            "round-trip. Latency target ~25s/cycle vs ~95s under v1."
+        )
+        assert dropped == []
+
+    def test_singleton_in_mandatory_suite_still_clamps(self):
+        """Sanity check the clamp still fires when an actual write
+        sneaks into the mandatory-suite batch (e.g. Floki tries to
+        submit a plan in the same turn as the suite reads). This
+        protects the original FLO-385 race-condition guarantee."""
+        batch = [
+            _tc("list_active_plans", "tc1"),
+            _tc("get_open_positions", "tc2"),
+            _tc("submit_plan_to_snow", "tc3"),  # write — clamps batch
+            _tc("get_indicators", "tc4"),
+        ]
+        kept, dropped = _apply_singleton_clamp(batch)
         assert len(kept) == 1
-        assert kept[0].function.name == "get_indicators"
-        assert any(tc.function.name == "get_chart_screenshots"
-                   for tc in dropped)
+        assert kept[0].function.name == "list_active_plans"
+        assert len(dropped) == 3
