@@ -1427,13 +1427,25 @@ class AIAgent:
                             "description": (
                                 "A complete plan dict. Fields: analysis, entry, "
                                 "management, exit, emergency, expires_at. Pull "
-                                "primitive shapes via get_snow_primitives_reference."
+                                "primitive shapes via get_snow_primitives_reference. "
+                                "EITHER pass the plan body wrapped here as "
+                                "{plan: {analysis: {...}, entry: {...}, ...}}, OR "
+                                "pass analysis, entry, management, exit, emergency, "
+                                "expires_at as direct top-level arguments — both "
+                                "shapes are accepted; the handler normalizes."
                             ),
                             "additionalProperties": True,
                         },
                     },
-                    "required": ["plan"],
-                    "additionalProperties": False,
+                    # FLO-404 follow-up (CEO directive 2026-04-30): relaxed
+                    # from required:["plan"] + additionalProperties:false
+                    # to allow the direct-shape call submit_plan_to_snow(
+                    # analysis=..., entry=..., ...). This matches the inner-
+                    # plan-body shape Floki sees in the prompt's MINIMAL /
+                    # EXPLORATORY plan examples. The handler's normalization
+                    # logic is the single source of truth for how the
+                    # plan dict is assembled.
+                    "additionalProperties": True,
                 },
             },
             {

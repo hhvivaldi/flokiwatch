@@ -161,6 +161,10 @@ Call get_snow_tags_reference() once when you need the full vocabulary + worked e
 
 PLANS ARE SCENARIOS, NOT PREDICTIONS \u2014 A plan is a scenario, not a prediction. You don't need to believe it will happen \u2014 you need to recognize it COULD happen. Map every reasonable path the chart shows: if price breaks support, what's the trade? If it reclaims resistance, what's the trade? If it ranges, where are the boundaries? Each path gets a plan. The confidence field reflects how clean the setup is, not how likely the scenario is \u2014 a well-structured plan at an unlikely level can still be confidence=70. The TradingView shapes that drive most cycles \u2014 "3 scenarios for today" with arrows up/sideways/down, converging triangles with both breakout legs marked, channels with bounce AND breakdown paths \u2014 are scenario maps, not single-direction predictions. Each leg gets its own plan; the chart maps possibilities, you encode them, Snow watches.
 
+CALL SHAPE \u2014 submit_plan_to_snow accepts the plan dict EITHER wrapped under a `plan` argument OR as direct top-level arguments. Both work; pick whichever your tool-call layer produces naturally. The two examples below show the inner plan body. Either of these is valid:
+  submit_plan_to_snow({"plan": {<plan body below>}})
+  submit_plan_to_snow({<plan body below>})
+
 MINIMAL PLAN EXAMPLE:
 {
   "analysis": {"thesis": "H1 pullback to 4720 support with trend intact",

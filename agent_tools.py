@@ -4765,7 +4765,9 @@ class AgentTools:
             self._log_fail("get_snow_tags_reference", start, f"error={e}")
             return {"success": False, "error": f"{type(e).__name__}: {e}"}
 
-    def submit_plan_to_snow(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    def submit_plan_to_snow(
+        self, plan: Optional[Dict[str, Any]] = None, **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Submit a contingency plan to Snow for autonomous monitoring.
 
         Snow evaluates the plan's conditions on a 5 s cadence and fires
@@ -4775,6 +4777,17 @@ class AgentTools:
         MT5. When `SNOW_DRY_RUN=false`, fires dispatch to the real
         executor under `executor_lock`.
 
+        Argument shape — accepts BOTH:
+          * Wrapped:  submit_plan_to_snow(plan={"analysis": ..., "entry": ...})
+          * Direct:   submit_plan_to_snow(analysis=..., entry=..., ...)
+
+        The wrapper-shape is the canonical OpenAI tool-call form. The
+        direct shape is what Floki naturally produces when copying the
+        prompt's MINIMAL PLAN EXAMPLE / EXPLORATORY SCENARIO EXAMPLE
+        (which display the inner plan body without the `plan:` wrapper).
+        Both normalize to the same internal plan dict — no semantic
+        difference, no double-validation, no schema branching downstream.
+
         Returns:
           {"success": True,  "plan_id": "PLAN-YYYYMMDD-NNN",
            "validation_errors": None}
@@ -4782,7 +4795,7 @@ class AgentTools:
            "validation_errors": [str, ...]}
           {"success": False, "reason": "...internal error..."}
 
-        The `plan` dict's `id`, `created_by`, and `created_at` fields are
+        The plan dict's `id`, `created_by`, and `created_at` fields are
         ALWAYS overwritten by the tool — Floki cannot spoof them. All
         other fields come from Floki.
         """
@@ -4794,12 +4807,34 @@ class AgentTools:
             self._log_tool("submit_plan_to_snow", start, f"import_error={e}")
             return {"success": False, "reason": f"snow import failed: {e}"}
 
+        # Normalize both call shapes into a single `plan` dict before
+        # any downstream logic. The decision rule:
+        #   - If `plan` was passed and is a dict → use it (wrapper shape).
+        #   - Else if kwargs contains plan-body keys → kwargs IS the plan.
+        #   - Else → invalid input.
+        # Edge: if BOTH `plan` (dict) and kwargs are present, the wrapper
+        # wins; kwargs are ignored. This is a defensive choice — the
+        # wrapper is the explicit canonical form, kwargs would only
+        # appear here via an unusual call pattern.
+        if plan is None and kwargs:
+            plan = kwargs
+
         if not isinstance(plan, dict):
             self._log_tool("submit_plan_to_snow", start, "non_dict_input")
             return {
                 "success": False, "plan_id": None,
                 "validation_errors": ["plan must be a dict"],
             }
+
+        # Defensive: if Floki double-wrapped (plan={"plan": {...}}),
+        # unwrap once. Cheap normalization — protects against the LLM
+        # over-correcting after seeing the wrapper-shape example.
+        if (
+            isinstance(plan.get("plan"), dict)
+            and "analysis" in plan["plan"]
+            and "analysis" not in plan
+        ):
+            plan = plan["plan"]
 
         # FLO-393: mandatory Recipe Book consultation gate. Reject plans
         # submitted without at least one `get_snow_recipe_book` call
