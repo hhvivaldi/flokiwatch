@@ -224,3 +224,339 @@ class TestProviderLabelGemini:
         assert _provider_label(
             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
         ) == "Qwen"
+
+
+# =============================================================================
+# FLO-389 Path A — thought_signature capture-and-replay
+# =============================================================================
+#
+# Gemini 3 returns an encrypted reasoning blob at
+# tool_call.extra_content.google.thought_signature on every assistant turn
+# that contains tool_calls. The next request must echo it back on the
+# rebuilt assistant message or the API returns 400. The OpenAI-compat shim
+# preserves it on the wire IF passed via a dict message; the SDK
+# ChatCompletionMessage object's serialization is not contractually
+# guaranteed to carry Pydantic extras, so the rebuild is always-dict
+# under FLO-389.
+#
+# Pure helpers in gemini_signature.py:
+#   - rebuild_assistant_message(msg, tool_calls, *, preserve_signatures)
+#   - strip_thought_signatures(messages)
+#
+# These tests cover the four acceptance items: roundtrip, parallel-call
+# ordering, missing-signature graceful handling, and fallback strip.
+
+
+class _FakeFunction:
+    def __init__(self, name, arguments):
+        self.name = name
+        self.arguments = arguments
+
+
+class _FakeToolCall:
+    """Minimal duck-type for the OpenAI SDK ChatCompletionMessageToolCall.
+
+    The rebuild helper reads `tc.id`, `tc.function.name`,
+    `tc.function.arguments`, and `tc.extra_content` (optional). We
+    construct only those fields here — full SDK fidelity would couple
+    the test to openai version internals.
+    """
+    def __init__(self, id_, name, arguments, extra_content=None):
+        self.id = id_
+        self.function = _FakeFunction(name, arguments)
+        if extra_content is not None:
+            self.extra_content = extra_content
+
+
+class _FakeMessage:
+    def __init__(self, content=None):
+        self.content = content
+
+
+_SIG_A = "EtgDCtUDAQw_signature_alpha_=="
+_SIG_B = "AbCDeFgH_signature_beta_=="
+
+
+class TestThoughtSignatureRoundtrip:
+    """Single-tool-call roundtrip: signature captured on response is
+    threaded into the rebuilt assistant message dict so the next-turn
+    request carries it back to Gemini. This is the canonical fix path
+    for the production 400."""
+
+    def _gemini_tc(self):
+        return _FakeToolCall(
+            "call-1", "get_weather", '{"city":"Paris"}',
+            extra_content={"google": {"thought_signature": _SIG_A}},
+        )
+
+    def test_signature_preserved_when_provider_is_gemini(self):
+        from gemini_signature import rebuild_assistant_message
+        tc = self._gemini_tc()
+        out = rebuild_assistant_message(
+            _FakeMessage(content=None), [tc], preserve_signatures=True,
+        )
+        assert out["role"] == "assistant"
+        assert len(out["tool_calls"]) == 1
+        rebuilt_tc = out["tool_calls"][0]
+        assert rebuilt_tc["id"] == "call-1"
+        assert rebuilt_tc["function"]["name"] == "get_weather"
+        assert rebuilt_tc["function"]["arguments"] == '{"city":"Paris"}'
+        # Critical: extra_content carried through verbatim
+        assert rebuilt_tc["extra_content"] == {
+            "google": {"thought_signature": _SIG_A}
+        }
+
+    def test_signature_dropped_when_provider_is_not_gemini(self):
+        """preserve_signatures=False (Qwen/Kimi default) must omit
+        extra_content even if the SDK object happens to carry one. This
+        is defense-in-depth: a non-Gemini wire either ignores or 400s
+        on the field."""
+        from gemini_signature import rebuild_assistant_message
+        tc = self._gemini_tc()
+        out = rebuild_assistant_message(
+            _FakeMessage(content=None), [tc], preserve_signatures=False,
+        )
+        rebuilt_tc = out["tool_calls"][0]
+        assert "extra_content" not in rebuilt_tc
+
+    def test_missing_signature_does_not_crash(self):
+        """If Gemini ever returns a tool_call without extra_content (e.g.
+        on Gemini 2.5 where signatures are optional, or a hypothetical
+        future model), the helper must not crash — the rebuild dict
+        simply omits the field. Validation/400 is the API's job."""
+        from gemini_signature import rebuild_assistant_message
+        tc = _FakeToolCall("call-1", "get_weather", '{"city":"Paris"}')
+        # No extra_content attribute set
+        out = rebuild_assistant_message(
+            _FakeMessage(), [tc], preserve_signatures=True,
+        )
+        rebuilt_tc = out["tool_calls"][0]
+        assert "extra_content" not in rebuilt_tc
+
+    def test_empty_extra_content_dropped(self):
+        """An explicitly empty extra_content dict shouldn't surface as
+        a noise field on the wire."""
+        from gemini_signature import rebuild_assistant_message
+        tc = _FakeToolCall(
+            "call-1", "get_weather", '{"city":"Paris"}', extra_content={},
+        )
+        out = rebuild_assistant_message(
+            _FakeMessage(), [tc], preserve_signatures=True,
+        )
+        assert "extra_content" not in out["tool_calls"][0]
+
+    def test_content_passthrough_alongside_tool_calls(self):
+        """The original rebuild already preserved msg.content alongside
+        tool_calls. FLO-389 must not regress that."""
+        from gemini_signature import rebuild_assistant_message
+        tc = self._gemini_tc()
+        out = rebuild_assistant_message(
+            _FakeMessage(content="reasoning prose"), [tc],
+            preserve_signatures=True,
+        )
+        assert out["content"] == "reasoning prose"
+
+    def test_no_content_no_content_field(self):
+        from gemini_signature import rebuild_assistant_message
+        tc = self._gemini_tc()
+        out = rebuild_assistant_message(
+            _FakeMessage(content=None), [tc], preserve_signatures=True,
+        )
+        assert "content" not in out
+
+
+class TestParallelToolCallSignatureOrdering:
+    """Per Google docs: 'the thought_signature is attached only to the
+    first functionCall part. Subsequent functionCall parts in the same
+    response will not contain a signature.' The rebuild must preserve
+    this asymmetry — first tc carries the field, later tcs don't."""
+
+    def test_first_tc_carries_signature_others_dont(self):
+        from gemini_signature import rebuild_assistant_message
+        tcs = [
+            _FakeToolCall(
+                "call-1", "first_tool", '{}',
+                extra_content={"google": {"thought_signature": _SIG_A}},
+            ),
+            _FakeToolCall("call-2", "second_tool", '{}'),
+            _FakeToolCall("call-3", "third_tool", '{}'),
+        ]
+        out = rebuild_assistant_message(
+            _FakeMessage(), tcs, preserve_signatures=True,
+        )
+        assert "extra_content" in out["tool_calls"][0]
+        assert out["tool_calls"][0]["extra_content"] == {
+            "google": {"thought_signature": _SIG_A}
+        }
+        assert "extra_content" not in out["tool_calls"][1]
+        assert "extra_content" not in out["tool_calls"][2]
+
+    def test_singleton_clamp_drops_later_tcs_signature_unaffected(self):
+        """When FLO-385 singleton clamp reduces a parallel batch to one
+        tc, the kept tc's signature still rides through."""
+        from gemini_signature import rebuild_assistant_message
+        # Simulating: clamp kept only the first tc
+        kept_tcs = [
+            _FakeToolCall(
+                "call-1", "get_chart_screenshots", '{}',
+                extra_content={"google": {"thought_signature": _SIG_A}},
+            ),
+        ]
+        out = rebuild_assistant_message(
+            _FakeMessage(), kept_tcs, preserve_signatures=True,
+        )
+        assert len(out["tool_calls"]) == 1
+        assert out["tool_calls"][0]["extra_content"] == {
+            "google": {"thought_signature": _SIG_A}
+        }
+
+
+class TestFallbackStripsSignatures:
+    """FLO-299 fallback path: Gemini-primary failures route to OpenRouter
+    mid-cycle. Any prior assistant turns in `messages` carry Gemini's
+    extra_content; sending those to OpenRouter risks a 400 (strict
+    OpenAI-compat) or silent drop. strip_thought_signatures returns a
+    copy with the field scrubbed."""
+
+    def test_strip_removes_extra_content_from_assistant_tool_calls(self):
+        from gemini_signature import strip_thought_signatures
+        messages = [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call-1", "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                        "extra_content": {
+                            "google": {"thought_signature": _SIG_A}
+                        },
+                    },
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call-1", "content": "{}"},
+        ]
+        out = strip_thought_signatures(messages)
+        assert "extra_content" not in out[1]["tool_calls"][0]
+        # Other fields preserved
+        assert out[1]["tool_calls"][0]["id"] == "call-1"
+        assert out[1]["tool_calls"][0]["function"]["name"] == "f"
+
+    def test_strip_does_not_mutate_original(self):
+        """Pure on input. Fallback retry must not destroy signatures
+        from the messages list — if Gemini recovers next iteration,
+        the originals stay intact."""
+        from gemini_signature import strip_thought_signatures
+        original = [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call-1", "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                        "extra_content": {
+                            "google": {"thought_signature": _SIG_A}
+                        },
+                    },
+                ],
+            },
+        ]
+        _ = strip_thought_signatures(original)
+        # Original retains the signature
+        assert "extra_content" in original[0]["tool_calls"][0]
+        assert original[0]["tool_calls"][0]["extra_content"] == {
+            "google": {"thought_signature": _SIG_A}
+        }
+
+    def test_strip_passes_through_non_assistant_messages(self):
+        from gemini_signature import strip_thought_signatures
+        messages = [
+            {"role": "system", "content": "..."},
+            {"role": "user", "content": "..."},
+            {"role": "tool", "tool_call_id": "x", "content": "..."},
+        ]
+        out = strip_thought_signatures(messages)
+        assert out == messages
+
+    def test_strip_handles_assistant_without_tool_calls(self):
+        from gemini_signature import strip_thought_signatures
+        messages = [{"role": "assistant", "content": "plain reply"}]
+        out = strip_thought_signatures(messages)
+        assert out == messages
+
+    def test_strip_handles_multiple_parallel_tcs(self):
+        """Strip must scrub every tc, not just the first — even though
+        only the first carries a signature, defense-in-depth on the
+        scrub matters if Google ever changes the asymmetry."""
+        from gemini_signature import strip_thought_signatures
+        messages = [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "c1", "type": "function",
+                        "function": {"name": "f1", "arguments": "{}"},
+                        "extra_content": {
+                            "google": {"thought_signature": _SIG_A}
+                        },
+                    },
+                    {
+                        "id": "c2", "type": "function",
+                        "function": {"name": "f2", "arguments": "{}"},
+                        "extra_content": {
+                            "google": {"thought_signature": _SIG_B}
+                        },
+                    },
+                ],
+            },
+        ]
+        out = strip_thought_signatures(messages)
+        for tc in out[0]["tool_calls"]:
+            assert "extra_content" not in tc
+
+    def test_strip_idempotent(self):
+        """Stripping already-stripped messages is a no-op."""
+        from gemini_signature import strip_thought_signatures
+        messages = [
+            {
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "c1", "type": "function",
+                    "function": {"name": "f1", "arguments": "{}"},
+                }],
+            },
+        ]
+        out1 = strip_thought_signatures(messages)
+        out2 = strip_thought_signatures(out1)
+        assert out1 == out2
+
+
+class TestAiAgentIntegrationContract:
+    """Source-inspection lock that ai_agent.py wires the rebuild + strip
+    helpers in. Belt-and-braces: if a future refactor drops the import
+    or replaces the helper call, this fails fast."""
+
+    def test_ai_agent_imports_helpers(self):
+        import inspect
+        import ai_agent
+        src = inspect.getsource(ai_agent)
+        assert "from gemini_signature import" in src, (
+            "ai_agent.py must import the FLO-389 thought_signature helpers"
+        )
+        assert "_rebuild_assistant_message" in src, (
+            "ai_agent.py must call the rebuild helper in the tool-call loop"
+        )
+        assert "_strip_thought_signatures" in src, (
+            "ai_agent.py must scrub signatures before non-Gemini fallback"
+        )
+
+    def test_ai_agent_provider_gates_signature_preservation(self):
+        """Source contract: rebuild call must condition preserve_signatures
+        on LLM_PROVIDER == 'gemini' (not always-True, not always-False)."""
+        import inspect
+        import ai_agent
+        src = inspect.getsource(ai_agent)
+        assert 'preserve_signatures=' in src
+        assert '"gemini"' in src, (
+            "rebuild call must gate on LLM_PROVIDER == 'gemini'"
+        )

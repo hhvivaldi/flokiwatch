@@ -19,6 +19,10 @@ from tz_utils import utc_now, utc_iso, trading_day_utc
 
 from logger import log
 from agent_prompts import get_system_prompt, get_prompt_hash, get_prompt_version
+from gemini_signature import (
+    rebuild_assistant_message as _rebuild_assistant_message,
+    strip_thought_signatures as _strip_thought_signatures,
+)
 import config
 
 logger = log
@@ -1692,9 +1696,20 @@ class AIAgent:
                 _primary_label = self._fallback_label
 
             def _sync_call_on(_client, _model):
+                # FLO-389: Gemini's thought_signature blob lives at
+                # tool_call.extra_content.google.thought_signature. It rides
+                # the messages list verbatim while the primary stays on
+                # Gemini. Before any non-Gemini destination (OpenRouter
+                # fallback, or any cycle where primary isn't Gemini),
+                # scrub it — those wires either ignore it or 400.
+                _is_gemini_target = (
+                    getattr(config, "LLM_PROVIDER", "qwen") == "gemini"
+                    and _client is self.client
+                )
+                _msgs = messages if _is_gemini_target else _strip_thought_signatures(messages)
                 kwargs = {
                     "model": _model,
-                    "messages": messages,
+                    "messages": _msgs,
                     "tools": openai_tools,
                     "max_completion_tokens": int(self.max_tokens),
                     "temperature": 1.0,
@@ -1918,24 +1933,19 @@ class AIAgent:
                     )
                     calls_to_process = _clamp_kept
 
-                # Build assistant message with ONLY the calls we'll process (avoids orphan tool_call_ids)
+                # Build assistant message with ONLY the calls we'll process (avoids orphan tool_call_ids).
+                # FLO-389: always rebuild as a dict via gemini_signature.rebuild_assistant_message
+                # so wire format is explicit and the Google `extra_content.thought_signature` blob
+                # rides along on Gemini's path (Gemini 3 rejects the next turn with 400 otherwise).
+                # For Qwen/Kimi the field is omitted; identical wire behavior to the prior
+                # SDK-object passthrough. Narrative content alongside tool_calls is preserved.
                 if len(calls_to_process) < len(msg.tool_calls):
                     logger.warning(f"FLOKI | tool batch reduced: processing {len(calls_to_process)}/{len(msg.tool_calls)} calls")
-                    # Create a modified message with only the calls we process.
-                    # Preserve any narrative content the model emitted alongside
-                    # tool_calls — uncommon today (logs show has_content=False
-                    # whenever tool_calls is non-empty) but not guaranteed by
-                    # the API contract; losing it on rebuild would silently
-                    # drop reasoning prose if a provider ever emits both.
-                    _rebuilt_msg = {"role": "assistant", "tool_calls": [
-                        {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                        for tc in calls_to_process
-                    ]}
-                    if msg.content:
-                        _rebuilt_msg["content"] = msg.content
-                    messages.append(_rebuilt_msg)
-                else:
-                    messages.append(msg)
+                _rebuilt_msg = _rebuild_assistant_message(
+                    msg, calls_to_process,
+                    preserve_signatures=(getattr(config, "LLM_PROVIDER", "qwen") == "gemini"),
+                )
+                messages.append(_rebuilt_msg)
 
                 # FLO-385: collect chart-image user-messages and append
                 # them AFTER the entire tool-response sequence completes,
