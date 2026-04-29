@@ -701,7 +701,11 @@ class Plan(BaseModel):
     analysis: PlanAnalysis
     entry: EntryBlock
     management: list[Contingency] = Field(default_factory=list, max_length=10)
-    exit: list[Contingency] = Field(default_factory=list, max_length=10)
+    # FLO-401: exit is mandatory with min_length=1. Empty `exit` regressed
+    # the trade-safety profile — Gemini PLAN-005/006 emitted exit=[] (vs
+    # Qwen baseline 1-2 exits/plan), leaving management-only as the entire
+    # downside protection. Floor at 1; max stays 10.
+    exit: list[Contingency] = Field(min_length=1, max_length=10)
     emergency: EmergencyBlock = Field(default_factory=EmergencyBlock)
 
     # Outcome fields (populated as plan progresses)

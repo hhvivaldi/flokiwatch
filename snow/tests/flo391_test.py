@@ -62,7 +62,7 @@ def _plan(initial_sl: float, initial_tp: float, mgmt_conditions: list,
                 "fires": "once",
             }
         ],
-        "exit": [],
+        "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
         "emergency": {
             "max_loss_pips": 150,
             "max_duration_minutes": 480,

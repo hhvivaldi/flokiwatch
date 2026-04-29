@@ -67,7 +67,7 @@ def _wrap_plan(conditions: list, schema_version: int = 1) -> dict:
             "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0},
             "fires": "once",
         }],
-        "exit": [],
+        "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
         "emergency": {
             "max_loss_pips": 150,
             "max_duration_minutes": 480,

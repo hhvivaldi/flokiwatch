@@ -369,7 +369,7 @@ class TestPlanIntegration:
                     "initial_tp": 4710.0,
                 },
                 "management": [],
-                "exit": [],
+                "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
                 "emergency": {
                     "max_loss_pips": 150, "max_duration_minutes": 480,
                     "on_broker_error": "alert_floki",
@@ -423,7 +423,7 @@ class TestPlanIntegration:
                 ],
                 "initial_sl": 4710.0, "initial_tp": 4730.0,
             },
-            "management": [], "exit": [],
+            "management": [], "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
             "emergency": {"max_loss_pips": 150, "max_duration_minutes": 480,
                           "on_broker_error": "alert_floki"},
         }

@@ -62,17 +62,41 @@ class TestPlanRoundtrip:
         assert p2.entry.initial_sl == p1.entry.initial_sl
         assert len(p2.exit) == len(p1.exit)
 
-    def test_minimal_plan_accepts_defaults(self, valid_plan_dict):
-        """emergency and management/exit default gracefully."""
-        minimal = {
+    def test_minimal_plan_omitting_exit_raises(self, valid_plan_dict):
+        """FLO-401: exit is mandatory (min_length=1). A plan that omits it
+        — or supplies an empty list — must raise ValidationError. This
+        inverts the prior `test_minimal_plan_accepts_defaults` contract,
+        which was the implicit codification of the regressed default that
+        Gemini surfaced (PLAN-20260429-005/006 shipped exit=[] and left
+        management-only as the entire downside-protection layer)."""
+        minimal_no_exit = {
             "id": "PLAN-20260424-002",
             "created_at": "2026-04-24T08:00:00Z",
             "analysis": valid_plan_dict["analysis"],
             "entry": valid_plan_dict["entry"],
         }
-        p = Plan(**minimal)
+        with pytest.raises(ValidationError):
+            Plan(**minimal_no_exit)
+
+        # Empty list also rejected — min_length=1, not just non-None.
+        minimal_empty_exit = {**minimal_no_exit, "exit": []}
+        with pytest.raises(ValidationError):
+            Plan(**minimal_empty_exit)
+
+    def test_minimal_plan_accepts_management_default(self, valid_plan_dict):
+        """FLO-401 split: management still defaults to []. emergency still
+        materializes its own defaults. Status still defaults to PENDING.
+        Only `exit` had its default-empty contract tightened."""
+        minimal_with_exit = {
+            "id": "PLAN-20260424-003",
+            "created_at": "2026-04-24T08:00:00Z",
+            "analysis": valid_plan_dict["analysis"],
+            "entry": valid_plan_dict["entry"],
+            "exit": valid_plan_dict["exit"],
+        }
+        p = Plan(**minimal_with_exit)
         assert p.management == []
-        assert p.exit == []
+        assert len(p.exit) >= 1
         assert p.emergency.max_loss_pips == 150
         assert p.status.value == "pending"
 
