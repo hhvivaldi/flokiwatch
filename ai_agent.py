@@ -863,6 +863,21 @@ class AIAgent:
             except Exception as _fl_e:
                 logger.debug(f"floki_lessons injection skipped (ignored): {_fl_e}")
 
+            # FLO-404 follow-up: SLOT ACCOUNTING reminder. If the
+            # PREVIOUS cycle's reasoning was missing per-slot
+            # justifications, the post-decision validator persisted a
+            # warning. render_reminder() reads + DELETES the warning
+            # state — one-shot per missing-accounting cycle. Prepended
+            # AFTER lessons (so it ends up just below boss_notes — high
+            # visibility but boss_notes still tops the message).
+            try:
+                from floki_slot_accounting import render_reminder as _sa_render
+                _sa_block = _sa_render()
+                if _sa_block:
+                    user_message = _sa_block + "\n\n" + user_message
+            except Exception as _sa_e:
+                logger.debug(f"slot-accounting reminder skipped (ignored): {_sa_e}")
+
             # FLO-303: boss_notes (Hermano's directives — prepended last so
             # they land at the top of the user message).
             try:
@@ -2356,6 +2371,41 @@ class AIAgent:
                     "assessment": _coerce_str(_dn_raw, cap=500),
                 }
 
+            # FLO-404 follow-up: SLOT ACCOUNTING validator (feedback
+            # loop, never blocks). When active plan count < 4, the
+            # prompt mandates per-slot empty-justification lines in
+            # the reasoning. We exact-substring scan for "Slot N empty:"
+            # markers; missing ones get logged as WARN, surfaced in
+            # data_needs.slot_accounting_missing, AND persisted so the
+            # next cycle's user_message prepends a reminder block.
+            try:
+                from floki_slot_accounting import check_reasoning, write_warning
+                from snow import db as _snow_db
+                _active_plans = _snow_db.get_active_plans() or []
+                _active_count = len(_active_plans)
+                _reasoning_text = parsed.get("reasoning", "") if isinstance(parsed, dict) else ""
+                _missing_slots = check_reasoning(_reasoning_text, _active_count)
+                if _missing_slots:
+                    logger.warning(
+                        f"FLOKI_SLOT_ACCOUNTING | missing slot justification "
+                        f"for slots {_missing_slots} | active_plans={_active_count}/4"
+                    )
+                    write_warning(_active_count, _missing_slots)
+                    if data_needs is None:
+                        # Synthesize minimal data_needs so the slot field
+                        # surfaces even if Floki emitted no data_needs at all.
+                        data_needs = {
+                            "followed_plan": "", "not_called": [], "unavailable": [],
+                            "timeframes_skipped": [], "biggest_obstacle": "",
+                            "self_critique": "", "feature_requests": [],
+                            "tool_errors": [], "assessment": "",
+                        }
+                    data_needs["slot_accounting_missing"] = _missing_slots
+                    data_needs["active_plan_count"] = _active_count
+            except Exception as _sa_e:
+                # Never break the cycle on a feedback-loop bug.
+                logger.debug(f"FLO-404 slot-accounting validator skipped: {_sa_e}")
+
             if data_needs is not None:
                 # Compact one-line log so grep stays useful.
                 _nc = data_needs["not_called"]; _ua = data_needs["unavailable"]
@@ -2366,6 +2416,9 @@ class AIAgent:
                 # FLO-315: split old "sugg" into critique (process) + feat_req (new-build asks).
                 _crit = data_needs.get("self_critique") or ""
                 _freq = data_needs.get("feature_requests") or []
+                # FLO-404 follow-up: surface missing-slot list when present.
+                _slots_missing = data_needs.get("slot_accounting_missing") or []
+                _ac = data_needs.get("active_plan_count")
                 logger.info(
                     "FLOKI_DATA_NEEDS | "
                     f"followed_plan={_fp} | "
@@ -2376,6 +2429,7 @@ class AIAgent:
                     f"critique=\"{_crit}\" | "
                     f"feat_req={_freq or '[]'} | "
                     f"errors={_errs or '[]'}"
+                    + (f" | slots_missing={_slots_missing} ({_ac}/4)" if _slots_missing else "")
                 )
 
             return AgentResult(
