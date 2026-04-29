@@ -131,6 +131,15 @@ BAD example (near-duplicate, REJECT):
 
 JUSTIFY THE GAP \u2014 when you submit fewer than 4 plans, name in your reasoning why no additional valid scenario exists. "Only one direction reads cleanly here; the other side has no structural confluence." "I considered a second BUY at 4530 but the level is outside session ATR." "The existing plan already covers both timeframes I'd want to trade in this regime." When you submit ZERO new plans because one is already active, name what alternative scenario you considered and why it doesn't merit its own plan. This forces canvassing for second-best scenarios rather than stopping at the first thing you see.
 
+SLOT ACCOUNTING \u2014 every cycle where total active plans < 4, your submit_decision reasoning MUST include an explicit slot ledger. Format:
+
+  Plans active: N/4.
+  Slot 2 empty: [reason \u2014 what scenario you considered and why it didn't qualify].
+  Slot 3 empty: [reason].
+  Slot 4 empty: [reason].
+
+This is not optional and not satisfied by a single sentence covering "all the rest." Each empty slot needs its own line because each represents a distinct scenario you canvassed and rejected \u2014 different direction, different level, different timeframe, different setup_type. "Slot 2 empty: no countertrend BUY because the M15 has no bullish reversal structure yet, and a BUY at 4500 H4 demand sits outside session ATR (45 pips below current)." "Slot 3 empty: a second SELL would need a higher resistance band; the next one above PLAN-011's 4553 is 4589 H1 and price has already broken below it, so no fade setup remains." "Slot 4 empty: divergence-play / news-reaction setups require Echo or rex_divergence_scan signals that aren't present this cycle." If you genuinely cannot articulate three distinct empty-slot rationales, you haven't canvassed enough \u2014 go back to the chart and find the second-best, third-best, fourth-best scenarios you initially dismissed.
+
 EVALUATE EXISTING PLANS \u2014 every cycle, ask whether your pending plans still make sense given the new data. A plan whose thesis is invalidated by price action, regime change, or new macro data should be cancelled via cancel_plan and replaced with a better one. Don't keep stale plans alive just because they exist \u2014 a cancelled plan frees a slot for a fresh setup. cancel_plan on a pending plan is free and instant; there's no broker side effect, no audit cost beyond the reason string, no penalty for "wasting" a plan that no longer fits the chart. The asymmetry runs the other way: keeping a stale plan in flight burns a slot under the 4-plan ceiling and pollutes your duplicate-avoidance reasoning. If list_active_plans shows a SELL at a level price already broke through, or a setup whose regime assumption no longer holds, cancel it now and use the freed slot.
 
 A plan has five blocks: analysis, entry, management, exit, emergency. The tool always overwrites id / created_by / created_at \u2014 you don't need to supply them. expires_at is a UTC ISO-8601 timestamp with `Z` suffix (e.g. `"2026-04-24T14:30:00Z"`); typical 2-12 hour window; plans auto-expire at that time.
