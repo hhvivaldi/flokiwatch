@@ -4844,13 +4844,28 @@ class TradingBot:
                     self._consecutive_no_timer = 0
 
                 if post_next_check_mtime == pre_next_check_mtime:
-                    # FLO-241: Progressive backoff when Floki doesn't set timer
+                    # FLO-403 Phase 1 fallback fix — Floki forgot to call
+                    # set_next_check. Apply the SAME floor as
+                    # AgentTools.set_next_check: 30-min default; 10-min
+                    # only when no plan AND no position (fresh-authoring
+                    # window). The pre-existing progressive backoff
+                    # (5→10→15…→60) and the position-mode 3-min fallback
+                    # both pre-dated FLO-403 and silently re-introduced
+                    # the 5-min cycle cost Phase 1 removes when Floki
+                    # forgets the timer. Same conservative-on-error
+                    # direction as the canonical set_next_check path.
                     _cnt = getattr(self, "_consecutive_no_timer", 0) + 1
                     self._consecutive_no_timer = _cnt
-                    if has_open_position:
-                        fallback_minutes = get_fallback_minutes(True)  # always short with position
-                    else:
-                        fallback_minutes = min(5 + ((_cnt - 1) * 5), 60)
+                    _no_plan = False
+                    try:
+                        from snow import db as _snow_db
+                        _no_plan = not _snow_db.list_plans_by_status(
+                            ("pending", "active"), limit=1,
+                        )
+                    except Exception:
+                        _no_plan = False  # conservative — assume plan exists
+                    _no_position = not has_open_position
+                    fallback_minutes = 10 if (_no_plan and _no_position) else 30
                     now_utc = datetime.utcnow()
                     next_at = now_utc + timedelta(minutes=fallback_minutes)
                     payload = {
@@ -4864,7 +4879,10 @@ class TradingBot:
                         with open(tmp_path, "w", encoding="utf-8") as f:
                             json.dump(payload, f, ensure_ascii=False, indent=2)
                         os.replace(tmp_path, next_path)
-                        _mode_label = "position mode" if has_open_position else f"backoff #{_cnt}"
+                        _mode_label = (
+                            "fresh-authoring (10m floor)" if (fallback_minutes == 10)
+                            else "30m floor (plan or position)"
+                        )
                         log.info(
                             f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes ({_mode_label})"
                         )
