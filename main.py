@@ -334,20 +334,30 @@ class TradingBot:
             except Exception:
                 acquired = True
 
-            # FLO-90: ECHO_CRITICAL removed — Echo is pull-only, no forced cycles
+            # FLO-90:  ECHO_CRITICAL removed — Echo is pull-only.
             # FLO-301: SIMBA_EXIT_EXECUTED added — Simba-initiated wake after close/adjust_sl
-            # FLO-403 Phase 1: SIMBA_WAKE / SIMBA_WATCH removed — Floki receives
-            # only schedule-driven cycles + close signal + pending-order-fill.
-            # Snow `exit` contingencies (FLO-401) + monitor.py deterministic
-            # logic + 30-min scheduled cadence cover the gap. Simba itself is
-            # untouched: its conditions still evaluate, still log, still
-            # surface in the Trade Room — they just stop initiating Floki
-            # cycles. Phase 2 redirects these triggers to the Trade Manager.
-            # Same pattern as FLO-90 (37-day precedent, zero regressions).
-            allowed = {"SCHEDULED", "PENDING_FILL", "SIMBA_EXIT_EXECUTED"}
-            if str(trigger_type or "") not in allowed:
-                log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
-                return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}
+            # FLO-403 Phase 1: SIMBA_WAKE / SIMBA_WATCH dropped from Floki.
+            # FLO-403 Phase 2 Step 3: trigger PARTITION between Floki
+            # (analytical brain — plan author) and Trade Manager (executor —
+            # open-trade supervisor on Qwen 3.6-Plus). PENDING_FILL moves
+            # to TM (was Floki under Phase 1); SIMBA_WAKE / SIMBA_WATCH
+            # re-enabled but routed to TM. Two NEW trigger types:
+            #   TM_CHECK       — Snow-emitted on price-delta / near-trigger
+            #                    (snow_loop.py emit landing in a follow-up step)
+            #   TM_HEARTBEAT   — 60s drift-catcher (heartbeat thread landing
+            #                    in a follow-up step)
+            #   PLAN_TERMINAL  — Snow-emitted on plan close/cancel/expire/fail
+            #                    (snow/db.py callback landing in a follow-up)
+            # Same FLO-90 precedent: unknown / legacy triggers logged + dropped.
+            floki_allowed = {"SCHEDULED", "SIMBA_EXIT_EXECUTED", "PLAN_TERMINAL"}
+            tm_allowed = {"SIMBA_WAKE", "SIMBA_WATCH", "PENDING_FILL",
+                          "TM_CHECK", "TM_HEARTBEAT"}
+            tt = str(trigger_type or "")
+            if tt in tm_allowed:
+                return self._dispatch_to_trade_manager(tt, trigger_data)
+            if tt not in floki_allowed:
+                log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {tt}")
+                return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": tt}
 
             if not acquired:
                 log.info("MONITOR | Out-of-cycle Proactive skipped — analysis already running")
@@ -385,6 +395,33 @@ class TradingBot:
                     self._proactive_lock.release()
                 except Exception:
                     pass
+
+    def _dispatch_to_trade_manager(self, trigger_type: str, trigger_data: Optional[dict]) -> dict:
+        """FLO-403 Phase 2 Step 3 — route TM-allowed triggers to the
+        Trade Manager singleton. Defensive on every layer: if the
+        singleton isn't initialized (TM init failed at startup, or
+        the import is broken), we log + drop instead of crashing the
+        trigger source. The deterministic safety net (Snow + monitor.py)
+        keeps the position covered regardless."""
+        try:
+            from trade_manager import get_trade_manager
+            tm = get_trade_manager()
+            if tm is None:
+                log.debug(
+                    f"TM_DISPATCH | trade_manager not initialized — "
+                    f"discarding {trigger_type}"
+                )
+                return {"success": False, "reason": "tm_not_initialized",
+                        "trigger_type": trigger_type}
+            return tm.run_cycle(trigger_type, trigger_data or {})
+        except Exception as e:
+            log.warning(
+                f"TM_DISPATCH | failed for {trigger_type}: "
+                f"{type(e).__name__}: {e}"
+            )
+            return {"success": False,
+                    "reason": f"tm_dispatch_error:{type(e).__name__}",
+                    "trigger_type": trigger_type}
 
     def _reconcile_with_mt5(self) -> None:
         """Reconcile saved state with MT5 reality.
@@ -1141,6 +1178,26 @@ class TradingBot:
                     log.warning("AI Agent: OFF (init failed)")
             except Exception as e:
                 log.warning(f"AI Agent init error (ignored): {e}")
+
+        # FLO-403 Phase 2 Step 3 — Trade Manager init (alongside AI Agent).
+        # Defaults TRADE_MANAGER_ENABLED=False (shadow mode). The daemon
+        # constructs unconditionally so trigger dispatch lands; shadow
+        # mode is enforced inside TradeManager._dispatch.
+        try:
+            from trade_manager import initialize_trade_manager
+            if initialize_trade_manager(executor, bot=self):
+                _tm_mode = (
+                    "PRODUCTION" if getattr(config, "TRADE_MANAGER_ENABLED", False)
+                    else "SHADOW"
+                )
+                log.info(
+                    f"Trade Manager: ON ({_tm_mode}, "
+                    f"model={getattr(config, 'TRADE_MANAGER_MODEL', '?')})"
+                )
+            else:
+                log.warning("Trade Manager: OFF (init failed)")
+        except Exception as e:
+            log.warning(f"Trade Manager init error (ignored): {e}")
 
         # Give the PositionMonitor access to this bot instance (for Agent watch-condition triggers)
         try:

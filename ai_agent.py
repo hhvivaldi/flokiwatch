@@ -547,6 +547,11 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     "set_watch_conditions",       # writes per-ticket watch conditions
     # --- Broker side effects (MT5 / executor) ---
     "execute_trade",              # opens an MT5 position
+    # FLO-403 Phase 2 Step 4 — close_trade / adjust_trade removed
+    # from Floki's tool roster (the OpenAI tool definitions are gone),
+    # but kept in this set for defense-in-depth. If a future change
+    # ever re-adds them to Floki's roster, the singleton classification
+    # is still in place — no concurrent-with-reads race window.
     "close_trade",                # closes an MT5 position
     "adjust_trade",               # modifies MT5 SL/TP on an open position
     "cancel_pending_order",       # cancels a pending broker order
@@ -1133,30 +1138,13 @@ class AIAgent:
                     "additionalProperties": False,
                 },
             },
-            {
-                "name": "close_trade",
-                "description": "Close a trade by ticket",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"ticket": {"type": "integer"}},
-                    "required": ["ticket"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "adjust_trade",
-                "description": "Adjust SL/TP of an open trade. You are responsible for position management — move SL to protect profits or adjust TP based on market structure.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "ticket": {"type": "integer"},
-                        "new_sl": {"type": "number"},
-                        "new_tp": {"type": "number"},
-                    },
-                    "required": ["ticket", "new_sl", "new_tp"],
-                    "additionalProperties": False,
-                },
-            },
+            # FLO-403 Phase 2 Step 4 — close_trade / adjust_trade
+            # tool definitions removed. The Trade Manager owns those
+            # decisions on its own lean tool surface. The validation
+            # at ai_agent.py ~2043-2077 ("decision=CLOSE_TRADE →
+            # close_trade in trace") becomes unreachable since the
+            # decision space no longer carries those values; left in
+            # place as a regression catcher per design §8.3.
             {
                 "name": "read_session_memory",
                 "description": "Read session memory notes (trading journal)",

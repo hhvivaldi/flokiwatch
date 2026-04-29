@@ -80,16 +80,36 @@ class TradeManagerTools:
     class, not by inheritance discipline.
     """
 
-    def __init__(self, *, executor, agent_tools=None):
+    def __init__(self, *, executor, agent_tools=None, bot=None):
+        """Init is intentionally CHEAP — no AgentTools construction.
+
+        The lazy `_floki_tools` property builds AgentTools the first
+        time it's needed (matching main.py's per-cycle construction
+        pattern: bot + executor + safety_checks_module + risk_manager_module).
+        Tests pass `agent_tools=<mock>` which short-circuits the
+        property; production passes `bot=<TradingBot instance>`.
+        """
         self._executor = executor
-        # Composition: we lazily build a private AgentTools for the
-        # read-only passthroughs that already work (positions inventory,
-        # full indicators, regime classification, echo alerts). The
-        # caller can inject for tests.
-        if agent_tools is None:
+        self._bot = bot
+        self._cached_floki_tools = agent_tools  # may be a stub or None
+
+    @property
+    def _floki_tools(self):
+        """Composition: lazy-construct AgentTools on first access. Per
+        Floki's per-cycle pattern (main.py:4764) we wire bot + executor
+        + safety + risk. If the test path injected an `agent_tools`
+        stub at __init__, this short-circuits and returns it directly."""
+        if self._cached_floki_tools is None:
             from agent_tools import AgentTools
-            agent_tools = AgentTools(executor=executor)
-        self._floki_tools = agent_tools
+            import safety_checks
+            import risk_manager
+            self._cached_floki_tools = AgentTools(
+                self._bot,
+                executor=self._executor,
+                safety_checks_module=safety_checks,
+                risk_manager_module=risk_manager,
+            )
+        return self._cached_floki_tools
 
     # =========================================================================
     # 1. Inventory — passthrough (lean fields are already what we need)
@@ -358,25 +378,24 @@ class TradeManagerTools:
         return out
 
     # =========================================================================
-    # 6. Execute paths — gated by Phase 1 ownership guard until Step 5
+    # 6. Execute paths — caller-aware Phase 1 guard (Q10.1 Option A)
     # =========================================================================
-    # In Steps 1+2 these are thin passthroughs to AgentTools.close_trade /
-    # adjust_trade. Phase 1 guard blocks snow-owned positions for caller
-    # role "floki" (the default). Step 5 will introduce caller_role
-    # parameter and TM will pass "trade_manager" to bypass.
+    # TM passes caller_role="trade_manager" to AgentTools.close_trade /
+    # adjust_trade so the Phase 1 Snow ownership guard recognizes the
+    # authorized executor and lets the call through. Floki callers use
+    # the default ("floki") and remain blocked on snow:* positions.
     #
     # In shadow mode (TRADE_MANAGER_ENABLED=False — default) these are
-    # never called by the daemon — TradeManager._dispatch logs the
-    # decision instead. They exist here so the dispatch path doesn't
-    # need conditional imports and Step 5 only needs to update one site.
+    # never invoked by the daemon — TradeManager._dispatch logs the
+    # decision instead.
 
     def close_trade(self, ticket: int, reason: str) -> Dict[str, Any]:
         """Close a position. `reason` is a TM-side rationale string
-        carried into the result for telemetry; the underlying
-        AgentTools call doesn't accept reason yet (Step 5 will widen
-        it). Pre-Step-5: this is blocked by Phase 1 guard for snow:*
-        positions; post-Step-5: TM passes caller_role='trade_manager'."""
-        result = self._floki_tools.close_trade(int(ticket))
+        carried into the result for telemetry. Bypasses the Phase 1
+        Snow ownership guard via caller_role='trade_manager'."""
+        result = self._floki_tools.close_trade(
+            int(ticket), caller_role="trade_manager",
+        )
         if isinstance(result, dict):
             result["tm_reason"] = str(reason or "")[:200]
         return result
@@ -384,11 +403,12 @@ class TradeManagerTools:
     def adjust_trade(
         self, ticket: int, new_sl: float, new_tp: float, reason: str,
     ) -> Dict[str, Any]:
-        """SL/TP adjustment. Same Phase 1 guard interaction as close_trade."""
+        """SL/TP adjustment. Same caller_role bypass as close_trade."""
         result = self._floki_tools.adjust_trade(
             int(ticket),
             new_sl=float(new_sl),
             new_tp=float(new_tp),
+            caller_role="trade_manager",
         )
         if isinstance(result, dict):
             result["tm_reason"] = str(reason or "")[:200]

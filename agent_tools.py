@@ -2627,7 +2627,7 @@ class AgentTools:
             self._log_tool("execute_trade", start, f"error={e}")
             return {"success": False, "reason": "tool_error"}
 
-    def close_trade(self, ticket: int) -> Dict[str, Any]:
+    def close_trade(self, ticket: int, caller_role: str = "floki") -> Dict[str, Any]:
         start = time.time()
         try:
             try:
@@ -2635,12 +2635,14 @@ class AgentTools:
             except Exception:
                 return {"success": False, "reason": "invalid ticket"}
 
-            # FLO-403 Phase 1 — Snow ownership guard. Floki must not close
-            # positions managed by Snow; the canonical close path is
-            # cancel_plan, which lets Snow's audit machinery handle the
-            # transition. Failure-safe: if the position lookup raises,
-            # assume NOT Snow-owned (false negative over false positive —
-            # the existing close_position path stays the dominant one).
+            # FLO-403 Phase 1 — Snow ownership guard.
+            # FLO-403 Phase 2 Step 5 (Q10.1 Option A): caller-aware guard.
+            # Default caller_role="floki" preserves Phase 1 behavior;
+            # Trade Manager passes caller_role="trade_manager" to bypass
+            # (it IS Snow's authorized executor under the new architecture).
+            # Failure-safe: if the position lookup raises, assume NOT
+            # Snow-owned (false negative over false positive — the existing
+            # close_position path stays the dominant one).
             try:
                 _positions = self._executor.get_open_positions() or []
                 _snow_owned = any(
@@ -2650,8 +2652,8 @@ class AgentTools:
                 )
             except Exception:
                 _snow_owned = False
-            if _snow_owned:
-                self._log_tool("close_trade", start, f"ticket={t} | blocked | snow_owned")
+            if _snow_owned and caller_role != "trade_manager":
+                self._log_tool("close_trade", start, f"ticket={t} | blocked | snow_owned | caller={caller_role}")
                 return {
                     "success": False,
                     "reason": "snow_owned",
@@ -2704,8 +2706,13 @@ class AgentTools:
         """Record a successful adjustment timestamp."""
         _adjust_rate_history.setdefault(ticket, []).append(time.time())
 
-    def adjust_trade(self, ticket: int, new_sl: float, new_tp: float) -> Dict[str, Any]:
-        """Adjust SL/TP on an open position with SL-widening guard and rate limiting (FLO-141)."""
+    def adjust_trade(self, ticket: int, new_sl: float, new_tp: float, caller_role: str = "floki") -> Dict[str, Any]:
+        """Adjust SL/TP on an open position with SL-widening guard and rate limiting (FLO-141).
+
+        FLO-403 Phase 2 Step 5 (Q10.1 Option A): caller_role gates the
+        Snow ownership guard. Default "floki" preserves Phase 1 behavior;
+        Trade Manager passes "trade_manager" to bypass.
+        """
         start = time.time()
         try:
             try:
@@ -2746,8 +2753,8 @@ class AgentTools:
             except Exception:
                 pass
 
-            if _snow_owned:
-                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | snow_owned")
+            if _snow_owned and caller_role != "trade_manager":
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | snow_owned | caller={caller_role}")
                 return {
                     "success": False,
                     "reason": "snow_owned",

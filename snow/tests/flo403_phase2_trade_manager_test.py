@@ -745,7 +745,11 @@ class TestProductionMode:
         result = tm.run_cycle("TM_CHECK", {"ticket": 999})
         assert result["decision"] == "CLOSE_TRADE"
         assert result["executed"] is True
-        floki.close_trade.assert_called_once_with(999)
+        # Phase 2 Step 5: TM passes caller_role="trade_manager" to
+        # bypass the Phase 1 ownership guard.
+        floki.close_trade.assert_called_once_with(
+            999, caller_role="trade_manager",
+        )
 
     def test_adjust_decision_executes_on_floki_ticket(self):
         tm, _, floki = _make_tm(
@@ -761,6 +765,7 @@ class TestProductionMode:
         assert result["executed"] is True
         floki.adjust_trade.assert_called_once_with(
             999, new_sl=4490.0, new_tp=4530.0,
+            caller_role="trade_manager",
         )
 
     def test_no_op_decision_does_not_execute(self):

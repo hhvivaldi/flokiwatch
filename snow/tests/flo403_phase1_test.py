@@ -376,16 +376,29 @@ class TestSimbaTriggerCleanup_SourceContract:
         )
 
     def test_scheduled_pending_fill_exit_executed_preserved(self):
-        """The three triggers Floki SHOULD still receive — the 30-min
-        cadence channel, the pending-order-fill signal, and the
-        close-summary wake."""
+        """Phase 1 → Phase 2 evolution: SCHEDULED + SIMBA_EXIT_EXECUTED
+        stay on Floki throughout. PENDING_FILL was Floki under Phase 1,
+        moved to TM under Phase 2 — assertion now scoped to the
+        floki_allowed set (Phase 2 partition). This test was originally
+        a Phase 1 contract; the partition rename is covered by the
+        Phase 2 trigger-routing test file."""
         src = self._read_main()
-        idx = src.find("allowed = {")
+        # Phase 2 introduced floki_allowed = {...} naming; Phase 1
+        # used allowed = {...}. Match either to keep the test stable
+        # across phases.
+        for pat in ("floki_allowed = {", "allowed = {"):
+            idx = src.find(pat)
+            if idx >= 0:
+                break
+        assert idx >= 0
         end = src.find("}", idx)
         block = src[idx:end + 1]
         assert "SCHEDULED" in block
-        assert "PENDING_FILL" in block
         assert "SIMBA_EXIT_EXECUTED" in block
+        # PENDING_FILL is now in tm_allowed (Phase 2) — no longer in
+        # the Floki block. Test it from the phase-aware location.
+        # See snow/tests/flo403_phase2_trigger_routing_test.py for the
+        # canonical PENDING_FILL → TM contract.
 
     def test_echo_critical_still_absent(self):
         """FLO-90 precedent: ECHO_CRITICAL was removed 37 days ago.

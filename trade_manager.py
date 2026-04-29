@@ -73,15 +73,17 @@ class TradeManager:
         api_base: str,
         api_key: str,
         shadow_mode: bool,
+        bot=None,
         agent_tools=None,
     ):
         self._executor = executor
+        self._bot = bot
         self._model = model
         self._api_base = api_base
         self._api_key = api_key
         self._shadow = bool(shadow_mode)
         self._tools = TradeManagerTools(
-            executor=executor, agent_tools=agent_tools,
+            executor=executor, agent_tools=agent_tools, bot=bot,
         )
         self._cycle_lock = threading.RLock()
         # ticket → ISO-8601 UTC trade-open time, used for the
@@ -375,4 +377,47 @@ class TradeManager:
             return False
 
 
-__all__ = ["TradeManager"]
+# =============================================================================
+# Module-level singleton — same pattern as ai_agent.initialize_agent
+# =============================================================================
+
+_tm_instance: Optional["TradeManager"] = None
+
+
+def initialize_trade_manager(executor, bot=None) -> bool:
+    """Initialize the global TradeManager singleton from config. Returns
+    True iff the daemon is constructed; False if config disables it
+    or instantiation raises.
+
+    `bot` is the TradingBot reference threaded into the per-cycle
+    AgentTools construction (matches Floki's pattern at main.py:4764).
+    Optional in tests; production passes self.
+
+    Called by main.py at startup, alongside initialize_agent. A failed
+    TM init logs a warning and the bot continues; trigger routing
+    falls through to the not-initialized debug log."""
+    global _tm_instance
+    try:
+        import config as _cfg
+        _tm_instance = TradeManager(
+            executor=executor,
+            bot=bot,
+            model=_cfg.TRADE_MANAGER_MODEL,
+            api_base=_cfg.TRADE_MANAGER_API_BASE,
+            api_key=_cfg.TRADE_MANAGER_API_KEY,
+            shadow_mode=not bool(_cfg.TRADE_MANAGER_ENABLED),
+        )
+        return True
+    except Exception as e:
+        log.warning(f"TRADE_MANAGER | initialize_trade_manager failed: {e}")
+        _tm_instance = None
+        return False
+
+
+def get_trade_manager() -> Optional["TradeManager"]:
+    """Return the singleton or None if not initialized. Trigger router
+    at main.py uses this to dispatch."""
+    return _tm_instance
+
+
+__all__ = ["TradeManager", "initialize_trade_manager", "get_trade_manager"]
