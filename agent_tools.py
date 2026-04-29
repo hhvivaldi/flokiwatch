@@ -48,27 +48,48 @@ class AgentTools:
                 m = 5
             _original_requested = int(m)
 
+            # FLO-403 Phase 1 — 30-min default floor; 10-min only when
+            # NO plan AND NO position exists (fresh-authoring fast iteration
+            # window). Inverted-default fix per CTO review: floor STARTS at
+            # 30 and is only lowered to 10 on positive confirmation that
+            # both stores are empty. If either lookup raises, the
+            # conservative 30-min floor stays — failure-safe direction is
+            # "slower cadence" because faster-than-30 is the privilege case.
+            _floor = 30
+            try:
+                from snow import db as _snow_db
+                _no_plan = not _snow_db.list_plans_by_status(
+                    ("pending", "active"), limit=1,
+                )
+            except Exception:
+                _no_plan = False  # conservative — assume plan exists
+            try:
+                _positions = self._executor.get_open_positions() if self._executor else []
+                _no_position = not _positions
+            except Exception:
+                _no_position = False  # conservative — assume position exists
+            if _no_plan and _no_position:
+                _floor = 10
+
             # FLO-297: Range clamp (valid 2-120). Previously silent.
             _range_clamped = False
-            if m < 2:
-                m = 2
+            if m < _floor:
+                m = _floor
                 _range_clamped = True
             elif m > 120:
                 m = 120
                 _range_clamped = True
 
-            # Position mode cap: max N min with open position
+            # FLO-403 Phase 1 — legacy `FLOKI_MAX_CHECK_WITH_POSITION` cap
+            # removed. That cap forced fast re-checks when a position was
+            # open (10-min default) under the pre-FLO-403 model where
+            # Floki managed open trades. Under Phase 1, Floki does NOT
+            # manage open trades — Snow contingencies + monitor.py handle
+            # them — so a 10-min cap below the new 30-min floor would
+            # silently re-introduce the cost driver Phase 1 is removing.
+            # The 30-min floor (above) IS the policy with a position open.
             _position_capped = False
-            _max_pos = 10
-            try:
-                import config as _cfg_snc
-                _max_pos = int(getattr(_cfg_snc, "FLOKI_MAX_CHECK_WITH_POSITION", 10) or 10)
-                _positions = self._executor.get_open_positions() if self._executor else []
-                if _positions and m > _max_pos:
-                    m = _max_pos
-                    _position_capped = True
-            except Exception:
-                pass
+            _max_pos = 0  # retained for clamp-reason payload symmetry only
 
             now = datetime.utcnow()
             next_at = now + timedelta(minutes=int(m))
@@ -2614,6 +2635,33 @@ class AgentTools:
             except Exception:
                 return {"success": False, "reason": "invalid ticket"}
 
+            # FLO-403 Phase 1 — Snow ownership guard. Floki must not close
+            # positions managed by Snow; the canonical close path is
+            # cancel_plan, which lets Snow's audit machinery handle the
+            # transition. Failure-safe: if the position lookup raises,
+            # assume NOT Snow-owned (false negative over false positive —
+            # the existing close_position path stays the dominant one).
+            try:
+                _positions = self._executor.get_open_positions() or []
+                _snow_owned = any(
+                    getattr(p, "ticket", None) == t
+                    and str(getattr(p, "comment", "") or "").startswith("snow:")
+                    for p in _positions
+                )
+            except Exception:
+                _snow_owned = False
+            if _snow_owned:
+                self._log_tool("close_trade", start, f"ticket={t} | blocked | snow_owned")
+                return {
+                    "success": False,
+                    "reason": "snow_owned",
+                    "hint": (
+                        "this position is managed by Snow; use cancel_plan "
+                        "to close the plan, or let Snow's exit / management "
+                        "contingencies fire"
+                    ),
+                }
+
             res = self._executor.close_position(t)
             if not getattr(res, "success", False):
                 reason = getattr(res, "error_message", None) or "close failed"
@@ -2678,9 +2726,13 @@ class AgentTools:
             # (was: 3/hour max, cost $22 on 2026-04-02 when blocked at 15:44)
 
             # --- Get current position (live MT5) for old values + direction ---
+            # FLO-403 Phase 1 — Snow ownership guard piggybacks on this same
+            # positions fetch (no extra MT5 round-trip). Same failure-safe
+            # default as close_trade: lookup raises → assume NOT Snow-owned.
             old_sl = None
             old_tp = None
             direction_type = None  # 0=BUY, 1=SELL
+            _snow_owned = False
             try:
                 positions = self._executor.get_open_positions() or []
                 for p in positions:
@@ -2688,9 +2740,24 @@ class AgentTools:
                         old_sl = self._safe_float(getattr(p, "sl", None))
                         old_tp = self._safe_float(getattr(p, "tp", None))
                         direction_type = getattr(p, "type", None)
+                        if str(getattr(p, "comment", "") or "").startswith("snow:"):
+                            _snow_owned = True
                         break
             except Exception:
                 pass
+
+            if _snow_owned:
+                self._log_tool("adjust_trade", start, f"ticket={t} | blocked | snow_owned")
+                return {
+                    "success": False,
+                    "reason": "snow_owned",
+                    "hint": (
+                        "this position is managed by Snow; SL / TP changes "
+                        "must come from Snow's plan-defined contingencies — "
+                        "if the plan is wrong, cancel_plan and submit a new "
+                        "plan with the corrected geometry"
+                    ),
+                }
 
             # FLO-200: SL widening guard REMOVED — Floki has full autonomy
             # (was: blocked SL moves further from entry)

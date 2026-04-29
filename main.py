@@ -336,7 +336,15 @@ class TradingBot:
 
             # FLO-90: ECHO_CRITICAL removed — Echo is pull-only, no forced cycles
             # FLO-301: SIMBA_EXIT_EXECUTED added — Simba-initiated wake after close/adjust_sl
-            allowed = {"SCHEDULED", "SIMBA_WAKE", "SIMBA_WATCH", "PENDING_FILL", "SIMBA_EXIT_EXECUTED"}
+            # FLO-403 Phase 1: SIMBA_WAKE / SIMBA_WATCH removed — Floki receives
+            # only schedule-driven cycles + close signal + pending-order-fill.
+            # Snow `exit` contingencies (FLO-401) + monitor.py deterministic
+            # logic + 30-min scheduled cadence cover the gap. Simba itself is
+            # untouched: its conditions still evaluate, still log, still
+            # surface in the Trade Room — they just stop initiating Floki
+            # cycles. Phase 2 redirects these triggers to the Trade Manager.
+            # Same pattern as FLO-90 (37-day precedent, zero regressions).
+            allowed = {"SCHEDULED", "PENDING_FILL", "SIMBA_EXIT_EXECUTED"}
             if str(trigger_type or "") not in allowed:
                 log.info(f"FLOKI_SCHEDULE | Blocked legacy trigger: {trigger_type}")
                 return {"success": False, "reason": "blocked_legacy_trigger", "trigger_type": trigger_type}

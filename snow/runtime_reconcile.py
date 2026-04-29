@@ -225,6 +225,23 @@ def _runtime_reconcile_one(
         f"deals={len(deals)}"
     )
 
+    # FLO-403 Phase 1 — every active_to_closed transition reaching this
+    # path is by definition an EXTERNAL close: Snow contingencies (exit /
+    # management close_full) call mark_plan_terminal directly via
+    # snow.actions BEFORE the position vanishes from MT5, so a Snow-owned
+    # close never lands here. Reaching this branch means the close source
+    # was outside Snow's contingency machinery — broker manual close,
+    # non-Floki API, or a regression of the agent_tools.close_trade /
+    # adjust_trade ownership guard (FLO-403 §E). Rule 19: surface the
+    # observation so future debugging knows where to look.
+    log.warning(
+        f"snow.runtime_reconcile.external_close_post_guard plan_id={plan_id} "
+        f"ticket={ticket} broker_close={close_time_iso} — close source "
+        f"was external to Snow's contingency machinery (manual broker close, "
+        f"non-Floki API, or ownership-guard regression). Investigate if "
+        f"unexpected."
+    )
+
     try:
         from snow.outcome import backfill_outcome
         backfill_outcome(plan_id, int(ticket), mt5_proxy=mt5_proxy)
