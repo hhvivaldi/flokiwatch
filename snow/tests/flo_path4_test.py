@@ -116,10 +116,19 @@ class TestIntelligenceBlock:
     def test_echo_section_strips_directional_bias_field(self):
         # Bug G discipline: gold_impact (BULLISH/BEARISH) MUST be stripped.
         # relevance_score (numeric classification-adjacent) MUST be stripped.
+        # FLO-396: timestamp is computed at test time (now-30min) instead of
+        # hardcoded — hardcoded dates bit-rot when the `_ECHO_RECENT_HOURS`
+        # window (6h) lapses past them. Adjacent tests in this file already
+        # use `datetime.now(timezone.utc).isoformat()` for the same reason;
+        # this test is brought in line.
+        from datetime import datetime, timezone
+        recent_iso = datetime.now(timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
         raw_alert = {
-            "timestamp": "2026-04-28T16:50:00Z",  # very recent
-            "first_seen": "2026-04-28T16:50:00Z",
-            "latest": "2026-04-28T16:50:00Z",
+            "timestamp": recent_iso,  # FLO-396: dynamic, not hardcoded
+            "first_seen": recent_iso,
+            "latest": recent_iso,
             "title": "Gold drops on dollar strength",
             "representative_headline": "Gold drops on dollar strength",
             "headline_count": 1,
