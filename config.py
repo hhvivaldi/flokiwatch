@@ -556,6 +556,43 @@ FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "qwen/qwen3.6-plus
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
 # ============================================================================
+# FLO-403 Phase 2 — TRADE MANAGER AGENT
+# ============================================================================
+# Cheap LLM that supervises open trades (HOLD / ADJUST / CLOSE / NO_OP).
+# Floki authors plans (Gemini, 30-min); Trade Manager executes (Qwen, ~60s).
+# See data/_design/FLO-403_Phase2_Trade_Manager_Design.md for the full spec.
+#
+# `TRADE_MANAGER_ENABLED` is the shadow/production flag:
+#   False (default) — daemon runs, decisions logged, NO broker calls
+#                     (one-week shadow run before flipping to True).
+#   True            — decisions execute via close_trade / adjust_trade.
+TRADE_MANAGER_ENABLED = os.environ.get(
+    "TRADE_MANAGER_ENABLED", "false"
+).strip().lower() in ("1", "true", "yes")
+# Model + endpoint for the TM. Reuses Qwen via DashScope by default
+# (no new provider) — overridable via env for shadow comparisons.
+TRADE_MANAGER_MODEL = os.environ.get("TRADE_MANAGER_MODEL", "qwen3.6-plus")
+TRADE_MANAGER_API_BASE = os.environ.get(
+    "TRADE_MANAGER_API_BASE",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+)
+TRADE_MANAGER_API_KEY = os.environ.get(
+    "TRADE_MANAGER_API_KEY", os.environ.get("QWEN_API_KEY", ""),
+)
+# Heartbeat cadence (seconds) — drift catcher when Snow's TM_CHECK
+# event delivery is interrupted. 60 chosen to stay below Floki's
+# 30-min floor while not flooding Snow's 5-second tick.
+TRADE_MANAGER_HEARTBEAT_SECONDS = int(
+    os.environ.get("TRADE_MANAGER_HEARTBEAT_SECONDS", "60") or "60"
+)
+# Snow → TM event ratio for "near contingency" trigger emission.
+# Plan condition is "near-trigger" when MFE/MAE / threshold ratio
+# crosses this fraction (e.g. mfe_reached(100) at MFE=80 → 0.8).
+TRADE_MANAGER_NEAR_TRIGGER_RATIO = float(
+    os.environ.get("TRADE_MANAGER_NEAR_TRIGGER_RATIO", "0.8") or "0.8"
+)
+
+# ============================================================================
 # SAGE PERFORMANCE AUDITOR (daily)
 # ============================================================================
 USE_SAGE_AUDITOR = True

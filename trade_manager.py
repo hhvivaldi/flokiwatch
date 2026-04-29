@@ -1,0 +1,378 @@
+"""FLO-403 Phase 2 — Trade Manager Agent daemon.
+
+Cheap LLM (Qwen 3.6-Plus by default) that supervises OPEN trades.
+Reactive, single-call-per-cycle: gather context server-side via 6
+tools (no in-LLM tool loop), then ONE chat completion that returns
+strict decision JSON.
+
+Decision space: HOLD_TRADE | ADJUST_TRADE | CLOSE_TRADE | NO_OP.
+NO authoring, NO opening positions, NO calls to anything outside
+TradeManagerTools.
+
+Lifecycle:
+  - Instantiated once per bot lifetime (alongside AIAgent).
+  - main.py routes SIMBA_WAKE / SIMBA_WATCH / PENDING_FILL /
+    TM_CHECK / TM_HEARTBEAT events here via run_cycle().
+  - Concurrency: per-instance RLock; second event during an
+    in-flight cycle returns {"reason": "tm_cycle_in_progress"} —
+    same lossy-by-design pattern as Floki's proactive_lock.
+
+Failure modes (all → NO_OP, no Floki fallback):
+  - LLM timeout / provider down
+  - Response parse failure
+  - Tool fetch raises (best-effort fields populated as None)
+The deterministic safety net (monitor.py BE/trail/drawdown,
+Snow exit + management contingencies, runtime_reconcile) covers
+everything the TM might miss.
+
+Shadow vs production:
+  - TRADE_MANAGER_ENABLED=False (default) — daemon runs the LLM
+    cycle, logs the decision, but does NOT dispatch to broker.
+  - TRADE_MANAGER_ENABLED=True — decisions execute via
+    TradeManagerTools.close_trade / adjust_trade.
+
+See data/_design/FLO-403_Phase2_Trade_Manager_Design.md §3 for
+the full design.
+"""
+from __future__ import annotations
+
+import threading
+import time
+from typing import Any, Dict, Optional
+
+from logger import log
+from trade_manager_prompts import (
+    SYSTEM_PROMPT,
+    build_user_prompt,
+    parse_decision_json,
+)
+from trade_manager_tools import TradeManagerTools
+
+
+# Single-call timeout — Qwen p50 ~85s today; 120s gives slack
+# without blocking Snow's 5s tick on a stuck request.
+_LLM_TIMEOUT_SECONDS = 120
+
+
+def _utc_iso(ts: Optional[float] = None) -> str:
+    from datetime import datetime, timezone
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class TradeManager:
+    """Daemon class. Stateless across cycles except for the cycle lock
+    and the trade-open-time map (used to bound the get_echo_critical
+    `since_iso` filter to per-ticket open time)."""
+
+    def __init__(
+        self,
+        *,
+        executor,
+        model: str,
+        api_base: str,
+        api_key: str,
+        shadow_mode: bool,
+        agent_tools=None,
+    ):
+        self._executor = executor
+        self._model = model
+        self._api_base = api_base
+        self._api_key = api_key
+        self._shadow = bool(shadow_mode)
+        self._tools = TradeManagerTools(
+            executor=executor, agent_tools=agent_tools,
+        )
+        self._cycle_lock = threading.RLock()
+        # ticket → ISO-8601 UTC trade-open time, used for the
+        # get_echo_critical since_iso filter. Best-effort; missing
+        # entries fall back to no time filter.
+        self._open_time_map: Dict[int, str] = {}
+        self._client = None  # lazy — built on first run_cycle
+
+        log.info(
+            f"TRADE_MANAGER | initialized | model={model} | "
+            f"shadow={'YES' if shadow_mode else 'NO (PRODUCTION)'} | "
+            f"endpoint={api_base}"
+        )
+
+    # =========================================================================
+    # Public entry point — called by main.py trigger router
+    # =========================================================================
+
+    def run_cycle(
+        self, trigger_type: str, trigger_data: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        """Single TM cycle.
+
+        Returns:
+          {success: bool, decision: <DECISION>, reason: <str>,
+           executed: bool, latency_ms: int, ...}
+
+        Concurrency: holds `_cycle_lock` for the duration. A second
+        call during an in-flight cycle returns immediately with
+        reason="tm_cycle_in_progress" — same shape as Floki's
+        proactive_lock. Lossy by design; heartbeat catches up.
+        """
+        if not self._cycle_lock.acquire(blocking=False):
+            return {
+                "success": False,
+                "reason": "tm_cycle_in_progress",
+                "decision": "NO_OP",
+                "executed": False,
+            }
+        t0 = time.time()
+        try:
+            # --- 1. Gather context (server-side, no LLM yet) ---
+            ctx = self._gather_context(trigger_type, trigger_data or {})
+            if not ctx.get("position"):
+                latency_ms = int((time.time() - t0) * 1000)
+                log.info(
+                    f"TM_CYCLE | trigger={trigger_type} | NO_OP | "
+                    f"reason=no_open_position | {latency_ms}ms"
+                )
+                return {
+                    "success": True,
+                    "decision": "NO_OP",
+                    "reason": "no_open_position",
+                    "executed": False,
+                    "latency_ms": latency_ms,
+                }
+
+            # --- 2. Build prompts ---
+            user_msg = build_user_prompt(ctx)
+
+            # --- 3. LLM call ---
+            try:
+                raw = self._call_llm(SYSTEM_PROMPT, user_msg)
+            except Exception as e:
+                latency_ms = int((time.time() - t0) * 1000)
+                log.warning(
+                    f"TM_CYCLE | trigger={trigger_type} | LLM_FAILED | "
+                    f"{type(e).__name__}: {e} | {latency_ms}ms — defaulting NO_OP"
+                )
+                return {
+                    "success": False,
+                    "reason": f"llm_failed:{type(e).__name__}",
+                    "decision": "NO_OP",
+                    "executed": False,
+                    "latency_ms": latency_ms,
+                }
+
+            # --- 4. Parse strict decision JSON ---
+            decision = parse_decision_json(raw)
+            if decision is None:
+                latency_ms = int((time.time() - t0) * 1000)
+                log.warning(
+                    f"TM_CYCLE | trigger={trigger_type} | PARSE_FAILED | "
+                    f"raw[:200]={raw[:200]!r} | {latency_ms}ms — defaulting NO_OP"
+                )
+                return {
+                    "success": False,
+                    "reason": "parse_failed",
+                    "decision": "NO_OP",
+                    "executed": False,
+                    "latency_ms": latency_ms,
+                }
+
+            # --- 5. Dispatch (or shadow-log) ---
+            executed = self._dispatch(decision, ctx)
+            latency_ms = int((time.time() - t0) * 1000)
+            log.info(
+                f"TM_CYCLE | trigger={trigger_type} | "
+                f"decision={decision['decision']} | "
+                f"reason={decision.get('reason', '')[:80]!r} | "
+                f"shadow={self._shadow} | executed={executed} | {latency_ms}ms"
+            )
+            return {
+                "success": True,
+                **decision,
+                "executed": executed,
+                "latency_ms": latency_ms,
+            }
+        finally:
+            self._cycle_lock.release()
+
+    # =========================================================================
+    # Internals
+    # =========================================================================
+
+    def _gather_context(
+        self, trigger_type: str, trigger_data: dict,
+    ) -> Dict[str, Any]:
+        """Six tool calls + per-ticket selection. No LLM. Failure on
+        any sub-fetch yields a None field — the prompt builder treats
+        None as 'n/a'."""
+        ctx: Dict[str, Any] = {
+            "position": None,
+            "plan": {},
+            "market": {},
+            "trigger": {"type": trigger_type, "data": trigger_data},
+        }
+
+        # 1. Inventory — pick first managed position. Multi-position
+        # case is bounded (max 3 per CLAUDE.md); for v1 the TM cycles
+        # one position per call. The trigger router fires per-ticket
+        # for TM_CHECK so this naturally serializes.
+        try:
+            inv = self._tools.get_open_positions() or {}
+            positions = inv.get("positions") or []
+        except Exception as e:
+            log.debug(f"TM_GATHER | get_open_positions failed: {e}")
+            positions = []
+        if not positions:
+            return ctx
+
+        # Prefer the trigger's ticket if provided; otherwise first.
+        target_ticket = None
+        if isinstance(trigger_data, dict):
+            tt = trigger_data.get("ticket")
+            if tt is not None:
+                try:
+                    target_ticket = int(tt)
+                except Exception:
+                    target_ticket = None
+        chosen = None
+        if target_ticket is not None:
+            for p in positions:
+                if int(p.get("ticket") or 0) == target_ticket:
+                    chosen = p
+                    break
+        if chosen is None:
+            chosen = positions[0]
+        ctx["position"] = dict(chosen)
+        ticket = int(chosen.get("ticket") or 0)
+
+        # Stamp open time on first sighting (used for echo since-filter).
+        if ticket and ticket not in self._open_time_map:
+            self._open_time_map[ticket] = _utc_iso()
+
+        # 2. Position state (lean Snow-side view)
+        try:
+            state = self._tools.get_position_state(ticket)
+            if isinstance(state, dict):
+                ctx["position"]["mfe_pips"] = state.get("mfe_pips")
+                ctx["position"]["mae_pips"] = state.get("mae_pips")
+                if state.get("age_minutes") is not None:
+                    ctx["position"]["age_minutes"] = state.get("age_minutes")
+                ctx["plan"] = {
+                    "plan_id": state.get("plan_id"),
+                    "thesis": state.get("plan_thesis"),
+                    "contingencies_remaining": state.get(
+                        "contingencies_remaining", []
+                    ),
+                }
+        except Exception as e:
+            log.debug(f"TM_GATHER | get_position_state failed: {e}")
+
+        # 3. Management indicators (M5 + M15 only)
+        try:
+            ctx["market"]["indicators"] = self._tools.get_management_indicators()
+        except Exception as e:
+            log.debug(f"TM_GATHER | get_management_indicators failed: {e}")
+            ctx["market"]["indicators"] = {"M5": {}, "M15": {}}
+
+        # 4. Regime stability flag
+        try:
+            regime = self._tools.get_regime_stability_flag(ticket)
+            ctx["market"]["regime_changed"] = bool(regime.get("regime_changed"))
+        except Exception as e:
+            log.debug(f"TM_GATHER | get_regime_stability_flag failed: {e}")
+            ctx["market"]["regime_changed"] = False
+
+        # 5. Echo CRITICAL since trade open
+        since_iso = self._open_time_map.get(ticket)
+        try:
+            ctx["market"]["echo_critical_since_open"] = (
+                self._tools.get_echo_critical(since_iso=since_iso)
+            )
+        except Exception as e:
+            log.debug(f"TM_GATHER | get_echo_critical failed: {e}")
+            ctx["market"]["echo_critical_since_open"] = []
+
+        # current_price from position (already resident; cheap)
+        try:
+            entry = float(chosen.get("entry") or 0)
+            pnl = float(chosen.get("current_pnl") or 0)
+            # Approximate; the prompt doesn't need broker-perfect price.
+            # Real current_price would require an MT5 tick fetch; the
+            # TM can ask for one via tools later if it matters for
+            # the decision. Phase 2 v1 keeps the prompt prefab simple.
+            ctx["market"]["current_price"] = entry  # placeholder — see TODO
+        except Exception:
+            pass
+        # unrealised_pips — derive from current_pnl + volume if useful.
+        # v1 leaves it None and the LLM works with current_pnl USD.
+        ctx["position"]["unrealised_pips"] = None
+
+        return ctx
+
+    def _call_llm(self, system_msg: str, user_msg: str) -> str:
+        """Single chat completion. JSON-mode hint via response_format
+        works on Qwen + Kimi + Gemini OpenAI-compat endpoints. Lazy
+        client init."""
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(
+                api_key=self._api_key,
+                base_url=self._api_base,
+                timeout=_LLM_TIMEOUT_SECONDS,
+            )
+        resp = self._client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            max_tokens=300,
+        )
+        msg = resp.choices[0].message
+        return getattr(msg, "content", "") or ""
+
+    def _dispatch(self, decision: dict, ctx: dict) -> bool:
+        """Return True iff the decision actually executed against the
+        broker. Shadow mode never executes."""
+        d = decision["decision"]
+        if d == "NO_OP" or d == "HOLD_TRADE":
+            return False
+        # Both ADJUST_TRADE and CLOSE_TRADE are execute-class.
+        if self._shadow:
+            log.info(
+                f"TRADE_MANAGER_SHADOW | would_{d} | "
+                f"reason={decision.get('reason', '')!r} | "
+                f"NOT executed (TRADE_MANAGER_ENABLED=False)"
+            )
+            return False
+        # Production path (Step 5 will wire caller_role here).
+        ticket = int((ctx.get("position") or {}).get("ticket") or 0)
+        if not ticket:
+            return False
+        try:
+            if d == "CLOSE_TRADE":
+                result = self._tools.close_trade(
+                    ticket, reason=decision.get("reason", ""),
+                )
+            else:  # ADJUST_TRADE
+                result = self._tools.adjust_trade(
+                    ticket,
+                    new_sl=decision["new_sl"],
+                    new_tp=decision["new_tp"],
+                    reason=decision.get("reason", ""),
+                )
+            ok = bool(isinstance(result, dict) and result.get("success"))
+            log.info(
+                f"TRADE_MANAGER_EXECUTE | {d} | ticket={ticket} | "
+                f"success={ok} | result={result}"
+            )
+            return ok
+        except Exception as e:
+            log.error(
+                f"TRADE_MANAGER_EXECUTE | {d} | ticket={ticket} | "
+                f"raised {type(e).__name__}: {e}"
+            )
+            return False
+
+
+__all__ = ["TradeManager"]
