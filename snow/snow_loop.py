@@ -107,8 +107,17 @@ class SnowLoop:
         dry = bool(getattr(config, "SNOW_DRY_RUN", True) if dry_run is None else dry_run)
         self._dry_run = dry
 
+        # FLO-410: TTL dropped from default 60s -> 5s to match the
+        # fast indicator loop cadence in main.py (FAST_INDICATOR_LOOP).
+        # Brain's slow-cycle data (news/SR/calendar/macro) refreshes
+        # every 60s but the per-TF indicators now refresh every ~5s,
+        # so the SemanticCache must let them through. Slow-cycle keys
+        # are also re-deepcopied every 5s — minor extra CPU but the
+        # whole snapshot is small (~100KB) and deepcopy of dicts is
+        # well under a millisecond.
         self._semantic = semantic_cache or SemanticCache(
-            lambda: getattr(self._bot, "_last_agent_data", None)
+            lambda: getattr(self._bot, "_last_agent_data", None),
+            ttl_seconds=5.0,
         )
         self._live_data = live_data or LiveData(self._symbol, self._semantic)
         self._tracker = tracker or PerPlanTracker()

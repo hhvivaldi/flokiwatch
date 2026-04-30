@@ -41,7 +41,7 @@ Graceful degradation (CEO Phase 3a directive):
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional, Set, Tuple
 
 import pandas as pd
 
@@ -64,6 +64,13 @@ MIN_BARS_FOR_INDICATOR: int = 30
 
 
 class LiveData:
+
+    # FLO-410: process-lifetime dedup for unsupported-TF warnings on
+    # bollinger / stochastic / macd_divergence (Brain publishes these
+    # H1-only). Class-level so all LiveData instances share one record;
+    # a bot restart resets it (desirable — operators see post-deploy
+    # plans re-warn if still asking for unsupported data).
+    _warned_unsupported_tf: Set[Tuple[str, str]] = set()
 
     def __init__(self, symbol: str, semantic_cache: SemanticCache):
         self._symbol = symbol
@@ -134,28 +141,34 @@ class LiveData:
         """Latest RSI value for the given timeframe.
 
         M1 → computed locally from the fresh bar window.
-        Anything else → delegated to SemanticCache (Floki's cycle data).
+        Anything else → read from dp.multi_tf_indicators[tf].rsi
+        (FLO-410: was previously routing through TF-agnostic
+        _semantic_indicator and silently returning H1 data for every
+        non-M1 request).
         """
         if tf != "M1":
-            return self._semantic_indicator("rsi")
+            return self._multi_tf_indicator(tf, "rsi")
         return self._tick_cached(("M1", "rsi", period), self._compute_rsi, period)
 
     def macd_histogram(self, tf: str = "M1") -> Optional[float]:
-        """Latest MACD histogram value. M1 → local; H1+ → semantic."""
+        """Latest MACD histogram value.
+        M1 → local. Non-M1 → mtf[tf].macd.histogram (FLO-410)."""
         if tf != "M1":
-            return self._semantic_indicator("macd_hist")
+            return self._multi_tf_indicator(tf, "macd", "histogram")
         return self._tick_cached(("M1", "macd_hist", 0), self._compute_macd_hist)
 
     def ema(self, tf: str = "M1", period: int = 9) -> Optional[float]:
-        """Latest EMA value. M1 → local; H1+ → semantic."""
+        """Latest EMA value.
+        M1 → local. Non-M1 → mtf[tf].ema<period> (FLO-410)."""
         if tf != "M1":
-            return self._semantic_indicator(f"ema_{period}")
+            return self._multi_tf_indicator(tf, f"ema{period}")
         return self._tick_cached(("M1", "ema", period), self._compute_ema, period)
 
     def atr(self, tf: str = "M1", period: int = 14) -> Optional[float]:
-        """Latest ATR value (price units). M1 → local; H1+ → semantic."""
+        """Latest ATR value (price units).
+        M1 → local. Non-M1 → mtf[tf].atr (FLO-410)."""
         if tf != "M1":
-            return self._semantic_indicator("atr")
+            return self._multi_tf_indicator(tf, "atr")
         return self._tick_cached(("M1", "atr", period), self._compute_atr, period)
 
     # -- Phase 7.3 (FLO-355) Cat A indicator accessors ---------------------
@@ -171,6 +184,7 @@ class LiveData:
         >1 == above upper, <0 == below lower. Brain handles the
         formula in agent_data_builder."""
         if tf != "H1":
+            self._warn_unsupported_tf("bollinger", tf)
             return None
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):
@@ -181,6 +195,7 @@ class LiveData:
     def stochastic(self, tf: str = "H1") -> Optional[float]:
         """Return Brain's stochastic value (0-100) for `tf` or None."""
         if tf != "H1":
+            self._warn_unsupported_tf("stochastic", tf)
             return None
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):
@@ -213,6 +228,7 @@ class LiveData:
         Shape: {detected: bool, type: 'bullish'|'bearish'|None, bars_since}.
         Computed each cycle by technical_analyzer.detect_macd_divergence."""
         if tf != "H1":
+            self._warn_unsupported_tf("macd_divergence", tf)
             return None
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):
@@ -330,3 +346,68 @@ class LiveData:
                 if isinstance(inner, (int, float)):
                     return float(inner)
         return None
+
+    # --- FLO-410: Multi-TF semantic delegation -----------------------------
+
+    def _multi_tf_indicator(self, tf: str, *path: str) -> Optional[float]:
+        """Read indicators from `dp.multi_tf_indicators[tf]` honoring
+        the requested timeframe.
+
+        Brain populates `dp["multi_tf_indicators"][tf]` per-TF for every
+        TF in {M1, M5, M15, H1, H4, D1} via
+        technical_analyzer.compute_indicators_from_candles. The shape
+        is uniform across timeframes:
+            {rsi, atr, ema9, ema21, ema50, ema200,
+             macd: {value, signal, histogram}, ...}
+
+        `path` is the field-or-nested-field sequence to walk after
+        landing on the per-TF block. e.g. ("rsi",) for rsi,
+        ("macd", "histogram") for the histogram, ("ema9",) for EMA9.
+
+        Returns None on any missing segment or non-numeric leaf
+        (fail-safe per RFC §6.5: missing data → False at the
+        evaluator level)."""
+        mtf = self._semantic.get("multi_tf_indicators")
+        if not isinstance(mtf, dict):
+            return None
+        block = mtf.get(tf)
+        if not isinstance(block, dict):
+            return None
+        node: Any = block
+        for seg in path:
+            if not isinstance(node, dict) or seg not in node:
+                return None
+            node = node[seg]
+        return float(node) if isinstance(node, (int, float)) else None
+
+    # --- FLO-410: Warn-once for unsupported-TF requests --------------------
+
+    def _warn_unsupported_tf(self, accessor: str, tf: str) -> None:
+        """Log a one-time WARN per (accessor, tf) when a plan requests
+        an indicator on a timeframe Brain doesn't compute per-TF.
+
+        Currently bollinger / stochastic / macd_divergence are H1-only
+        in Brain's compute pipeline (see technical_analyzer.py). Floki
+        may author a plan with `bollinger_position(tf="M5")`; the
+        evaluator will silently see None → False every tick. Warning
+        once per (accessor, tf) makes the silent-False pattern
+        visible to operators without log-spam.
+
+        Dedup is process-lifetime (a class-level set). A bot restart
+        re-emits the warning, which is desirable — operators see the
+        unsupported request reappear post-deploy."""
+        key = (accessor, tf)
+        if key in LiveData._warned_unsupported_tf:
+            return
+        LiveData._warned_unsupported_tf.add(key)
+        try:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "snow.live_data.unsupported_tf accessor=%s tf=%s — "
+                "Brain doesn't compute %s per-TF; evaluator will "
+                "return False until plan switches to H1 or Brain is "
+                "extended.",
+                accessor, tf, accessor,
+            )
+        except Exception:
+            pass

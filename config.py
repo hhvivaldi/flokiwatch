@@ -636,6 +636,12 @@ ECHO_MODEL = os.environ.get("ECHO_MODEL", "mimo-v2-flash")                   # C
 ECHO_API_KEY = os.environ.get("ECHO_API_KEY", os.environ.get("LUNA_API_KEY", ""))    # Shared Xiaomi API key; falls back to LUNA_API_KEY
 ECHO_API_BASE = os.environ.get("ECHO_API_BASE", "https://api.xiaomimimo.com/v1")    # MiMo API base URL
 ECHO_MAX_WAKES_PER_HOUR = int(os.environ.get("ECHO_MAX_WAKES_PER_HOUR", "2"))       # Safety cap on CRITICAL → Simba wake
+# FLO-410: fast indicator loop cadence — refreshes dp.multi_tf_indicators
+# every N seconds so Snow's 5s tick reads fresh per-TF data instead of
+# the 60s-stale Brain-cycle data. ~75-100ms per refresh (pure MT5 +
+# pandas); 5s gives Snow ~10s freshness worst-case.
+FAST_INDICATOR_INTERVAL_SECONDS = float(os.environ.get("FAST_INDICATOR_INTERVAL_SECONDS", "5.0"))
+
 ECHO_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_SCAN_INTERVAL_SECONDS", "300"))       # 5 min for direct RSS feeds
 ECHO_GOOGLE_SCAN_INTERVAL_SECONDS = int(os.environ.get("ECHO_GOOGLE_SCAN_INTERVAL_SECONDS", "600"))  # 10 min for Google News feeds
 ECHO_COOLDOWN_MINUTES = int(os.environ.get("ECHO_COOLDOWN_MINUTES", "30"))           # Dedup window — same headline ignored within this window

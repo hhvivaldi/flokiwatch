@@ -382,23 +382,34 @@ class TestSemanticDelegation:
         ld.refresh()
         return ld
 
-    def test_h1_rsi_delegates_to_semantic(self, monkeypatch):
+    def test_h1_rsi_reads_per_tf(self, monkeypatch):
+        """FLO-410: non-M1 reads come from dp.multi_tf_indicators[tf],
+        NOT the flat dp.indicators path. Old test asserted the latter
+        (which was the bug — TF-agnostic single-TF read). New contract:
+        H1 RSI must come from multi_tf_indicators.H1.rsi."""
         ld = self._live_with_semantic(
             monkeypatch,
-            {"indicators": {"rsi": {"value": 68.3}}},
+            {"multi_tf_indicators": {"H1": {"rsi": 68.3}}},
         )
         assert ld.rsi(tf="H1") == 68.3
 
-    def test_h4_macd_hist_delegates_to_semantic(self, monkeypatch):
+    def test_h4_macd_hist_reads_per_tf(self, monkeypatch):
+        """FLO-410: macd_histogram reads mtf[tf].macd.histogram."""
         ld = self._live_with_semantic(
             monkeypatch,
-            {"indicators": {"macd_hist": {"value": 0.25}}},
+            {"multi_tf_indicators": {
+                "H4": {"macd": {"histogram": 0.25}},
+            }},
         )
         assert ld.macd_histogram(tf="H4") == 0.25
 
-    def test_h1_ema_flat_scalar_accepted(self, monkeypatch):
+    def test_h1_ema_reads_per_tf(self, monkeypatch):
+        """FLO-410: ema reads mtf[tf].ema<period> (no underscore)."""
         ld = self._live_with_semantic(
-            monkeypatch, {"indicators": {"ema_50": 4710.5}}
+            monkeypatch,
+            {"multi_tf_indicators": {
+                "H1": {"ema50": 4710.5},
+            }},
         )
         assert ld.ema(tf="H1", period=50) == 4710.5
 
@@ -409,6 +420,68 @@ class TestSemanticDelegation:
     def test_semantic_entire_cache_empty_returns_none(self, monkeypatch):
         ld = self._live_with_semantic(monkeypatch, None)
         assert ld.rsi(tf="H1") is None
+
+    # FLO-410: per-TF correctness — different TFs return different values.
+
+    def test_per_tf_rsi_independence(self, monkeypatch):
+        """rsi(M5) and rsi(H1) must return DIFFERENT values when the
+        per-TF cache has different per-TF data. Pre-fix this test
+        would have failed (both returned the same flat value)."""
+        ld = self._live_with_semantic(
+            monkeypatch,
+            {"multi_tf_indicators": {
+                "M5": {"rsi": 35.0},
+                "M15": {"rsi": 50.0},
+                "H1": {"rsi": 70.0},
+                "H4": {"rsi": 80.0},
+            }},
+        )
+        assert ld.rsi(tf="M5") == 35.0
+        assert ld.rsi(tf="M15") == 50.0
+        assert ld.rsi(tf="H1") == 70.0
+        assert ld.rsi(tf="H4") == 80.0
+
+    def test_per_tf_ema_alignment_independence(self, monkeypatch):
+        """All four periods must read from the same TF block,
+        independent of other TFs."""
+        ld = self._live_with_semantic(
+            monkeypatch,
+            {"multi_tf_indicators": {
+                "M15": {"ema9": 4632.0, "ema21": 4630.0,
+                        "ema50": 4626.0, "ema200": 4616.0},
+                "H1":  {"ema9": 4640.0, "ema21": 4636.0,
+                        "ema50": 4630.0, "ema200": 4600.0},
+            }},
+        )
+        # M15 alignment values
+        assert ld.ema(tf="M15", period=9) == 4632.0
+        assert ld.ema(tf="M15", period=21) == 4630.0
+        assert ld.ema(tf="M15", period=50) == 4626.0
+        assert ld.ema(tf="M15", period=200) == 4616.0
+        # H1 alignment values — must NOT bleed into the M15 read
+        assert ld.ema(tf="H1", period=9) == 4640.0
+        assert ld.ema(tf="H1", period=200) == 4600.0
+
+    def test_unsupported_tf_warns_once_per_pair(self, monkeypatch, caplog):
+        """FLO-410: bollinger / stochastic / macd_divergence on non-H1
+        emit a single WARN log per (accessor, tf) for process lifetime."""
+        import logging as _logging
+        # Reset class-level dedup set — other tests may have populated.
+        from snow.live_data import LiveData as _LD
+        _LD._warned_unsupported_tf.clear()
+
+        ld = self._live_with_semantic(monkeypatch, {})
+        with caplog.at_level(_logging.WARNING, logger="snow.live_data"):
+            assert ld.bollinger(tf="M5") is None
+            assert ld.bollinger(tf="M5") is None  # no second warn
+            assert ld.bollinger(tf="H4") is None  # different TF → warn
+            assert ld.stochastic(tf="M5") is None  # different accessor → warn
+        warns = [
+            r for r in caplog.records
+            if "snow.live_data.unsupported_tf" in r.getMessage()
+        ]
+        # Expect 3 warnings: bollinger/M5, bollinger/H4, stochastic/M5
+        assert len(warns) == 3, [w.getMessage() for w in warns]
 
 
 # =============================================================================

@@ -1307,6 +1307,25 @@ class TradingBot:
                     log.error(f"snow.loop.spawn_failed: {e}")
                     log.error(traceback.format_exc())
 
+            # FLO-410: Fast indicator loop — refreshes
+            # dp.multi_tf_indicators + dp.candles every ~5s so Snow
+            # evaluates plans against ~5s-stale per-TF data instead
+            # of 60s-stale Brain-cycle data. Pure MT5 + pandas math,
+            # no external APIs, ~75-100ms per refresh.
+            try:
+                self._fast_indicator_thread = threading.Thread(
+                    target=self._fast_indicator_loop,
+                    name="FastIndicatorLoop", daemon=True,
+                )
+                self._fast_indicator_thread.start()
+                log.info(
+                    "FAST_INDICATOR_LOOP spawned (cadence=%ss)",
+                    int(getattr(config, "FAST_INDICATOR_INTERVAL_SECONDS", 5)),
+                )
+            except Exception as e:
+                log.error(f"fast_indicator_loop.spawn_failed: {e}")
+                log.error(traceback.format_exc())
+
         write_state(self)
 
         return True
@@ -1665,7 +1684,128 @@ class TradingBot:
                 time.sleep(60)
         
         self.stop("Loop ended")
-    
+
+    # ----------------------------------------------------------------------
+    # FLO-410 — Fast indicator loop
+    # ----------------------------------------------------------------------
+    def _fast_indicator_loop(self) -> None:
+        """Refresh dp.multi_tf_indicators + dp.candles every ~5s.
+
+        Producer half of FLO-410 (multi-TF fix). Snow's daemon ticks
+        every 5s and reads Brain's data via SemanticCache. Without
+        this loop, the only writer is the 60s _analysis_cycle, so
+        Snow evaluates 11 of 12 ticks against stale indicator data.
+
+        Scope: only the per-TF indicator block (lines ~2160-2238 in
+        _analysis_cycle) — fetch M1/M5/M15/H1/H4/D1 candles, compute
+        indicators per TF, atomic-assign into _last_agent_data.
+        Slow-cycle data (news/calendar/SR/macro/Brain decision) stays
+        on the 60s cycle.
+
+        Concurrency: writes only the multi_tf_indicators and candles
+        keys of _last_agent_data. The 60s cycle writes everything.
+        Python's GIL makes single-key dict assignment atomic; the
+        SemanticCache deepcopies on read (worst case = one tick of
+        staleness across a partial assignment, no torn read).
+        """
+        from technical_analyzer import compute_indicators_from_candles
+        from mt5_safe import mt5
+
+        interval = float(getattr(config, "FAST_INDICATOR_INTERVAL_SECONDS", 5.0))
+        log.info("FAST_INDICATOR_LOOP starting (interval=%.1fs)", interval)
+
+        def _rates_to_candles(rates):
+            out = []
+            if rates is None:
+                return out
+            for r in rates:
+                try:
+                    out.append({
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "volume": float(r.get("tick_volume", 0)),
+                        "time": int(r["time"]),
+                    })
+                except Exception:
+                    continue
+            return out
+
+        # Refresh state — keep the loop running across MT5 disconnects
+        # (warning once per minute when degraded, info on recovery).
+        last_warn_at = 0.0
+        last_ok = True
+
+        while getattr(self, "running", False):
+            tick_t0 = time.time()
+            try:
+                tf_map = [
+                    ("M1",  mt5.TIMEFRAME_M1),
+                    ("M5",  mt5.TIMEFRAME_M5),
+                    ("M15", mt5.TIMEFRAME_M15),
+                    ("H1",  mt5.TIMEFRAME_H1),
+                    ("H4",  mt5.TIMEFRAME_H4),
+                    ("D1",  mt5.TIMEFRAME_D1),
+                ]
+                candles_cache = {}
+                for tf_name, tf_const in tf_map:
+                    rates = mt5.copy_rates_from_pos(config.SYMBOL, tf_const, 0, 250)
+                    candle_list = _rates_to_candles(rates)
+                    if candle_list:
+                        candles_cache[tf_name] = candle_list
+
+                multi_tf = {}
+                for tf_name, _ in tf_map:
+                    cs = candles_cache.get(tf_name)
+                    if isinstance(cs, list) and len(cs) >= 14:
+                        multi_tf[tf_name] = compute_indicators_from_candles(cs)
+
+                # Atomic publish. Both keys are dict assignments; under
+                # the GIL each is a single bytecode (STORE_SUBSCR) and
+                # cannot tear. The 60s _analysis_cycle may overwrite
+                # these keys with its own values a moment later — that's
+                # fine, both writers are producing the same shape.
+                dp = getattr(self, "_last_agent_data", None)
+                if isinstance(dp, dict):
+                    if multi_tf:
+                        dp["multi_tf_indicators"] = multi_tf
+                    if candles_cache:
+                        # Merge into existing dp.candles rather than replace —
+                        # other code paths may have populated TFs we didn't
+                        # fetch (defensive).
+                        existing = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
+                        merged = {**existing, **candles_cache}
+                        dp["candles"] = merged
+                    # Stamp refresh timestamp so callers can verify freshness.
+                    dp["multi_tf_indicators_refreshed_at"] = time.time()
+
+                if not last_ok:
+                    log.info("FAST_INDICATOR_LOOP recovered")
+                    last_ok = True
+
+                elapsed_ms = (time.time() - tick_t0) * 1000.0
+                log.debug(
+                    "FAST_INDICATOR_LOOP tick tfs=%d compute_ms=%.0f",
+                    len(multi_tf), elapsed_ms,
+                )
+            except Exception as e:
+                last_ok = False
+                now = time.time()
+                if now - last_warn_at > 60.0:
+                    log.warning("FAST_INDICATOR_LOOP error (rate-limited): %s", e)
+                    last_warn_at = now
+
+            # Sleep in 0.5s slices so shutdown latency stays bounded.
+            deadline = tick_t0 + interval
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0 or not getattr(self, "running", False):
+                    break
+                time.sleep(min(0.5, remaining))
+
+        log.info("FAST_INDICATOR_LOOP stopped")
+
     def _analysis_cycle(self):
         """Analysis and decision cycle"""
         try:
