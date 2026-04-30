@@ -1784,6 +1784,34 @@ class TradingBot:
                                         indicators["macd"]["value"] = float(dv)
                             except Exception:
                                 pass
+
+                            # Propagate Brain's MACD divergence detection
+                            # (technical_analyzer.detect_macd_divergence) into
+                            # dp.indicators.macd.divergence — the path Snow's
+                            # live_data.macd_divergence() reads. Without this
+                            # plumbing the FLO-355 indicator_divergence
+                            # primitive is dead-on-arrival: the detector runs
+                            # but its {detected, type, bars_since} payload is
+                            # silently dropped during the dp rebuild.
+                            try:
+                                div = macd.get("divergence")
+                                if isinstance(div, dict):
+                                    indicators["macd"]["divergence"] = div
+                                else:
+                                    # No divergence detected this cycle —
+                                    # surface absence explicitly so downstream
+                                    # readers see {detected: false} instead of
+                                    # an ambiguous missing key.
+                                    indicators["macd"]["divergence"] = {
+                                        "detected": False,
+                                        "type": None,
+                                        "bars_since": None,
+                                    }
+                            except Exception:
+                                indicators["macd"]["divergence"] = {
+                                    "detected": False, "type": None,
+                                    "bars_since": None,
+                                }
                         except Exception:
                             indicators["macd"] = {}
                         try:
