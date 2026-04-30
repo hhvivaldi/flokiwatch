@@ -1324,6 +1324,24 @@ class TradingBot:
                 log.error(f"fast_indicator_loop.spawn_failed: {e}")
                 log.error(traceback.format_exc())
 
+            # FLO-415: TM_HEARTBEAT emitter — wakes the Qwen Trade
+            # Manager every TRADE_MANAGER_HEARTBEAT_SECONDS (default 60s)
+            # whenever there's an open position. Without this thread,
+            # TM had no path to wake mid-trade — empirical evidence
+            # 2026-04-30 #1622387680 ran 30 min unmanaged for $20 of
+            # paper profit lost to a BE retrace.
+            try:
+                self._tm_heartbeat_thread = threading.Thread(
+                    target=self._trade_manager_heartbeat_loop,
+                    name="TMHeartbeat", daemon=True,
+                )
+                self._tm_heartbeat_thread.start()
+                _tm_cadence = int(getattr(config, "TRADE_MANAGER_HEARTBEAT_SECONDS", 60))
+                log.info(f"TM_HEARTBEAT spawned (cadence={_tm_cadence}s)")
+            except Exception as e:
+                log.error(f"tm_heartbeat.spawn_failed: {e}")
+                log.error(traceback.format_exc())
+
         write_state(self)
 
         return True
@@ -1818,6 +1836,91 @@ class TradingBot:
                 time.sleep(min(0.5, remaining))
 
         log.info("FAST_INDICATOR_LOOP stopped")
+
+    # ----------------------------------------------------------------------
+    # FLO-415 — Trade Manager heartbeat
+    # ----------------------------------------------------------------------
+    def _trade_manager_heartbeat_loop(self) -> None:
+        """Wake the Qwen Trade Manager every
+        `TRADE_MANAGER_HEARTBEAT_SECONDS` (default 60s) when at least
+        one position is open.
+
+        Empirical motivation (2026-04-30): position #1622387680 ran
+        30 minutes unmanaged after Snow's only management contingency
+        fired at +5 pips. The position made +101 pips MFE then closed
+        at BE for -$0.10 — $20 of paper profit lost to a retrace
+        because no agent loop was running during the trade. Snow's
+        contingency machinery only fires on exact threshold crossings;
+        once those fire, nothing observes the trade. TM_HEARTBEAT is
+        the drift catcher.
+
+        TM dispatch: routes through `_dispatch_to_trade_manager`
+        (main.py:399), the receiver-side handler that already exists.
+        TM's wake path is gated through `tm_allowed` at main.py:354
+        which already includes "TM_HEARTBEAT" — the receiver was
+        ready; this is the producer that was missing.
+
+        Failure modes:
+          * `executor.get_open_positions()` raises → log debug, skip
+            this tick, retry next tick. Don't propagate; the heartbeat
+            must be resilient.
+          * No positions → silent skip (don't burn TM cycles when
+            there's nothing to manage).
+          * TM dispatch raises → log warning rate-limited, continue.
+        Sleep is interruptible in 0.5s slices so shutdown latency
+        stays bounded ≤ 1s.
+        """
+        try:
+            from executor import get_positions
+        except Exception as e:
+            log.warning(f"TM_HEARTBEAT | executor import failed: {e} — heartbeat disabled")
+            return
+
+        interval = float(getattr(config, "TRADE_MANAGER_HEARTBEAT_SECONDS", 60.0))
+        log.info(f"TM_HEARTBEAT starting (interval={interval:.0f}s)")
+
+        last_warn_at = 0.0
+        while getattr(self, "running", False):
+            tick_t0 = time.time()
+            try:
+                positions = get_positions()
+                if positions:
+                    pos_summary = [
+                        {
+                            "ticket": getattr(p, "ticket", None),
+                            "direction": getattr(p, "direction", None),
+                            "profit": getattr(p, "profit", None),
+                            "open_price": getattr(p, "open_price", None),
+                            "sl": getattr(p, "sl", None),
+                            "tp": getattr(p, "tp", None),
+                        }
+                        for p in positions
+                    ]
+                    try:
+                        self._dispatch_to_trade_manager(
+                            "TM_HEARTBEAT",
+                            {"positions": pos_summary},
+                        )
+                    except Exception as e:
+                        now = time.time()
+                        if now - last_warn_at > 60.0:
+                            log.warning(f"TM_HEARTBEAT | dispatch error (rate-limited): {e}")
+                            last_warn_at = now
+            except Exception as e:
+                now = time.time()
+                if now - last_warn_at > 60.0:
+                    log.debug(f"TM_HEARTBEAT | tick error (rate-limited): {e}")
+                    last_warn_at = now
+
+            # Interruptible sleep — bounded shutdown latency.
+            deadline = tick_t0 + interval
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0 or not getattr(self, "running", False):
+                    break
+                time.sleep(min(0.5, remaining))
+
+        log.info("TM_HEARTBEAT stopped")
 
     # ----------------------------------------------------------------------
     # FLO-415 — Real-data integration test snapshot
