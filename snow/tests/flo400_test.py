@@ -225,7 +225,14 @@ def _failed_gemini_body():
         "entry": {
             "conditions": [
                 '{"type": "price_above", "level": 4589.0}',
-                '{"type": "ema_relation", "tf": "H1", "period": 21, '
+                # FLO-404 follow-up (CEO directive 2026-04-30): the
+                # verbatim production body had `period: 21` with
+                # aligned_bear; under the new cross-field rule this
+                # is rejected. Updated to omit period (canonical
+                # regime-gate shape). Preserves FLO-400's JSON-string
+                # decoder test surface — the decoder still has to
+                # unwrap this string into a dict.
+                '{"type": "ema_relation", "tf": "H1", '
                 '"relation": "aligned_bear"}',
             ],
             "initial_sl": 4605,

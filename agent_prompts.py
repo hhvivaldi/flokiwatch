@@ -246,7 +246,7 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
 
 (2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend:
 "conditions": [
-  {"type": "ema_relation", "tf": "H1", "period": 50, "relation": "aligned_bull"},
+  {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
   {"type": "price_at_fibonacci", "level": 0.618, "tolerance_pips": 8.0},
   {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0}
 ]
@@ -254,7 +254,7 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
 (3) MACD MOMENTUM CONTINUATION — histogram positive and rising; entry on hold of recent low:
 "conditions": [
   {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.05},
-  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+  {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
   {"type": "price_above", "level": 4720.0}
 ]
 
@@ -265,7 +265,7 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}
 ]
 
-(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion:
+(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion. Required fields: `pivot_set` (∈ classic | fibonacci), `level` (∈ PP, R1, R2, R3, S1, S2, S3), `tolerance_pips` (gt=0; typical 3-5 for tight pivot tag, 8-10 for wider zones). Use `pivot_set: classic` for the standard PP±H+L formula or `pivot_set: fibonacci` for fib-weighted pivots — pick whichever your chart-reading actually uses; the levels enum is identical:
 "conditions": [
   {"type": "price_at_pivot", "pivot_set": "classic", "level": "R1", "tolerance_pips": 5.0},
   {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
@@ -275,7 +275,7 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
 (6) STATEFUL CROSSOVER ENTRY — the crossing event itself, not a sustained state. Latches on first cross. Requires schema_version >= 2 (auto-stamped):
 "conditions": [
   {"type": "indicator_crossover", "indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0},
-  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"}
+  {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"}
 ]
 
 (7) FAILED-BREAKDOWN RECLAIM — price swept a level and reclaimed (Wyckoff spring shape). Stateful — schema_version >= 2:
@@ -287,14 +287,14 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
 
 (8) MTF TREND-ALIGNMENT ENTRY — both HTF and working-TF EMAs aligned, structural pullback:
 "conditions": [
-  {"type": "ema_relation", "tf": "H4", "period": 50, "relation": "aligned_bull"},
-  {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+  {"type": "ema_relation", "tf": "H4", "relation": "aligned_bull"},
+  {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
   {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0}
 ]
 
 EMA_RELATION — `aligned_bull` vs `price_above` are different gates. Picking the wrong one is the #1 reason a momentum-thesis plan fails to trigger even when the chart says it should:
 
-- `relation: aligned_bull` — REGIME gate. Requires the FULL 4-EMA stack EMA9 > EMA21 > EMA50 > EMA200 on `tf`. The `period` field is IGNORED — the evaluator reads all four periods. Use only when the thesis depends on a sustained trending regime (not a fresh bounce or a breakout from a range). Same shape, opposite direction: `aligned_bear`.
+- `relation: aligned_bull` — REGIME gate. Requires the FULL 4-EMA stack EMA9 > EMA21 > EMA50 > EMA200 on `tf`. The `period` field MUST BE OMITTED — the evaluator reads all four periods regardless. Submitting `aligned_bull` with `period` set is rejected by the validator with an educational message pointing you at `relation: price_above` (the single-EMA primitive). Use `aligned_bull` only when the thesis depends on a sustained trending regime (not a fresh bounce or a breakout from a range). Same shape, opposite direction: `aligned_bear`.
 - `relation: price_above` — MOMENTUM gate. Requires `current_price > EMA(tf, period)`. The `period` field IS load-bearing — the evaluator reads exactly the EMA you name. Use for "price has flipped above the M5 EMA21" / "price is reclaiming the H1 EMA50" / "price held the EMA200 retest." Same shape, opposite direction: `price_below`.
 
 Don't mix them. A countertrend bounce thesis ("price reclaimed M5 EMA21, momentum is extending") needs `price_above` with `period: 21` — `aligned_bull` will refuse to fire because the macro EMA stack is still bear-aligned by definition (that's why the bounce is countertrend in the first place). A trend-pullback thesis ("HTF and working-TF EMAs both stacked bullish, price retraced to a fib") wants `aligned_bull` — the stack confirms the regime supports the entry.
@@ -304,7 +304,7 @@ These eight shapes cover ~80% of the analytical surface available to you. Notice
 Condition primitives:
 - Price (point-in-time): price_above, price_below.
 - Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).
-- Structural / level proximity (point-in-time): price_at_sr_zone, price_at_fibonacci (extended: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips), price_at_pivot (Classic / Fibonacci sets, levels PP/R1-R3/S1-S3, mandatory tolerance_pips).
+- Structural / level proximity (point-in-time): price_at_sr_zone (zone_type ∈ support|resistance|any, **mandatory `tolerance_pips`** — typical 3-5 pips for tight S/R, 8-10 for wider zones), price_at_fibonacci (extended levels: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips, defaults to 5 if omitted), price_at_pivot (pivot_set ∈ classic|fibonacci, level ∈ PP/R1/R2/R3/S1/S2/S3, **mandatory `tolerance_pips`** — typical 3-5 pips). The mandatory `tolerance_pips` is Pydantic-enforced (gt=0); omitting it on sr_zone or pivot rejects the plan with a validation error.
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.
 - Stateful (carry memory across ticks — Phase 8b additions):

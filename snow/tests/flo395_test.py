@@ -86,13 +86,13 @@ PROMPT_EXAMPLES = [
         {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0},
     ]),
     ("trend_pullback_ma_confluence", 1, [
-        {"type": "ema_relation", "tf": "H1", "period": 50, "relation": "aligned_bull"},
+        {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
         {"type": "price_at_fibonacci", "level": 0.618, "tolerance_pips": 8.0},
         {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0},
     ]),
     ("macd_momentum_continuation", 1, [
         {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.05},
-        {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+        {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
         {"type": "price_above", "level": 4720.0},
     ]),
     ("divergence_play_reversal", 1, [
@@ -107,7 +107,7 @@ PROMPT_EXAMPLES = [
     ]),
     ("stateful_crossover_entry", 2, [
         {"type": "indicator_crossover", "indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0},
-        {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+        {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
     ]),
     ("failed_breakdown_reclaim", 2, [
         {"type": "price_crossed_level", "level": 4707.0, "direction": "below"},
@@ -115,8 +115,8 @@ PROMPT_EXAMPLES = [
         {"type": "indicator_was", "indicator": "rsi", "tf": "H1", "op": "below", "threshold": 30, "within_bars": 4},
     ]),
     ("mtf_trend_alignment_entry", 1, [
-        {"type": "ema_relation", "tf": "H4", "period": 50, "relation": "aligned_bull"},
-        {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+        {"type": "ema_relation", "tf": "H4", "relation": "aligned_bull"},
+        {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
         {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0},
     ]),
 ]
@@ -176,7 +176,7 @@ class TestB1PromptExamples:
             "pivot_level_rejection": '"pivot_set": "classic", "level": "R1"',
             "stateful_crossover_entry": '"indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0',
             "failed_breakdown_reclaim": '"level": 4707.0, "direction": "below"',
-            "mtf_trend_alignment_entry": '"tf": "H4", "period": 50, "relation": "aligned_bull"',
+            "mtf_trend_alignment_entry": '"tf": "H4", "relation": "aligned_bull"',
         }
         for name, anchor in anchors.items():
             assert anchor in src, (
@@ -270,7 +270,7 @@ class TestC3IndicatorPrimitiveShape:
 PRIMITIVE_SHAPE_REALIZATIONS = {
     "rsi": {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70.0},
     "macd": {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.0},
-    "emas": {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+    "emas": {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
     "bollinger": {"type": "bollinger_position", "tf": "H1", "relation": "above_upper"},
     "atr": {"type": "atr", "tf": "H1", "op": "above", "multiplier": 1.0, "baseline_pips": 100.0},
 }
@@ -450,7 +450,7 @@ class TestE2VocabularyDiversity:
     def test_helper_three_distinct_families(self):
         plan = Plan(**_wrap_plan([
             {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
-            {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+            {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
             {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0},
         ]))
         n_types, n_fams, fams = _entry_vocabulary_diversity(plan)
@@ -473,7 +473,7 @@ class TestE2VocabularyDiversity:
         """Helper must accept either parsed Plan model OR plan dict."""
         d = _wrap_plan([
             {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
-            {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+            {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
         ])
         n_types, n_fams, fams = _entry_vocabulary_diversity(d)
         assert n_types == 2
@@ -503,7 +503,7 @@ class TestE2VocabularyDiversity:
         entry_families."""
         plan = Plan(**_wrap_plan([
             {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
-            {"type": "ema_relation", "tf": "H1", "period": 21, "relation": "aligned_bull"},
+            {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
             {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0},
         ]))
         with caplog.at_level(logging.INFO, logger="snow.instrumentation"):

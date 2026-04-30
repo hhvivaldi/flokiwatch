@@ -577,6 +577,50 @@ def _check_management_reachability(plan: Plan) -> list[str]:
     return errors
 
 
+def _check_ema_relation_period_consistency(plan: Plan) -> list[str]:
+    """FLO-404 follow-up (CEO directive 2026-04-30) — cross-field rule
+    on EMARelation: `period` is REQUIRED for `price_above`/`price_below`
+    (the evaluator reads exactly EMA(tf, period) — single-EMA flip
+    primitive) but FORBIDDEN for `aligned_bull`/`aligned_bear`
+    (the evaluator reads ALL FOUR periods 9/21/50/200 in strict
+    alignment — regime gate, period field is silently ignored).
+
+    Pre-FLO-404 the schema accepted period for any relation, producing
+    the PLAN-20260429-012 misuse: Floki used `aligned_bull` with
+    `period: 21` thinking it meant "price above EMA21," but the
+    primitive required EMA9>EMA21>EMA50>EMA200 (full bullish stack)
+    which never held during the bounce. Plan never fired.
+
+    This check rejects both inconsistencies with educational messages
+    that point Floki at the correct primitive.
+    """
+    errors: list[str] = []
+    for label, ci, c in _iter_plan_conditions(plan):
+        if getattr(c, "type", None) != "ema_relation":
+            continue
+        relation = getattr(c, "relation", None)
+        period = getattr(c, "period", None)
+        if relation in ("price_above", "price_below") and period is None:
+            errors.append(
+                f"{label}.conditions[{ci}]: ema_relation with "
+                f"relation={relation!r} REQUIRES the `period` field "
+                f"(one of 9, 21, 50, 200) — the evaluator reads exactly "
+                f"EMA(tf, period) for this primitive. Add `period: N` "
+                f"to the condition."
+            )
+        elif relation in ("aligned_bull", "aligned_bear") and period is not None:
+            errors.append(
+                f"{label}.conditions[{ci}]: ema_relation with "
+                f"relation={relation!r} must NOT carry a `period` field "
+                f"— the evaluator reads all four EMAs (9, 21, 50, 200) "
+                f"on `tf` regardless of period (full-stack regime gate). "
+                f"If you meant the regime check, omit `period`. If you "
+                f"meant 'price above EMA{period}' (single-EMA flip), "
+                f"use `relation: price_above` with period={period}."
+            )
+    return errors
+
+
 def _check_stateful_in_v1(plan: Plan) -> list[str]:
     """v1 plans MUST NOT reference stateful primitives.
 
@@ -730,6 +774,7 @@ def validate_plan(
     errors: list[str] = []
     errors += _check_schema_version(plan)
     errors += _check_stateful_in_v1(plan)
+    errors += _check_ema_relation_period_consistency(plan)
     errors += _check_timestamps(plan)
     errors += _check_entry_sl_tp(plan)
     errors += _check_price_bounds(plan)

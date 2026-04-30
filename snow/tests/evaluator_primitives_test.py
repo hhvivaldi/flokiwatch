@@ -167,9 +167,10 @@ class TestEMARelation:
             ("H1", 50):  4710.0,
             ("H1", 200): 4700.0,
         }))
-        # period in the cond is unused for alignment checks, pass 9 for shape
+        # FLO-404 follow-up: period must be omitted for aligned_*
+        # (evaluator reads all 4 EMAs regardless of any period value).
         assert evaluate_condition(
-            EMARelation(tf="H1", period=9, relation="aligned_bull"), ctx
+            EMARelation(tf="H1", relation="aligned_bull"), ctx
         ) is True
 
     def test_aligned_bull_broken(self, eval_ctx, fake_live):
@@ -180,7 +181,7 @@ class TestEMARelation:
             ("H1", 200): 4712.0,   # inversion
         }))
         assert evaluate_condition(
-            EMARelation(tf="H1", period=9, relation="aligned_bull"), ctx
+            EMARelation(tf="H1", relation="aligned_bull"), ctx
         ) is False
 
     def test_aligned_bear(self, eval_ctx, fake_live):
@@ -191,7 +192,7 @@ class TestEMARelation:
             ("H1", 200): 4720.0,
         }))
         assert evaluate_condition(
-            EMARelation(tf="H1", period=9, relation="aligned_bear"), ctx
+            EMARelation(tf="H1", relation="aligned_bear"), ctx
         ) is True
 
     def test_missing_ema_false(self, eval_ctx, fake_live):

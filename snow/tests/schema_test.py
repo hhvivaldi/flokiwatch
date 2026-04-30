@@ -210,8 +210,14 @@ class TestConditionPrimitives:
         assert c.type == "macd_histogram"
 
     def test_ema_relation_aligned_bull(self):
-        c = EMARelation(tf="H1", period=50, relation="aligned_bull")
+        # FLO-404 follow-up (CEO directive 2026-04-30): period MUST be
+        # omitted with aligned_bull (evaluator reads all 4 EMAs
+        # regardless). Schema accepts the condition with period=None;
+        # validator rejects period+aligned_bull combos with an
+        # educational message pointing at relation=price_above.
+        c = EMARelation(tf="H1", relation="aligned_bull")
         assert c.relation == "aligned_bull"
+        assert c.period is None
 
     def test_ema_relation_invalid_period(self):
         with pytest.raises(ValidationError):

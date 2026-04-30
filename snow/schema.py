@@ -121,7 +121,15 @@ EMARelationKind = Literal[
 class EMARelation(_Cond):
     type: Literal["ema_relation"] = "ema_relation"
     tf: Timeframe
-    period: Literal[9, 21, 50, 200]
+    # FLO-404 follow-up (CEO directive 2026-04-30): period is REQUIRED
+    # for price_above / price_below (single-EMA flip — evaluator reads
+    # exactly EMA(tf, period)) but FORBIDDEN for aligned_bull /
+    # aligned_bear (regime gate — evaluator reads all 4 EMAs 9/21/50/
+    # 200 regardless of period). Pre-FLO-404 this field was required
+    # on ALL relations; the silent ignore on aligned_* produced the
+    # PLAN-20260429-012 misuse. The cross-field consistency rule is
+    # enforced in snow.validator._check_ema_relation_period_consistency.
+    period: Optional[Literal[9, 21, 50, 200]] = None
     relation: EMARelationKind
 
 
