@@ -1196,3 +1196,117 @@ class TestTradingLoggerAPIDiscipline:
         assert matches == [], (
             f"multi-arg TradingLogger calls found: {matches}"
         )
+
+
+# =============================================================================
+# FLO-417 — opposing-positions safety gate on Snow's execute_market
+# =============================================================================
+#
+# Empirical motivation (CEO directive 2026-04-30): on this date PLAN-022
+# (BUY) and PLAN-020 (SELL) were both open simultaneously for 54 minutes
+# because Snow's execute_market action bypassed FLO-85's opposing-
+# positions guard (which only covered Floki's execute_trade tool path).
+
+class TestFLO417OpposingPositionsGate:
+    """Gate contract:
+      1. Reject when an OPPOSING position is open
+      2. Allow same-direction positions (FLO-85 forbids opposing only)
+      3. Allow when no positions are open
+      4. Transition plan to FAILED so Snow doesn't retry
+      5. Record snow_triggers row with execution_status=skipped_guard
+      6. Fail-OPEN on executor query errors
+    """
+
+    def test_opposing_buy_blocks_sell_entry(self, snow_conn):
+        _insert_base_plan()  # SELL plan
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(ticket=999_111, direction="BUY")]
+
+        result = actions.execute_action(_entry_fire())
+
+        assert result.status == STATUS_SKIPPED_GUARD
+        row = _plan_row(snow_conn, "PLAN-20260424-001")
+        assert row["status"] == PlanStatus.FAILED.value
+        exec_calls = [c for c in exe.calls if c[0] == "execute_trade"]
+        assert exec_calls == [], "broker must not be called when gate blocks"
+        # At least one snow_triggers row with execution_status=skipped_guard
+        # (the execute_market path may also write a _record_and_return
+        # row — we don't assert exact count, only that the gate's audit
+        # row exists).
+        triggers = _trigger_rows(snow_conn)
+        guard_rows = [
+            t for t in triggers
+            if t["action_type"] == "execute_market"
+            and t["execution_status"] == STATUS_SKIPPED_GUARD
+        ]
+        assert len(guard_rows) >= 1, (
+            f"missing skipped_guard audit row in {triggers}"
+        )
+
+    def test_opposing_sell_blocks_buy_entry(self, snow_conn):
+        from copy import deepcopy
+        d = deepcopy(_BASE_PLAN_DICT)
+        # Plan ID must match ^PLAN-\d{8}-\d{3}$ — use a valid format.
+        d["id"] = "PLAN-20260424-099"
+        d["entry"]["direction"] = "BUY"
+        d["entry"]["initial_sl"] = 4710.0
+        d["entry"]["initial_tp"] = 4740.0
+        snow_db.insert_plan(Plan(**d))
+
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(ticket=888_222, direction="SELL")]
+
+        from snow.actions import FireEvent, FirePayload
+        from snow.schema import Direction, ActionExecuteMarket
+        fire = FireEvent(
+            plan_id="PLAN-20260424-099",
+            created_at="2026-04-24T08:00:00Z",
+            contingency_name="_entry",
+            action_type="execute_market",
+            override=5,
+            plan_list_order=-1,
+            payload=FirePayload(
+                action=ActionExecuteMarket(),
+                kind="entry",
+                plan_direction=Direction.BUY,
+                ticket=None, guards=None, entry_price=None,
+            ),
+        )
+        result = actions.execute_action(fire)
+        assert result.status == STATUS_SKIPPED_GUARD
+        row = _plan_row(snow_conn, "PLAN-20260424-099")
+        assert row["status"] == PlanStatus.FAILED.value
+
+    def test_same_direction_position_does_not_block(self, snow_conn):
+        """FLO-85 forbids OPPOSING; same-direction is permitted by this
+        gate (other gates handle max-positions / stacking)."""
+        _insert_base_plan()  # SELL plan
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(ticket=777_333, direction="SELL")]
+        exe.execute_trade_results.append(_OrderResultLike(ticket=555_000))
+
+        result = actions.execute_action(_entry_fire())
+        assert result.status == STATUS_SUCCESS
+        row = _plan_row(snow_conn, "PLAN-20260424-001")
+        assert row["status"] == PlanStatus.ACTIVE.value
+
+    def test_no_positions_does_not_block(self, snow_conn):
+        _insert_base_plan()
+        actions, exe, _ = _make_actions()
+        exe.positions = []
+        exe.execute_trade_results.append(_OrderResultLike(ticket=555_001))
+
+        result = actions.execute_action(_entry_fire())
+        assert result.status == STATUS_SUCCESS
+
+    def test_executor_get_positions_failure_fails_open(self, snow_conn):
+        """If get_open_positions raises, log a warning and proceed.
+        Documented fail-OPEN contract — better to risk a duplicate
+        entry than deadlock all entries on transient MT5 hiccups."""
+        _insert_base_plan()
+        actions, exe, _ = _make_actions()
+        exe.raise_on.add("get_open_positions")
+        exe.execute_trade_results.append(_OrderResultLike(ticket=555_002))
+
+        result = actions.execute_action(_entry_fire())
+        assert result.status == STATUS_SUCCESS

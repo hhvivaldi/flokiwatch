@@ -215,13 +215,77 @@ class SnowActions:
                 fire, STATUS_ERROR, reason="plan hydrate failed",
             )
 
-        # Transition PENDING -> TRIGGERED BEFORE broker call (makes the
-        # transient visible; loop will skip further evals while TRIGGERED).
-        snow_db.update_plan_status(fire.plan_id, PlanStatus.TRIGGERED.value)
-
         entry = plan.entry
         direction = entry.direction.value  # "BUY" or "SELL"
         comment = f"snow:{fire.plan_id}"
+
+        # FLO-417: opposing-positions safety gate.
+        # CLAUDE.md "No simultaneous BUY+SELL — FLO-85 hard gate" was
+        # only enforced on Floki's `execute_trade` agent-tool path.
+        # Snow's `execute_market` action bypassed it. On 2026-04-30
+        # PLAN-022 (BUY) and PLAN-020 (SELL) were both open
+        # simultaneously for 54 minutes — direct evidence the gate
+        # didn't cover this code path.
+        # Check MT5 for open positions on the same symbol BEFORE the
+        # PENDING → TRIGGERED transition so we don't burn the trigger
+        # window on a guaranteed-rejected action. Reject + WARN log +
+        # transition the plan to FAILED so Snow doesn't retry the same
+        # opposing entry on the next tick.
+        try:
+            existing = self._executor.get_open_positions()
+        except Exception as e:
+            log.warning(
+                f"snow.actions.opposing_positions_check_failed plan_id={fire.plan_id} "
+                f"err={type(e).__name__}: {e} — proceeding with entry "
+                f"(fail-open: better to risk a duplicate-side entry than "
+                f"deadlock the entry path on a transient MT5 hiccup)"
+            )
+            existing = []
+
+        opposing = [
+            p for p in existing
+            if str(getattr(p, "direction", "")).upper() not in ("", direction)
+        ]
+        if opposing:
+            opp_summary = ", ".join(
+                f"#{getattr(p, 'ticket', '?')}({getattr(p, 'direction', '?')})"
+                for p in opposing
+            )
+            log.warning(
+                f"snow.actions.opposing_positions_blocked plan_id={fire.plan_id} "
+                f"attempted_direction={direction} opposing={opp_summary} — "
+                f"FLO-85 safety gate: refusing to open opposing position. "
+                f"Plan transitions to FAILED so Snow does not retry on next tick."
+            )
+            snow_db.record_trigger_and_transition(
+                fire.plan_id,
+                contingency_name="_entry",
+                contingency_kind="entry",
+                action_type="execute_market",
+                execution_status=STATUS_SKIPPED_GUARD,
+                new_plan_status=PlanStatus.FAILED.value,
+                action_params={
+                    "direction": direction, "volume": entry.volume,
+                    "sl": entry.initial_sl, "tp": entry.initial_tp,
+                },
+                execution_result={
+                    "success": False,
+                    "error_code": "opposing_positions",
+                    "error_message": (
+                        f"FLO-85 gate: cannot open {direction} while "
+                        f"opposing position(s) {opp_summary} are live"
+                    ),
+                },
+                cycle_duration_ms=0,
+            )
+            return self._record_and_return(
+                fire, STATUS_SKIPPED_GUARD,
+                reason=f"opposing positions live: {opp_summary}",
+            )
+
+        # Transition PENDING -> TRIGGERED BEFORE broker call (makes the
+        # transient visible; loop will skip further evals while TRIGGERED).
+        snow_db.update_plan_status(fire.plan_id, PlanStatus.TRIGGERED.value)
 
         # FLO-365: tick snapshot taken once, immediately before broker call.
         # Reference price = ask for BUY / bid for SELL — what the fill is
