@@ -1318,10 +1318,8 @@ class TradingBot:
                     name="FastIndicatorLoop", daemon=True,
                 )
                 self._fast_indicator_thread.start()
-                log.info(
-                    "FAST_INDICATOR_LOOP spawned (cadence=%ss)",
-                    int(getattr(config, "FAST_INDICATOR_INTERVAL_SECONDS", 5)),
-                )
+                _fi_cadence = int(getattr(config, "FAST_INDICATOR_INTERVAL_SECONDS", 5))
+                log.info(f"FAST_INDICATOR_LOOP spawned (cadence={_fi_cadence}s)")
             except Exception as e:
                 log.error(f"fast_indicator_loop.spawn_failed: {e}")
                 log.error(traceback.format_exc())
@@ -1712,7 +1710,7 @@ class TradingBot:
         from mt5_safe import mt5
 
         interval = float(getattr(config, "FAST_INDICATOR_INTERVAL_SECONDS", 5.0))
-        log.info("FAST_INDICATOR_LOOP starting (interval=%.1fs)", interval)
+        log.info(f"FAST_INDICATOR_LOOP starting (interval={interval:.1f}s)")
 
         def _rates_to_candles(rates):
             out = []
@@ -1767,9 +1765,8 @@ class TradingBot:
                 # these keys with its own values a moment later — that's
                 # fine, both writers are producing the same shape.
                 dp = getattr(self, "_last_agent_data", None)
-                if isinstance(dp, dict):
-                    if multi_tf:
-                        dp["multi_tf_indicators"] = multi_tf
+                if isinstance(dp, dict) and multi_tf:
+                    dp["multi_tf_indicators"] = multi_tf
                     if candles_cache:
                         # Merge into existing dp.candles rather than replace —
                         # other code paths may have populated TFs we didn't
@@ -1777,7 +1774,9 @@ class TradingBot:
                         existing = dp.get("candles") if isinstance(dp.get("candles"), dict) else {}
                         merged = {**existing, **candles_cache}
                         dp["candles"] = merged
-                    # Stamp refresh timestamp so callers can verify freshness.
+                    # Stamp refresh timestamp ONLY when we actually published
+                    # fresh data — otherwise the staleness metric lies (says
+                    # "refreshed 2s ago" while multi_tf is empty).
                     dp["multi_tf_indicators_refreshed_at"] = time.time()
 
                 if not last_ok:
@@ -1785,15 +1784,12 @@ class TradingBot:
                     last_ok = True
 
                 elapsed_ms = (time.time() - tick_t0) * 1000.0
-                log.debug(
-                    "FAST_INDICATOR_LOOP tick tfs=%d compute_ms=%.0f",
-                    len(multi_tf), elapsed_ms,
-                )
+                log.debug(f"FAST_INDICATOR_LOOP tick tfs={len(multi_tf)} compute_ms={elapsed_ms:.0f}")
             except Exception as e:
                 last_ok = False
                 now = time.time()
                 if now - last_warn_at > 60.0:
-                    log.warning("FAST_INDICATOR_LOOP error (rate-limited): %s", e)
+                    log.warning(f"FAST_INDICATOR_LOOP error (rate-limited): {e}")
                     last_warn_at = now
 
             # Sleep in 0.5s slices so shutdown latency stays bounded.
