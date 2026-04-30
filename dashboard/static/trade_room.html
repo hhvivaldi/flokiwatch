@@ -4378,6 +4378,42 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
         }
 
         function updatePanels(messages, state) {
+          // FLO-415 (post-trade #1622387680 incident): Position visibility
+          // is non-negotiable — if the operator has a live position they
+          // MUST see it. Any later panel-update failure used to silently
+          // hide the position card because the surrounding try/catch
+          // swallowed errors before the toggle ran. Run the toggle FIRST
+          // in its own isolated try/catch with explicit console.error
+          // logging on failure so the operator can see what went wrong
+          // in F12 even when the rest of the dashboard breaks.
+          try {
+            var _earlyPos = (state && Array.isArray(state.positions)) ? state.positions : [];
+            var _earlyHasPos = _earlyPos.length > 0;
+            var _earlyPosC = document.getElementById('main-has-position');
+            var _earlyNoPos = document.getElementById('main-no-position');
+            var _earlyPosCount = document.getElementById('positions-count');
+            if (_earlyPosC) {
+              _earlyPosC.style.display = _earlyHasPos ? '' : 'none';
+              if (_earlyHasPos && typeof _renderPositionBar === 'function') {
+                try { _renderPositionBar(_earlyPos, state); } catch(e) {
+                  console.error('[FLO-415] _renderPositionBar threw:', e);
+                }
+              }
+            }
+            if (_earlyNoPos) _earlyNoPos.style.display = _earlyHasPos ? 'none' : '';
+            if (_earlyPosCount) _earlyPosCount.textContent = String(_earlyPos.length);
+            if (_earlyHasPos && (!_earlyPosC || !_earlyNoPos)) {
+              console.error(
+                '[FLO-415] Position present but DOM toggle elements missing:',
+                {has_main_has_position: !!_earlyPosC, has_main_no_position: !!_earlyNoPos,
+                 positions: _earlyPos}
+              );
+            }
+          } catch(e) {
+            console.error('[FLO-415] Early position-toggle failed:', e,
+                          'state.positions=', state && state.positions);
+          }
+
           try {
             // FLO-298: show/hide maintenance banner + Floki card hiding.
             if (window.MaintenanceMode) window.MaintenanceMode.apply(state);
