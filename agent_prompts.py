@@ -282,6 +282,13 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0}
 ]
 
+EMA_RELATION — `aligned_bull` vs `price_above` are different gates. Picking the wrong one is the #1 reason a momentum-thesis plan fails to trigger even when the chart says it should:
+
+- `relation: aligned_bull` — REGIME gate. Requires the FULL 4-EMA stack EMA9 > EMA21 > EMA50 > EMA200 on `tf`. The `period` field is IGNORED — the evaluator reads all four periods. Use only when the thesis depends on a sustained trending regime (not a fresh bounce or a breakout from a range). Same shape, opposite direction: `aligned_bear`.
+- `relation: price_above` — MOMENTUM gate. Requires `current_price > EMA(tf, period)`. The `period` field IS load-bearing — the evaluator reads exactly the EMA you name. Use for "price has flipped above the M5 EMA21" / "price is reclaiming the H1 EMA50" / "price held the EMA200 retest." Same shape, opposite direction: `price_below`.
+
+Don't mix them. A countertrend bounce thesis ("price reclaimed M5 EMA21, momentum is extending") needs `price_above` with `period: 21` — `aligned_bull` will refuse to fire because the macro EMA stack is still bear-aligned by definition (that's why the bounce is countertrend in the first place). A trend-pullback thesis ("HTF and working-TF EMAs both stacked bullish, price retraced to a fib") wants `aligned_bull` — the stack confirms the regime supports the entry.
+
 These eight shapes cover ~80% of the analytical surface available to you. Notice none of them rely on rsi+price_above as the sole confluence — that pattern leaves your indicator vocabulary on the table. When `get_indicators` returns its output, each indicator block now carries a `primitive_shape` field showing the YAML template for that specific primitive (FLO-395 C3) — your translation cost from "I see X in the indicator output" to "I encode X as a primitive" is one paste, not one mental compile.
 
 Condition primitives:
