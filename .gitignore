@@ -34,6 +34,11 @@ data/bot_state.json
 data/agent_session_memory.json
 data/agent_session_memory_*.json
 data/agent_watch_conditions.json
+
+# FLO-415: real-data dp snapshot for integration tests. Contains live
+# broker prices + indicator values from production cycles — keep local
+# only, never commit.
+data/_test_snapshots/
 data/*.csv
 data/*.txt
 data/*.json

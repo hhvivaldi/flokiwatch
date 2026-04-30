@@ -1819,6 +1819,53 @@ class TradingBot:
 
         log.info("FAST_INDICATOR_LOOP stopped")
 
+    # ----------------------------------------------------------------------
+    # FLO-415 — Real-data integration test snapshot
+    # ----------------------------------------------------------------------
+    def _write_dp_snapshot(self) -> None:
+        """Atomic-write a JSON snapshot of `_last_agent_data` for the
+        real-data integration test suite (snow/tests/snow_integration_
+        real_data_test.py).
+
+        Called once per analysis cycle from the end of the dp
+        enrichment block. Snow's SemanticCache reads `_last_agent_data`
+        directly, so this snapshot is BYTE-FOR-BYTE the same data the
+        live evaluator sees on the next tick — eliminating the
+        producer/consumer drift class that shipped 7 P0 bugs on
+        2026-04-30 (b247a88..7fafed8).
+
+        Failure is non-blocking: a snapshot write error must NEVER
+        affect trading. The test suite handles missing snapshots via
+        a module-level pytest skip.
+
+        File location: data/_test_snapshots/dp_snapshot_latest.json
+        Atomicity: temp file + os.replace (Rule 22 / project convention).
+        """
+        try:
+            dp = getattr(self, "_last_agent_data", None)
+            if not isinstance(dp, dict):
+                return
+            snap_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "data", "_test_snapshots",
+            )
+            os.makedirs(snap_dir, exist_ok=True)
+            tmp_path = os.path.join(snap_dir, "dp_snapshot_latest.json.tmp")
+            final_path = os.path.join(snap_dir, "dp_snapshot_latest.json")
+            # default=str so datetime / numpy / pandas types serialise
+            # without erroring. The test suite reads JSON-deserializable
+            # values back as plain dicts/lists/numbers — type fidelity at
+            # the seam is what matters; representation drift inside
+            # primitives is irrelevant for the test contract.
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(dp, f, default=str, indent=2)
+            os.replace(tmp_path, final_path)
+        except Exception as e:
+            try:
+                log.debug(f"DP_SNAPSHOT | write failed (non-blocking): {e}")
+            except Exception:
+                pass
+
     def _analysis_cycle(self):
         """Analysis and decision cycle"""
         try:
@@ -2554,6 +2601,13 @@ class TradingBot:
                                 "spread": 0.0,
                                 "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                             }
+
+                    # FLO-415: Write a snapshot of the fully-enriched dp so the
+                    # real-data integration test suite can exercise every Snow
+                    # primitive against the exact data the live Snow loop sees.
+                    # Mock fixtures missed 7 producer/consumer drift bugs on
+                    # 2026-04-30; this snapshot is the canonical truth source.
+                    self._write_dp_snapshot()
             except Exception:
                 # Never block trading loop
                 pass
