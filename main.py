@@ -1847,6 +1847,26 @@ class TradingBot:
                                         indicators["emas"]["ema50"] = float(ev)
                             except Exception:
                                 pass
+
+                            # FLO-XXX: Snow's live_data.ema(tf,period) reads
+                            # indicators["ema_<period>"] (flat scalar), not
+                            # indicators.emas.ema<period>. Without this,
+                            # ema_relation primitives on non-M1 timeframes
+                            # silently return None → False. Publish all four
+                            # periods at the path the evaluator expects.
+                            try:
+                                ema9_val = ema.get("ema9") if ema.get("ema9") is not None else _df_get("ema_9")
+                                ema21_val = ema.get("ema21") if ema.get("ema21") is not None else _df_get("ema_21")
+                                if ema9_val is not None:
+                                    indicators["ema_9"] = float(ema9_val)
+                                if ema21_val is not None:
+                                    indicators["ema_21"] = float(ema21_val)
+                                if ema50 is not None:
+                                    indicators["ema_50"] = float(ema50)
+                                if ema200 is not None:
+                                    indicators["ema_200"] = float(ema200)
+                            except Exception:
+                                pass
                         except Exception:
                             indicators["emas"] = {}
                         try:
@@ -1897,11 +1917,24 @@ class TradingBot:
                             except Exception:
                                 bb_pos = None
 
+                            # FLO-XXX: Snow's evaluate_bollinger_position reads
+                            # bb["position"] (not "position_pct") for the
+                            # above_upper/below_lower/above_middle/below_middle
+                            # relations, AND bb["squeeze"] (bool) for the
+                            # in_squeeze relation. Pre-fix the rebuild renamed
+                            # position → position_pct and dropped squeeze
+                            # entirely, making all 5 bollinger relations
+                            # silently False. Publish both the canonical
+                            # "position" key (for Snow) AND keep "position_pct"
+                            # (for whatever else reads it), plus surface the
+                            # squeeze bool from tech_data.
                             indicators["bollinger"] = {
                                 "upper": bb_upper,
                                 "middle": bb_middle,
                                 "lower": bb_lower,
+                                "position": bb_pos,
                                 "position_pct": bb_pos,
+                                "squeeze": bool(bb.get("squeeze")) if bb.get("squeeze") is not None else False,
                             }
 
                             # Backfill Bollinger bands from df if analyzer only provides position/width.
@@ -1923,6 +1956,26 @@ class TradingBot:
                                 pass
                         except Exception:
                             indicators["bollinger"] = {}
+
+                        # FLO-XXX: Add stochastic block — Snow's
+                        # evaluate_stochastic reads dp.indicators.stochastic.value
+                        # (FLO-355 Phase 7.3). Pre-fix the rebuild had no
+                        # stochastic key at all; the primitive always returned
+                        # None → False. Source: technical_analyzer publishes
+                        # tech_data["stochastic"] = {value, level}.
+                        try:
+                            stoch_block = tech_data.get("stochastic") if isinstance(tech_data.get("stochastic"), dict) else {}
+                            stoch_val = stoch_block.get("value")
+                            if stoch_val is None:
+                                stoch_val = _df_get("stoch_k")
+                                if stoch_val is None:
+                                    stoch_val = _df_get("stochastic")
+                            indicators["stochastic"] = {
+                                "value": float(stoch_val) if isinstance(stoch_val, (int, float)) else None,
+                                "level": stoch_block.get("level"),
+                            }
+                        except Exception:
+                            indicators["stochastic"] = {"value": None, "level": None}
                         dp["indicators"] = indicators
 
                     # macro + headlines
