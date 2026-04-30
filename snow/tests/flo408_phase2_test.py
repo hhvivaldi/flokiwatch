@@ -596,3 +596,197 @@ class TestPartialSubmitInBatchIntegration:
         # Layer C is invoked AFTER null-scan but BEFORE validate_plan.
         # The error message hints at the partial-submit pattern.
         assert "deltas" in msg.lower() or "own turn" in msg.lower()
+
+
+# =============================================================================
+# FLO-408 Phase 2.x — Leaf-primitive condition schema contracts
+# =============================================================================
+#
+# Phase 2.1 fixed top-level required-field omission (0% -> 56% pass).
+# Phase 2.x adds leaf-primitive required fields via oneOf
+# discriminator on `type`. These tests pin the contract:
+#   - The constant exists with all 18 primitives.
+#   - Each variant declares the per-type required fields per Pydantic.
+#   - The constant is wired into entry/management/exit conditions.
+
+
+class TestLeafPrimitiveSchema:
+    """Pin the oneOf-discriminated leaf primitive schema."""
+
+    def _get_const(self):
+        import ai_agent
+        return ai_agent._CONDITION_PRIMITIVE_SCHEMA
+
+    def test_constant_exists_and_is_dict(self):
+        const = self._get_const()
+        assert isinstance(const, dict)
+        assert const.get("type") == "object"
+        assert "oneOf" in const
+        assert isinstance(const["oneOf"], list)
+
+    def test_eighteen_primitive_branches(self):
+        """Every Snow primitive must have a oneOf branch — drift here
+        means a primitive Floki can use is unsteerable for Gemini."""
+        const = self._get_const()
+        # snow/schema.py defines 18 primitives (FLO-355 added 4 to the
+        # original 14). Update this number AND the oneOf branches when
+        # adding a new primitive.
+        assert len(const["oneOf"]) == 18
+
+    def test_each_branch_has_type_const_discriminator(self):
+        """Every branch must use {type: {const: <name>}} so Gemini's
+        tool generator picks the right variant."""
+        const = self._get_const()
+        for branch in const["oneOf"]:
+            type_prop = branch.get("properties", {}).get("type", {})
+            assert "const" in type_prop, (
+                f"branch missing type.const: {branch}"
+            )
+
+    def test_branch_names_match_pydantic_literals(self):
+        """The set of `type.const` values must equal the set of
+        Snow Condition Literal names."""
+        const = self._get_const()
+        branch_types = {
+            b["properties"]["type"]["const"] for b in const["oneOf"]
+        }
+        # Source of truth — must mirror snow/schema.py Condition union.
+        expected = {
+            "price_above", "price_below", "rsi", "macd_histogram",
+            "ema_relation", "atr", "price_at_sr_zone",
+            "price_at_fibonacci", "profit_pips", "mfe_reached",
+            "mae_reached", "profit_retraced_from_peak",
+            "duration_exceeds", "time_between", "bollinger_position",
+            "stochastic", "price_at_pivot", "indicator_divergence",
+        }
+        assert branch_types == expected, (
+            f"missing: {expected - branch_types}, "
+            f"extra: {branch_types - expected}"
+        )
+
+    def test_rsi_branch_requires_tf_op_threshold(self):
+        """The exact failure pattern from corpus 2026-04-30: Gemini
+        emitted {type: 'rsi'} only. The oneOf branch must enforce
+        tf+op+threshold so Gemini's strict generator fills them."""
+        const = self._get_const()
+        rsi_branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "rsi"
+        )
+        assert set(rsi_branch["required"]) == {"type", "tf", "op", "threshold"}
+
+    def test_ema_relation_requires_tf_relation(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "ema_relation"
+        )
+        # period is conditionally required (price_above/below need it,
+        # aligned_* forbid it) — handled at validator level, NOT here.
+        assert set(branch["required"]) == {"type", "tf", "relation"}
+
+    def test_price_above_requires_level(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "price_above"
+        )
+        assert set(branch["required"]) == {"type", "level"}
+
+    def test_price_below_requires_level(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "price_below"
+        )
+        assert set(branch["required"]) == {"type", "level"}
+
+    def test_mfe_reached_requires_pips(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "mfe_reached"
+        )
+        assert set(branch["required"]) == {"type", "pips"}
+
+    def test_price_at_sr_zone_requires_tolerance_pips(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "price_at_sr_zone"
+        )
+        assert set(branch["required"]) == {"type", "tolerance_pips"}
+
+    def test_atr_requires_full_param_set(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "atr"
+        )
+        assert set(branch["required"]) == {
+            "type", "tf", "op", "multiplier", "baseline_pips"
+        }
+
+    def test_time_between_requires_start_and_end_utc(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "time_between"
+        )
+        assert set(branch["required"]) == {"type", "start_utc", "end_utc"}
+
+    def test_indicator_divergence_requires_indicator_and_direction(self):
+        const = self._get_const()
+        branch = next(
+            b for b in const["oneOf"]
+            if b["properties"]["type"]["const"] == "indicator_divergence"
+        )
+        assert set(branch["required"]) == {"type", "indicator", "direction"}
+
+    def test_all_branches_allow_additional_properties(self):
+        """Tolerance for fields not in the union (FLO-355 may add more)
+        and for handler-side compatibility."""
+        const = self._get_const()
+        for branch in const["oneOf"]:
+            assert branch.get("additionalProperties", False) is True
+
+
+class TestLeafPrimitiveWiring:
+    """Verify _CONDITION_PRIMITIVE_SCHEMA is referenced in entry,
+    management, and exit conditions of submit_plan_to_snow."""
+
+    def _get_submit_schema(self):
+        import ai_agent
+
+        class _Stub:
+            def _macro_tools_if_needed(self):
+                return ai_agent.AIAgent._macro_tools_if_needed(self)
+
+        schemas = ai_agent.AIAgent._tool_schemas(_Stub())
+        submit = next(s for s in schemas if s["name"] == "submit_plan_to_snow")
+        return submit["input_schema"]
+
+    def test_entry_conditions_use_primitive_schema(self):
+        import ai_agent
+        schema = self._get_submit_schema()
+        plan = schema["properties"]["plan"]
+        entry_items = plan["properties"]["entry"]["properties"]["conditions"]["items"]
+        # Identity check — the actual constant must be referenced,
+        # not a copy. This guarantees a single source of truth.
+        assert entry_items is ai_agent._CONDITION_PRIMITIVE_SCHEMA
+
+    def test_management_conditions_use_primitive_schema(self):
+        import ai_agent
+        schema = self._get_submit_schema()
+        plan = schema["properties"]["plan"]
+        mgmt = plan["properties"]["management"]
+        mgmt_item_conditions = mgmt["items"]["properties"]["conditions"]
+        assert mgmt_item_conditions["items"] is ai_agent._CONDITION_PRIMITIVE_SCHEMA
+
+    def test_exit_conditions_use_primitive_schema(self):
+        import ai_agent
+        schema = self._get_submit_schema()
+        plan = schema["properties"]["plan"]
+        exit_block = plan["properties"]["exit"]
+        exit_item_conditions = exit_block["items"]["properties"]["conditions"]
+        assert exit_item_conditions["items"] is ai_agent._CONDITION_PRIMITIVE_SCHEMA

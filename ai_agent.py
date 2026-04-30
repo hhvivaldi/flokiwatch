@@ -502,6 +502,173 @@ SUBMIT_DECISION_TOOL = {
 
 
 # =============================================================================
+# FLO-408 Phase 2.x — Leaf-primitive required-field schema
+# =============================================================================
+#
+# Phase 2.1 added required arrays at the top-level (analysis/entry/exit) and
+# entry-block level — pass rate jumped 0% -> 56%. The remaining 44% failure
+# was at the LEAF condition primitives: Gemini was producing
+# `{type: "rsi"}` only, omitting tf/op/threshold; same for ema_relation,
+# price_above, mfe_reached, etc.
+#
+# This constant makes the per-type required fields explicit via a oneOf
+# discriminated union keyed on `type`. With it in place, Gemini's strict
+# tool generator must fill the per-variant required fields before
+# emitting the call. additionalProperties: True everywhere preserves
+# tolerance for fields that aren't in the union (FLO-355 added 4
+# primitives mid-deploy; another set may follow).
+#
+# Source of truth: snow/schema.py condition classes (PriceAbove, RSI,
+# EMARelation, ATR, PriceAtSRZone, PriceAtFibonacci, ProfitPips,
+# MFEReached, MAEReached, ProfitRetracedFromPeak, DurationExceeds,
+# TimeBetween, BollingerPosition, Stochastic, PriceAtPivot,
+# IndicatorDivergence, MACDHistogram). Any new primitive must be added
+# here at the same time it lands in snow/schema.py.
+_TIMEFRAME_ENUM = ["M1", "M5", "M15", "H1", "H4", "D1"]
+_COMPARISON_OP_ENUM = ["above", "below"]
+
+_CONDITION_PRIMITIVE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Snow condition primitive. MUST be one of the 18 variants in "
+        "the oneOf list — each variant declares the per-type required "
+        "fields (e.g. rsi requires tf+op+threshold; mfe_reached requires "
+        "pips; price_above requires level). NEVER emit `{type: \"rsi\"}` "
+        "alone — the per-type fields are mandatory and Snow will reject "
+        "the plan. Call get_snow_primitives_reference for the canonical "
+        "field list when in doubt."
+    ),
+    "oneOf": [
+        # 1. price_above
+        {"type": "object", "required": ["type", "level"],
+         "properties": {"type": {"const": "price_above"},
+                        "level": {"type": "number"}},
+         "additionalProperties": True},
+        # 2. price_below
+        {"type": "object", "required": ["type", "level"],
+         "properties": {"type": {"const": "price_below"},
+                        "level": {"type": "number"}},
+         "additionalProperties": True},
+        # 3. rsi
+        {"type": "object", "required": ["type", "tf", "op", "threshold"],
+         "properties": {"type": {"const": "rsi"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
+                        "threshold": {"type": "number"}},
+         "additionalProperties": True},
+        # 4. macd_histogram
+        {"type": "object", "required": ["type", "tf", "op", "threshold"],
+         "properties": {"type": {"const": "macd_histogram"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
+                        "threshold": {"type": "number"}},
+         "additionalProperties": True},
+        # 5. ema_relation. period optional (required only for
+        # price_above/below; forbidden for aligned_*) — handled at
+        # the validator level, not here.
+        {"type": "object", "required": ["type", "tf", "relation"],
+         "properties": {"type": {"const": "ema_relation"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "relation": {"type": "string",
+                                     "enum": ["price_above", "price_below",
+                                              "aligned_bull", "aligned_bear"]},
+                        "period": {"type": "integer",
+                                   "enum": [9, 21, 50, 200]}},
+         "additionalProperties": True},
+        # 6. atr
+        {"type": "object",
+         "required": ["type", "tf", "op", "multiplier", "baseline_pips"],
+         "properties": {"type": {"const": "atr"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
+                        "multiplier": {"type": "number"},
+                        "baseline_pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 7. price_at_sr_zone
+        {"type": "object", "required": ["type", "tolerance_pips"],
+         "properties": {"type": {"const": "price_at_sr_zone"},
+                        "zone_type": {"type": "string",
+                                      "enum": ["support", "resistance", "any"]},
+                        "tolerance_pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 8. price_at_fibonacci. tolerance_pips Optional.
+        {"type": "object", "required": ["type", "level"],
+         "properties": {"type": {"const": "price_at_fibonacci"},
+                        "level": {"type": "number",
+                                  "enum": [0.236, 0.382, 0.5, 0.618,
+                                           0.786, 1.0, 1.272, 1.618]},
+                        "tolerance_pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 9. profit_pips
+        {"type": "object", "required": ["type", "op", "threshold"],
+         "properties": {"type": {"const": "profit_pips"},
+                        "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
+                        "threshold": {"type": "number"}},
+         "additionalProperties": True},
+        # 10. mfe_reached
+        {"type": "object", "required": ["type", "pips"],
+         "properties": {"type": {"const": "mfe_reached"},
+                        "pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 11. mae_reached
+        {"type": "object", "required": ["type", "pips"],
+         "properties": {"type": {"const": "mae_reached"},
+                        "pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 12. profit_retraced_from_peak
+        {"type": "object", "required": ["type", "pips"],
+         "properties": {"type": {"const": "profit_retraced_from_peak"},
+                        "pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 13. duration_exceeds
+        {"type": "object", "required": ["type", "minutes"],
+         "properties": {"type": {"const": "duration_exceeds"},
+                        "minutes": {"type": "integer"}},
+         "additionalProperties": True},
+        # 14. time_between
+        {"type": "object", "required": ["type", "start_utc", "end_utc"],
+         "properties": {"type": {"const": "time_between"},
+                        "start_utc": {"type": "string"},
+                        "end_utc": {"type": "string"}},
+         "additionalProperties": True},
+        # 15. bollinger_position
+        {"type": "object", "required": ["type", "tf", "relation"],
+         "properties": {"type": {"const": "bollinger_position"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "relation": {"type": "string",
+                                     "enum": ["above_upper", "below_lower",
+                                              "above_middle", "below_middle",
+                                              "in_squeeze"]}},
+         "additionalProperties": True},
+        # 16. stochastic
+        {"type": "object", "required": ["type", "tf", "op", "threshold"],
+         "properties": {"type": {"const": "stochastic"},
+                        "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
+                        "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
+                        "threshold": {"type": "number"}},
+         "additionalProperties": True},
+        # 17. price_at_pivot
+        {"type": "object", "required": ["type", "level", "tolerance_pips"],
+         "properties": {"type": {"const": "price_at_pivot"},
+                        "pivot_set": {"type": "string",
+                                      "enum": ["classic", "fibonacci"]},
+                        "level": {"type": "string",
+                                  "enum": ["PP", "R1", "R2", "R3",
+                                           "S1", "S2", "S3"]},
+                        "tolerance_pips": {"type": "number"}},
+         "additionalProperties": True},
+        # 18. indicator_divergence
+        {"type": "object", "required": ["type", "indicator", "direction"],
+         "properties": {"type": {"const": "indicator_divergence"},
+                        "indicator": {"type": "string", "enum": ["macd"]},
+                        "direction": {"type": "string",
+                                      "enum": ["bullish", "bearish"]}},
+         "additionalProperties": True},
+    ],
+}
+
+
+# =============================================================================
 # FLO-385 — Group-by-dependency tool-call classification
 # =============================================================================
 #
@@ -1516,21 +1683,11 @@ class AIAgent:
                                         "conditions": {
                                             "type": "array",
                                             "minItems": 2,
-                                            "items": {
-                                                "type": "object",
-                                                "description": (
-                                                    "Condition primitive: "
-                                                    "{type, ...primitive-specific "
-                                                    "fields}. Never null. Never a "
-                                                    "JSON-string. Always a real "
-                                                    "object."
-                                                ),
-                                                "required": ["type"],
-                                                "properties": {
-                                                    "type": {"type": "string"},
-                                                },
-                                                "additionalProperties": True,
-                                            },
+                                            # FLO-408 Phase 2.x — leaf-
+                                            # primitive required-field steering
+                                            # via discriminated oneOf. See
+                                            # _CONDITION_PRIMITIVE_SCHEMA.
+                                            "items": _CONDITION_PRIMITIVE_SCHEMA,
                                         },
                                         "initial_sl": {"type": "number"},
                                         "initial_tp": {"type": "number"},
@@ -1557,7 +1714,9 @@ class AIAgent:
                                             "priority": {"type": "integer"},
                                             "conditions": {
                                                 "type": "array",
-                                                "items": {"type": "object"},
+                                                # FLO-408 Phase 2.x —
+                                                # leaf-primitive schema.
+                                                "items": _CONDITION_PRIMITIVE_SCHEMA,
                                             },
                                             "action": {"type": "object"},
                                             "fires": {
@@ -1595,7 +1754,9 @@ class AIAgent:
                                             "priority": {"type": "integer"},
                                             "conditions": {
                                                 "type": "array",
-                                                "items": {"type": "object"},
+                                                # FLO-408 Phase 2.x —
+                                                # leaf-primitive schema.
+                                                "items": _CONDITION_PRIMITIVE_SCHEMA,
                                             },
                                             "action": {"type": "object"},
                                             "fires": {

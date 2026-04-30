@@ -1,0 +1,809 @@
+{
+  "run": {
+    "started_at": "2026-04-30T09:06:35Z",
+    "runs_per_trigger": 2,
+    "triggers_used": [
+      "range_bound",
+      "trending_bearish",
+      "trending_bullish",
+      "volatile_news",
+      "multi_scenario"
+    ],
+    "model": "gemini-3.1-pro-preview",
+    "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "captures": [
+      {
+        "trigger_name": "trending_bullish",
+        "run_id": 2,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"management\":[{\"name\":\"trail_sl_after_advance\",\"priority\":5,\"action\":{\"trail_pips\":20,\"type\":\"trail_sl\"},\"fires\":\"every_time\",\"conditions\":[{\"type\":\"mfe_reached\",\"pips\":40}]}],\"exit\":[{\"name\":\"momentum_loss\",\"conditions\":[{\"op\":\"below\",\"type\":\"rsi\",\"threshold\":50,\"tf\":\"H1\"}],\"action\":{\"type\":\"close_full\"},\"fires\":\"once\",\"priority\":9}],\"emergency\":{\"max_duration_minutes\":240,\"on_broker_error\":\"alert_floki\",\"max_loss_pips\":150},\"expires_at\":\"2026-04-30T12:00:00Z\",\"analysis\":{\"thesis\":\"Momentum breakout continuation above H1 resistance 4715 in a strong bullish trend\",\"regime_assumed\":\"TRENDING_BULLISH\",\"setup_type\":\"continuation_momentum\",\"confidence_reason\":\"ADX 28 rising and MACD H1 hist +1.2 indicate strong momentum supporting a breakout above 4715.\",\"context_tags\":{\"htf\":\"HTF_aligned\",\"news_session\":[],\"trend\":\"trend_strong\",\"volatility\":\"high_vol\"},\"key_levels\":[4715,4720,4735,4700],\"confidence\":75},\"entry\":{\"direction\":\"BUY\",\"initial_tp\":4730,\"initial_sl\":4705,\"entry_price\":4715.5,\"volume\":0.02,\"conditions\":[{\"level\":4715,\"type\":\"price_crossed_level\",\"direction\":\"above\"},{\"tf\":\"H1\",\"relation\":\"aligned_bull\",\"type\":\"ema_relation\"}]}}}",
+        "parsed_arguments": {
+          "plan": {
+            "management": [
+              {
+                "name": "trail_sl_after_advance",
+                "priority": 5,
+                "action": {
+                  "trail_pips": 20,
+                  "type": "trail_sl"
+                },
+                "fires": "every_time",
+                "conditions": [
+                  {
+                    "type": "mfe_reached",
+                    "pips": 40
+                  }
+                ]
+              }
+            ],
+            "exit": [
+              {
+                "name": "momentum_loss",
+                "conditions": [
+                  {
+                    "op": "below",
+                    "type": "rsi",
+                    "threshold": 50,
+                    "tf": "H1"
+                  }
+                ],
+                "action": {
+                  "type": "close_full"
+                },
+                "fires": "once",
+                "priority": 9
+              }
+            ],
+            "emergency": {
+              "max_duration_minutes": 240,
+              "on_broker_error": "alert_floki",
+              "max_loss_pips": 150
+            },
+            "expires_at": "2026-04-30T12:00:00Z",
+            "analysis": {
+              "thesis": "Momentum breakout continuation above H1 resistance 4715 in a strong bullish trend",
+              "regime_assumed": "TRENDING_BULLISH",
+              "setup_type": "continuation_momentum",
+              "confidence_reason": "ADX 28 rising and MACD H1 hist +1.2 indicate strong momentum supporting a breakout above 4715.",
+              "context_tags": {
+                "htf": "HTF_aligned",
+                "news_session": [],
+                "trend": "trend_strong",
+                "volatility": "high_vol"
+              },
+              "key_levels": [
+                4715,
+                4720,
+                4735,
+                4700
+              ],
+              "confidence": 75
+            },
+            "entry": {
+              "direction": "BUY",
+              "initial_tp": 4730,
+              "initial_sl": 4705,
+              "entry_price": 4715.5,
+              "volume": 0.02,
+              "conditions": [
+                {
+                  "level": 4715,
+                  "type": "price_crossed_level",
+                  "direction": "above"
+                },
+                {
+                  "tf": "H1",
+                  "relation": "aligned_bull",
+                  "type": "ema_relation"
+                }
+              ]
+            }
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "volatile_news",
+        "run_id": 1,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"expires_at\":\"2026-06-01T20:00:00Z\",\"emergency\":{\"max_loss_pips\":150,\"on_broker_error\":\"alert_floki\",\"max_duration_minutes\":120},\"analysis\":{\"confidence\":75,\"confidence_reason\":\"Pre-FOMC compression inside a defined 15-pip range; upside expansion carries squeeze potential.\",\"key_levels\":[4610,4595,4635],\"context_tags\":{\"htf\":\"HTF_neutral\",\"trend\":\"range_wide\",\"volatility\":\"high_vol\",\"news_session\":[\"near_news\"]},\"setup_type\":\"news_reaction\",\"thesis\":\"Upside breakout of the 4595-4610 pre-FOMC range\",\"regime_assumed\":\"VOLATILE\"},\"management\":[{\"name\":\"be_lock_volatility\",\"priority\":1,\"conditions\":[{\"type\":\"mfe_reached\",\"pips\":20}],\"action\":{\"offset_pips\":0,\"type\":\"move_sl_to_breakeven\"},\"fires\":\"once\"}],\"entry\":{\"direction\":\"BUY\",\"volume\":0.05,\"initial_tp\":4640,\"entry_price\":4612,\"conditions\":[{\"type\":\"price_above\",\"level\":4612},{\"tf\":\"M5\",\"type\":\"macd_histogram\",\"op\":\"above\",\"threshold\":0}],\"initial_sl\":4600},\"exit\":[{\"conditions\":[{\"type\":\"price_below\",\"level\":4603}],\"fires\":\"once\",\"action\":{\"type\":\"close_full\"},\"name\":\"fakeout_invalidation\",\"priority\":2}]}}",
+        "parsed_arguments": {
+          "plan": {
+            "expires_at": "2026-06-01T20:00:00Z",
+            "emergency": {
+              "max_loss_pips": 150,
+              "on_broker_error": "alert_floki",
+              "max_duration_minutes": 120
+            },
+            "analysis": {
+              "confidence": 75,
+              "confidence_reason": "Pre-FOMC compression inside a defined 15-pip range; upside expansion carries squeeze potential.",
+              "key_levels": [
+                4610,
+                4595,
+                4635
+              ],
+              "context_tags": {
+                "htf": "HTF_neutral",
+                "trend": "range_wide",
+                "volatility": "high_vol",
+                "news_session": [
+                  "near_news"
+                ]
+              },
+              "setup_type": "news_reaction",
+              "thesis": "Upside breakout of the 4595-4610 pre-FOMC range",
+              "regime_assumed": "VOLATILE"
+            },
+            "management": [
+              {
+                "name": "be_lock_volatility",
+                "priority": 1,
+                "conditions": [
+                  {
+                    "type": "mfe_reached",
+                    "pips": 20
+                  }
+                ],
+                "action": {
+                  "offset_pips": 0,
+                  "type": "move_sl_to_breakeven"
+                },
+                "fires": "once"
+              }
+            ],
+            "entry": {
+              "direction": "BUY",
+              "volume": 0.05,
+              "initial_tp": 4640,
+              "entry_price": 4612,
+              "conditions": [
+                {
+                  "type": "price_above",
+                  "level": 4612
+                },
+                {
+                  "tf": "M5",
+                  "type": "macd_histogram",
+                  "op": "above",
+                  "threshold": 0
+                }
+              ],
+              "initial_sl": 4600
+            },
+            "exit": [
+              {
+                "conditions": [
+                  {
+                    "type": "price_below",
+                    "level": 4603
+                  }
+                ],
+                "fires": "once",
+                "action": {
+                  "type": "close_full"
+                },
+                "name": "fakeout_invalidation",
+                "priority": 2
+              }
+            ]
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "volatile_news",
+        "run_id": 1,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"analysis\":{\"setup_type\":\"news_reaction\",\"context_tags\":{\"htf\":\"HTF_neutral\",\"trend\":\"range_wide\",\"news_session\":[\"near_news\"],\"volatility\":\"high_vol\"},\"regime_assumed\":\"VOLATILE\",\"thesis\":\"Downside breakdown of the 4595-4610 pre-FOMC range\",\"confidence\":75,\"key_levels\":[4610,4595,4570],\"confidence_reason\":\"Pre-FOMC compression inside a defined 15-pip range; downside expansion triggers trapped longs.\"},\"management\":[{\"name\":\"be_lock_volatility\",\"priority\":1,\"conditions\":[{\"pips\":20,\"type\":\"mfe_reached\"}],\"fires\":\"once\",\"action\":{\"type\":\"move_sl_to_breakeven\",\"offset_pips\":0}}],\"expires_at\":\"2026-06-01T20:00:00Z\",\"emergency\":{\"max_loss_pips\":150,\"on_broker_error\":\"alert_floki\",\"max_duration_minutes\":120},\"exit\":[{\"conditions\":[{\"type\":\"price_above\",\"level\":4602}],\"fires\":\"once\",\"action\":{\"type\":\"close_full\"},\"name\":\"fakeout_invalidation\",\"priority\":2}],\"entry\":{\"conditions\":[{\"type\":\"price_below\",\"level\":4593},{\"tf\":\"M5\",\"type\":\"macd_histogram\",\"op\":\"below\",\"threshold\":0}],\"initial_sl\":4605,\"volume\":0.05,\"direction\":\"SELL\",\"entry_price\":4593,\"initial_tp\":4565}}}",
+        "parsed_arguments": {
+          "plan": {
+            "analysis": {
+              "setup_type": "news_reaction",
+              "context_tags": {
+                "htf": "HTF_neutral",
+                "trend": "range_wide",
+                "news_session": [
+                  "near_news"
+                ],
+                "volatility": "high_vol"
+              },
+              "regime_assumed": "VOLATILE",
+              "thesis": "Downside breakdown of the 4595-4610 pre-FOMC range",
+              "confidence": 75,
+              "key_levels": [
+                4610,
+                4595,
+                4570
+              ],
+              "confidence_reason": "Pre-FOMC compression inside a defined 15-pip range; downside expansion triggers trapped longs."
+            },
+            "management": [
+              {
+                "name": "be_lock_volatility",
+                "priority": 1,
+                "conditions": [
+                  {
+                    "pips": 20,
+                    "type": "mfe_reached"
+                  }
+                ],
+                "fires": "once",
+                "action": {
+                  "type": "move_sl_to_breakeven",
+                  "offset_pips": 0
+                }
+              }
+            ],
+            "expires_at": "2026-06-01T20:00:00Z",
+            "emergency": {
+              "max_loss_pips": 150,
+              "on_broker_error": "alert_floki",
+              "max_duration_minutes": 120
+            },
+            "exit": [
+              {
+                "conditions": [
+                  {
+                    "type": "price_above",
+                    "level": 4602
+                  }
+                ],
+                "fires": "once",
+                "action": {
+                  "type": "close_full"
+                },
+                "name": "fakeout_invalidation",
+                "priority": 2
+              }
+            ],
+            "entry": {
+              "conditions": [
+                {
+                  "type": "price_below",
+                  "level": 4593
+                },
+                {
+                  "tf": "M5",
+                  "type": "macd_histogram",
+                  "op": "below",
+                  "threshold": 0
+                }
+              ],
+              "initial_sl": 4605,
+              "volume": 0.05,
+              "direction": "SELL",
+              "entry_price": 4593,
+              "initial_tp": 4565
+            }
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "volatile_news",
+        "run_id": 2,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"emergency\":{\"max_duration_minutes\":180,\"max_loss_pips\":170,\"on_broker_error\":\"alert_floki\"},\"expires_at\":\"2026-10-10T20:00:00Z\",\"management\":[{\"fires\":\"once\",\"priority\":1,\"conditions\":[{\"pips\":25,\"type\":\"mfe_reached\"}],\"name\":\"be_lock\",\"action\":{\"type\":\"move_sl_to_breakeven\",\"offset_pips\":5}}],\"exit\":[{\"action\":{\"type\":\"close_full\"},\"name\":\"whipsaw_invalidation\",\"conditions\":[{\"level\":4594,\"type\":\"price_below\"}],\"fires\":\"once\",\"priority\":9}],\"analysis\":{\"confidence_reason\":\"Pre-FOMC consolidation 4595-4610. Upside break post-news targets 4630.\",\"confidence\":75,\"regime_assumed\":\"VOLATILE\",\"key_levels\":[4610,4595,4630],\"context_tags\":{\"volatility\":\"high_vol\",\"trend\":\"range_wide\",\"htf\":\"HTF_neutral\",\"news_session\":[\"near_news\"]},\"thesis\":\"Upside breakout of pre-FOMC range (4595-4610)\",\"setup_type\":\"breakout_range\"},\"entry\":{\"volume\":0.05,\"entry_price\":4611,\"initial_tp\":4640,\"direction\":\"BUY\",\"conditions\":[{\"type\":\"price_above\",\"level\":4611},{\"op\":\"above\",\"type\":\"rsi\",\"threshold\":55,\"tf\":\"M5\"}],\"initial_sl\":4594}}}",
+        "parsed_arguments": {
+          "plan": {
+            "emergency": {
+              "max_duration_minutes": 180,
+              "max_loss_pips": 170,
+              "on_broker_error": "alert_floki"
+            },
+            "expires_at": "2026-10-10T20:00:00Z",
+            "management": [
+              {
+                "fires": "once",
+                "priority": 1,
+                "conditions": [
+                  {
+                    "pips": 25,
+                    "type": "mfe_reached"
+                  }
+                ],
+                "name": "be_lock",
+                "action": {
+                  "type": "move_sl_to_breakeven",
+                  "offset_pips": 5
+                }
+              }
+            ],
+            "exit": [
+              {
+                "action": {
+                  "type": "close_full"
+                },
+                "name": "whipsaw_invalidation",
+                "conditions": [
+                  {
+                    "level": 4594,
+                    "type": "price_below"
+                  }
+                ],
+                "fires": "once",
+                "priority": 9
+              }
+            ],
+            "analysis": {
+              "confidence_reason": "Pre-FOMC consolidation 4595-4610. Upside break post-news targets 4630.",
+              "confidence": 75,
+              "regime_assumed": "VOLATILE",
+              "key_levels": [
+                4610,
+                4595,
+                4630
+              ],
+              "context_tags": {
+                "volatility": "high_vol",
+                "trend": "range_wide",
+                "htf": "HTF_neutral",
+                "news_session": [
+                  "near_news"
+                ]
+              },
+              "thesis": "Upside breakout of pre-FOMC range (4595-4610)",
+              "setup_type": "breakout_range"
+            },
+            "entry": {
+              "volume": 0.05,
+              "entry_price": 4611,
+              "initial_tp": 4640,
+              "direction": "BUY",
+              "conditions": [
+                {
+                  "type": "price_above",
+                  "level": 4611
+                },
+                {
+                  "op": "above",
+                  "type": "rsi",
+                  "threshold": 55,
+                  "tf": "M5"
+                }
+              ],
+              "initial_sl": 4594
+            }
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "multi_scenario",
+        "run_id": 1,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"exit\":[{\"priority\":1,\"name\":\"target_reached\",\"fires\":\"once\",\"action\":{\"type\":\"close_full\"},\"conditions\":[{\"type\":\"price_below\",\"level\":4545}]}],\"emergency\":{\"max_duration_minutes\":480,\"max_loss_pips\":150,\"on_broker_error\":\"alert_floki\"},\"expires_at\":\"2026-04-30T20:00:00Z\",\"analysis\":{\"confidence_reason\":\"HTF trend is bearish; a pullback to 4571 resistance offers a clean continuation entry with H1 stochastic exhaustion.\",\"setup_type\":\"pullback_trend\",\"key_levels\":[4581,4571,4543],\"regime_assumed\":\"TRENDING_BEARISH\",\"context_tags\":{\"volatility\":\"high_vol\",\"news_session\":[],\"trend\":\"trend_strong\",\"htf\":\"HTF_aligned\"},\"confidence\":75,\"thesis\":\"Pullback to H1 resistance at 4571 for trend continuation rejection.\"},\"entry\":{\"direction\":\"SELL\",\"initial_sl\":4585,\"initial_tp\":4545,\"conditions\":[{\"tolerance_pips\":5,\"zone_type\":\"resistance\",\"type\":\"price_at_sr_zone\"},{\"threshold\":65,\"tf\":\"M15\",\"type\":\"rsi\",\"op\":\"above\"}],\"entry_price\":4571,\"volume\":0.02},\"management\":[{\"conditions\":[{\"type\":\"mfe_reached\",\"pips\":20}],\"action\":{\"type\":\"move_sl_to_breakeven\",\"offset_pips\":0},\"priority\":1,\"name\":\"lock_be\",\"fires\":\"once\"}]}}",
+        "parsed_arguments": {
+          "plan": {
+            "exit": [
+              {
+                "priority": 1,
+                "name": "target_reached",
+                "fires": "once",
+                "action": {
+                  "type": "close_full"
+                },
+                "conditions": [
+                  {
+                    "type": "price_below",
+                    "level": 4545
+                  }
+                ]
+              }
+            ],
+            "emergency": {
+              "max_duration_minutes": 480,
+              "max_loss_pips": 150,
+              "on_broker_error": "alert_floki"
+            },
+            "expires_at": "2026-04-30T20:00:00Z",
+            "analysis": {
+              "confidence_reason": "HTF trend is bearish; a pullback to 4571 resistance offers a clean continuation entry with H1 stochastic exhaustion.",
+              "setup_type": "pullback_trend",
+              "key_levels": [
+                4581,
+                4571,
+                4543
+              ],
+              "regime_assumed": "TRENDING_BEARISH",
+              "context_tags": {
+                "volatility": "high_vol",
+                "news_session": [],
+                "trend": "trend_strong",
+                "htf": "HTF_aligned"
+              },
+              "confidence": 75,
+              "thesis": "Pullback to H1 resistance at 4571 for trend continuation rejection."
+            },
+            "entry": {
+              "direction": "SELL",
+              "initial_sl": 4585,
+              "initial_tp": 4545,
+              "conditions": [
+                {
+                  "tolerance_pips": 5,
+                  "zone_type": "resistance",
+                  "type": "price_at_sr_zone"
+                },
+                {
+                  "threshold": 65,
+                  "tf": "M15",
+                  "type": "rsi",
+                  "op": "above"
+                }
+              ],
+              "entry_price": 4571,
+              "volume": 0.02
+            },
+            "management": [
+              {
+                "conditions": [
+                  {
+                    "type": "mfe_reached",
+                    "pips": 20
+                  }
+                ],
+                "action": {
+                  "type": "move_sl_to_breakeven",
+                  "offset_pips": 0
+                },
+                "priority": 1,
+                "name": "lock_be",
+                "fires": "once"
+              }
+            ]
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "multi_scenario",
+        "run_id": 2,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"emergency\":{\"max_loss_pips\":150,\"on_broker_error\":\"alert_floki\",\"max_duration_minutes\":480},\"entry\":{\"volume\":0.02,\"initial_sl\":4585,\"entry_price\":4571,\"initial_tp\":4543,\"direction\":\"SELL\",\"conditions\":[{\"zone_type\":\"resistance\",\"tolerance_pips\":5,\"type\":\"price_at_sr_zone\"},{\"type\":\"stochastic\",\"op\":\"above\",\"threshold\":80,\"tf\":\"H1\"}]},\"expires_at\":\"2026-05-01T00:00:00Z\",\"analysis\":{\"key_levels\":[4571,4581,4543,4512],\"confidence\":75,\"confidence_reason\":\"H1 resistance confluence with overbought stochastic in a bearish HTF regime.\",\"regime_assumed\":\"TRENDING_BEARISH\",\"context_tags\":{\"volatility\":\"high_vol\",\"trend\":\"trend_strong\",\"htf\":\"HTF_aligned\",\"news_session\":[]},\"thesis\":\"Bearish regime pullback to H1 resistance at 4571 aligns with H1 stochastic exhaustion for a trend-continuation fade.\",\"setup_type\":\"pullback_trend\"},\"exit\":[{\"action\":{\"type\":\"close_full\"},\"priority\":1,\"conditions\":[{\"type\":\"price_above\",\"level\":4585}],\"name\":\"structural_invalidation\",\"fires\":\"once\"}],\"management\":[{\"fires\":\"once\",\"conditions\":[{\"pips\":20,\"type\":\"mfe_reached\"}],\"name\":\"trail_sl_after_advance\",\"priority\":5,\"action\":{\"type\":\"trail_sl\",\"trail_pips\":15}}]}}",
+        "parsed_arguments": {
+          "plan": {
+            "emergency": {
+              "max_loss_pips": 150,
+              "on_broker_error": "alert_floki",
+              "max_duration_minutes": 480
+            },
+            "entry": {
+              "volume": 0.02,
+              "initial_sl": 4585,
+              "entry_price": 4571,
+              "initial_tp": 4543,
+              "direction": "SELL",
+              "conditions": [
+                {
+                  "zone_type": "resistance",
+                  "tolerance_pips": 5,
+                  "type": "price_at_sr_zone"
+                },
+                {
+                  "type": "stochastic",
+                  "op": "above",
+                  "threshold": 80,
+                  "tf": "H1"
+                }
+              ]
+            },
+            "expires_at": "2026-05-01T00:00:00Z",
+            "analysis": {
+              "key_levels": [
+                4571,
+                4581,
+                4543,
+                4512
+              ],
+              "confidence": 75,
+              "confidence_reason": "H1 resistance confluence with overbought stochastic in a bearish HTF regime.",
+              "regime_assumed": "TRENDING_BEARISH",
+              "context_tags": {
+                "volatility": "high_vol",
+                "trend": "trend_strong",
+                "htf": "HTF_aligned",
+                "news_session": []
+              },
+              "thesis": "Bearish regime pullback to H1 resistance at 4571 aligns with H1 stochastic exhaustion for a trend-continuation fade.",
+              "setup_type": "pullback_trend"
+            },
+            "exit": [
+              {
+                "action": {
+                  "type": "close_full"
+                },
+                "priority": 1,
+                "conditions": [
+                  {
+                    "type": "price_above",
+                    "level": 4585
+                  }
+                ],
+                "name": "structural_invalidation",
+                "fires": "once"
+              }
+            ],
+            "management": [
+              {
+                "fires": "once",
+                "conditions": [
+                  {
+                    "pips": 20,
+                    "type": "mfe_reached"
+                  }
+                ],
+                "name": "trail_sl_after_advance",
+                "priority": 5,
+                "action": {
+                  "type": "trail_sl",
+                  "trail_pips": 15
+                }
+              }
+            ]
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "multi_scenario",
+        "run_id": 2,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"entry\":{\"volume\":0.02,\"initial_tp\":4512,\"entry_price\":4541,\"initial_sl\":4556,\"direction\":\"SELL\",\"conditions\":[{\"type\":\"price_below\",\"level\":4541},{\"type\":\"macd_histogram\",\"threshold\":-0.05,\"op\":\"below\",\"tf\":\"M15\"}]},\"emergency\":{\"max_loss_pips\":150,\"max_duration_minutes\":480,\"on_broker_error\":\"alert_floki\"},\"expires_at\":\"2026-05-01T00:00:00Z\",\"analysis\":{\"thesis\":\"Momentum continuation on clean break of D1 support shelf at 4543, targeting 4512 floor.\",\"context_tags\":{\"htf\":\"HTF_aligned\",\"volatility\":\"high_vol\",\"trend\":\"trend_strong\",\"news_session\":[]},\"regime_assumed\":\"TRENDING_BEARISH\",\"setup_type\":\"breakout_range\",\"key_levels\":[4555,4543,4512],\"confidence\":70,\"confidence_reason\":\"D1 4-touch shelf breakdown carries strong liquidity-sweep potential in existing bear trend.\"},\"exit\":[{\"conditions\":[{\"level\":4555,\"type\":\"price_above\"}],\"name\":\"reclaim_exit\",\"fires\":\"once\",\"action\":{\"type\":\"close_full\"},\"priority\":1}],\"management\":[{\"priority\":5,\"action\":{\"offset_pips\":0,\"type\":\"move_sl_to_breakeven\"},\"fires\":\"once\",\"name\":\"move_to_be\",\"conditions\":[{\"type\":\"mfe_reached\",\"pips\":20}]}]}}",
+        "parsed_arguments": {
+          "plan": {
+            "entry": {
+              "volume": 0.02,
+              "initial_tp": 4512,
+              "entry_price": 4541,
+              "initial_sl": 4556,
+              "direction": "SELL",
+              "conditions": [
+                {
+                  "type": "price_below",
+                  "level": 4541
+                },
+                {
+                  "type": "macd_histogram",
+                  "threshold": -0.05,
+                  "op": "below",
+                  "tf": "M15"
+                }
+              ]
+            },
+            "emergency": {
+              "max_loss_pips": 150,
+              "max_duration_minutes": 480,
+              "on_broker_error": "alert_floki"
+            },
+            "expires_at": "2026-05-01T00:00:00Z",
+            "analysis": {
+              "thesis": "Momentum continuation on clean break of D1 support shelf at 4543, targeting 4512 floor.",
+              "context_tags": {
+                "htf": "HTF_aligned",
+                "volatility": "high_vol",
+                "trend": "trend_strong",
+                "news_session": []
+              },
+              "regime_assumed": "TRENDING_BEARISH",
+              "setup_type": "breakout_range",
+              "key_levels": [
+                4555,
+                4543,
+                4512
+              ],
+              "confidence": 70,
+              "confidence_reason": "D1 4-touch shelf breakdown carries strong liquidity-sweep potential in existing bear trend."
+            },
+            "exit": [
+              {
+                "conditions": [
+                  {
+                    "level": 4555,
+                    "type": "price_above"
+                  }
+                ],
+                "name": "reclaim_exit",
+                "fires": "once",
+                "action": {
+                  "type": "close_full"
+                },
+                "priority": 1
+              }
+            ],
+            "management": [
+              {
+                "priority": 5,
+                "action": {
+                  "offset_pips": 0,
+                  "type": "move_sl_to_breakeven"
+                },
+                "fires": "once",
+                "name": "move_to_be",
+                "conditions": [
+                  {
+                    "type": "mfe_reached",
+                    "pips": 20
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      },
+      {
+        "trigger_name": "multi_scenario",
+        "run_id": 2,
+        "tool_name": "submit_plan_to_snow",
+        "raw_arguments_str": "{\"plan\":{\"expires_at\":\"2026-05-01T00:00:00Z\",\"analysis\":{\"setup_type\":\"structural_bounce\",\"regime_assumed\":\"RANGING\",\"thesis\":\"Exploratory counter-trend bounce if D1 support at 4543 sweeps and reclaims with momentum exhaustion.\",\"context_tags\":{\"news_session\":[],\"volatility\":\"low_vol\",\"trend\":\"trend_weak\",\"htf\":\"HTF_counter\"},\"confidence_reason\":\"4-touch D1 shelf is historically defended; looking for sweep and reclaim trigger.\",\"confidence\":65,\"key_levels\":[4543,4555,4571,4512]},\"entry\":{\"direction\":\"BUY\",\"conditions\":[{\"level\":4541,\"type\":\"price_crossed_level\",\"direction\":\"below\"},{\"level\":4544,\"type\":\"price_above\"},{\"tf\":\"M5\",\"within_bars\":6,\"indicator\":\"rsi\",\"type\":\"indicator_was\",\"threshold\":35,\"op\":\"below\"}],\"volume\":0.02,\"initial_tp\":4571,\"initial_sl\":4535,\"entry_price\":4545},\"emergency\":{\"max_duration_minutes\":480,\"on_broker_error\":\"alert_floki\",\"max_loss_pips\":150},\"management\":[{\"action\":{\"type\":\"move_sl_to_breakeven\",\"offset_pips\":0},\"priority\":5,\"name\":\"be_lock_after_advance\",\"conditions\":[{\"type\":\"mfe_reached\",\"pips\":15}],\"fires\":\"once\"}],\"exit\":[{\"action\":{\"type\":\"close_full\"},\"priority\":1,\"conditions\":[{\"level\":4535,\"type\":\"price_below\"}],\"name\":\"structural_fail\",\"fires\":\"once\"}]}}",
+        "parsed_arguments": {
+          "plan": {
+            "expires_at": "2026-05-01T00:00:00Z",
+            "analysis": {
+              "setup_type": "structural_bounce",
+              "regime_assumed": "RANGING",
+              "thesis": "Exploratory counter-trend bounce if D1 support at 4543 sweeps and reclaims with momentum exhaustion.",
+              "context_tags": {
+                "news_session": [],
+                "volatility": "low_vol",
+                "trend": "trend_weak",
+                "htf": "HTF_counter"
+              },
+              "confidence_reason": "4-touch D1 shelf is historically defended; looking for sweep and reclaim trigger.",
+              "confidence": 65,
+              "key_levels": [
+                4543,
+                4555,
+                4571,
+                4512
+              ]
+            },
+            "entry": {
+              "direction": "BUY",
+              "conditions": [
+                {
+                  "level": 4541,
+                  "type": "price_crossed_level",
+                  "direction": "below"
+                },
+                {
+                  "level": 4544,
+                  "type": "price_above"
+                },
+                {
+                  "tf": "M5",
+                  "within_bars": 6,
+                  "indicator": "rsi",
+                  "type": "indicator_was",
+                  "threshold": 35,
+                  "op": "below"
+                }
+              ],
+              "volume": 0.02,
+              "initial_tp": 4571,
+              "initial_sl": 4535,
+              "entry_price": 4545
+            },
+            "emergency": {
+              "max_duration_minutes": 480,
+              "on_broker_error": "alert_floki",
+              "max_loss_pips": 150
+            },
+            "management": [
+              {
+                "action": {
+                  "type": "move_sl_to_breakeven",
+                  "offset_pips": 0
+                },
+                "priority": 5,
+                "name": "be_lock_after_advance",
+                "conditions": [
+                  {
+                    "type": "mfe_reached",
+                    "pips": 15
+                  }
+                ],
+                "fires": "once"
+              }
+            ],
+            "exit": [
+              {
+                "action": {
+                  "type": "close_full"
+                },
+                "priority": 1,
+                "conditions": [
+                  {
+                    "level": 4535,
+                    "type": "price_below"
+                  }
+                ],
+                "name": "structural_fail",
+                "fires": "once"
+              }
+            ]
+          }
+        },
+        "parse_error": null,
+        "layer_b_null_paths": [],
+        "pydantic_ok": false,
+        "pydantic_errors": [
+          "schema: ('id',): Field required",
+          "schema: ('created_at',): Field required"
+        ],
+        "flo400_decoder_changed_paths": []
+      }
+    ],
+    "api_call_count": 10,
+    "errors": []
+  },
+  "findings": {
+    "tool_call_distribution": {
+      "submit_plan_to_snow": 8
+    },
+    "raw_args_parse_errors": 0,
+    "submit_plan_to_snow": {
+      "attempts": 8,
+      "pydantic_ok": 0,
+      "with_null_paths": 0,
+      "with_flo400_decodable_paths": 0,
+      "null_path_pattern_counts": {},
+      "flo400_decodable_path_counts": {},
+      "pydantic_error_signature_counts": {
+        "schema: ('id',): Field required": 8,
+        "schema: ('created_at',): Field required": 8
+      }
+    }
+  }
+}
