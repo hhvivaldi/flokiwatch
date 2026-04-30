@@ -462,26 +462,46 @@ class TestSemanticDelegation:
         assert ld.ema(tf="H1", period=9) == 4640.0
         assert ld.ema(tf="H1", period=200) == 4600.0
 
-    def test_unsupported_tf_warns_once_per_pair(self, monkeypatch, caplog):
-        """FLO-410: bollinger / stochastic / macd_divergence on non-H1
-        emit a single WARN log per (accessor, tf) for process lifetime."""
-        import logging as _logging
-        # Reset class-level dedup set — other tests may have populated.
-        from snow.live_data import LiveData as _LD
-        _LD._warned_unsupported_tf.clear()
-
-        ld = self._live_with_semantic(monkeypatch, {})
-        with caplog.at_level(_logging.WARNING, logger="snow.live_data"):
-            assert ld.bollinger(tf="M5") is None
-            assert ld.bollinger(tf="M5") is None  # no second warn
-            assert ld.bollinger(tf="H4") is None  # different TF → warn
-            assert ld.stochastic(tf="M5") is None  # different accessor → warn
-        warns = [
-            r for r in caplog.records
-            if "snow.live_data.unsupported_tf" in r.getMessage()
-        ]
-        # Expect 3 warnings: bollinger/M5, bollinger/H4, stochastic/M5
-        assert len(warns) == 3, [w.getMessage() for w in warns]
+    def test_bollinger_stochastic_divergence_per_tf_resolve(self, monkeypatch):
+        """FLO-411: bollinger / stochastic / macd_divergence are no
+        longer H1-only. compute_indicators_from_candles publishes
+        these per-TF in dp.multi_tf_indicators[tf]; the consumers route
+        non-H1 reads there. Test: each accessor resolves a per-TF
+        value when the cache provides it."""
+        ld = self._live_with_semantic(
+            monkeypatch,
+            {
+                "multi_tf_indicators": {
+                    "M5":  {"bollinger": {"upper": 4630.0, "middle": 4625.0, "lower": 4620.0, "position": 0.7, "squeeze": False},
+                            "stochastic": {"value": 65.0},
+                            "macd": {"value": 0.5, "signal": 0.3, "histogram": 0.2,
+                                     "divergence": {"detected": True, "type": "bullish", "bars_since": 3}}},
+                    "M15": {"bollinger": {"upper": 4640.0, "middle": 4625.0, "lower": 4610.0, "position": 0.5, "squeeze": True},
+                            "stochastic": {"value": 30.0},
+                            "macd": {"divergence": {"detected": False, "type": None}}},
+                    "H4":  {"bollinger": {"upper": 4700.0, "middle": 4625.0, "lower": 4550.0, "position": 0.3, "squeeze": False},
+                            "stochastic": {"value": 75.0},
+                            "macd": {"divergence": {"detected": False, "type": None}}},
+                },
+            },
+        )
+        # bollinger
+        bb_m5 = ld.bollinger(tf="M5")
+        assert bb_m5 is not None and bb_m5["position"] == 0.7
+        bb_m15 = ld.bollinger(tf="M15")
+        assert bb_m15 is not None and bb_m15["squeeze"] is True
+        bb_h4 = ld.bollinger(tf="H4")
+        assert bb_h4 is not None and bb_h4["position"] == 0.3
+        # stochastic
+        assert ld.stochastic(tf="M5") == 65.0
+        assert ld.stochastic(tf="M15") == 30.0
+        assert ld.stochastic(tf="H4") == 75.0
+        # macd_divergence
+        m5_div = ld.macd_divergence(tf="M5")
+        assert m5_div is not None and m5_div["detected"] is True
+        assert m5_div["type"] == "bullish"
+        m15_div = ld.macd_divergence(tf="M15")
+        assert m15_div is not None and m15_div["detected"] is False
 
 
 # =============================================================================

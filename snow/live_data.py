@@ -178,14 +178,25 @@ class LiveData:
     # evaluator level: missing data → False).
 
     def bollinger(self, tf: str = "H1") -> Optional[dict]:
-        """Return Brain's `indicators.bollinger` dict for `tf` or None.
+        """Return the Bollinger dict for `tf` or None.
         Shape: {upper, middle, lower, position (0..1), squeeze (bool)}.
         The `position` is normalised: 0 == lower band, 1 == upper band,
-        >1 == above upper, <0 == below lower. Brain handles the
-        formula in agent_data_builder."""
+        >1 == above upper, <0 == below lower.
+
+        FLO-411: was H1-only; now reads from
+        dp.multi_tf_indicators[tf].bollinger for non-H1 (Brain's
+        compute_indicators_from_candles writes the same shape per TF).
+        H1 path keeps reading dp.indicators.bollinger for backward compat
+        with the slow-cycle producer."""
         if tf != "H1":
-            self._warn_unsupported_tf("bollinger", tf)
-            return None
+            mtf = self._semantic.get("multi_tf_indicators")
+            if not isinstance(mtf, dict):
+                return None
+            tf_block = mtf.get(tf)
+            if not isinstance(tf_block, dict):
+                return None
+            bb = tf_block.get("bollinger")
+            return bb if isinstance(bb, dict) else None
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):
             return None
@@ -193,10 +204,12 @@ class LiveData:
         return bb if isinstance(bb, dict) else None
 
     def stochastic(self, tf: str = "H1") -> Optional[float]:
-        """Return Brain's stochastic value (0-100) for `tf` or None."""
+        """Return the stochastic %K value (0-100) for `tf` or None.
+
+        FLO-411: was H1-only; now reads dp.multi_tf_indicators[tf].
+        stochastic.value for non-H1."""
         if tf != "H1":
-            self._warn_unsupported_tf("stochastic", tf)
-            return None
+            return self._multi_tf_indicator(tf, "stochastic", "value")
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):
             return None
@@ -224,11 +237,25 @@ class LiveData:
         return None
 
     def macd_divergence(self, tf: str = "H1") -> Optional[dict]:
-        """Return Brain's MACD divergence detection for `tf` or None.
+        """Return the MACD divergence detection for `tf` or None.
         Shape: {detected: bool, type: 'bullish'|'bearish'|None, bars_since}.
-        Computed each cycle by technical_analyzer.detect_macd_divergence."""
+
+        FLO-411: was H1-only; now reads dp.multi_tf_indicators[tf].
+        macd.divergence for non-H1. compute_indicators_from_candles
+        runs detect_macd_divergence per TF and writes the result into
+        the macd sub-dict."""
         if tf != "H1":
-            self._warn_unsupported_tf("macd_divergence", tf)
+            mtf = self._semantic.get("multi_tf_indicators")
+            if not isinstance(mtf, dict):
+                return None
+            tf_block = mtf.get(tf)
+            if not isinstance(tf_block, dict):
+                return None
+            macd_block = tf_block.get("macd")
+            if isinstance(macd_block, dict):
+                div = macd_block.get("divergence")
+                if isinstance(div, dict):
+                    return div
             return None
         ind = self._semantic.get("indicators")
         if not isinstance(ind, dict):

@@ -167,6 +167,63 @@ def compute_indicators_from_candles(candles: list) -> dict:
             "ema9_ema21_distance": round(ema9 - ema21, 2),
         }
 
+        # FLO-411: extract Bollinger Bands + Stochastic from the dataframe
+        # `calculate_indicators(df)` already populated above. Snow's
+        # bollinger_position / stochastic primitives can now read per-TF
+        # data instead of being silently restricted to H1.
+        try:
+            bb_upper = float(last.get("bb_upper", 0))
+            bb_middle = float(last.get("bb_middle", 0))
+            bb_lower = float(last.get("bb_lower", 0))
+            # Position normalised: 0=lower, 1=upper, >1 above upper,
+            # <0 below lower. Matches the formula Snow's
+            # evaluate_bollinger_position relies on
+            # (snow/evaluators/indicator.py: above_upper checks pos > 1.0).
+            bb_range = bb_upper - bb_lower
+            if bb_range > 0:
+                bb_position = (price - bb_lower) / bb_range
+            else:
+                bb_position = 0.5
+            # Squeeze: bb_width < 50% of trailing-20 average bb_width.
+            # Mirrors analyze_technical_detailed's squeeze formula
+            # (technical_analyzer.py:~1077) so the per-TF bool matches
+            # the H1-only one Brain already produces.
+            bb_widths = (df["bb_upper"] - df["bb_lower"]).values
+            if len(bb_widths) >= 20:
+                avg_width = float(np.nanmean(bb_widths[-20:]))
+                bb_squeeze = (bb_range < avg_width * 0.5) if avg_width > 0 else False
+            else:
+                bb_squeeze = False
+            result["bollinger"] = {
+                "upper": round(bb_upper, 2),
+                "middle": round(bb_middle, 2),
+                "lower": round(bb_lower, 2),
+                "position": round(bb_position, 4),
+                "squeeze": bool(bb_squeeze),
+            }
+        except Exception:
+            result["bollinger"] = {}
+
+        try:
+            stoch_k = float(last.get("stoch_k", 50.0))
+            result["stochastic"] = {"value": round(stoch_k, 2)}
+        except Exception:
+            result["stochastic"] = {}
+
+        # FLO-411: per-TF MACD divergence. detect_macd_divergence is a
+        # standalone function (technical_analyzer.py:~920) that takes
+        # the df and returns {detected, type, bars_since}. Run it per TF
+        # so Snow's indicator_divergence primitive can fire on
+        # M5/M15/H4 divergences, not just H1.
+        try:
+            div = detect_macd_divergence(df)
+            if isinstance(div, dict):
+                result["macd"]["divergence"] = div
+        except Exception:
+            # Leave macd dict alone — divergence sub-key is optional;
+            # Snow's evaluator returns False on missing data (fail-safe).
+            pass
+
         # FLO-222: Direction and trajectory (compare current vs 4 candles ago)
         if len(df) >= 19:  # 14 warmup + 5 for lookback
             try:

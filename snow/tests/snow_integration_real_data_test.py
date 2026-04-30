@@ -178,44 +178,48 @@ class TestEverySnowPrimitiveResolvesAgainstRealDp:
         )
         assert isinstance(v, float)
 
-    # H1-only accessors (Brain doesn't compute these per-TF)
+    # FLO-411: bollinger / stochastic / macd_divergence are no longer
+    # H1-only — compute_indicators_from_candles writes them per TF.
+    # Test all 5 TFs to lock in the fix.
 
-    def test_bollinger_h1_resolves(self, real_live_data):
-        bb = real_live_data.bollinger(tf="H1")
+    @pytest.mark.parametrize("tf", NON_M1_TIMEFRAMES)
+    def test_bollinger_resolves(self, real_live_data, tf):
+        bb = real_live_data.bollinger(tf=tf)
+        # H1 reads slow-cycle dp.indicators.bollinger; non-H1 reads
+        # mtf[tf].bollinger. Both paths must produce the same shape.
         assert bb is not None, (
-            "bollinger(H1) returned None — check dp.indicators.bollinger"
+            f"bollinger(tf={tf!r}) returned None — for H1 check "
+            f"dp.indicators.bollinger; for non-H1 check "
+            f"dp.multi_tf_indicators[{tf!r}].bollinger (FLO-411)"
         )
-        # Snow's evaluate_bollinger_position reads these specific keys.
-        assert "position" in bb, (
-            "bb.position missing — Snow's above_upper/below_lower/"
-            "above_middle/below_middle relations need this float key. "
-            "Pre-fix 1fdd194 the field was named 'position_pct' and "
-            "Snow silently read None."
-        )
-        assert "squeeze" in bb, (
-            "bb.squeeze missing — Snow's in_squeeze relation needs "
-            "this bool key. Pre-fix 1fdd194 the field was dropped "
-            "entirely."
-        )
+        assert "position" in bb, "bb.position missing"
+        assert "squeeze" in bb, "bb.squeeze missing"
         assert isinstance(bb["squeeze"], bool)
 
-    def test_stochastic_h1_resolves(self, real_live_data):
-        v = real_live_data.stochastic(tf="H1")
+    @pytest.mark.parametrize("tf", NON_M1_TIMEFRAMES)
+    def test_stochastic_resolves(self, real_live_data, tf):
+        v = real_live_data.stochastic(tf=tf)
+        # H1 reads dp.indicators.stochastic.value (slow cycle);
+        # non-H1 reads mtf[tf].stochastic.value (FLO-411).
         assert v is not None, (
-            "stochastic(H1) returned None — check "
-            "dp.indicators.stochastic.value. Pre-fix 1fdd194 the entire "
-            "stochastic block was missing from dp.indicators."
+            f"stochastic(tf={tf!r}) returned None — for H1 check "
+            f"dp.indicators.stochastic.value; for non-H1 check "
+            f"dp.multi_tf_indicators[{tf!r}].stochastic.value (FLO-411)"
         )
         assert isinstance(v, float)
         assert 0.0 <= v <= 100.0
 
-    def test_macd_divergence_h1_resolves(self, real_live_data):
-        d = real_live_data.macd_divergence(tf="H1")
+    @pytest.mark.parametrize("tf", NON_M1_TIMEFRAMES)
+    def test_macd_divergence_resolves(self, real_live_data, tf):
+        d = real_live_data.macd_divergence(tf=tf)
+        # H1 reads dp.indicators.macd.divergence (slow cycle);
+        # non-H1 reads mtf[tf].macd.divergence (FLO-411 — Brain runs
+        # detect_macd_divergence per TF inside
+        # compute_indicators_from_candles).
         assert d is not None, (
-            "macd_divergence(H1) returned None — check "
-            "dp.indicators.macd.divergence. Pre-fix 6fce88c the divergence "
-            "sub-key was dropped during the dp rebuild — main.py:~1773 "
-            "rebuilt indicators.macd as {value, signal, histogram} only."
+            f"macd_divergence(tf={tf!r}) returned None — for H1 check "
+            f"dp.indicators.macd.divergence; for non-H1 check "
+            f"dp.multi_tf_indicators[{tf!r}].macd.divergence (FLO-411)"
         )
         assert "detected" in d, "divergence.detected missing"
         assert isinstance(d["detected"], bool)
