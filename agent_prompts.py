@@ -208,7 +208,12 @@ MINIMAL PLAN EXAMPLE:
                   "priority": 7,
                   "conditions": [{"type": "mfe_reached", "pips": 30}],
                   "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
-                  "fires": "once"}],
+                  "fires": "once"},
+                 {"name": "trail_after_strong_advance",
+                  "priority": 5,
+                  "conditions": [{"type": "mfe_reached", "pips": 60}],
+                  "action": {"type": "trail_sl", "trail_pips": 25},
+                  "fires": "every_time"}],
   "exit": [{"name": "rsi_exit",
             "priority": 9,
             "conditions": [{"type": "rsi", "tf": "H1", "op": "below", "threshold": 40}],
@@ -238,7 +243,12 @@ EXPLORATORY SCENARIO EXAMPLE — a "what-if branch" plan: countertrend BUY at H4
                   "priority": 7,
                   "conditions": [{"type": "mfe_reached", "pips": 20}],
                   "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
-                  "fires": "once"}],
+                  "fires": "once"},
+                 {"name": "trail_after_continuation",
+                  "priority": 5,
+                  "conditions": [{"type": "mfe_reached", "pips": 40}],
+                  "action": {"type": "trail_sl", "trail_pips": 20},
+                  "fires": "every_time"}],
   "exit": [{"name": "structural_invalidation",
             "priority": 9,
             "conditions": [{"type": "price_below", "level": 4485.0}],
@@ -336,7 +346,7 @@ Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_brea
 
 MANAGEMENT PRIMITIVE SELECTION — the management contingencies you wire encode an assumption about what "trade going right" looks like; pick the shape that matches the thesis.
 
-- `move_sl_to_breakeven` is appropriate when the trade is binary at a defined level — it works or invalidates near entry. Counter-trend rejections, news reactions, scalps where the thesis dies fast. After it fires, ANY pullback through entry scratches; in continuation theses that means scratching on every wiggle.
+- `move_sl_to_breakeven` is appropriate when the trade is binary at a defined level — it works or invalidates near entry. Counter-trend rejections, news reactions, scalps where the thesis dies fast. After it fires, ANY pullback through entry scratches; in continuation theses that means scratching on every wiggle. **MANDATORY PAIRING (FLO-416): every plan with a `move_sl_to_breakeven` contingency MUST also include a `trail_sl` contingency at strictly higher MFE — without a trail, the SL never advances past breakeven and the plan gives back all profit on retrace. Empirical: PLAN-20260430-009 (+29 pips) and PLAN-20260430-020 (+101 pips) both closed at BE because they had no trail. The validator rejects BE-only plans.**
 
 - `trail_sl` (trail_pips) is the natural fit for trend-continuation theses — you expect the move to extend past initial TP, and you'd rather give up small reversals than scratch on every wiggle. Size the trail to the recent swing range or ATR; tighter trails approximate BE-lock, wider trails leave more room.
 

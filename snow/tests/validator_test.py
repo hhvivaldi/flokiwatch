@@ -332,7 +332,15 @@ class TestManagementThresholdFloor:
     @staticmethod
     def _set_management(plan: dict, contingencies: list[dict]) -> None:
         """Replace the management array with the given contingencies,
-        each filled in with sensible defaults for unrelated fields."""
+        each filled in with sensible defaults for unrelated fields.
+
+        Default action: `move_sl_to_price` — NOT move_sl_to_breakeven,
+        because FLO-416 forbids BE-only plans (BE without trail). These
+        tests target the threshold-floor / signal-class rules, not BE
+        specifically, so the default action should be one that doesn't
+        trip an unrelated validator. Tests that specifically want BE
+        must include a paired trail_sl contingency in their list.
+        """
         out = []
         for i, c in enumerate(contingencies):
             out.append({
@@ -340,7 +348,7 @@ class TestManagementThresholdFloor:
                 "priority": c.get("priority", 7),
                 "conditions": c["conditions"],
                 "action": c.get("action", {
-                    "type": "move_sl_to_breakeven", "offset_pips": 0,
+                    "type": "alert_floki", "message": "test",
                 }),
                 "fires": "once",
             })
@@ -521,7 +529,14 @@ class TestPromptExamplePlan:
                                             "pips": 30}],
                             "action": {"type": "move_sl_to_breakeven",
                                        "offset_pips": 0},
-                            "fires": "once"}],
+                            "fires": "once"},
+                           {"name": "trail_after_strong_advance",
+                            "priority": 5,
+                            "conditions": [{"type": "mfe_reached",
+                                            "pips": 60}],
+                            "action": {"type": "trail_sl",
+                                       "trail_pips": 25},
+                            "fires": "every_time"}],
             "exit": [{"name": "rsi_exit",
                       "priority": 9,
                       "conditions": [{"type": "rsi", "tf": "H1", "op": "below",
@@ -1291,3 +1306,165 @@ class TestPromptV3_8SnowPositionVisibility:
         from agent_prompts import SYSTEM_PROMPT
         # The Floki-managed branch still names the trio.
         assert "adjust_trade, close_trade, set_watch_conditions" in SYSTEM_PROMPT
+
+
+# =============================================================================
+# FLO-416 — BE requires Trail rule
+# =============================================================================
+#
+# Empirical motivation (CEO directive 2026-04-30): two trades closed
+# at break-even after locking BE early then giving back all profit.
+# PLAN-20260430-009 (move_sl_to_be@mfe(30), no trail) → +29 pips → BE.
+# PLAN-20260430-020 (lock_be@mfe(15), no trail) → +101.7 pips → BE.
+
+class TestBeRequiresTrail:
+
+    def _be_mgmt(self, name: str, mfe_pips: float) -> dict:
+        return {
+            "name": name,
+            "priority": 7,
+            "conditions": [{"type": "mfe_reached", "pips": mfe_pips}],
+            "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0},
+            "fires": "once",
+        }
+
+    def _trail_mgmt_mfe(self, name: str, mfe_pips: float, trail_pips: float = 20.0) -> dict:
+        return {
+            "name": name,
+            "priority": 5,
+            "conditions": [{"type": "mfe_reached", "pips": mfe_pips}],
+            "action": {"type": "trail_sl", "trail_pips": trail_pips},
+            "fires": "every_time",
+        }
+
+    def _trail_mgmt_non_mfe(self, name: str, profit_pips_threshold: float) -> dict:
+        """Trail triggered by profit_pips, not mfe_reached. Acceptable
+        per FLO-416 signal-class rule (operator chose alternative)."""
+        return {
+            "name": name,
+            "priority": 5,
+            "conditions": [{
+                "type": "profit_pips", "op": "above",
+                "threshold": profit_pips_threshold,
+            }],
+            "action": {"type": "trail_sl", "trail_pips": 20.0},
+            "fires": "every_time",
+        }
+
+    # --- Acceptance cases ---
+
+    def test_no_be_at_all_passes(self, valid_plan_dict):
+        """Baseline plan has no move_sl_to_breakeven action — rule
+        does not apply."""
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert be_trail_errors == [], be_trail_errors
+
+    def test_be_with_trail_at_higher_mfe_passes(self, valid_plan_dict):
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be", 15.0),
+            self._trail_mgmt_mfe("trail_after_be", 30.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert be_trail_errors == [], be_trail_errors
+
+    def test_be_with_trail_via_non_mfe_signal_passes(self, valid_plan_dict):
+        """Trail triggered by profit_pips (not mfe_reached) — operator
+        chose an alternative ratchet signal; validator only enforces
+        that A trail exists, not the trigger class."""
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be", 15.0),
+            self._trail_mgmt_non_mfe("trail_profit", 25.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert be_trail_errors == [], be_trail_errors
+
+    def test_trail_only_no_be_passes(self, valid_plan_dict):
+        """Trail without BE — no footgun. The rule only fires when a
+        BE exists without a complementary trail."""
+        valid_plan_dict["management"] = [
+            self._trail_mgmt_mfe("trail_only", 25.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert be_trail_errors == [], be_trail_errors
+
+    def test_multiple_be_with_trail_above_max_passes(self, valid_plan_dict):
+        """Staggered BE at +15 and +30 with trail at +50 — trail must
+        be above the LARGEST BE (30), which it is."""
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be_15", 15.0),
+            self._be_mgmt("lock_be_30", 30.0),
+            self._trail_mgmt_mfe("trail_after_be", 50.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert be_trail_errors == [], be_trail_errors
+
+    # --- Rejection cases ---
+
+    def test_be_only_no_trail_rejected(self, valid_plan_dict):
+        """The PLAN-20260430-020 shape: BE without a trail. Empirical:
+        +101 pips MFE → BE → -$0.10. This must be rejected."""
+        valid_plan_dict["management"] = [self._be_mgmt("lock_be", 15.0)]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is False, "BE-only plan must be rejected"
+        be_trail_errors = [e for e in errors if "move_sl_to_breakeven" in e]
+        assert len(be_trail_errors) == 1, errors
+        msg = be_trail_errors[0]
+        assert "lock_be" in msg
+        assert "15" in msg
+        assert "trail_sl" in msg
+        assert "BE alone" in msg or "gives back" in msg.lower()
+
+    def test_be_with_trail_at_lower_mfe_rejected(self, valid_plan_dict):
+        """Trail fires at MFE 10 but BE fires at 15 — trail is shadowed
+        by BE and adds no upside protection."""
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be", 15.0),
+            self._trail_mgmt_mfe("trail_premature", 10.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        be_trail_errors = [
+            e for e in errors
+            if "shadowed" in e or ("trail_sl" in e and "MFE" in e)
+        ]
+        assert len(be_trail_errors) == 1, errors
+        assert "15" in be_trail_errors[0]
+
+    def test_be_with_trail_at_equal_mfe_rejected(self, valid_plan_dict):
+        """Trail fires at exactly the same MFE as BE — strict >
+        requirement, equal is rejected."""
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be", 20.0),
+            self._trail_mgmt_mfe("trail_equal", 20.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        be_trail_errors = [
+            e for e in errors
+            if "shadowed" in e or ("trail_sl" in e and "MFE" in e)
+        ]
+        assert len(be_trail_errors) == 1, errors
+
+    def test_multiple_be_one_trail_below_max_rejected(self, valid_plan_dict):
+        """Two BE contingencies (max=30) and one trail at +25 — trail
+        is below the largest BE."""
+        valid_plan_dict["management"] = [
+            self._be_mgmt("lock_be_15", 15.0),
+            self._be_mgmt("lock_be_30", 30.0),
+            self._trail_mgmt_mfe("trail_low", 25.0),
+        ]
+        ok, plan, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        be_trail_errors = [
+            e for e in errors
+            if "shadowed" in e or ("trail_sl" in e and "MFE" in e)
+        ]
+        assert len(be_trail_errors) == 1, errors
+        # Message names the largest BE threshold (30), the floor the
+        # trail must clear.
+        assert "30" in be_trail_errors[0]

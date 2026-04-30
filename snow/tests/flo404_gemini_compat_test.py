@@ -143,6 +143,13 @@ def _gpt_style_plan() -> dict[str, Any]:
             "conditions": [{"type": "mfe_reached", "pips": 90}],
             "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
             "fires": "once",
+        }, {
+            # FLO-416 — mandatory trail_sl pairing.
+            "name": "trail_after_breakout",
+            "priority": 5,
+            "conditions": [{"type": "mfe_reached", "pips": 130}],
+            "action": {"type": "trail_sl", "trail_pips": 25},
+            "fires": "every_time",
         }],
         "exit": [{
             "name": "breakout_failure_back_under_4576",

@@ -66,6 +66,14 @@ def _wrap_plan(conditions: list, schema_version: int = 1) -> dict:
             "conditions": [{"type": "mfe_reached", "pips": 20.0}],
             "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0},
             "fires": "once",
+        }, {
+            # FLO-416 mandatory pairing — every BE contingency must
+            # have a trail companion at strictly higher MFE.
+            "name": "trail_after_be",
+            "priority": 5,
+            "conditions": [{"type": "mfe_reached", "pips": 40.0}],
+            "action": {"type": "trail_sl", "trail_pips": 20.0},
+            "fires": "every_time",
         }],
         "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
         "emergency": {

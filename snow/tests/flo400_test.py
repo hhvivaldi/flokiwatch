@@ -220,7 +220,12 @@ def _failed_gemini_body():
             '{"name": "lock_be_at_100_pips", "priority": 7, '
             '"conditions": [{"type": "mfe_reached", "pips": 100}], '
             '"action": {"type": "move_sl_to_breakeven", "offset_pips": 0}, '
-            '"fires": "once"}'
+            '"fires": "once"}',
+            # FLO-416 — mandatory trail_sl pairing.
+            '{"name": "trail_after_be", "priority": 5, '
+            '"conditions": [{"type": "mfe_reached", "pips": 150}], '
+            '"action": {"type": "trail_sl", "trail_pips": 30}, '
+            '"fires": "every_time"}'
         ],
         "entry": {
             "conditions": [
