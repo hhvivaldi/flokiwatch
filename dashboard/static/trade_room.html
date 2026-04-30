@@ -2364,6 +2364,17 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
           var watchEl = document.getElementById('position-watch-conditions');
           if (!barEl) return;
 
+          // FLO-415 follow-up (CEO incident 2026-04-30, mobile/Cloudflare):
+          // The parent #main-has-position div toggles correctly when a
+          // position opens (CEO sees the "1 open" header), but the child
+          // #position-bar starts with the `hidden` HTML attribute (line
+          // ~1507) and nothing in the renderer removed it. Result: HTML
+          // got written into a display:none container — the position
+          // details were rendered but invisible. Strip the hidden attr
+          // here so any caller path (early-toggle, late-toggle, future
+          // refactors) inherits the visibility flip for free.
+          if (barEl.hasAttribute('hidden')) barEl.removeAttribute('hidden');
+
           var html = '';
           for (var pi = 0; pi < positions.length; pi++) {
             var p = positions[pi];
@@ -4392,6 +4403,7 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             var _earlyPosC = document.getElementById('main-has-position');
             var _earlyNoPos = document.getElementById('main-no-position');
             var _earlyPosCount = document.getElementById('positions-count');
+            var _earlyPosBar = document.getElementById('position-bar');
             if (_earlyPosC) {
               _earlyPosC.style.display = _earlyHasPos ? '' : 'none';
               if (_earlyHasPos && typeof _renderPositionBar === 'function') {
@@ -4402,6 +4414,13 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             }
             if (_earlyNoPos) _earlyNoPos.style.display = _earlyHasPos ? 'none' : '';
             if (_earlyPosCount) _earlyPosCount.textContent = String(_earlyPos.length);
+            // FLO-415 follow-up: when no position, ensure the bar clears
+            // and re-hides itself. Pairs with _renderPositionBar's
+            // unhide-on-render behavior.
+            if (_earlyPosBar && !_earlyHasPos) {
+              _earlyPosBar.innerHTML = '';
+              _earlyPosBar.setAttribute('hidden', '');
+            }
             if (_earlyHasPos && (!_earlyPosC || !_earlyNoPos)) {
               console.error(
                 '[FLO-415] Position present but DOM toggle elements missing:',
