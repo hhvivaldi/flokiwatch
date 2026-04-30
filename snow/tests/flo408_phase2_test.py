@@ -743,12 +743,24 @@ class TestLeafPrimitiveSchema:
         )
         assert set(branch["required"]) == {"type", "indicator", "direction"}
 
-    def test_all_branches_allow_additional_properties(self):
-        """Tolerance for fields not in the union (FLO-355 may add more)
-        and for handler-side compatibility."""
+    def test_all_branches_forbid_additional_properties(self):
+        """FLO-408 Phase 2.x.1: Each oneOf branch is STRICT
+        (additionalProperties: False). Empirical: cycle 1 of the
+        Phase 2.x deploy showed Gemini emitting a stray
+        `stochastic: "M5"` field on the stochastic primitive (a
+        duplicate of the type discriminator). With permissive branch
+        schemas, the extra field reached Pydantic which rejected via
+        extra="forbid". Strict branches block the hallucination at
+        the tool-generator layer instead. Outer schema layers
+        (entry/management/exit) keep additionalProperties: True for
+        forward-compat with FLO-355-style additions; only the leaf
+        union variants flip strict."""
         const = self._get_const()
         for branch in const["oneOf"]:
-            assert branch.get("additionalProperties", False) is True
+            assert branch.get("additionalProperties") is False, (
+                f"branch type={branch['properties']['type']['const']} "
+                f"must be strict (additionalProperties: False)"
+            )
 
 
 class TestLeafPrimitiveWiring:

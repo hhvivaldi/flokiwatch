@@ -535,7 +535,10 @@ _CONDITION_PRIMITIVE_SCHEMA = {
         "fields (e.g. rsi requires tf+op+threshold; mfe_reached requires "
         "pips; price_above requires level). NEVER emit `{type: \"rsi\"}` "
         "alone — the per-type fields are mandatory and Snow will reject "
-        "the plan. Call get_snow_primitives_reference for the canonical "
+        "the plan. Each variant is STRICT (additionalProperties: False) "
+        "— do not invent fields like a duplicate `stochastic: \"M5\"` on "
+        "the stochastic primitive; only the listed properties are "
+        "permitted. Call get_snow_primitives_reference for the canonical "
         "field list when in doubt."
     ),
     "oneOf": [
@@ -543,26 +546,26 @@ _CONDITION_PRIMITIVE_SCHEMA = {
         {"type": "object", "required": ["type", "level"],
          "properties": {"type": {"const": "price_above"},
                         "level": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 2. price_below
         {"type": "object", "required": ["type", "level"],
          "properties": {"type": {"const": "price_below"},
                         "level": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 3. rsi
         {"type": "object", "required": ["type", "tf", "op", "threshold"],
          "properties": {"type": {"const": "rsi"},
                         "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
                         "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
                         "threshold": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 4. macd_histogram
         {"type": "object", "required": ["type", "tf", "op", "threshold"],
          "properties": {"type": {"const": "macd_histogram"},
                         "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
                         "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
                         "threshold": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 5. ema_relation. period optional (required only for
         # price_above/below; forbidden for aligned_*) — handled at
         # the validator level, not here.
@@ -574,7 +577,7 @@ _CONDITION_PRIMITIVE_SCHEMA = {
                                               "aligned_bull", "aligned_bear"]},
                         "period": {"type": "integer",
                                    "enum": [9, 21, 50, 200]}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 6. atr
         {"type": "object",
          "required": ["type", "tf", "op", "multiplier", "baseline_pips"],
@@ -583,14 +586,14 @@ _CONDITION_PRIMITIVE_SCHEMA = {
                         "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
                         "multiplier": {"type": "number"},
                         "baseline_pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 7. price_at_sr_zone
         {"type": "object", "required": ["type", "tolerance_pips"],
          "properties": {"type": {"const": "price_at_sr_zone"},
                         "zone_type": {"type": "string",
                                       "enum": ["support", "resistance", "any"]},
                         "tolerance_pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 8. price_at_fibonacci. tolerance_pips Optional.
         {"type": "object", "required": ["type", "level"],
          "properties": {"type": {"const": "price_at_fibonacci"},
@@ -598,39 +601,39 @@ _CONDITION_PRIMITIVE_SCHEMA = {
                                   "enum": [0.236, 0.382, 0.5, 0.618,
                                            0.786, 1.0, 1.272, 1.618]},
                         "tolerance_pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 9. profit_pips
         {"type": "object", "required": ["type", "op", "threshold"],
          "properties": {"type": {"const": "profit_pips"},
                         "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
                         "threshold": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 10. mfe_reached
         {"type": "object", "required": ["type", "pips"],
          "properties": {"type": {"const": "mfe_reached"},
                         "pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 11. mae_reached
         {"type": "object", "required": ["type", "pips"],
          "properties": {"type": {"const": "mae_reached"},
                         "pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 12. profit_retraced_from_peak
         {"type": "object", "required": ["type", "pips"],
          "properties": {"type": {"const": "profit_retraced_from_peak"},
                         "pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 13. duration_exceeds
         {"type": "object", "required": ["type", "minutes"],
          "properties": {"type": {"const": "duration_exceeds"},
                         "minutes": {"type": "integer"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 14. time_between
         {"type": "object", "required": ["type", "start_utc", "end_utc"],
          "properties": {"type": {"const": "time_between"},
                         "start_utc": {"type": "string"},
                         "end_utc": {"type": "string"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 15. bollinger_position
         {"type": "object", "required": ["type", "tf", "relation"],
          "properties": {"type": {"const": "bollinger_position"},
@@ -639,14 +642,14 @@ _CONDITION_PRIMITIVE_SCHEMA = {
                                      "enum": ["above_upper", "below_lower",
                                               "above_middle", "below_middle",
                                               "in_squeeze"]}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 16. stochastic
         {"type": "object", "required": ["type", "tf", "op", "threshold"],
          "properties": {"type": {"const": "stochastic"},
                         "tf": {"type": "string", "enum": _TIMEFRAME_ENUM},
                         "op": {"type": "string", "enum": _COMPARISON_OP_ENUM},
                         "threshold": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 17. price_at_pivot
         {"type": "object", "required": ["type", "level", "tolerance_pips"],
          "properties": {"type": {"const": "price_at_pivot"},
@@ -656,14 +659,14 @@ _CONDITION_PRIMITIVE_SCHEMA = {
                                   "enum": ["PP", "R1", "R2", "R3",
                                            "S1", "S2", "S3"]},
                         "tolerance_pips": {"type": "number"}},
-         "additionalProperties": True},
+         "additionalProperties": False},
         # 18. indicator_divergence
         {"type": "object", "required": ["type", "indicator", "direction"],
          "properties": {"type": {"const": "indicator_divergence"},
                         "indicator": {"type": "string", "enum": ["macd"]},
                         "direction": {"type": "string",
                                       "enum": ["bullish", "bearish"]}},
-         "additionalProperties": True},
+         "additionalProperties": False},
     ],
 }
 
