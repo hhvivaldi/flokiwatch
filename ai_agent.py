@@ -1902,19 +1902,76 @@ class AIAgent:
             )
 
             if msg.tool_calls:
-                # FLO-295: submit_decision is a terminator — intercept before dispatch.
-                # If present in this batch, extract its args, drop any parallel calls,
-                # and return via synthetic-content path so _parse_response handles it
-                # unchanged (same coercion for tool channel and content channel).
+                # FLO-295 v2 (CEO directive 2026-04-30): submit_decision is still
+                # the terminator, BUT action-side tool_calls in the same batch
+                # (cancel_plan, submit_plan_to_snow, write_session_memory, etc.)
+                # are now EXECUTED sequentially before the return. Pre-FLO-404
+                # Floki only ever batched submit_decision alone; under multi-
+                # plan + EVALUATE EXISTING (cancel + N submits + decision),
+                # Floki naturally batches action tools alongside the terminator.
+                # The original "drop everything but submit_decision" logic
+                # silently lost those writes — today's PLAN-014/-015 attempt
+                # is the empirical case that motivated this fix.
+                # Action tools are commit-and-forget — submit_decision's args
+                # reflect Floki's REASONING, which is independent of write
+                # success/failure. Failures get logged and added to tool_trace
+                # for post-cycle audit.
                 _submit_tc = next(
                     (tc for tc in msg.tool_calls if tc.function.name == "submit_decision"),
                     None,
                 )
                 if _submit_tc is not None:
                     _submit_args_json = _submit_tc.function.arguments or "{}"
-                    _other_names = [tc.function.name for tc in msg.tool_calls if tc.function.name != "submit_decision"]
-                    if _other_names:
-                        logger.warning(f"FLOKI_BATCH_WITH_SUBMIT | dropping parallel calls: {_other_names}")
+                    _action_tcs = [tc for tc in msg.tool_calls if tc.function.name != "submit_decision"]
+                    if _action_tcs:
+                        _action_names = [tc.function.name for tc in _action_tcs]
+                        logger.info(
+                            f"FLOKI_BATCH_WITH_SUBMIT | executing {len(_action_tcs)} "
+                            f"action tool(s) before submit_decision return: {_action_names}"
+                        )
+                        # Execute sequentially to preserve FLO-385's serial-write
+                        # contract on singleton tools (submit_plan_to_snow,
+                        # cancel_plan, write_session_memory all write under
+                        # locks; a parallel race would corrupt state).
+                        for _tc in _action_tcs:
+                            _fname = _tc.function.name
+                            try:
+                                _fargs = json.loads(_tc.function.arguments) if _tc.function.arguments else {}
+                            except Exception:
+                                _fargs = {}
+                            _t0 = time.time()
+                            try:
+                                _action_result = self._execute_tool(tools, _fname, _fargs)
+                            except Exception as _ae:
+                                logger.warning(
+                                    f"FLOKI_BATCH_WITH_SUBMIT | action {_fname} "
+                                    f"raised: {type(_ae).__name__}: {_ae}"
+                                )
+                                _action_result = {"success": False, "reason": f"exception: {type(_ae).__name__}: {_ae}"}
+                            _dt_ms = int((time.time() - _t0) * 1000)
+                            tool_trace.append({
+                                "name": _fname, "input": _fargs,
+                                "result": _action_result, "latency_ms": _dt_ms,
+                            })
+                            _ok = bool(
+                                isinstance(_action_result, dict)
+                                and _action_result.get("success", True) is not False
+                            )
+                            if _ok:
+                                logger.info(
+                                    f"FLOKI_BATCH_WITH_SUBMIT | {_fname} | "
+                                    f"{_dt_ms}ms | success"
+                                )
+                            else:
+                                _reason = (
+                                    _action_result.get("reason")
+                                    or _action_result.get("validation_errors")
+                                    or "unknown"
+                                ) if isinstance(_action_result, dict) else "non-dict-result"
+                                logger.warning(
+                                    f"FLOKI_BATCH_WITH_SUBMIT | {_fname} | "
+                                    f"{_dt_ms}ms | FAILED | {_reason}"
+                                )
                     _fields_populated = 0
                     _decision_label = "?"
                     _conf_val = "?"
