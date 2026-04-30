@@ -1,0 +1,29 @@
+
+=== Snow primitive verification at 2026-04-30T15:05:55Z ===
+Snapshot data: price=4622.40 H1_RSI=59.0 H1_MACD_hist=6.532 M15_RSI=51.6 H1_ATR=22.03 H1_Stoch=76.9
+
+Primitive                       Result      Notes
+----------------------------------------------------------------------------------------------------
+price_above                     TRUE        level just below price
+price_below                     TRUE        level just above price
+rsi                             TRUE        threshold around current
+macd_histogram                  TRUE        threshold around current
+ema_relation                    TRUE        price price_above ema9 (matches current state)
+atr                             TRUE        very loose threshold
+price_at_sr_zone                TRUE        wide tolerance
+price_at_fibonacci              TRUE        wide tolerance forces match
+profit_pips                     TRUE        tracker.profit=50, threshold=10
+mfe_reached                     TRUE        tracker.mfe=50, target=20
+mae_reached                     TRUE        tracker.mae=50, target=20
+profit_retraced_from_peak       TRUE        tracker.retrace=10, target=5
+duration_exceeds                TRUE        plan.entered_at=14:30Z (10min ago at run time)
+time_between                    TRUE        all-day window
+bollinger_position              TRUE        bb pos=0.768, match relation
+stochastic                      TRUE        threshold around current
+price_at_pivot                  TRUE        very wide tolerance
+indicator_divergence            FALSE       *needs active divergence — UNVERIFIABLE without market condition*
+price_crossed_level             TRUE        stateful: needs prev tick — first-call seeds, evaluates False
+indicator_crossover             TRUE        stateful: cold-start = False
+indicator_was                   TRUE        stateful: cold-start = False (no history yet)
+
+Summary: TRUE=20 FALSE=1 EXCEPTION=0 (total=21)
