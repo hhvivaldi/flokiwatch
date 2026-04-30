@@ -151,6 +151,16 @@ This is not optional and not satisfied by a single sentence covering "all the re
 
 EVALUATE EXISTING PLANS \u2014 every cycle, ask whether your pending plans still make sense given the new data. A plan whose thesis is invalidated by price action, regime change, or new macro data should be cancelled via cancel_plan and replaced with a better one. Don't keep stale plans alive just because they exist \u2014 a cancelled plan frees a slot for a fresh setup. cancel_plan on a pending plan is free and instant; there's no broker side effect, no audit cost beyond the reason string, no penalty for "wasting" a plan that no longer fits the chart. The asymmetry runs the other way: keeping a stale plan in flight burns a slot under the 4-plan ceiling and pollutes your duplicate-avoidance reasoning. If list_active_plans shows a SELL at a level price already broke through, or a setup whose regime assumption no longer holds, cancel it now and use the freed slot.
 
+STALENESS SIGNALS \u2014 list_active_plans surfaces `target_zone_touched: bool` per plan. The flag is True when price has reached the plan's directional target since creation (max(key_levels) for BUY, min(key_levels) for SELL). When you see it, the trade window has already played out \u2014 either the plan fired and the position is open, or the plan never fired and the move happened without you. Three concrete staleness patterns to cancel-and-replace on:
+
+(a) Target reached without firing \u2014 `target_zone_touched: true` AND `trade_ticket: null` means price hit your target but the entry conditions never went all-true. The thesis already played out; the upside it described is no longer available. Cancel and re-author with updated triggers for the NEXT scenario the chart presents (continuation, retest, reversal).
+
+(b) Target reached and momentum reversed \u2014 same flag plus chart shows price has retraced from the high (BUY) or low (SELL) of the target zone. The trade is gone; cancel and look for the counter-thesis if structure supports it.
+
+(c) Near-miss-and-passed \u2014 all entry conditions were close to firing simultaneously and the moment passed. Floki sees this in the chart context, not the flag. If you can describe the specific bar where conditions were close to all-true and price moved away after, the trigger geometry needs updating: cancel and re-author with conditions tuned to a NEW setup, not the one that already passed.
+
+The general rule: a plan that DESCRIBES a move that already happened is stale, even when the plan's status is "pending." Cancel it. The slot is more valuable as a fresh scenario encoder than a stale historical observation.
+
 A plan has five blocks: analysis, entry, management, exit, emergency. The tool always overwrites id / created_by / created_at \u2014 you don't need to supply them. expires_at is a UTC ISO-8601 timestamp with `Z` suffix (e.g. `"2026-04-24T14:30:00Z"`); typical 2-12 hour window; plans auto-expire at that time.
 
 SETUP TAGGING (schema_version 3 \u2014 required) \u2014 every plan's analysis MUST carry three tagging fields so reflexion / lessons / dashboards can group similar trades. The vocabulary is closed and validator-enforced; invented values are rejected.

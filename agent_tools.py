@@ -5092,6 +5092,87 @@ class AgentTools:
             self._log_fail("get_plan_status", start, f"error={e}")
             return {"success": False, "reason": f"{type(e).__name__}: {e}"}
 
+    @staticmethod
+    def _plan_target_zone_touched(
+        plan_dict: Optional[Dict[str, Any]], created_at_iso: Optional[str],
+    ) -> Optional[bool]:
+        """FLO-404 staleness signal — True if price has reached the
+        plan's directional target since the plan was created.
+
+        Definition:
+          BUY plan  → max(key_levels)  reached if MT5-high  ≥ that level since create
+          SELL plan → min(key_levels)  reached if MT5-low   ≤ that level since create
+
+        Returns None when the signal cannot be computed (no MT5, no
+        key_levels, no direction, plan too old/fresh, broker query
+        failure). None means "no opinion" — Floki should treat absence
+        of the signal as no information rather than a False.
+
+        Cost: one mt5.copy_rates_from_pos M1 query per plan in the
+        list. With the typical 1-4 active plans this is bounded.
+        """
+        if not isinstance(plan_dict, dict) or not created_at_iso:
+            return None
+        direction = ((plan_dict.get("entry") or {}).get("direction") or "").upper()
+        key_levels = (plan_dict.get("analysis") or {}).get("key_levels") or []
+        if direction not in ("BUY", "SELL") or not key_levels:
+            return None
+        try:
+            from datetime import datetime, timezone
+            from mt5_safe import mt5
+            import MetaTrader5 as _mt5_raw
+        except Exception:
+            return None
+        try:
+            created_dt = datetime.fromisoformat(
+                str(created_at_iso).replace("Z", "+00:00")
+            )
+        except Exception:
+            return None
+        try:
+            minutes_since = int(
+                (datetime.now(timezone.utc) - created_dt).total_seconds() / 60
+            )
+        except Exception:
+            return None
+        if minutes_since < 0 or minutes_since > 1440:
+            # < 0 = future-dated; > 24h = too old to compute cheaply
+            return None
+        bars_count = min(max(minutes_since + 60, 60), 1500)
+        try:
+            rates = mt5.copy_rates_from_pos(
+                "XAUUSD", _mt5_raw.TIMEFRAME_M1, 0, bars_count,
+            )
+        except Exception:
+            return None
+        if rates is None or len(rates) == 0:
+            return None
+        # MT5 candle.time is broker-local epoch — subtract offset to
+        # get true UTC for filtering against plan.created_at.
+        try:
+            from executor import _mt5_server_offset
+            offset_s = int(_mt5_server_offset() or 0)
+        except Exception:
+            offset_s = 10800  # 3h default per FLO-96
+        try:
+            created_epoch = int(created_dt.timestamp())
+            relevant = [
+                r for r in rates
+                if (int(r["time"]) - offset_s) >= created_epoch
+            ]
+            if not relevant:
+                return False  # too fresh; no candle has fully formed since create
+            if direction == "BUY":
+                target = float(max(key_levels))
+                max_high = max(float(r["high"]) for r in relevant)
+                return max_high >= target
+            else:  # SELL
+                target = float(min(key_levels))
+                min_low = min(float(r["low"]) for r in relevant)
+                return min_low <= target
+        except Exception:
+            return None
+
     def list_active_plans(self, ticket: Optional[int] = None) -> Dict[str, Any]:
         """List all Snow plans in non-terminal states.
 
@@ -5130,6 +5211,7 @@ class AgentTools:
                 _direction: Optional[str] = None
                 _entry_price = None
                 _thesis: Optional[str] = None
+                _pj: Optional[Dict[str, Any]] = None
                 _raw = r.get("plan_json")
                 if _raw:
                     try:
@@ -5140,7 +5222,16 @@ class AgentTools:
                         _entry_price = _entry.get("entry_price")
                         _thesis = _analysis.get("thesis")
                     except Exception:
-                        pass
+                        _pj = None
+                # FLO-404 staleness signal (CEO directive 2026-04-30):
+                # has price reached the plan's directional target since
+                # creation? True/False/None. Floki uses this with the
+                # EVALUATE EXISTING PLANS rule to decide whether the
+                # thesis already played out — cancel + re-author rather
+                # than holding a stale plan past its target.
+                _target_touched = AgentTools._plan_target_zone_touched(
+                    _pj, r.get("created_at"),
+                )
                 plans.append({
                     "plan_id": r.get("id"),
                     "status": r.get("status"),
@@ -5153,6 +5244,8 @@ class AgentTools:
                     "entry_price": _entry_price,
                     "thesis": _thesis,
                     "expires_at": r.get("expires_at"),
+                    # FLO-404 staleness signal (CEO directive 2026-04-30).
+                    "target_zone_touched": _target_touched,
                 })
             self._log_tool(
                 "list_active_plans", start,

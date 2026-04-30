@@ -472,8 +472,14 @@ class TestListActivePlans:
 
         FLO-404 follow-up (CEO directive 2026-04-29): summary now
         includes direction, entry_price, thesis, expires_at to support
-        Floki's duplicate-avoidance reasoning. plan_json itself stays
-        out — callers that need it use get_plan_status."""
+        Floki's duplicate-avoidance reasoning.
+
+        FLO-404 follow-up (CEO directive 2026-04-30): summary also
+        includes target_zone_touched (bool|None) — staleness signal
+        for the EVALUATE EXISTING PLANS rule.
+
+        plan_json itself stays out — callers that need it use
+        get_plan_status."""
         tools.submit_plan_to_snow(_plan_dict())
         r = tools.list_active_plans()
         p = r["plans"][0]
@@ -481,6 +487,7 @@ class TestListActivePlans:
         assert set(p.keys()) == {
             "plan_id", "status", "trade_ticket", "created_at", "last_evaluated_at",
             "direction", "entry_price", "thesis", "expires_at",
+            "target_zone_touched",
         }
 
     def test_summary_carries_flo404_duplicate_avoidance_fields(
