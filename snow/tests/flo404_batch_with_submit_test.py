@@ -84,10 +84,11 @@ class TestBatchWithSubmitContract:
         # is not None branch.
         assert "_submit_tc is not None" in src
         # A return statement must appear after the intercept's main work.
-        # Find the section between "_submit_tc is not None" and the next
-        # block (search for the `else:` or function end / next top-level).
+        # Use unbounded forward search — the legitimate function body
+        # grows over time (FLO-409 added action-priority sort, etc.),
+        # so a fixed-size window would false-positive on healthy growth.
         idx = src.index("_submit_tc is not None")
-        block_after = src[idx:idx + 5000]
+        block_after = src[idx:]
         assert "return {" in block_after, (
             "submit_decision intercept must still return — that's the "
             "terminator contract. Action tools execute BEFORE the return."

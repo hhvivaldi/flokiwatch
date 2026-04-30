@@ -1420,63 +1420,99 @@ class AIAgent:
                     "values for those fields are ignored."
                 ),
                 "input_schema": {
-                    # FLO-404 v3 (CEO directive 2026-04-30): detailed nested
-                    # schema to STEER Gemini's strict schema-follower tool
-                    # generator away from emitting `null` at list-of-object
-                    # paths. Pre-FLO-404 the schema was {plan: object,
-                    # additionalProperties: true} with no inner structure;
-                    # GPT pattern-matched the prompt examples correctly,
-                    # but Gemini emitted [null, null] for entry.conditions,
-                    # management, exit (since the schema didn't constrain
-                    # item types). The detailed inner schema below tells
-                    # the tool generator "these are arrays of objects"
-                    # explicitly. additionalProperties: True is preserved
-                    # at every layer to keep wrapper-vs-direct call shapes
-                    # both accepted (the agent_tools handler normalizes).
+                    # FLO-408 Phase 2 (CEO directive 2026-04-30) — required-
+                    # field arrays added at every nested level. Phase 1
+                    # corpus capture (data/_audits/gemini_format_corpus_*)
+                    # showed Gemini's tool generator was emitting partial
+                    # dicts (12/17 missing analysis.thesis, 9/17 missing
+                    # entry.direction/volume/initial_sl/initial_tp, 3/17
+                    # missing entry/exit blocks entirely). Without
+                    # `required: [...]`, Gemini treats every property as
+                    # optional and ships only what it deems necessary —
+                    # especially aggressive in batched submits where call
+                    # #2+ gets stripped to deltas. Adding the required
+                    # arrays + the `fires` enum constraint forces the tool
+                    # generator to populate every required path.
+                    # additionalProperties: True at every layer preserves
+                    # wrapper-vs-direct shape compat (FLO-404 handler).
                     "type": "object",
                     "properties": {
                         "plan": {
                             "type": "object",
                             "description": (
-                                "A complete plan dict. Fields: analysis, entry, "
-                                "management, exit, emergency, expires_at. Pull "
-                                "primitive shapes via get_snow_primitives_reference. "
-                                "EITHER pass the plan body wrapped here as "
-                                "{plan: {analysis: {...}, entry: {...}, ...}}, OR "
-                                "pass analysis, entry, management, exit, emergency, "
-                                "expires_at as direct top-level arguments — both "
-                                "shapes are accepted; the handler normalizes."
+                                "A complete plan dict. EITHER pass the plan "
+                                "body wrapped here as {plan: {analysis: {...}, "
+                                "entry: {...}, ...}}, OR pass analysis, entry, "
+                                "management, exit, emergency, expires_at as "
+                                "direct top-level arguments — both shapes are "
+                                "accepted; the handler normalizes."
                             ),
+                            # Pydantic-required at submit time. emergency
+                            # has default_factory=EmergencyBlock and
+                            # management defaults to empty list — both
+                            # NOT in required (Pydantic accepts absence).
+                            "required": ["analysis", "entry", "exit"],
                             "properties": {
                                 "analysis": {
                                     "type": "object",
                                     "description": (
                                         "thesis, key_levels, confidence, "
-                                        "regime_assumed, setup_type, context_tags "
-                                        "(REQUIRED OBJECT, never null), "
-                                        "confidence_reason."
+                                        "regime_assumed, setup_type, context_tags, "
+                                        "confidence_reason — ALL required."
                                     ),
+                                    # Pydantic strictly required: thesis,
+                                    # confidence. v3+ required (FLO-366):
+                                    # setup_type, context_tags,
+                                    # confidence_reason. key_levels has
+                                    # default_factory; regime_assumed is
+                                    # Optional. Required-array reflects
+                                    # the Pydantic truth.
+                                    "required": [
+                                        "thesis", "confidence",
+                                        "setup_type", "context_tags",
+                                        "confidence_reason",
+                                    ],
                                     "properties": {
+                                        "thesis": {"type": "string"},
+                                        "key_levels": {
+                                            "type": "array",
+                                            "items": {"type": "number"},
+                                        },
+                                        "confidence": {"type": "integer"},
+                                        "regime_assumed": {"type": "string"},
+                                        "setup_type": {"type": "string"},
                                         "context_tags": {
                                             "type": "object",
                                             "description": (
                                                 "{trend, volatility, htf, "
-                                                "news_session}. MUST be a populated "
-                                                "object — never null."
+                                                "news_session}. MUST be a "
+                                                "populated object — never null."
                                             ),
                                             "additionalProperties": True,
                                         },
+                                        "confidence_reason": {"type": "string"},
                                     },
                                     "additionalProperties": True,
                                 },
                                 "entry": {
                                     "type": "object",
                                     "description": (
-                                        "direction, volume, conditions (array of "
-                                        "≥2 condition dicts — never null items), "
-                                        "initial_sl, initial_tp, entry_price."
+                                        "direction, volume, conditions (≥2), "
+                                        "initial_sl, initial_tp, entry_price — "
+                                        "ALL required."
                                     ),
+                                    # entry_price is Optional (FLO-392
+                                    # hint, NOT required). Per Pydantic.
+                                    "required": [
+                                        "direction", "volume", "conditions",
+                                        "initial_sl", "initial_tp",
+                                    ],
                                     "properties": {
+                                        "direction": {
+                                            "type": "string",
+                                            "enum": ["BUY", "SELL"],
+                                        },
+                                        "volume": {"type": "number"},
                                         "conditions": {
                                             "type": "array",
                                             "minItems": 2,
@@ -1489,21 +1525,53 @@ class AIAgent:
                                                     "JSON-string. Always a real "
                                                     "object."
                                                 ),
+                                                "required": ["type"],
+                                                "properties": {
+                                                    "type": {"type": "string"},
+                                                },
                                                 "additionalProperties": True,
                                             },
                                         },
+                                        "initial_sl": {"type": "number"},
+                                        "initial_tp": {"type": "number"},
+                                        "entry_price": {"type": "number"},
                                     },
                                     "additionalProperties": True,
                                 },
                                 "management": {
                                     "type": "array",
                                     "description": (
-                                        "Array of management contingency dicts: "
-                                        "{name, priority, conditions, action, "
-                                        "fires}. Never null items."
+                                        "Array of management contingency dicts. "
+                                        "Each item required: name, priority, "
+                                        "conditions, action, fires."
                                     ),
                                     "items": {
                                         "type": "object",
+                                        # priority (default 5) and fires
+                                        # (default 'once') are NOT required.
+                                        "required": [
+                                            "name", "conditions", "action",
+                                        ],
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "priority": {"type": "integer"},
+                                            "conditions": {
+                                                "type": "array",
+                                                "items": {"type": "object"},
+                                            },
+                                            "action": {"type": "object"},
+                                            "fires": {
+                                                "type": "string",
+                                                "enum": ["once", "every_time"],
+                                                "description": (
+                                                    "Closed enum — must be "
+                                                    "exactly 'once' or "
+                                                    "'every_time'. NOT "
+                                                    "'continuous' or other "
+                                                    "values."
+                                                ),
+                                            },
+                                        },
                                         "additionalProperties": True,
                                     },
                                 },
@@ -1512,12 +1580,29 @@ class AIAgent:
                                     "minItems": 1,
                                     "description": (
                                         "Array of ≥1 exit contingency dicts. "
-                                        "Same shape as management. FLO-401 hard "
-                                        "minimum: at least one exit. Never null "
-                                        "items."
+                                        "FLO-401 hard minimum. Each item required: "
+                                        "name, priority, conditions, action, fires."
                                     ),
                                     "items": {
                                         "type": "object",
+                                        # priority (default 5) and fires
+                                        # (default 'once') are NOT required.
+                                        "required": [
+                                            "name", "conditions", "action",
+                                        ],
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "priority": {"type": "integer"},
+                                            "conditions": {
+                                                "type": "array",
+                                                "items": {"type": "object"},
+                                            },
+                                            "action": {"type": "object"},
+                                            "fires": {
+                                                "type": "string",
+                                                "enum": ["once", "every_time"],
+                                            },
+                                        },
                                         "additionalProperties": True,
                                     },
                                 },
@@ -1525,8 +1610,21 @@ class AIAgent:
                                     "type": "object",
                                     "description": (
                                         "{max_loss_pips, max_duration_minutes, "
-                                        "on_broker_error}."
+                                        "on_broker_error} — ALL required."
                                     ),
+                                    # All emergency sub-fields have
+                                    # Pydantic defaults — NOT required.
+                                    "properties": {
+                                        "max_loss_pips": {"type": "number"},
+                                        "max_duration_minutes": {"type": "integer"},
+                                        "on_broker_error": {
+                                            "type": "string",
+                                            "enum": [
+                                                "alert_floki", "close_full",
+                                                "cancel_plan",
+                                            ],
+                                        },
+                                    },
                                     "additionalProperties": True,
                                 },
                                 "expires_at": {
@@ -2017,11 +2115,37 @@ class AIAgent:
                 if _submit_tc is not None:
                     _submit_args_json = _submit_tc.function.arguments or "{}"
                     _action_tcs = [tc for tc in msg.tool_calls if tc.function.name != "submit_decision"]
+                    # FLO-409 (CEO directive 2026-04-30) — atomic plan-replacement
+                    # safety. Sort action tool_calls so creates run BEFORE
+                    # destructives. If a submit_plan_to_snow fails (validator
+                    # reject, recipe-gate, etc.), the cancel_plan that would
+                    # have replaced an existing plan does NOT execute, so the
+                    # original plan stays live. Pre-FLO-409 the sequential
+                    # dispatch ran in Gemini's emit order — cancel + 2 failed
+                    # submits + decision left 0 active plans (the plan being
+                    # cancelled was the only protection). Sort key:
+                    #   0 = submit_plan_to_snow         (creates new state)
+                    #   1 = place_pending_order         (creates broker order)
+                    #   2 = write_session_memory / journal / save_lesson
+                    #   3 = set_watch / set_wake / set_next_check  (config writes)
+                    #   5 = unknown (default — middle priority)
+                    #   9 = cancel_plan / cancel_pending_order / forget_lesson
+                    #       (destructive — last)
+                    def _action_priority(tc):
+                        n = tc.function.name
+                        if n == "submit_plan_to_snow": return 0
+                        if n == "place_pending_order": return 1
+                        if n in ("write_session_memory", "write_trading_journal", "save_lesson"): return 2
+                        if n in ("set_watch_conditions", "set_wake_conditions", "set_next_check"): return 3
+                        if n in ("cancel_plan", "cancel_pending_order", "forget_lesson"): return 9
+                        return 5
+                    _action_tcs.sort(key=_action_priority)
                     if _action_tcs:
                         _action_names = [tc.function.name for tc in _action_tcs]
                         logger.info(
                             f"FLOKI_BATCH_WITH_SUBMIT | executing {len(_action_tcs)} "
-                            f"action tool(s) before submit_decision return: {_action_names}"
+                            f"action tool(s) before submit_decision return "
+                            f"(FLO-409 ordered): {_action_names}"
                         )
                         # Execute sequentially to preserve FLO-385's serial-write
                         # contract on singleton tools (submit_plan_to_snow,

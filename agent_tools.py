@@ -4868,6 +4868,45 @@ class AgentTools:
                 ],
             }
 
+        # FLO-408 Phase 2 (CEO directive 2026-04-30) — Layer C missing-
+        # required-field defense. Phase 1 corpus capture (data/_audits/
+        # gemini_format_corpus_*) showed Gemini's tool generator omits
+        # required fields entirely (12/17 corpus submits missing
+        # analysis.thesis + analysis.confidence; 9/17 missing
+        # entry.direction/volume/initial_sl/initial_tp; 3/17 missing
+        # entry/exit blocks). The Layer A required-arrays in
+        # ai_agent.py force the LLM tool generator to populate them at
+        # generation time; this is belt-and-suspenders that catches
+        # the case if any slip through (e.g. partial-submission-in-
+        # batch where call #2's tool_call gets stripped to a delta).
+        # Surfaces a single structured error naming every missing path
+        # so Floki's 3-attempt retry budget corrects on attempt 2.
+        _missing_fields = AgentTools._scan_missing_required_fields(plan)
+        if _missing_fields:
+            self._log_fail(
+                "submit_plan_to_snow", start,
+                f"missing_required_fields={_missing_fields}",
+            )
+            return {
+                "success": False, "plan_id": None,
+                "validation_errors": [
+                    f"FLO-408: plan is missing {len(_missing_fields)} "
+                    f"required field(s): {', '.join(_missing_fields)}. "
+                    f"Every plan must have a complete analysis (thesis, "
+                    f"key_levels, confidence, regime_assumed, setup_type, "
+                    f"context_tags, confidence_reason), entry (direction, "
+                    f"volume, conditions, initial_sl, initial_tp, "
+                    f"entry_price), management items (name, priority, "
+                    f"conditions, action, fires), exit items (same), "
+                    f"emergency (max_loss_pips, max_duration_minutes, "
+                    f"on_broker_error). If you batched multiple "
+                    f"submit_plan_to_snow calls in one assistant turn, "
+                    f"emit each in its own turn instead — some tool-call "
+                    f"generators strip subsequent calls to deltas, "
+                    f"which produces this missing-required-fields shape."
+                ],
+            }
+
         # FLO-393: mandatory Recipe Book consultation gate. Reject plans
         # submitted without at least one `get_snow_recipe_book` call
         # earlier in the same Floki cycle. Counter is reset to 0 at the
@@ -5123,6 +5162,118 @@ class AgentTools:
         except Exception as e:
             self._log_fail("get_plan_status", start, f"error={e}")
             return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
+    @staticmethod
+    def _scan_missing_required_fields(
+        plan_dict: Optional[Dict[str, Any]],
+    ) -> list:
+        """FLO-408 Phase 2 — Layer C defense. Returns dotted-path
+        strings for every required field missing from the plan dict.
+
+        Required field sets match the Pydantic Plan schema:
+          analysis: thesis, key_levels, confidence, regime_assumed,
+                    setup_type, context_tags, confidence_reason
+          entry: direction, volume, conditions, initial_sl, initial_tp,
+                 entry_price
+          management[i]: name, priority, conditions, action, fires
+          exit[i]: name, priority, conditions, action, fires
+          emergency: max_loss_pips, max_duration_minutes,
+                     on_broker_error
+
+        SKIPPED (auto-stamped by handler or schema-defaulted):
+          id, created_at, created_by, status, schema_version, expires_at
+
+        Pure function. Same wrapper-or-direct unwrap as
+        _scan_null_object_paths so partial+wrapped Gemini payloads
+        evaluate against the canonical inner-plan view.
+        """
+        if not isinstance(plan_dict, dict):
+            return []
+        outer = plan_dict
+        inner = plan_dict.get("plan")
+        if isinstance(inner, dict) and "analysis" in inner:
+            outer = inner
+
+        missing: list = []
+
+        # FLO-366: setup_type / context_tags / confidence_reason are
+        # required ONLY for schema_version >= 3. v1/v2 plans round-
+        # trip without them. Mirror the Pydantic Plan._check_v3_
+        # tagging_required validator's conditional. Default to
+        # current SCHEMA_VERSION when absent (Pydantic default).
+        try:
+            from snow.schema import SCHEMA_VERSION as _SCHEMA_DEFAULT
+        except Exception:
+            _SCHEMA_DEFAULT = 3
+        _v = outer.get("schema_version", _SCHEMA_DEFAULT)
+        try:
+            _v = int(_v)
+        except Exception:
+            _v = _SCHEMA_DEFAULT
+        _is_v3_plus = _v >= 3
+
+        # analysis.* — block + Pydantic-required fields.
+        analysis = outer.get("analysis")
+        if "analysis" not in outer:
+            missing.append("analysis (entire block)")
+        elif isinstance(analysis, dict):
+            # Pydantic-required at any version: thesis, confidence.
+            # NOT scanned: key_levels (default factory), regime_assumed
+            # (Optional).
+            for f in ("thesis", "confidence"):
+                if f not in analysis:
+                    missing.append(f"analysis.{f}")
+            # FLO-366 v3+ required: setup_type, context_tags,
+            # confidence_reason.
+            if _is_v3_plus:
+                for f in ("setup_type", "context_tags",
+                          "confidence_reason"):
+                    if f not in analysis:
+                        missing.append(f"analysis.{f}")
+
+        # entry.* — block + per-field
+        entry = outer.get("entry")
+        if "entry" not in outer:
+            missing.append("entry (entire block)")
+        elif isinstance(entry, dict):
+            # entry_price is Optional (FLO-392 hint) — NOT scanned.
+            for f in ("direction", "volume", "conditions",
+                      "initial_sl", "initial_tp"):
+                if f not in entry:
+                    missing.append(f"entry.{f}")
+
+        # management[i].* — block check is permissive (empty list ok),
+        # per-item required fields enforced
+        management = outer.get("management")
+        if isinstance(management, list):
+            for i, item in enumerate(management):
+                if not isinstance(item, dict):
+                    continue  # null/string handled by other scanners
+                # priority (default 5), fires (default once) — NOT scanned.
+                for f in ("name", "conditions", "action"):
+                    if f not in item:
+                        missing.append(f"management[{i}].{f}")
+
+        # exit[i].* — FLO-401 ≥1 enforced by Pydantic; here we just
+        # check per-item required fields. Block-missing flagged.
+        exits = outer.get("exit")
+        if "exit" not in outer:
+            missing.append("exit (entire block)")
+        elif isinstance(exits, list):
+            for i, item in enumerate(exits):
+                if not isinstance(item, dict):
+                    continue
+                # priority (default 5), fires (default once) — NOT scanned.
+                for f in ("name", "conditions", "action"):
+                    if f not in item:
+                        missing.append(f"exit[{i}].{f}")
+
+        # emergency block — has default_factory=EmergencyBlock with
+        # all sub-fields defaulted. Plan validates without it. NOT
+        # scanned (Pydantic accepts an absent emergency block AND
+        # accepts a partial one). Auto-fills via Pydantic defaults.
+
+        return missing
 
     @staticmethod
     def _scan_null_object_paths(plan_dict: Optional[Dict[str, Any]]) -> list:
