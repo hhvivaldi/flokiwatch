@@ -52,8 +52,18 @@ def evaluate_price_at_sr_zone(cond: PriceAtSRZone, ctx: EvalContext) -> bool:
         zone_type = z.get("zone_type")
         if not isinstance(zone_price, (int, float)):
             continue
-        if wanted != "any" and zone_type != wanted:
-            continue
+        # Brain publishes zone_type as UPPERCASE ('SUPPORT' / 'RESISTANCE'
+        # / 'FLIP') from support_resistance.SRZone; cond.zone_type is a
+        # Pydantic Literal lowercase ('support' / 'resistance' / 'any').
+        # Compare case-insensitively so the lowercase Literal matches
+        # the upstream uppercase tag. 'flip' zones don't match either
+        # 'support' or 'resistance' — match only 'any' (preserves the
+        # operator's intent: a flip is neither pure support nor pure
+        # resistance).
+        if wanted != "any":
+            zt_norm = (zone_type or "").lower()
+            if zt_norm != wanted:
+                continue
         if abs(float(price) - float(zone_price)) <= tolerance_price:
             return True
     return False

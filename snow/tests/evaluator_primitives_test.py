@@ -287,6 +287,49 @@ class TestPriceAtSRZone:
         cond = PriceAtSRZone(zone_type="any", tolerance_pips=10.0)
         assert evaluate_condition(cond, ctx) is False
 
+    def test_uppercase_zone_type_matches_lowercase_filter(
+        self, eval_ctx, fake_live, fake_semantic
+    ):
+        """Brain publishes zone_type as UPPERCASE
+        'SUPPORT' / 'RESISTANCE' / 'FLIP' from support_resistance.SRZone.
+        cond.zone_type is a Pydantic Literal lowercase. Pre-fix the
+        case-sensitive comparison meant the filter NEVER matched
+        against real upstream data — any plan using zone_type='support'
+        or 'resistance' was guaranteed False. Pin case-insensitive
+        contract here."""
+        upper_zones = [
+            {"price": 4720.0, "zone_type": "SUPPORT"},
+            {"price": 4750.0, "zone_type": "RESISTANCE"},
+        ]
+        ctx = eval_ctx(
+            live_data=fake_live(price_mid=4750.5),  # 5 pips from 4750
+            semantic_cache=fake_semantic({"sr_zones": upper_zones}),
+        )
+        cond = PriceAtSRZone(zone_type="resistance", tolerance_pips=10.0)
+        assert evaluate_condition(cond, ctx) is True
+
+    def test_flip_zone_does_not_match_support_or_resistance(
+        self, eval_ctx, fake_live, fake_semantic
+    ):
+        """A FLIP zone (former-resistance-now-support) is neither pure
+        support nor pure resistance. zone_type='support' and
+        zone_type='resistance' filters must NOT match it; only
+        zone_type='any' matches. Preserves operator intent."""
+        flip_zones = [{"price": 4720.0, "zone_type": "FLIP"}]
+        ctx = eval_ctx(
+            live_data=fake_live(price_mid=4720.5),
+            semantic_cache=fake_semantic({"sr_zones": flip_zones}),
+        )
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="support", tolerance_pips=10.0), ctx
+        ) is False
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="resistance", tolerance_pips=10.0), ctx
+        ) is False
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="any", tolerance_pips=10.0), ctx
+        ) is True
+
     def test_no_sr_zones_false(self, eval_ctx, fake_live, fake_semantic):
         ctx = eval_ctx(
             live_data=fake_live(price_mid=4720.0),
