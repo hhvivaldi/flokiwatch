@@ -1096,6 +1096,66 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
   .rex-rationale, .dd-body { font-size: 14px; }
 }
 
+/* ── Position card (FLO-215 / FLO-415): labels were rendering flush
+   to values — "Entry4626.26" — because the underlying spans had no
+   styling. Fixed below with a mobile-first grid layout. */
+.position-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  margin-bottom: 6px;
+}
+.position-row .pos-pill-buy,
+.position-row .pos-pill-sell,
+.position-row .pos-pill-phase {
+  /* Direction pill anchors top-left; phase pill top-right */
+  grid-row: 1;
+}
+.position-row .pos-pill-phase { grid-column: 3; justify-self: end; }
+.position-row > .pos-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;          /* allow shrink in narrow viewports */
+}
+.position-row .pos-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  white-space: nowrap;
+}
+.position-row .pos-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  white-space: nowrap;
+}
+/* Stat groups occupy a 5-column row UNDER the pills on mobile,
+   giving Entry/P&L/SL/TP/Duration their own column each. */
+.position-row .pos-stats {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+@media (max-width: 480px) {
+  /* Phone: 2-column grid so each cell stays readable. P&L takes col 2. */
+  .position-row .pos-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+  }
+  .position-row .pos-val { font-size: 12px; }
+}
+
 </style>
   <link rel="icon" type="image/png" href="/image/flokiwatch.png">
   <script src="/static/tz.js"></script>
@@ -2408,25 +2468,32 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             html += '<span class="bc-pill ' + dirClass + '" style="font-size:11px;font-weight:800;padding:3px 10px"' +
                     (pi === 0 ? ' id="position-direction"' : '') + '>' + dir + ' ' + (p.volume || '') + '</span>';
 
-            html += '<div class="pos-group"><span class="pos-label">Entry</span><span class="pos-val"' +
-                    (pi === 0 ? ' id="position-entry"' : '') + '>' + (p.open_price != null ? Number(p.open_price).toFixed(2) : '—') + '</span></div>';
-
-            html += '<div class="pos-group"><span class="pos-label">P&L</span><span class="pos-val" style="color:' + pnlColor + '"' +
-                    (pi === 0 ? ' id="position-pnl"' : '') + '>' + pnlStr + ' <span style="font-size:10px;opacity:0.7">' + pips + '</span></span></div>';
-
-            html += '<div class="pos-group"><span class="pos-label">SL</span><span class="pos-val" style="font-size:11px"' +
-                    (pi === 0 ? ' id="position-sl"' : '') + '>' + (p.sl != null ? Number(p.sl).toFixed(2) : '—') + '</span></div>';
-
-            html += '<div class="pos-group"><span class="pos-label">TP</span><span class="pos-val" style="font-size:11px"' +
-                    (pi === 0 ? ' id="position-tp"' : '') + '>' + (p.tp != null ? Number(p.tp).toFixed(2) : '—') + '</span></div>';
-
-            html += '<div class="pos-group"><span class="pos-label">Duration</span><span class="pos-val" style="font-size:11px"' +
-                    (pi === 0 ? ' id="position-duration"' : '') + '>' + durStr + '</span></div>';
+            // Spacer cell so phase pill sits in column 3 of the top row.
+            html += '<span></span>';
 
             html += '<span class="bc-pill pos-pill-phase" style="background:' + phaseBg + ';color:' + phaseColor + ';border:1px solid ' + phaseColor + '"' +
                     (pi === 0 ? ' id="position-phase"' : '') + '>' + phase + '</span>';
 
-            html += '</div>';
+            // Stats row — 5 columns desktop, 2 columns mobile (CSS).
+            html += '<div class="pos-stats">';
+
+            html += '<div class="pos-group"><span class="pos-label">Entry</span><span class="pos-val"' +
+                    (pi === 0 ? ' id="position-entry"' : '') + '>' + (p.open_price != null ? Number(p.open_price).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">P&amp;L</span><span class="pos-val" style="color:' + pnlColor + '"' +
+                    (pi === 0 ? ' id="position-pnl"' : '') + '>' + pnlStr + ' <span style="font-size:10px;opacity:0.7;font-weight:600">' + pips + '</span></span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">SL</span><span class="pos-val"' +
+                    (pi === 0 ? ' id="position-sl"' : '') + '>' + (p.sl != null ? Number(p.sl).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">TP</span><span class="pos-val"' +
+                    (pi === 0 ? ' id="position-tp"' : '') + '>' + (p.tp != null ? Number(p.tp).toFixed(2) : '—') + '</span></div>';
+
+            html += '<div class="pos-group"><span class="pos-label">Duration</span><span class="pos-val"' +
+                    (pi === 0 ? ' id="position-duration"' : '') + '>' + durStr + '</span></div>';
+
+            html += '</div>';  // /.pos-stats
+            html += '</div>';  // /.position-row
           }
           barEl.innerHTML = html;
 
