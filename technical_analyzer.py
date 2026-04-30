@@ -87,12 +87,23 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
     df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
     
-    # ATR
+    # ATR — Wilder's smoothing (RMA) to match MT5 chart default.
+    # Seed = SMA(14) of True Range for the first 14 bars, then
+    # recursive Wilder formula: ATR_n = (ATR_{n-1} × 13 + TR_n) / 14.
+    # Mirrors the RSI pattern above (lines 65-75, "matches
+    # MT5/TradingView") so all Wilder-smoothed indicators in this file
+    # share the same seed-then-recurse construction. Pre-fix this used
+    # plain SMA which diverges from MT5 ATR after the 14-bar seed
+    # window — the values agree on calm bars and diverge on volatile
+    # bars, exactly when ATR-based plans need accurate readings.
     high_low = df['high'] - df['low']
     high_close = np.abs(df['high'] - df['close'].shift())
     low_close = np.abs(df['low'] - df['close'].shift())
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df['atr_14'] = tr.rolling(window=14).mean()
+    atr = tr.rolling(window=14).mean()  # SMA seed
+    for i in range(15, len(df)):
+        atr.iloc[i] = (atr.iloc[i - 1] * 13 + tr.iloc[i]) / 14
+    df['atr_14'] = atr
     
     # Stochastic — SLOW (matches MT5 default: K=14, slowing=3, D=3)
     # Pipeline: raw %K → SMA(3) smoothing → %K, then %D = SMA(3) of %K.

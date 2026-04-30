@@ -343,8 +343,17 @@ class LiveData:
         high_close = (df["high"] - df["close"].shift()).abs()
         low_close = (df["low"] - df["close"].shift()).abs()
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        # Rolling SMA, not Wilder — matches technical_analyzer.py:95
+        # Wilder's smoothing (RMA) — mirrors technical_analyzer.py:92-95
+        # post-fix. Seed = SMA(period) of TR for the first `period`
+        # bars, then recursive: ATR_n = (ATR_{n-1} × (n-1) + TR_n) / n.
+        # Aligns the M1 local path with the per-TF compute path so
+        # plan-authoring values (MT5 charts, Brain) and Snow's
+        # M1 evaluator agree on the same number.
         atr_series = tr.rolling(window=period).mean()
+        for i in range(period + 1, len(df)):
+            atr_series.iloc[i] = (
+                atr_series.iloc[i - 1] * (period - 1) + tr.iloc[i]
+            ) / period
         val = atr_series.iloc[-1]
         return float(val) if pd.notna(val) else None
 
