@@ -4836,6 +4836,38 @@ class AgentTools:
         ):
             plan = plan["plan"]
 
+        # FLO-404 v3 (CEO directive 2026-04-30) — Layer B null-path defense.
+        # Gemini's strict schema-follower tool generator has been observed
+        # emitting `null` at list-of-object paths (entry.conditions[*],
+        # management[*], exit[*]) and at analysis.context_tags. The
+        # tightened input_schema in ai_agent.py (Layer A) steers Gemini
+        # away from this; this is belt-and-suspenders that catches the
+        # case if the schema steering ever slips. We surface a clear,
+        # actionable error naming each null path so Floki's retry
+        # round-trip (Maximum 3 attempts, FLO-393) corrects it.
+        _null_paths = AgentTools._scan_null_object_paths(plan)
+        if _null_paths:
+            self._log_fail(
+                "submit_plan_to_snow", start,
+                f"null_at_object_paths={_null_paths}",
+            )
+            return {
+                "success": False, "plan_id": None,
+                "validation_errors": [
+                    f"FLO-404: plan has `null` at {len(_null_paths)} "
+                    f"path(s) where a populated object is required: "
+                    f"{', '.join(_null_paths)}. Each of these paths must "
+                    f"be a real dict — entry.conditions[*] are condition "
+                    f"primitives ({{'type': '...', ...}}); management[*] "
+                    f"and exit[*] are contingencies ({{'name', 'priority', "
+                    f"'conditions', 'action', 'fires'}}); analysis."
+                    f"context_tags is {{'trend', 'volatility', 'htf', "
+                    f"'news_session'}}. Resubmit with these paths "
+                    f"populated; the schema does not accept null at any "
+                    f"of them."
+                ],
+            }
+
         # FLO-393: mandatory Recipe Book consultation gate. Reject plans
         # submitted without at least one `get_snow_recipe_book` call
         # earlier in the same Floki cycle. Counter is reset to 0 at the
@@ -5091,6 +5123,60 @@ class AgentTools:
         except Exception as e:
             self._log_fail("get_plan_status", start, f"error={e}")
             return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
+    @staticmethod
+    def _scan_null_object_paths(plan_dict: Optional[Dict[str, Any]]) -> list:
+        """FLO-404 v3 — Layer B defense. Returns dotted-path strings for
+        every position in the plan dict where Pydantic expects a
+        populated object but Gemini emitted `null`.
+
+        Paths checked (matches the Pydantic schema's non-Optional
+        nested fields):
+          analysis.context_tags        — must be dict
+          entry.conditions[i]          — each must be dict (i = 0..N-1)
+          management[i]                — each must be dict
+          exit[i]                      — each must be dict
+
+        Designed to be safe on partial / malformed input — if the outer
+        plan structure is itself malformed (non-dict, missing entry
+        block, etc.), we return only the paths we CAN reach. Pydantic
+        catches the rest. Pure function, no side effects, no MT5 / DB.
+        """
+        if not isinstance(plan_dict, dict):
+            return []
+        # Plans can arrive wrapped ({"plan": {...}}) or direct. Unwrap
+        # once if the outer dict has a `plan` key holding a dict that
+        # itself looks like a plan body.
+        outer = plan_dict
+        inner = plan_dict.get("plan")
+        if isinstance(inner, dict) and "analysis" in inner:
+            outer = inner
+
+        bad_paths: list = []
+        # analysis.context_tags
+        analysis = outer.get("analysis")
+        if isinstance(analysis, dict) and "context_tags" in analysis:
+            if analysis["context_tags"] is None:
+                bad_paths.append("analysis.context_tags")
+
+        # entry.conditions[*]
+        entry = outer.get("entry")
+        if isinstance(entry, dict):
+            conds = entry.get("conditions")
+            if isinstance(conds, list):
+                for i, c in enumerate(conds):
+                    if c is None:
+                        bad_paths.append(f"entry.conditions[{i}]")
+
+        # management[*] and exit[*]
+        for key in ("management", "exit"):
+            items = outer.get(key)
+            if isinstance(items, list):
+                for i, item in enumerate(items):
+                    if item is None:
+                        bad_paths.append(f"{key}[{i}]")
+
+        return bad_paths
 
     @staticmethod
     def _plan_target_zone_touched(

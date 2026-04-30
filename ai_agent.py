@@ -1420,6 +1420,19 @@ class AIAgent:
                     "values for those fields are ignored."
                 ),
                 "input_schema": {
+                    # FLO-404 v3 (CEO directive 2026-04-30): detailed nested
+                    # schema to STEER Gemini's strict schema-follower tool
+                    # generator away from emitting `null` at list-of-object
+                    # paths. Pre-FLO-404 the schema was {plan: object,
+                    # additionalProperties: true} with no inner structure;
+                    # GPT pattern-matched the prompt examples correctly,
+                    # but Gemini emitted [null, null] for entry.conditions,
+                    # management, exit (since the schema didn't constrain
+                    # item types). The detailed inner schema below tells
+                    # the tool generator "these are arrays of objects"
+                    # explicitly. additionalProperties: True is preserved
+                    # at every layer to keep wrapper-vs-direct call shapes
+                    # both accepted (the agent_tools handler normalizes).
                     "type": "object",
                     "properties": {
                         "plan": {
@@ -1434,17 +1447,98 @@ class AIAgent:
                                 "expires_at as direct top-level arguments — both "
                                 "shapes are accepted; the handler normalizes."
                             ),
+                            "properties": {
+                                "analysis": {
+                                    "type": "object",
+                                    "description": (
+                                        "thesis, key_levels, confidence, "
+                                        "regime_assumed, setup_type, context_tags "
+                                        "(REQUIRED OBJECT, never null), "
+                                        "confidence_reason."
+                                    ),
+                                    "properties": {
+                                        "context_tags": {
+                                            "type": "object",
+                                            "description": (
+                                                "{trend, volatility, htf, "
+                                                "news_session}. MUST be a populated "
+                                                "object — never null."
+                                            ),
+                                            "additionalProperties": True,
+                                        },
+                                    },
+                                    "additionalProperties": True,
+                                },
+                                "entry": {
+                                    "type": "object",
+                                    "description": (
+                                        "direction, volume, conditions (array of "
+                                        "≥2 condition dicts — never null items), "
+                                        "initial_sl, initial_tp, entry_price."
+                                    ),
+                                    "properties": {
+                                        "conditions": {
+                                            "type": "array",
+                                            "minItems": 2,
+                                            "items": {
+                                                "type": "object",
+                                                "description": (
+                                                    "Condition primitive: "
+                                                    "{type, ...primitive-specific "
+                                                    "fields}. Never null. Never a "
+                                                    "JSON-string. Always a real "
+                                                    "object."
+                                                ),
+                                                "additionalProperties": True,
+                                            },
+                                        },
+                                    },
+                                    "additionalProperties": True,
+                                },
+                                "management": {
+                                    "type": "array",
+                                    "description": (
+                                        "Array of management contingency dicts: "
+                                        "{name, priority, conditions, action, "
+                                        "fires}. Never null items."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "additionalProperties": True,
+                                    },
+                                },
+                                "exit": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "description": (
+                                        "Array of ≥1 exit contingency dicts. "
+                                        "Same shape as management. FLO-401 hard "
+                                        "minimum: at least one exit. Never null "
+                                        "items."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "additionalProperties": True,
+                                    },
+                                },
+                                "emergency": {
+                                    "type": "object",
+                                    "description": (
+                                        "{max_loss_pips, max_duration_minutes, "
+                                        "on_broker_error}."
+                                    ),
+                                    "additionalProperties": True,
+                                },
+                                "expires_at": {
+                                    "type": "string",
+                                    "description": (
+                                        "UTC ISO-8601 with Z suffix."
+                                    ),
+                                },
+                            },
                             "additionalProperties": True,
                         },
                     },
-                    # FLO-404 follow-up (CEO directive 2026-04-30): relaxed
-                    # from required:["plan"] + additionalProperties:false
-                    # to allow the direct-shape call submit_plan_to_snow(
-                    # analysis=..., entry=..., ...). This matches the inner-
-                    # plan-body shape Floki sees in the prompt's MINIMAL /
-                    # EXPLORATORY plan examples. The handler's normalization
-                    # logic is the single source of truth for how the
-                    # plan dict is assembled.
                     "additionalProperties": True,
                 },
             },
