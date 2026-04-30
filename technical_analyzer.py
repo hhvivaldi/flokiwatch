@@ -94,13 +94,20 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     df['atr_14'] = tr.rolling(window=14).mean()
     
-    # Stochastic
+    # Stochastic — SLOW (matches MT5 default: K=14, slowing=3, D=3)
+    # Pipeline: raw %K → SMA(3) smoothing → %K, then %D = SMA(3) of %K.
+    # The smoothing step (slowing=3) is what distinguishes this from
+    # the fast stochastic (slowing=1) which feeds raw %K straight to
+    # %D. Aligns Snow's stochastic primitive with what Floki sees on
+    # MT5 charts so plan-authoring and evaluation agree on the same
+    # value at the same instant.
     low_14 = df['low'].rolling(window=14).min()
     high_14 = df['high'].rolling(window=14).max()
     denom = (high_14 - low_14).replace(0, np.nan)
-    df['stoch_k'] = 100 * (df['close'] - low_14) / denom
-    df['stoch_k'] = df['stoch_k'].fillna(50.0)
-    df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
+    raw_k = 100 * (df['close'] - low_14) / denom
+    raw_k = raw_k.fillna(50.0)
+    df['stoch_k'] = raw_k.rolling(window=3).mean().fillna(50.0)
+    df['stoch_d'] = df['stoch_k'].rolling(window=3).mean().fillna(50.0)
     
     return df
 

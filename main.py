@@ -2284,13 +2284,22 @@ class TradingBot:
                             zones_out = []
                             for z in sr_zones:
                                 try:
+                                    _mid = getattr(z, "midpoint", None)
                                     zones_out.append(
                                         {
                                             "timeframe": getattr(z, "timeframe", None),
                                             "zone_type": getattr(z, "zone_type", None),
                                             "price_low": getattr(z, "price_low", None),
                                             "price_high": getattr(z, "price_high", None),
-                                            "midpoint": getattr(z, "midpoint", None),
+                                            "midpoint": _mid,
+                                            # Snow's evaluate_price_at_sr_zone reads
+                                            # z.get("price") (snow/evaluators/structural.py:51).
+                                            # The dashboard path (_format_sr_zones)
+                                            # publishes the same key. Without this
+                                            # alias the fallback rebuild produced
+                                            # Snow-unreadable zones — caught by the
+                                            # FLO-415 integration test.
+                                            "price": _mid,
                                             "touches": getattr(z, "touches", None),
                                             "strength": getattr(z, "strength", None),
                                             "confluence": getattr(z, "confluence", None),
