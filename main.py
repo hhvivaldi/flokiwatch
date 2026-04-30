@@ -1713,18 +1713,35 @@ class TradingBot:
         log.info(f"FAST_INDICATOR_LOOP starting (interval={interval:.1f}s)")
 
         def _rates_to_candles(rates):
+            """Mirror of the slow-cycle helper at main.py:~2249.
+
+            MT5 copy_rates_from_pos returns a NumPy structured array;
+            each row is a void record indexable by string but lacking
+            .get(). Use bracket access + try/except for tick_volume /
+            real_volume backfill, matching the slow path so dp.candles
+            consumers (AgentTools.get_candles, Floki investigations)
+            see a uniform shape regardless of which producer wrote it.
+            """
             out = []
             if rates is None:
                 return out
             for r in rates:
                 try:
+                    tv = 0.0
+                    try:
+                        tv = float(r["tick_volume"])
+                    except Exception:
+                        try:
+                            tv = float(r["real_volume"])
+                        except Exception:
+                            tv = 0.0
                     out.append({
+                        "time": datetime.utcfromtimestamp(int(r["time"]) - _mt5_server_offset()).isoformat(),
                         "open": float(r["open"]),
                         "high": float(r["high"]),
                         "low": float(r["low"]),
                         "close": float(r["close"]),
-                        "volume": float(r.get("tick_volume", 0)),
-                        "time": int(r["time"]),
+                        "volume": tv,
                     })
                 except Exception:
                     continue
