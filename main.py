@@ -1776,6 +1776,21 @@ class TradingBot:
                                 "histogram": macd_hist,
                             }
 
+                            # FLO-XXX: Snow's live_data.macd_histogram(tf!=M1)
+                            # calls _semantic_indicator("macd_hist") which
+                                # reads a FLAT key indicators["macd_hist"], not
+                            # the nested indicators["macd"]["histogram"].
+                            # Without the flat alias the macd_histogram
+                            # primitive on non-M1 timeframes silently returns
+                            # None → False (affects every plan with
+                            # macd_histogram on H1/H4/M5/M15/D1, and the
+                            # indicator_crossover variant via macd_histogram).
+                            try:
+                                if isinstance(macd_hist, (int, float)):
+                                    indicators["macd_hist"] = float(macd_hist)
+                            except Exception:
+                                pass
+
                             # If analyzer only provides histogram/signal label, backfill MACD line from df columns.
                             try:
                                 if indicators.get("macd") and indicators["macd"].get("value") is None:
