@@ -308,27 +308,83 @@ class TestPriceAtSRZone:
         cond = PriceAtSRZone(zone_type="resistance", tolerance_pips=10.0)
         assert evaluate_condition(cond, ctx) is True
 
-    def test_flip_zone_does_not_match_support_or_resistance(
+    def test_flip_zone_above_price_matches_resistance(
         self, eval_ctx, fake_live, fake_semantic
     ):
-        """A FLIP zone (former-resistance-now-support) is neither pure
-        support nor pure resistance. zone_type='support' and
-        zone_type='resistance' filters must NOT match it; only
-        zone_type='any' matches. Preserves operator intent."""
+        """A FLIP level above current price IS resistance — that's what
+        the level is doing right now regardless of historical touches."""
         flip_zones = [{"price": 4720.0, "zone_type": "FLIP"}]
         ctx = eval_ctx(
-            live_data=fake_live(price_mid=4720.5),
+            live_data=fake_live(price_mid=4715.0),  # 50 pips below zone
+            semantic_cache=fake_semantic({"sr_zones": flip_zones}),
+        )
+        # Within tolerance for resistance match.
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="resistance", tolerance_pips=60.0), ctx
+        ) is True
+        # NOT support — zone is above price.
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="support", tolerance_pips=60.0), ctx
+        ) is False
+        # `any` always matches when in tolerance.
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="any", tolerance_pips=60.0), ctx
+        ) is True
+
+    def test_flip_zone_below_price_matches_support(
+        self, eval_ctx, fake_live, fake_semantic
+    ):
+        """A FLIP level below current price IS support."""
+        flip_zones = [{"price": 4720.0, "zone_type": "FLIP"}]
+        ctx = eval_ctx(
+            live_data=fake_live(price_mid=4725.0),  # 50 pips above zone
+            semantic_cache=fake_semantic({"sr_zones": flip_zones}),
+        )
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="support", tolerance_pips=60.0), ctx
+        ) is True
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="resistance", tolerance_pips=60.0), ctx
+        ) is False
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="any", tolerance_pips=60.0), ctx
+        ) is True
+
+    def test_flip_zone_at_price_matches_both(
+        self, eval_ctx, fake_live, fake_semantic
+    ):
+        """A FLIP level exactly at current price matches BOTH support
+        and resistance filters — there's no positional ambiguity to
+        resolve, so respect both intents."""
+        flip_zones = [{"price": 4720.0, "zone_type": "FLIP"}]
+        ctx = eval_ctx(
+            live_data=fake_live(price_mid=4720.0),  # exact equality
             semantic_cache=fake_semantic({"sr_zones": flip_zones}),
         )
         assert evaluate_condition(
             PriceAtSRZone(zone_type="support", tolerance_pips=10.0), ctx
-        ) is False
+        ) is True
         assert evaluate_condition(
             PriceAtSRZone(zone_type="resistance", tolerance_pips=10.0), ctx
-        ) is False
+        ) is True
         assert evaluate_condition(
             PriceAtSRZone(zone_type="any", tolerance_pips=10.0), ctx
         ) is True
+
+    def test_flip_zone_outside_tolerance_no_match(
+        self, eval_ctx, fake_live, fake_semantic
+    ):
+        """Positional matching only kicks in WITHIN the tolerance
+        window. A FLIP zone 200 pips away from price doesn't match
+        even though it's positionally above (resistance side)."""
+        flip_zones = [{"price": 4720.0, "zone_type": "FLIP"}]
+        ctx = eval_ctx(
+            live_data=fake_live(price_mid=4700.0),  # 200 pips below
+            semantic_cache=fake_semantic({"sr_zones": flip_zones}),
+        )
+        assert evaluate_condition(
+            PriceAtSRZone(zone_type="resistance", tolerance_pips=10.0), ctx
+        ) is False
 
     def test_no_sr_zones_false(self, eval_ctx, fake_live, fake_semantic):
         ctx = eval_ctx(

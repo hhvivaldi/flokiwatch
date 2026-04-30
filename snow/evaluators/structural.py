@@ -55,14 +55,29 @@ def evaluate_price_at_sr_zone(cond: PriceAtSRZone, ctx: EvalContext) -> bool:
         # Brain publishes zone_type as UPPERCASE ('SUPPORT' / 'RESISTANCE'
         # / 'FLIP') from support_resistance.SRZone; cond.zone_type is a
         # Pydantic Literal lowercase ('support' / 'resistance' / 'any').
-        # Compare case-insensitively so the lowercase Literal matches
-        # the upstream uppercase tag. 'flip' zones don't match either
-        # 'support' or 'resistance' — match only 'any' (preserves the
-        # operator's intent: a flip is neither pure support nor pure
-        # resistance).
+        # Compare case-insensitively so the lowercase Literal matches.
+        #
+        # FLIP zones are levels that have flipped role at least once
+        # (touched as support AND resistance historically). They match
+        # positionally:
+        #   FLIP zone ABOVE current price → matches "resistance"
+        #   FLIP zone BELOW current price → matches "support"
+        #   FLIP zone AT current price (zone_price == price) → matches BOTH
+        # This reflects that a flipped level IS support or resistance
+        # depending on which side price is on right now.
         if wanted != "any":
             zt_norm = (zone_type or "").lower()
-            if zt_norm != wanted:
+            if zt_norm == "flip":
+                # Positional matching for flipped levels.
+                if zone_price > price:
+                    pos_match = "resistance"
+                elif zone_price < price:
+                    pos_match = "support"
+                else:
+                    pos_match = None  # exact equality: matches both
+                if pos_match is not None and wanted != pos_match:
+                    continue
+            elif zt_norm != wanted:
                 continue
         if abs(float(price) - float(zone_price)) <= tolerance_price:
             return True
