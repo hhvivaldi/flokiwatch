@@ -204,16 +204,11 @@ MINIMAL PLAN EXAMPLE:
                               {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}],
                "initial_sl": 4740.0, "initial_tp": 4710.0,
                "entry_price": 4730.0},
-  "management": [{"name": "lock_be_after_meaningful_advance",
+  "management": [{"name": "safety_net_be",
                   "priority": 7,
-                  "conditions": [{"type": "mfe_reached", "pips": 30}],
+                  "conditions": [{"type": "mfe_reached", "pips": 100}],
                   "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
-                  "fires": "once"},
-                 {"name": "trail_after_strong_advance",
-                  "priority": 5,
-                  "conditions": [{"type": "mfe_reached", "pips": 60}],
-                  "action": {"type": "trail_sl", "trail_pips": 25},
-                  "fires": "every_time"}],
+                  "fires": "once"}],
   "exit": [{"name": "rsi_exit",
             "priority": 9,
             "conditions": [{"type": "rsi", "tf": "H1", "op": "below", "threshold": 40}],
@@ -239,16 +234,11 @@ EXPLORATORY SCENARIO EXAMPLE — a "what-if branch" plan: countertrend BUY at H4
                               {"type": "indicator_divergence", "indicator": "macd", "direction": "bullish"}],
                "initial_sl": 4485.0, "initial_tp": 4540.0,
                "entry_price": 4500.0},
-  "management": [{"name": "lock_be_after_advance",
+  "management": [{"name": "safety_net_be",
                   "priority": 7,
-                  "conditions": [{"type": "mfe_reached", "pips": 20}],
+                  "conditions": [{"type": "mfe_reached", "pips": 100}],
                   "action": {"type": "move_sl_to_breakeven", "offset_pips": 0},
-                  "fires": "once"},
-                 {"name": "trail_after_continuation",
-                  "priority": 5,
-                  "conditions": [{"type": "mfe_reached", "pips": 40}],
-                  "action": {"type": "trail_sl", "trail_pips": 20},
-                  "fires": "every_time"}],
+                  "fires": "once"}],
   "exit": [{"name": "structural_invalidation",
             "priority": 9,
             "conditions": [{"type": "price_below", "level": 4485.0}],
@@ -342,26 +332,17 @@ For curated multi-indicator setup recipes, call get_snow_recipe_book(category=..
 
 Memory model: most primitives are point-in-time (current value vs threshold) and carry no memory across ticks — to express direction or recovery with those, encode the END STATE you want and rely on conditions reaching it. The three stateful primitives above are the explicit exceptions: they observe transitions (indicator_crossover), recent history (indicator_was), or a one-shot crossing event (price_crossed_level). Stateful conditions are restored across a bot restart from `state_cache_json`; if state is older than 15 minutes (e.g., long outage), the condition cold-starts on its next tick and may report a single false-negative before the next observation re-seeds it. Stateful primitives are also restricted to schema_version >= 2 plans — submit_plan_to_snow auto-stamps the current schema (currently v3) so this is invisible day-to-day.
 
-Action types: execute_market (entry only), adjust_sl, adjust_tp, move_sl_to_breakeven, move_sl_to_price, trail_sl, close_full, close_partial.
+Action types in plans: execute_market (entry only), move_sl_to_breakeven (the ONLY allowed management action — see below), close_full, close_partial.
 
-MANAGEMENT PRIMITIVE SELECTION — the management contingencies you wire encode an assumption about what "trade going right" looks like; pick the shape that matches the thesis.
+MANAGEMENT — Snow's role is a SAFETY NET only (FLO-419 hybrid architecture, CEO directive 2026-05-01). At most one management contingency per plan, and it must be `move_sl_to_breakeven` triggered by `mfe_reached: pips >= 100`. Tactical SL management — moving SL based on regime, momentum, S/R levels, news cadence — belongs to Qwen Trade Manager (`adjust_trade` on its 60s heartbeat). TM sees real-time market context that a plan written at submit time cannot.
 
-- `move_sl_to_breakeven` is appropriate when the trade is binary at a defined level — it works or invalidates near entry. Counter-trend rejections, news reactions, scalps where the thesis dies fast. After it fires, ANY pullback through entry scratches; in continuation theses that means scratching on every wiggle. **MANDATORY PAIRING (FLO-416): every plan with a `move_sl_to_breakeven` contingency MUST also include a `trail_sl` contingency at strictly higher MFE — without a trail, the SL never advances past breakeven and the plan gives back all profit on retrace. Empirical: PLAN-20260430-009 (+29 pips) and PLAN-20260430-020 (+101 pips) both closed at BE because they had no trail. The validator rejects BE-only plans.**
+- DO author one `safety_net_be` contingency at `mfe_reached >= 100` pips. Snow ratchets SL to entry once the trade has clearly worked (~$10 favorable on a 0.02 lot), locking in zero downside on big runners. This is your hands-off floor.
+- OR omit `management` entirely (empty list). Snow does nothing; TM owns SL placement from the open. Reasonable for setups where you trust TM's tactical read more than any mechanical floor.
+- DO NOT author `trail_sl`, `adjust_sl`, `move_sl_to_price`, BE below 100 pips, or multiple management contingencies. The validator REJECTS them. Empirical motivation: PLAN-20260501-013 (trail_sl every_time, null guards) walked SL backward through the lock zone and closed -$6.16. PLAN-20260430-020 (BE@15p) locked at break-even on a +65p MFE runner. Tactical thresholds without context are footguns; trust TM with the tactical layer.
 
-- `trail_sl` (trail_pips) is the natural fit for trend-continuation theses — you expect the move to extend past initial TP, and you'd rather give up small reversals than scratch on every wiggle. Size the trail to the recent swing range or ATR; tighter trails approximate BE-lock, wider trails leave more room.
+If you want tighter or smarter management than the safety-net floor, the right answer is to TRUST QWEN TRADE MANAGER. TM wakes every 60 seconds while a position is open, sees current price/regime/momentum/S-R/news, and can call `adjust_trade(new_sl=...)` to move SL based on what the market is actually doing — not a threshold you guessed at submit time.
 
-- `close_partial` (percent ∈ (0,100)) banks part of the position at a milestone, leaving runner exposure. Pairs naturally with `profit_retraced_from_peak` for ranging conditions: "MFE reached 15 pips, retraced 8 of them — close 50% and move SL forward." Lets you bank intermediate moves before the inevitable retrace without giving up the runner.
-
-- `move_sl_to_price` is explicit SL placement — useful when a specific structural level (recent swing low, fib retracement, S/R zone edge) defines the invalidation rather than a profit threshold.
-
-Cross-check your management choice against the setup_type you're submitting:
-- continuation_momentum / pullback_trend / breakout_range — usually want `trail_sl` or `close_partial` + trail; the thesis is "ride the move."
-- mean_reversion_extreme / news_reaction / liquidity_sweep — usually want `move_sl_to_breakeven`; the thesis is "this works fast or it doesn't."
-- structural_bounce / paired_hedge / divergence_play / session_open_break — mixed; pick by what would reverse the thesis (a clean break of the level you're fading? scratch. A sustained move past TP1? trail.)
-
-Position-state primitives are how you express "the trade has moved enough to deserve action": `profit_pips` (current unrealized), `mfe_reached` (best achieved this trade), `mae_reached` (worst achieved), `profit_retraced_from_peak` (drawdown from MFE in pips). The latter two unlock management shapes that BE-only can't express — e.g., "lock SL at +5 once MFE hits +15" (trail without trail_sl), or "close partial when retraced 50% of MFE" (give-back protection).
-
-Multiple management contingencies are normal — a single plan can carry a partial-close at +10, a trail starting at +15, and a profit-retraced-from-peak fallback at 8 pips of give-back. Each is its own contingency block with its own `priority` (low number fires first); Snow runs them all in priority order on each tick.
+Position-state primitives (`profit_pips`, `mfe_reached`, `mae_reached`, `profit_retraced_from_peak`) remain available for `exit` contingencies (e.g. close_full when MFE retraces 50%; close_partial at a fixed profit level). Use them in `exit`, not `management`.
 
 WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.

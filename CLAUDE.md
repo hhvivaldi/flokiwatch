@@ -72,6 +72,8 @@ main.py (orchestrator)
 - Max 3 positions. No trades 60 min before/after market open/close. Max 6% daily loss.
 - Volatility guard: M5 >1.8% blocks trades (`volatility_guard.py`)
 - adjust_trade: SL-widening guard + rate limit (max 3/hour/ticket, FLO-141)
+- **Monotonic SL invariant (FLO-419, executor.py modify_position):** SL never loosens. BUY: new_sl >= current_sl. SELL: new_sl <= current_sl. Exception: first SL set when current is 0. Loosening attempts return `OrderResult(success=False, error_code=-5)` with a `SL_GUARD` warning log. Universal — covers Snow, Qwen TM, monitor.py, EA bridge, and any future caller.
+- **Hybrid SL architecture (FLO-419):** Snow plan management = at most ONE `move_sl_to_breakeven` contingency at `mfe_reached >= 100` pips (validator rejects anything else — no `trail_sl`, no `adjust_sl`, no BE below 100p, no >1 contingencies). Tactical SL belongs to Qwen Trade Manager via `adjust_trade` on its 60s heartbeat. Snow is the safety net; TM is the brain. Supersedes FLO-416. See `data/_audits/gemini_era_trade_audit_2026-05-01.md` for the empirical motivation (PLAN-20260501-013 lost $6.16 to a non-monotonic trail; PLAN-20260430-020 forfeited ~$11 to a 15-pip BE).
 
 ## Code Review Rules
 
