@@ -109,7 +109,7 @@ def _gpt_style_plan() -> dict[str, Any]:
                 "then 4599/4605 H4 resistance."
             ),
             "key_levels": [4576.0, 4581.0, 4592.9, 4599.0, 4605.0],
-            "confidence": 74,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BULLISH",
             "setup_type": "breakout_range",
             "context_tags": {

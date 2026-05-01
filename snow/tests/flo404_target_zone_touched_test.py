@@ -94,7 +94,7 @@ def _mk_plan(direction: str = "BUY", key_levels=None) -> dict[str, Any]:
         "analysis": {
             "thesis": "FLO-404 staleness test plan",
             "key_levels": key_levels or [4543.0, 4553.0, 4565.0, 4572.0],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BEARISH",
         },
         "entry": {

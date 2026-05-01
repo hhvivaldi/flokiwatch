@@ -191,7 +191,7 @@ class TestSnowSpawnBlock:
             "analysis": {
                 "thesis": "integration test seed",
                 "key_levels": [4735.0, 4720.0, 4707.0],
-                "confidence": 72,
+                "confidence": 75,
                 "regime_assumed": "TRENDING_BEARISH",
             },
             "entry": {

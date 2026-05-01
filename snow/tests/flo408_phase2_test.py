@@ -97,7 +97,7 @@ def _complete_plan() -> dict[str, Any]:
         "analysis": {
             "thesis": "Test plan thesis text",
             "key_levels": [4540.0, 4560.0, 4580.0],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BEARISH",
             "setup_type": "breakout_range",
             "context_tags": {

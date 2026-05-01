@@ -86,7 +86,7 @@ _BASE_PLAN: dict[str, Any] = {
     "analysis": {
         "thesis": "FLO-393 gate test plan",
         "key_levels": [4735.0, 4720.0, 4707.0],
-        "confidence": 72,
+        "confidence": 75,
         "regime_assumed": "TRENDING_BEARISH",
     },
     "entry": {

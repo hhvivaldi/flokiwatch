@@ -63,7 +63,7 @@ def _plan(
         "analysis": {
             "thesis": "FLO-392 reachability tightening test plan",
             "key_levels": [4500.0, initial_sl, initial_tp],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BULLISH",
         },
         "entry": entry,

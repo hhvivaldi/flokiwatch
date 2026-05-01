@@ -49,7 +49,7 @@ def _wrap_plan(conditions: list, schema_version: int = 1) -> dict:
         "analysis": {
             "thesis": "FLO-395 prompt-example round-trip test",
             "key_levels": [4500.0, 4510.0, 4520.0],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BULLISH",
         },
         "entry": {

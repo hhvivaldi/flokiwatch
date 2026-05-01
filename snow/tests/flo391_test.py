@@ -40,7 +40,7 @@ def _plan(initial_sl: float, initial_tp: float, mgmt_conditions: list,
         "analysis": {
             "thesis": "FLO-391 reachability gate test plan",
             "key_levels": [4500.0, initial_sl, initial_tp],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BULLISH",
         },
         "entry": {

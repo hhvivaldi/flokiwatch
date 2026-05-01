@@ -580,39 +580,38 @@ def _check_management_reachability(plan: Plan) -> list[str]:
 _MGMT_BE_FLOOR_PIPS: int = 100
 
 # FLO-419 Phase 2 (CEO directive 2026-05-01) — minimum analysis.confidence for
-# any submitted plan. The prompt's PLAN-AUTHORING DISCIPLINE caps confidence
-# at 50% when concerns name the failure mode. With this floor at 70%,
-# concerns-named-failure-mode plans get auto-rejected (50% < 70%): Floki must
-# either resolve the concern (so it no longer names the failure) or not
-# submit. Bucketed Gemini-era data through 2026-05-01: 65-69% bucket = 0/3
-# wins; 70-74% bucket = 0/4 wins; 75-79% bucket = 3/8 wins. Empirically the
-# floor cuts only losses.
-_CONFIDENCE_FLOOR: int = 70
+# any submitted plan. Empirical bucketing of 15 Gemini-era executed plans
+# through 2026-05-01:
+#   65-69%   n=3   wins=0   net -$17.86
+#   70-74%   n=4   wins=0   net -$30.08
+#   75-79%   n=8   wins=3   net +$8.98
+# Zero wins below 75% across 15 trades. All 3 wins were at exactly 75%.
+# Floor raised from 70 to 75 — only submit plans Floki strongly believes
+# in. Combined with the prompt's 50%-ceiling rule when concerns name the
+# failure mode, this auto-rejects every concerns-named-failure plan
+# (50 < 75). Floki must either resolve the concern or not submit.
+_CONFIDENCE_FLOOR: int = 75
 
 
 def _check_confidence_floor(plan: Plan) -> list[str]:
     """FLO-419 Phase 2 hard gate: reject plans whose authored confidence
-    is below the floor. Replaces / hardens the prompt-only suggestion that
-    Floki should self-cap; empirical observation through 2026-05-01 showed
-    the prompt rule was loaded but routinely violated (PLAN-014, PLAN-022,
-    PLAN-035, PLAN-037 all authored above 50% with concerns naming the
-    failure mode). A code gate cannot be ignored.
+    is below the floor. Replaces the prompt-only suggestion that Floki
+    should self-cap; empirical observation through 2026-05-01 showed the
+    prompt rule was loaded but routinely violated (PLAN-014/022/035/037
+    all authored above 50% with concerns naming the failure mode). A
+    code gate cannot be ignored.
 
     Combined with the prompt's THESIS-VS-CONCERNS CONFLICT CHECK rule
-    (50% ceiling when concerns describe the failure mode), this means:
-    any plan where Floki names the failure mode in concerns is now
-    auto-rejected (50% < 70%). Floki must either remove the concern
-    because he resolved it, or not submit the plan."""
+    (50% ceiling when concerns describe the failure mode), every
+    concerns-named-failure plan is now auto-rejected (50 < 75). Floki
+    must either remove the concern (because he resolved it) or not
+    submit the plan."""
     conf = int(plan.analysis.confidence or 0)
     if conf < _CONFIDENCE_FLOOR:
         return [(
             f"Plan rejected: confidence {conf}% is below the "
-            f"{int(_CONFIDENCE_FLOOR)}% minimum. Strengthen your thesis "
-            f"or don't submit. (FLO-419 Phase 2 confidence floor — "
-            f"empirically the 65-69% bucket showed 0/3 wins on the "
-            f"Gemini-era audit. If your concerns describe the plan's "
-            f"failure mode, the prompt's 50% ceiling already applies; "
-            f"either resolve the concern or omit the plan.)"
+            f"{int(_CONFIDENCE_FLOOR)}% minimum. Only submit plans you "
+            f"strongly believe in."
         )]
     return []
 

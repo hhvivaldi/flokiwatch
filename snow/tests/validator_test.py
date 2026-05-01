@@ -344,7 +344,7 @@ class TestPromptExamplePlan:
             "status": "pending",
             "analysis": {"thesis": "H1 pullback to 4720 support with trend intact",
                          "key_levels": [4735.0, 4720.0, 4707.0],
-                         "confidence": 72,
+                         "confidence": 75,
                          "regime_assumed": "TRENDING_BEARISH"},
             "entry":    {"direction": "SELL", "volume": 0.02,
                          "conditions": [{"type": "price_above", "level": 4730.0},
@@ -1267,17 +1267,24 @@ class TestManagementHybridConstraints:
 # =============================================================================
 
 class TestConfidenceFloor:
+    # FLO-419 Phase 2 floor raised to 75 (CEO 2026-05-01) — empirical
+    # bucketing showed zero wins below 75% across 15 Gemini-era trades.
 
-    def test_69_rejected(self, valid_plan_dict):
-        valid_plan_dict["analysis"]["confidence"] = 69
+    def test_74_rejected(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 74
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok is False
-        assert any("confidence 69%" in e and "70%" in e for e in errors), errors
+        assert any("confidence 74%" in e and "75%" in e for e in errors), errors
+
+    def test_70_rejected(self, valid_plan_dict):
+        # 70 was the prior floor — now rejected.
+        valid_plan_dict["analysis"]["confidence"] = 70
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        assert any("confidence 70%" in e for e in errors), errors
 
     def test_50_rejected(self, valid_plan_dict):
-        # The prompt's THESIS-VS-CONCERNS ceiling is 50% — verify the floor
-        # auto-rejects that too, so concerns-named-failure-mode plans
-        # cannot be submitted.
+        # Prompt's THESIS-VS-CONCERNS ceiling is 50%; floor auto-rejects.
         valid_plan_dict["analysis"]["confidence"] = 50
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok is False
@@ -1287,11 +1294,6 @@ class TestConfidenceFloor:
         valid_plan_dict["analysis"]["confidence"] = 0
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok is False
-
-    def test_70_accepted(self, valid_plan_dict):
-        valid_plan_dict["analysis"]["confidence"] = 70
-        ok, _, errors = validate_plan(valid_plan_dict)
-        assert ok, errors
 
     def test_75_accepted(self, valid_plan_dict):
         valid_plan_dict["analysis"]["confidence"] = 75
@@ -1304,13 +1306,11 @@ class TestConfidenceFloor:
         assert ok, errors
 
     def test_error_message_actionable(self, valid_plan_dict):
-        """The rejection message must tell Floki what to do, not just
-        that he failed. Anchor the key phrases."""
         valid_plan_dict["analysis"]["confidence"] = 65
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok is False
         msg = " ".join(errors)
         assert "Plan rejected" in msg
         assert "65%" in msg
-        assert "70%" in msg
-        assert "Strengthen your thesis or don't submit" in msg
+        assert "75%" in msg
+        assert "Only submit plans you strongly believe in" in msg

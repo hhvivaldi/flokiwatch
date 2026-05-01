@@ -30,7 +30,7 @@ _BASE_PLAN: dict[str, Any] = {
     "analysis": {
         "thesis": "Gold at H1 resistance; DXY strong; expect rejection",
         "key_levels": [4735.0, 4720.0, 4707.0],
-        "confidence": 72,
+        "confidence": 75,
         "regime_assumed": "TRENDING_BEARISH",
         # FLO-366 tagging — required from schema_version >= 3.
         "setup_type": "pullback_trend",

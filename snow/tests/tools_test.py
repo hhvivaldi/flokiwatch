@@ -110,7 +110,7 @@ _BASE_PLAN: dict[str, Any] = {
     "analysis": {
         "thesis": "integration test",
         "key_levels": [4735.0, 4720.0, 4707.0],
-        "confidence": 72,
+        "confidence": 75,
         "regime_assumed": "TRENDING_BEARISH",
     },
     "entry": {
@@ -512,7 +512,7 @@ class TestListActivePlans:
             analysis={
                 "thesis": "H1 pullback to 4730 resistance with bearish trend intact",
                 "key_levels": [4735.0, 4720.0, 4707.0],
-                "confidence": 72,
+                "confidence": 75,
                 "regime_assumed": "TRENDING_BEARISH",
             },
         )

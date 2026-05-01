@@ -46,7 +46,7 @@ def _plan_with_entry_conditions(conditions: list[dict]) -> dict[str, Any]:
         "analysis": {
             "thesis": "FLO-404 cross-field rule test",
             "key_levels": [4543.0, 4553.0, 4570.0],
-            "confidence": 70,
+            "confidence": 75,
             "regime_assumed": "TRENDING_BEARISH",
         },
         "entry": {
