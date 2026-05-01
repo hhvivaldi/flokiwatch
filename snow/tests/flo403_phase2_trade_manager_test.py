@@ -192,11 +192,12 @@ class TestSystemPrompt:
         """Token estimate (chars/4) must clear the design budget.
 
         Original FLO-403 directive was ≤500 tokens. FLO-418 added the
-        opposing-plan decision section (3 options + plan_id schema), a
-        legitimate scope expansion. Budget bumped to ≤800 tokens.
+        opposing-plan decision section. FLO-419 added the tactical-SL
+        ownership section (TM owns SL; Snow keeps only BE@100 safety
+        net). Budget bumped to ≤1100 tokens.
         """
         from trade_manager_prompts import SYSTEM_PROMPT
-        assert len(SYSTEM_PROMPT) < 800 * 5  # ~4000 chars, headroom over 3136
+        assert len(SYSTEM_PROMPT) < 1100 * 5
 
     def test_lists_all_decisions(self):
         from trade_manager_prompts import SYSTEM_PROMPT
@@ -207,12 +208,21 @@ class TestSystemPrompt:
         ):
             assert d in SYSTEM_PROMPT
 
-    def test_default_bias_no_op(self):
+    def test_owns_tactical_sl_management(self):
+        """FLO-419 reversed the old NO_OP-default principle. TM now
+        explicitly OWNS tactical SL management because Snow's plan
+        management is reduced to a wide BE@100p safety net only.
+        Both the ownership claim and the ADJUST_TRADE-liberally
+        directive must be present so the LLM doesn't fall back to
+        NO_OP and let SL drift through structural levels.
+        """
         from trade_manager_prompts import SYSTEM_PROMPT
-        # The directive principle must be explicit so the LLM doesn't
-        # over-fire CLOSE_TRADE on every wobble.
-        assert "DEFAULT BIAS" in SYSTEM_PROMPT
-        assert "NO_OP" in SYSTEM_PROMPT
+        assert "TACTICAL SL MANAGEMENT" in SYSTEM_PROMPT
+        assert "ADJUST_TRADE LIBERALLY" in SYSTEM_PROMPT
+        # NO_OP is still a valid decision (no signal warrants action),
+        # but it must NOT be framed as the default any more.
+        assert "NO_OP is still appropriate" in SYSTEM_PROMPT
+        assert "NOT the default" in SYSTEM_PROMPT
 
     def test_dont_preempt_snow(self):
         from trade_manager_prompts import SYSTEM_PROMPT

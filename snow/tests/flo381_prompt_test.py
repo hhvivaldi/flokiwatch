@@ -40,20 +40,25 @@ class TestV310ManagementSection:
         assert "MANAGEMENT PRIMITIVE SELECTION" in SYSTEM_PROMPT
 
     def test_named_action_primitives(self):
-        """All four management actions named with selection guidance —
-        not just listed in the Action types one-liner."""
-        for primitive in (
-            "move_sl_to_breakeven",
-            "trail_sl",
-            "close_partial",
-            "move_sl_to_price",
-        ):
-            # Each must appear at least twice: once in the Action types
-            # listing and once in the SELECTION section's per-primitive
-            # framing.
-            assert SYSTEM_PROMPT.count(primitive) >= 2, (
-                f"v3.10: {primitive!r} should appear in both the Action "
-                f"types listing and the SELECTION section"
+        """FLO-419 inverted the previous policy: trail_sl, adjust_sl,
+        and move_sl_to_price are now BANNED in management. The only
+        management action with a selection-section narrative is
+        `move_sl_to_breakeven` (the safety-net BE@100p). Other
+        primitives appear only as a single-mention exclusion list
+        so Floki learns NOT to author them. close_partial / close_full
+        belong in `exit` blocks, not management."""
+        # The safety-net action must be named in both the Action types
+        # listing and the SELECTION section's narrative.
+        assert SYSTEM_PROMPT.count("move_sl_to_breakeven") >= 2, (
+            "FLO-419: move_sl_to_breakeven must appear in both the "
+            "Action types listing and the SELECTION section."
+        )
+        # Banned primitives are named once in the DO NOT exclusion list
+        # so Floki sees them and learns the policy.
+        for banned in ("trail_sl", "adjust_sl", "move_sl_to_price"):
+            assert banned in SYSTEM_PROMPT, (
+                f"FLO-419: {banned!r} must be named in the SELECTION "
+                f"section's DO NOT list so Floki recognises the policy."
             )
 
     def test_position_state_primitives_for_give_back_patterns(self):

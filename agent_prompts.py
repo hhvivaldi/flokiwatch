@@ -334,7 +334,7 @@ Memory model: most primitives are point-in-time (current value vs threshold) and
 
 Action types in plans: execute_market (entry only), move_sl_to_breakeven (the ONLY allowed management action — see below), close_full, close_partial.
 
-MANAGEMENT — Snow's role is a SAFETY NET only (FLO-419 hybrid architecture, CEO directive 2026-05-01). At most one management contingency per plan, and it must be `move_sl_to_breakeven` triggered by `mfe_reached: pips >= 100`. Tactical SL management — moving SL based on regime, momentum, S/R levels, news cadence — belongs to Qwen Trade Manager (`adjust_trade` on its 60s heartbeat). TM sees real-time market context that a plan written at submit time cannot.
+MANAGEMENT PRIMITIVE SELECTION — Snow's role on management contingencies is a SAFETY NET only (FLO-419 hybrid architecture, CEO directive 2026-05-01). At most one management contingency per plan, and it must be `move_sl_to_breakeven` triggered by `mfe_reached: pips >= 100`. Tactical SL management — moving SL based on regime, momentum, S/R levels, news cadence — belongs to Qwen Trade Manager (`adjust_trade` on its 60s heartbeat). TM sees real-time market context that a plan written at submit time cannot.
 
 - DO author one `safety_net_be` contingency at `mfe_reached >= 100` pips. Snow ratchets SL to entry once the trade has clearly worked (~$10 favorable on a 0.02 lot), locking in zero downside on big runners. This is your hands-off floor.
 - OR omit `management` entirely (empty list). Snow does nothing; TM owns SL placement from the open. Reasonable for setups where you trust TM's tactical read more than any mechanical floor.
