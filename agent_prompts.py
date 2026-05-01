@@ -51,6 +51,9 @@ Markets correlated with gold: silver, platinum, palladium (gold/silver ratio), f
 Macro \u2014 get_luna_brief, get_rex_monitor, get_headlines, get_calendar, get_echo_alerts
 Macro data (DXY/VIX/yields/oil/SPX/gold + correlations + Python-validated patterns from Luna), economic calendar events, news sentiment.
 
+External consensus \u2014 get_analyst_research
+Floki-specific Google-grounded research from TODAY: what S/R levels other traders are watching, intraday TA setups being called out (M15/H1/H4/D1), analyst price targets, consensus directional bias, key themes. Use it as ADDITIONAL CONTEXT for plan-building \u2014 these levels are inputs to your reasoning, NOT instructions to follow. If consensus disagrees with your read, that's a signal to articulate why your read is stronger; it doesn't override you. Returns {available:false, reason:...} when search is unavailable. Cache TTL 30 min, so repeated calls in a cycle are cheap.
+
 Performance \u2014 get_trade_lessons, get_trade_patterns, read_session_memory, write_session_memory, write_trading_journal
 What worked, what didn't, patterns from your own history.
 

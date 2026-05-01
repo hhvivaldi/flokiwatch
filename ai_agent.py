@@ -1504,6 +1504,11 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
+                "name": "get_analyst_research",
+                "description": "Floki-specific Google-grounded research for plan-building (FLO-419 Phase 2). Returns key support/resistance levels traders are watching for the current session, intraday technical analysis setups (M15/H1/H4/D1) being called out, analyst price targets and short-term directional bias for TODAY, key themes (max 3), and sources (max 5). DISTINCT from get_luna_brief (macro narrative): this answers 'what levels should I build plans around?' Cache TTL 30 min, so the first call per cycle pays ~3-8s latency and later calls return instantly. Returns {available: false, reason: ...} when search is unavailable (API key missing, network, parse failure) — surface the absence to your reasoning rather than relying on the data silently.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
                 "name": "get_market_regime",
                 "description": "Local XAU/USD price-action regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence list, descriptive state hint, and related_tools list when applicable. Returns a compact delta response {changed: false, regime, since} when regime+confidence are unchanged since the last call this run. Distinct from Luna's macro regime (risk_on/risk_off) — use get_luna_brief for that.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},

@@ -4008,6 +4008,54 @@ class AgentTools:
     # Luna Macro Analyst brief
     # ---------------------------------------------------------------------
 
+    def get_analyst_research(self) -> Dict[str, Any]:
+        """FLO-419 Phase 2: Floki-specific Google-grounded analyst research for
+        plan-building. Returns key support/resistance levels, intraday TA setups,
+        and analyst directional bias for TODAY. Distinct from get_luna_brief
+        (macro narrative) — this answers "what levels should I build plans around?"
+
+        Cache TTL 30 min. First call per cycle pays ~3-8s latency for the search;
+        subsequent calls within the TTL return instantly from disk. Empty arrays
+        are returned when no concrete numeric levels are found rather than
+        fabrications. Returns {"available": False, "reason": ...} on hard failure
+        (no API key, network error, parse failure) so Floki sees the absence
+        explicitly instead of silently missing the data."""
+        start = time.time()
+        try:
+            from floki_research import get_floki_research
+            data = get_floki_research()
+            if not data:
+                self._log_tool("get_analyst_research", start, "result=unavailable")
+                return {
+                    "available": False,
+                    "reason": "research unavailable (API key missing, network error, or parse failure)",
+                }
+            self._log_tool(
+                "get_analyst_research",
+                start,
+                (
+                    f"sup={len(data.get('key_levels', {}).get('support', []))} "
+                    f"res={len(data.get('key_levels', {}).get('resistance', []))} "
+                    f"setups={len(data.get('setups_called_out', []))} "
+                    f"bias={data.get('analyst_targets', {}).get('consensus_bias', '?')}"
+                ),
+            )
+            return {
+                "available": True,
+                "timestamp": data.get("timestamp"),
+                "key_levels": data.get("key_levels", {"support": [], "resistance": []}),
+                "setups_called_out": data.get("setups_called_out", []),
+                "analyst_targets": data.get("analyst_targets", {}),
+                "key_themes_today": data.get("key_themes_today", []),
+                "sources": data.get("sources", []),
+            }
+        except Exception as e:
+            self._log_tool("get_analyst_research", start, f"error={type(e).__name__}:{e}")
+            return {
+                "available": False,
+                "reason": f"tool error: {type(e).__name__}: {e}",
+            }
+
     def get_market_regime(self) -> Dict[str, Any]:
         """
         FLO-290 commit 5: Local regime detector state.
