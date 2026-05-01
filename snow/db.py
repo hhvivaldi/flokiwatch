@@ -554,8 +554,38 @@ def update_plan_last_evaluated(plan_id: str) -> None:
 # resolves via cancel_plan / close_trade / override_opposing_block.
 
 def _read_state_cache(plan_id: str) -> dict[str, Any]:
-    """Return the parsed state_cache_json for a plan, or {} if missing
-    or unparseable. Defensive — never raises."""
+    """Return the parsed state_cache_json for a plan as a dict.
+    Defensive — never raises and never returns a non-dict.
+
+    P0 fix 2026-05-01: PLAN-20260501-046 entry crashed on
+    `get_override_opposing` because the column held a JSON LIST
+    (per-condition latches written by snow/state.py:295 for stateful
+    primitives like price_crossed_level / indicator_crossover /
+    indicator_was), and the FLO-418 reader path called `.get(...)` on
+    it. Two writers share this column with incompatible schemas:
+
+      - snow/state.py:295   writes a JSON LIST (latches per condition)
+      - snow/db.py (FLO-418) writes a JSON DICT (awaiting_decision /
+        override_opposing)
+
+    Until the canonical unification ships (separate ticket — track as
+    follow-up to FLO-418), this read returns {} whenever the parsed
+    value is anything other than a dict. The column data is left
+    untouched in the DB; snow/state.py continues to read it back
+    through its own SELECT path. FLO-418 reads see "no override / no
+    awaiting" for plans whose cache holds a list — which is the
+    correct semantic for any plan that hasn't actually had an
+    opposing-position event stamped.
+
+    Caveat: if a plan's cache holds a list AND then FLO-418 writes
+    (set_awaiting_decision / set_override_opposing) fire on it, the
+    write will overwrite the list and lose the latches — causing a
+    one-cycle false-negative on the stateful primitive. This is a
+    much rarer failure than the crash and is tracked for the
+    canonical unification follow-up. The crash itself blocked plan
+    EXECUTION entirely; the latch clobber only causes a tick-level
+    re-seed.
+    """
     conn = _connect()
     try:
         row = conn.execute(
@@ -567,9 +597,10 @@ def _read_state_cache(plan_id: str) -> dict[str, Any]:
     if not row or not row[0]:
         return {}
     try:
-        return json.loads(row[0]) or {}
+        parsed = json.loads(row[0])
     except (TypeError, ValueError):
         return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _write_state_cache(plan_id: str, cache: dict[str, Any]) -> None:
