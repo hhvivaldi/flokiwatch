@@ -1087,7 +1087,41 @@ class MT5Executor:
             )
         
         position = positions[0]
-        
+
+        # FLO-419 universal monotonic SL guard. The trail_sl-monotonic fix
+        # in snow/actions.py only covers Snow's trail action. Any other
+        # writer — Snow's adjust_sl/move_sl_to_price, Qwen's adjust_trade,
+        # Monitor's _check_trailing_stop / _check_breakeven, or a future
+        # caller — could still loosen SL. This is the single bottleneck;
+        # enforce the invariant here so it holds regardless of caller.
+        # BUY: SL can only move UP (toward price). SELL: SL can only move
+        # DOWN (toward price). First SL set (current == 0) bypasses.
+        # Loosen attempts are rejected with a WARNING, not silently clamped,
+        # so the caller's wrong intent is visible.
+        if new_sl is not None:
+            current_sl = float(position.sl or 0.0)
+            if current_sl > 0.0:
+                is_buy = position.type == mt5.POSITION_TYPE_BUY
+                loosens = (
+                    (is_buy and new_sl < current_sl) or
+                    (not is_buy and new_sl > current_sl)
+                )
+                if loosens:
+                    direction = "BUY" if is_buy else "SELL"
+                    msg = (
+                        f"SL_GUARD ticket={ticket} {direction} rejected: "
+                        f"new_sl={new_sl:.5f} would loosen current_sl={current_sl:.5f}"
+                    )
+                    log.warning(msg)
+                    return OrderResult(
+                        success=False,
+                        ticket=None,
+                        error_code=-5,
+                        error_message=msg,
+                        price=None,
+                        volume=None,
+                    )
+
         # Use current values if not specified
         sl = new_sl if new_sl is not None else position.sl
         tp = new_tp if new_tp is not None else position.tp
