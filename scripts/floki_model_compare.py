@@ -56,12 +56,53 @@ from typing import Any, Dict, List, Optional
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Load .env so OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY are present
+# Load .env so OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY are present.
+# CRITICAL: override=True. Without it, load_dotenv silently keeps any
+# existing environment variable (Windows system env, parent shell, etc.)
+# even when .env defines a different value. The project .env is the
+# source of truth for this comparison script — explicit override.
+DOTENV_PATH = ROOT / ".env"
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv(ROOT / ".env")
+    if DOTENV_PATH.exists():
+        load_dotenv(DOTENV_PATH, override=True)
 except Exception:
     pass
+
+
+def _key_tail(env_var: str) -> str:
+    """Return the last 4 chars of a key for safe logging."""
+    v = os.environ.get(env_var, "")
+    return v[-4:] if v else "<missing>"
+
+
+def _verify_keys_from_dotenv() -> None:
+    """Sanity-check: print which key (last 4 chars) is loaded for each
+    provider and confirm it matches the .env file. Helps CEO verify the
+    script isn't picking up a stale system-env key."""
+    print(f"[.env] {DOTENV_PATH}  (exists={DOTENV_PATH.exists()})")
+    if not DOTENV_PATH.exists():
+        print("  WARNING: project .env not found — falling back to system env only")
+        return
+    file_vals: Dict[str, str] = {}
+    try:
+        for line in DOTENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
+                file_vals[k] = v
+    except Exception as e:
+        print(f"  WARNING: could not parse .env: {e}")
+        return
+    for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
+        env_tail = _key_tail(k)
+        file_tail = (file_vals.get(k, "") or "")[-4:] or "<absent>"
+        match = "OK" if env_tail == file_tail and env_tail != "<missing>" else "MISMATCH"
+        print(f"  {k:20s} env=...{env_tail}  file=...{file_tail}  {match}")
 
 OUT_DIR = ROOT / "data" / "_audits" / "model_compare"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -452,6 +493,9 @@ def main():
     p.add_argument("--dry-run", action="store_true",
                    help="Build the user message and print sizes; do NOT call any model.")
     args = p.parse_args()
+
+    print("[0/4] Verifying API key sources...")
+    _verify_keys_from_dotenv()
 
     print(f"[1/4] Loading cycle (filter={args.cycle or 'LATEST'})...")
     cycle = load_cycle(args.cycle)
