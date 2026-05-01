@@ -219,69 +219,104 @@ class SnowActions:
         direction = entry.direction.value  # "BUY" or "SELL"
         comment = f"snow:{fire.plan_id}"
 
-        # FLO-417: opposing-positions safety gate.
-        # CLAUDE.md "No simultaneous BUY+SELL — FLO-85 hard gate" was
-        # only enforced on Floki's `execute_trade` agent-tool path.
-        # Snow's `execute_market` action bypassed it. On 2026-04-30
-        # PLAN-022 (BUY) and PLAN-020 (SELL) were both open
-        # simultaneously for 54 minutes — direct evidence the gate
-        # didn't cover this code path.
-        # Check MT5 for open positions on the same symbol BEFORE the
-        # PENDING → TRIGGERED transition so we don't burn the trigger
-        # window on a guaranteed-rejected action. Reject + WARN log +
-        # transition the plan to FAILED so Snow doesn't retry the same
-        # opposing entry on the next tick.
-        try:
-            existing = self._executor.get_open_positions()
-        except Exception as e:
-            log.warning(
-                f"snow.actions.opposing_positions_check_failed plan_id={fire.plan_id} "
-                f"err={type(e).__name__}: {e} — proceeding with entry "
-                f"(fail-open: better to risk a duplicate-side entry than "
-                f"deadlock the entry path on a transient MT5 hiccup)"
+        # FLO-418: opposing-positions soft-decision flow (replaces
+        # FLO-417 hard block). When Snow detects an opposing live
+        # position, the plan does NOT enter and does NOT fail —
+        # instead it stays PENDING with an `awaiting_decision` flag
+        # in state_cache_json. agent_data_builder reads the flag and
+        # injects a <snow_pending_decisions> block into Floki's next
+        # cycle, listing 3 options:
+        #   (a) cancel_plan(plan_id, reason)
+        #   (b) close_trade(opposing_ticket) — Snow auto-fires next tick
+        #   (c) override_opposing_block(plan_id, reason) — bypass gate
+        # Empirical (2026-05-01): the FLO-417 hard block on PLAN-010
+        # cost ~$2.68 of opportunity. The Floki-decision flow lets the
+        # operator choose per-instance.
+        # First check: if an active override stamp exists, bypass the
+        # opposing detection entirely (option c was already chosen).
+        override = snow_db.get_override_opposing(fire.plan_id)
+        if override:
+            log.info(
+                f"snow.actions.opposing_override_active plan_id={fire.plan_id} "
+                f"attempted_direction={direction} stamped_at={override.get('stamped_at')} "
+                f"expires_at={override.get('expires_at')} — bypassing opposing-positions gate"
             )
-            existing = []
+            # Fall through to the broker call with no awaiting check.
+        else:
+            try:
+                existing = self._executor.get_open_positions()
+            except Exception as e:
+                log.warning(
+                    f"snow.actions.opposing_positions_check_failed plan_id={fire.plan_id} "
+                    f"err={type(e).__name__}: {e} — proceeding with entry "
+                    f"(fail-open: better to risk a duplicate-side entry than "
+                    f"deadlock the entry path on a transient MT5 hiccup)"
+                )
+                existing = []
 
-        opposing = [
-            p for p in existing
-            if str(getattr(p, "direction", "")).upper() not in ("", direction)
-        ]
-        if opposing:
-            opp_summary = ", ".join(
-                f"#{getattr(p, 'ticket', '?')}({getattr(p, 'direction', '?')})"
-                for p in opposing
-            )
-            log.warning(
-                f"snow.actions.opposing_positions_blocked plan_id={fire.plan_id} "
-                f"attempted_direction={direction} opposing={opp_summary} — "
-                f"FLO-85 safety gate: refusing to open opposing position. "
-                f"Plan transitions to FAILED so Snow does not retry on next tick."
-            )
-            snow_db.record_trigger_and_transition(
-                fire.plan_id,
-                contingency_name="_entry",
-                contingency_kind="entry",
-                action_type="execute_market",
-                execution_status=STATUS_SKIPPED_GUARD,
-                new_plan_status=PlanStatus.FAILED.value,
-                action_params={
-                    "direction": direction, "volume": entry.volume,
-                    "sl": entry.initial_sl, "tp": entry.initial_tp,
-                },
-                execution_result={
-                    "success": False,
-                    "error_code": "opposing_positions",
-                    "error_message": (
-                        f"FLO-85 gate: cannot open {direction} while "
-                        f"opposing position(s) {opp_summary} are live"
+            opposing = [
+                p for p in existing
+                if str(getattr(p, "direction", "")).upper() not in ("", direction)
+            ]
+            if opposing:
+                opp_tickets = [
+                    int(getattr(p, "ticket", 0) or 0) for p in opposing
+                ]
+                opp_summary = ", ".join(
+                    f"#{getattr(p, 'ticket', '?')}({getattr(p, 'direction', '?')})"
+                    for p in opposing
+                )
+                fresh_write = snow_db.set_awaiting_decision(
+                    plan_id=fire.plan_id,
+                    opposing_tickets=opp_tickets,
+                    attempted_direction=direction,
+                    reason=(
+                        f"FLO-85 opposing: {fire.plan_id} {direction} "
+                        f"conditions all-true while {opp_summary} live"
                     ),
-                },
-                cycle_duration_ms=0,
-            )
-            return self._record_and_return(
-                fire, STATUS_SKIPPED_GUARD,
-                reason=f"opposing positions live: {opp_summary}",
-            )
+                )
+                if fresh_write:
+                    # First detection: log once + record audit row.
+                    log.info(
+                        f"snow.actions.opposing_positions_awaiting plan_id={fire.plan_id} "
+                        f"attempted_direction={direction} opposing={opp_summary} — "
+                        f"FLO-418: plan held PENDING, awaiting Floki decision "
+                        f"(cancel / close opposing / override). Plan stays alive; "
+                        f"Snow will not retry the entry until Floki resolves."
+                    )
+                    snow_db.record_trigger(
+                        plan_id=fire.plan_id,
+                        contingency_name="_entry",
+                        contingency_kind="entry",
+                        action_type="execute_market",
+                        execution_status=STATUS_SKIPPED_GUARD,
+                        action_params={
+                            "direction": direction,
+                            "volume": entry.volume,
+                            "sl": entry.initial_sl,
+                            "tp": entry.initial_tp,
+                            "awaiting_decision": True,
+                            "opposing_tickets": opp_tickets,
+                        },
+                        execution_result={
+                            "success": False,
+                            "error_code": "awaiting_floki_decision",
+                            "error_message": (
+                                f"opposing positions live: {opp_summary}; "
+                                f"plan held PENDING for Floki decision"
+                            ),
+                        },
+                    )
+                # Subsequent ticks: silent skip — same opposing set,
+                # plan already awaiting. Floki will see notification
+                # in next prompt cycle. No ActionResult logging row.
+                return ActionResult(
+                    status=STATUS_SKIPPED_GUARD,
+                    plan_id=fire.plan_id,
+                    action_type="execute_market",
+                    reason=f"awaiting Floki decision (opposing: {opp_summary})",
+                    ticket=None,
+                )
 
         # Transition PENDING -> TRIGGERED BEFORE broker call (makes the
         # transient visible; loop will skip further evals while TRIGGERED).
@@ -358,6 +393,13 @@ class SnowActions:
         # may or may not — use explicit call to be safe).
         if result.ticket is not None:
             snow_db.update_plan_trade_ticket(fire.plan_id, int(result.ticket))
+        # FLO-418: clear any awaiting / override flags on successful
+        # entry — they were transient state for the gate decision and
+        # have no meaning post-fire.
+        try:
+            snow_db.clear_awaiting_decision(fire.plan_id)
+        except Exception:
+            pass
         return ActionResult(
             status=STATUS_SUCCESS, plan_id=fire.plan_id,
             action_type="execute_market", ticket=result.ticket,

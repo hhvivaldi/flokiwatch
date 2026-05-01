@@ -5123,6 +5123,79 @@ class AgentTools:
             self._log_fail("cancel_plan", start, f"error={e}")
             return {"success": False, "reason": f"{type(e).__name__}: {e}"}
 
+    def override_opposing_block(self, plan_id: str, reason: str) -> Dict[str, Any]:
+        """FLO-418 — bypass the opposing-positions gate for a single
+        Snow plan. Allows both BUY and SELL to be open simultaneously
+        on the same symbol if Floki has explicit reason to want both
+        legs (e.g. complementary setups, hedge thesis).
+
+        Use this ONLY in response to a <snow_pending_decisions> block.
+        Default behaviour for opposing positions is the FLO-85 gate
+        (refuse to open opposing) — this tool is the explicit override
+        per CEO directive.
+
+        After override stamp: Snow's next 5s tick on the plan bypasses
+        the opposing detection and fires the entry normally. The
+        override has a 5-minute TTL — preventing a stale override
+        from re-triggering on a future opposing scenario.
+        """
+        start = time.time()
+        try:
+            from snow import db as _snow_db
+
+            if not isinstance(plan_id, str) or not plan_id.strip():
+                return {"success": False, "reason": "plan_id must be a non-empty string"}
+            if not isinstance(reason, str) or not reason.strip():
+                return {"success": False, "reason": "reason required (audit)"}
+            if len(reason) > 500:
+                return {"success": False, "reason": "reason must be <= 500 chars"}
+
+            row = _snow_db.get_plan(plan_id)
+            if row is None:
+                self._log_fail("override_opposing_block", start, f"plan_not_found={plan_id}")
+                return {"success": False, "reason": f"plan {plan_id} not found"}
+            current_status = row.get("status")
+            if current_status != "pending":
+                self._log_fail(
+                    "override_opposing_block", start,
+                    f"bad_state={current_status}",
+                )
+                return {
+                    "success": False,
+                    "reason": (
+                        f"plan {plan_id} is {current_status}; "
+                        f"override only applies to pending plans"
+                    ),
+                }
+
+            _snow_db.set_override_opposing(plan_id, ttl_seconds=300)
+            try:
+                _snow_db.record_trigger(
+                    plan_id=plan_id,
+                    contingency_name="_floki_override_opposing",
+                    contingency_kind="entry",
+                    action_type="override_opposing_block",
+                    execution_status="success",
+                    action_params={"reason": reason.strip(), "ttl_seconds": 300},
+                )
+            except Exception as audit_err:
+                log.error(f"override_opposing_block audit row failed: {audit_err}")
+
+            self._log_tool(
+                "override_opposing_block", start,
+                f"ok plan_id={plan_id} ttl=300s",
+            )
+            return {
+                "success": True,
+                "plan_id": plan_id,
+                "ttl_seconds": 300,
+                "reason": reason.strip(),
+                "note": "Snow will bypass opposing-positions gate for this plan on the next tick.",
+            }
+        except Exception as e:
+            self._log_fail("override_opposing_block", start, f"error={e}")
+            return {"success": False, "reason": f"{type(e).__name__}: {e}"}
+
     def get_plan_status(self, plan_id: str) -> Dict[str, Any]:
         """Return a summary of a Snow plan's current state.
 

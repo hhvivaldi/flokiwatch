@@ -1217,7 +1217,10 @@ class TestFLO417OpposingPositionsGate:
       6. Fail-OPEN on executor query errors
     """
 
-    def test_opposing_buy_blocks_sell_entry(self, snow_conn):
+    def test_opposing_buy_holds_sell_entry_for_floki_decision(self, snow_conn):
+        """FLO-418: opposing detection now HOLDS the plan in PENDING with
+        awaiting_decision flag, NOT a hard block. Plan stays alive so
+        Floki can decide on the next cycle (cancel / close / override)."""
         _insert_base_plan()  # SELL plan
         actions, exe, _ = _make_actions()
         exe.positions = [_PositionLike(ticket=999_111, direction="BUY")]
@@ -1226,27 +1229,69 @@ class TestFLO417OpposingPositionsGate:
 
         assert result.status == STATUS_SKIPPED_GUARD
         row = _plan_row(snow_conn, "PLAN-20260424-001")
-        assert row["status"] == PlanStatus.FAILED.value
+        # Plan stays PENDING (not FAILED) so it stays alive for Floki.
+        assert row["status"] == PlanStatus.PENDING.value
+        # No broker call.
         exec_calls = [c for c in exe.calls if c[0] == "execute_trade"]
-        assert exec_calls == [], "broker must not be called when gate blocks"
-        # At least one snow_triggers row with execution_status=skipped_guard
-        # (the execute_market path may also write a _record_and_return
-        # row — we don't assert exact count, only that the gate's audit
-        # row exists).
-        triggers = _trigger_rows(snow_conn)
-        guard_rows = [
-            t for t in triggers
-            if t["action_type"] == "execute_market"
-            and t["execution_status"] == STATUS_SKIPPED_GUARD
-        ]
-        assert len(guard_rows) >= 1, (
-            f"missing skipped_guard audit row in {triggers}"
-        )
+        assert exec_calls == [], "broker must not be called when awaiting"
+        # Awaiting flag is stamped on the plan's state_cache_json.
+        awaiting = snow_db.get_awaiting_decision("PLAN-20260424-001")
+        assert awaiting is not None, "awaiting_decision flag missing"
+        assert awaiting["attempted_direction"] == "SELL"
+        assert 999_111 in awaiting["opposing_tickets"]
 
-    def test_opposing_sell_blocks_buy_entry(self, snow_conn):
+    def test_opposing_idempotent_across_ticks(self, snow_conn):
+        """Snow ticks every 5s; Floki cycles every 5-30 min. The first
+        tick that sees opposing should log + write awaiting flag once;
+        subsequent ticks with the same opposing set must silent-skip
+        (no log spam, no DB churn)."""
+        _insert_base_plan()  # SELL plan
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(ticket=999_111, direction="BUY")]
+
+        # Tick 1 — first detection
+        actions.execute_action(_entry_fire())
+        triggers_after_1 = len(_trigger_rows(snow_conn))
+        # Tick 2 — same opposing set
+        actions.execute_action(_entry_fire())
+        # Tick 3 — same opposing set
+        actions.execute_action(_entry_fire())
+
+        triggers_after_3 = len(_trigger_rows(snow_conn))
+        # Only ONE audit row across 3 ticks (idempotent).
+        assert triggers_after_3 == triggers_after_1, (
+            f"expected 1 audit row across 3 ticks, got {triggers_after_3}"
+        )
+        # Awaiting payload's noticed_at didn't get rewritten.
+        awaiting = snow_db.get_awaiting_decision("PLAN-20260424-001")
+        assert awaiting is not None
+
+    def test_override_opposing_bypasses_gate(self, snow_conn):
+        """When Floki calls override_opposing_block, the dispatcher
+        bypasses the opposing detection on the next tick and fires
+        the entry normally."""
+        _insert_base_plan()
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(ticket=999_111, direction="BUY")]
+        exe.execute_trade_results.append(_OrderResultLike(ticket=555_111))
+
+        # Stamp the override (Floki's tool would do this).
+        snow_db.set_override_opposing("PLAN-20260424-001", ttl_seconds=300)
+
+        result = actions.execute_action(_entry_fire())
+
+        # Entry fires despite opposing — override active.
+        assert result.status == STATUS_SUCCESS
+        row = _plan_row(snow_conn, "PLAN-20260424-001")
+        assert row["status"] == PlanStatus.ACTIVE.value
+        # Awaiting flag (if any) cleared on successful fire.
+        awaiting = snow_db.get_awaiting_decision("PLAN-20260424-001")
+        assert awaiting is None
+
+    def test_opposing_sell_holds_buy_entry(self, snow_conn):
+        """Symmetric: SELL position open + BUY plan fires → awaiting."""
         from copy import deepcopy
         d = deepcopy(_BASE_PLAN_DICT)
-        # Plan ID must match ^PLAN-\d{8}-\d{3}$ — use a valid format.
         d["id"] = "PLAN-20260424-099"
         d["entry"]["direction"] = "BUY"
         d["entry"]["initial_sl"] = 4710.0
@@ -1275,7 +1320,10 @@ class TestFLO417OpposingPositionsGate:
         result = actions.execute_action(fire)
         assert result.status == STATUS_SKIPPED_GUARD
         row = _plan_row(snow_conn, "PLAN-20260424-099")
-        assert row["status"] == PlanStatus.FAILED.value
+        assert row["status"] == PlanStatus.PENDING.value
+        awaiting = snow_db.get_awaiting_decision("PLAN-20260424-099")
+        assert awaiting is not None
+        assert awaiting["attempted_direction"] == "BUY"
 
     def test_same_direction_position_does_not_block(self, snow_conn):
         """FLO-85 forbids OPPOSING; same-direction is permitted by this

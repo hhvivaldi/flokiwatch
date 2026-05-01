@@ -544,6 +544,167 @@ def update_plan_last_evaluated(plan_id: str) -> None:
 
 
 # =============================================================================
+# FLO-418 — Awaiting Floki decision (state_cache_json read/write)
+# =============================================================================
+#
+# When Snow's execute_market detects an opposing position, the plan
+# enters an "awaiting Floki decision" state instead of being rejected.
+# The awaiting payload is stored in state_cache_json under the
+# `awaiting_decision` key. Floki sees a notification next cycle and
+# resolves via cancel_plan / close_trade / override_opposing_block.
+
+def _read_state_cache(plan_id: str) -> dict[str, Any]:
+    """Return the parsed state_cache_json for a plan, or {} if missing
+    or unparseable. Defensive — never raises."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT state_cache_json FROM snow_plans WHERE id = ?",
+            (plan_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row[0]:
+        return {}
+    try:
+        return json.loads(row[0]) or {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _write_state_cache(plan_id: str, cache: dict[str, Any]) -> None:
+    """Atomically replace the plan's state_cache_json with `cache`."""
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE snow_plans SET state_cache_json = ? WHERE id = ?",
+            (json.dumps(cache), plan_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_awaiting_decision(plan_id: str) -> Optional[dict[str, Any]]:
+    """Return the awaiting-decision payload, or None.
+    Shape: {opposing_tickets, noticed_at, attempted_direction, reason}."""
+    cache = _read_state_cache(plan_id)
+    payload = cache.get("awaiting_decision")
+    return payload if isinstance(payload, dict) else None
+
+
+def set_awaiting_decision(
+    plan_id: str,
+    opposing_tickets: list,
+    attempted_direction: str,
+    reason: str,
+) -> bool:
+    """Write the awaiting-decision flag onto the plan's state_cache.
+    Idempotent for the same opposing_tickets set — does NOT update
+    noticed_at if the awaiting payload already covers the same tickets,
+    so log noise stays bounded across Snow's 5-second tick cadence.
+    Returns True if a fresh write happened (caller logs once),
+    False if the call was idempotent (caller silent-skips)."""
+    cache = _read_state_cache(plan_id)
+    existing = cache.get("awaiting_decision")
+    if isinstance(existing, dict):
+        existing_tickets = sorted(existing.get("opposing_tickets") or [])
+        if existing_tickets == sorted(opposing_tickets):
+            return False  # idempotent
+    cache["awaiting_decision"] = {
+        "opposing_tickets": list(opposing_tickets),
+        "noticed_at": utc_iso(),
+        "attempted_direction": str(attempted_direction).upper(),
+        "reason": reason,
+    }
+    _write_state_cache(plan_id, cache)
+    return True
+
+
+def clear_awaiting_decision(plan_id: str) -> None:
+    """Remove the awaiting-decision flag. Called when Floki resolves
+    (cancel/close/override) or when the plan fires successfully."""
+    cache = _read_state_cache(plan_id)
+    if "awaiting_decision" in cache:
+        cache.pop("awaiting_decision", None)
+        _write_state_cache(plan_id, cache)
+
+
+def set_override_opposing(plan_id: str, ttl_seconds: int = 300) -> None:
+    """Stamp an override that bypasses the opposing-positions gate for
+    `ttl_seconds`. TTL prevents stale overrides reactivating later.
+    Snow's dispatcher checks this flag BEFORE the opposing detection."""
+    import datetime as _dt
+    cache = _read_state_cache(plan_id)
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=int(ttl_seconds))
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cache["override_opposing"] = {
+        "stamped_at": utc_iso(),
+        "expires_at": expires_at,
+    }
+    cache.pop("awaiting_decision", None)
+    _write_state_cache(plan_id, cache)
+
+
+def get_override_opposing(plan_id: str) -> Optional[dict[str, Any]]:
+    """Return the override payload if active and not expired."""
+    import datetime as _dt
+    cache = _read_state_cache(plan_id)
+    payload = cache.get("override_opposing")
+    if not isinstance(payload, dict):
+        return None
+    exp = payload.get("expires_at")
+    if isinstance(exp, str):
+        try:
+            exp_dt = _dt.datetime.strptime(
+                exp, "%Y-%m-%dT%H:%M:%SZ",
+            ).replace(tzinfo=_dt.timezone.utc)
+            if _dt.datetime.now(_dt.timezone.utc) > exp_dt:
+                return None  # expired
+        except ValueError:
+            return None
+    return payload
+
+
+def list_plans_with_awaiting_decision() -> list[dict[str, Any]]:
+    """All PENDING plans whose state_cache carries an awaiting_decision
+    payload. Used by agent_data_builder to inject the
+    <snow_pending_decisions> block into Floki's user message."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, status, state_cache_json, plan_json "
+            "FROM snow_plans WHERE status = 'pending' "
+            "AND state_cache_json IS NOT NULL "
+            "AND state_cache_json LIKE '%awaiting_decision%'",
+        ).fetchall()
+    finally:
+        conn.close()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        try:
+            cache = json.loads(r[2]) or {}
+        except (TypeError, ValueError):
+            continue
+        payload = cache.get("awaiting_decision")
+        if not isinstance(payload, dict):
+            continue
+        try:
+            plan_dict = json.loads(r[3]) if r[3] else {}
+        except (TypeError, ValueError):
+            plan_dict = {}
+        out.append({
+            "plan_id": r[0],
+            "status": r[1],
+            "awaiting_decision": payload,
+            "plan": plan_dict,
+        })
+    return out
+
+
+# =============================================================================
 # Triggers (audit log — every contingency firing)
 # =============================================================================
 

@@ -710,6 +710,7 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     # --- Snow plan-state writes ---
     "submit_plan_to_snow",        # writes snow_plans row + plan_json
     "cancel_plan",                # mutates snow_plans.status to cancelled
+    "override_opposing_block",    # FLO-418: writes state_cache override flag
     # --- Bot-state writes ---
     "write_session_memory",       # writes data/agent_session_memory.json
     "write_trading_journal",      # writes data/trading_journal.json
@@ -1047,6 +1048,19 @@ class AIAgent:
                     user_message = _sa_block + "\n\n" + user_message
             except Exception as _sa_e:
                 logger.debug(f"slot-accounting reminder skipped (ignored): {_sa_e}")
+
+            # FLO-418: Snow pending-decisions (opposing-positions
+            # awaiting Floki's call). Prepended BEFORE boss_notes so
+            # it sits just below operator directives — high enough
+            # that Floki sees it before market data, low enough that
+            # CEO's notes still top.
+            try:
+                from snow_pending_decisions import render_block as _spd_render
+                _spd_block = _spd_render()
+                if _spd_block:
+                    user_message = _spd_block + "\n\n" + user_message
+            except Exception as _spd_e:
+                logger.debug(f"snow_pending_decisions injection skipped (ignored): {_spd_e}")
 
             # FLO-303: boss_notes (Hermano's directives — prepended last so
             # they land at the top of the user message).
@@ -1901,6 +1915,38 @@ class AIAgent:
                 },
             },
             {
+                "name": "override_opposing_block",
+                "description": (
+                    "FLO-418 — explicit override for the FLO-85 opposing-"
+                    "positions safety gate on a single Snow plan. Use ONLY "
+                    "in response to a <snow_pending_decisions> block. After "
+                    "stamping, Snow bypasses the opposing-positions check "
+                    "for this plan on the next 5s tick and fires the entry "
+                    "even though an opposing-direction position is live. "
+                    "5-minute TTL — preventing stale overrides from "
+                    "re-triggering on future scenarios. Use this when you "
+                    "want both legs simultaneously (hedge thesis, "
+                    "complementary setups). Otherwise prefer cancel_plan "
+                    "(abandon) or close_trade (close opposing then let "
+                    "Snow auto-fire). `reason` is required for audit."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "plan_id": {"type": "string", "description": "e.g. PLAN-20260501-010"},
+                        "reason": {
+                            "type": "string",
+                            "description": (
+                                "Why simultaneous opposing positions are "
+                                "intentional this time (audit, 1-500 chars)."
+                            ),
+                        },
+                    },
+                    "required": ["plan_id", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "get_plan_status",
                 "description": (
                     "Return the current DB state of a Snow plan: status, "
@@ -2301,6 +2347,10 @@ class AIAgent:
                         if n == "place_pending_order": return 1
                         if n in ("write_session_memory", "write_trading_journal", "save_lesson"): return 2
                         if n in ("set_watch_conditions", "set_wake_conditions", "set_next_check"): return 3
+                        # FLO-418: override flag must land before any submit/
+                        # close on the same plan. Priority 4 (between writes
+                        # and unknowns) ensures cancel still runs last.
+                        if n == "override_opposing_block": return 4
                         if n in ("cancel_plan", "cancel_pending_order", "forget_lesson"): return 9
                         return 5
                     _action_tcs.sort(key=_action_priority)
