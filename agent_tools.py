@@ -4091,16 +4091,23 @@ class AgentTools:
                 "QUIET": "Below-average volume and ATR. Narrow candle ranges.",
             }
 
-            # FLO-298 fix 3: high regime turnover => classifier reacting to noise;
-            # append context so Floki weights price action over regime labels.
+            # FLO-419 (CEO directive 2026-05-01): the prior FLO-298 hint
+            # ("price action and volume are more reliable than regime
+            # labels") gave Floki license to override the regime classifier
+            # with vibes — exactly what happened on PLAN-20260501-022, a
+            # SELL pullback fade authored at 75% confidence in a TRANSITIONAL
+            # regime with 38 changes/24h. The new hint constrains setup
+            # selection to what is appropriate when the regime is unstable.
             _hint = hint_map.get(_rn, "")
-            if regime_changes_24h > 15:
+            if regime_changes_24h > 20:
                 _hint = (
                     (_hint + " ") if _hint else ""
                 ) + (
                     f"High regime turnover ({regime_changes_24h} changes/24h) — "
-                    "classifier is reacting to noise; price action and volume are "
-                    "more reliable than regime labels in this environment."
+                    "prefer WAIT or range-bound setups. Do NOT author "
+                    "trend-continuation or counter-trend plans when the regime "
+                    "is unstable. If you must act, use breakout plans with "
+                    "tight invalidation levels."
                 )
 
             payload = {
