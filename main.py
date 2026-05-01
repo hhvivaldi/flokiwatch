@@ -4612,6 +4612,54 @@ class TradingBot:
                         os.replace(_vt, _vp)
                     except Exception:
                         pass
+
+                    # FLO-419 (CEO directive 2026-05-01): persist verdict to
+                    # agent_events as APPEND so historical verdicts survive.
+                    # oracle_verdict.json is overwrite-only — when we tried
+                    # to reconstruct the 06:21 verdict that informed
+                    # PLAN-20260501-014, the data was already gone (the file
+                    # had been overwritten 12+ times by the time of audit).
+                    # event_type=RM_VERDICT, author=RESEARCH_MANAGER (or
+                    # RM_UNAVAILABLE when status != OK). Both Bull and Bear
+                    # cases ride along in payload_json so we never lose
+                    # the argument text again.
+                    try:
+                        from db_writer import record_agent_event
+                        if _v:
+                            _content = (
+                                f"{_v.get('winner', '?')}/"
+                                f"{_v.get('recommendation', '?')} "
+                                f"(conv={_v.get('conviction', '?')}): "
+                                f"{(_v.get('reasoning') or '')[:200]}"
+                            )
+                            _evt = "RM_VERDICT"
+                        else:
+                            _content = "Research Manager unavailable for this cycle"
+                            _evt = "RM_UNAVAILABLE"
+                        _bull_conv = (_bull or {}).get("conviction") if isinstance(_bull, dict) else None
+                        _bear_conv = (_bear or {}).get("conviction") if isinstance(_bear, dict) else None
+                        record_agent_event(
+                            event_type=_evt,
+                            content=_content,
+                            payload={
+                                "winner": _v.get("winner") if _v else None,
+                                "recommendation": _v.get("recommendation") if _v else None,
+                                "conviction": _v.get("conviction") if _v else None,
+                                "reasoning": _v.get("reasoning") if _v else None,
+                                "entry": _v.get("entry") if _v else None,
+                                "sl": _v.get("sl") if _v else None,
+                                "target": _v.get("target") if _v else None,
+                                "trigger_buy": _v.get("trigger_buy") if _v else None,
+                                "trigger_sell": _v.get("trigger_sell") if _v else None,
+                                "bull_conviction": _bull_conv,
+                                "bear_conviction": _bear_conv,
+                                "rex_bull": _bull,
+                                "rex_bear": _bear,
+                            },
+                            author="RESEARCH_MANAGER",
+                        )
+                    except Exception:
+                        pass
              except Exception as _deb_err:
                 log.debug(f"REX_DEBATE | injection error (ignored): {_deb_err}")
 
