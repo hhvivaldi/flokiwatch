@@ -451,7 +451,10 @@ class TestDispatch:
     def test_trail_sl_buy_direction(self, snow_conn):
         _insert_base_plan(status="active", ticket=111_222)
         actions, exe, _ = _make_actions()
-        exe.positions = [_PositionLike(direction="BUY", current_price=4725.0)]
+        # BUY @ 4715, current=4725 (10 USD favorable), original SL=4710 below entry.
+        # Trail=10p tightens to 4725 - 1.0 = 4724, well above the original SL.
+        exe.positions = [_PositionLike(direction="BUY", open_price=4715.0,
+                                        sl=4710.0, current_price=4725.0)]
         fire = _contingency_fire(
             action=ActionTrailSL(trail_pips=10),
             direction=Direction.BUY,
@@ -460,6 +463,59 @@ class TestDispatch:
         assert result.status == STATUS_SUCCESS
         modify_call = next(c for c in exe.calls if c[0] == "modify_position")
         assert modify_call[2]["new_sl"] == pytest.approx(4724.0)
+
+    def test_trail_sl_sell_clamps_when_price_reverses(self, snow_conn):
+        # FLO-419: trailing SL must be monotonic. Mirrors PLAN-20260501-013:
+        # SELL @ 4593.79, SL already locked at 4593.54 from a prior MFE peak;
+        # price has reversed up to 4594.50. Naive trail = 4594.50 + 12*0.1
+        # = 4595.70, which would WIDEN the lock by 2.16 USD-units. Clamp
+        # must hold SL at 4593.54.
+        _insert_base_plan(status="active", ticket=111_222)
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(direction="SELL", open_price=4593.79,
+                                        sl=4593.54, current_price=4594.50)]
+        fire = _contingency_fire(
+            action=ActionTrailSL(trail_pips=12),
+            direction=Direction.SELL,
+        )
+        result = actions.execute_action(fire)
+        assert result.status == STATUS_SUCCESS
+        modify_call = next(c for c in exe.calls if c[0] == "modify_position")
+        assert modify_call[2]["new_sl"] == pytest.approx(4593.54)
+
+    def test_trail_sl_buy_clamps_when_price_reverses(self, snow_conn):
+        # FLO-419 BUY symmetric case. SL locked at 4728.0 (above entry,
+        # below current); price pulls back to 4728.5. Naive trail =
+        # 4728.5 - 10*0.1 = 4727.5, which would WIDEN the lock. Clamp
+        # must hold SL at 4728.0.
+        _insert_base_plan(status="active", ticket=111_222)
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(direction="BUY", open_price=4700.0,
+                                        sl=4728.0, current_price=4728.5)]
+        fire = _contingency_fire(
+            action=ActionTrailSL(trail_pips=10),
+            direction=Direction.BUY,
+        )
+        result = actions.execute_action(fire)
+        assert result.status == STATUS_SUCCESS
+        modify_call = next(c for c in exe.calls if c[0] == "modify_position")
+        assert modify_call[2]["new_sl"] == pytest.approx(4728.0)
+
+    def test_trail_sl_no_prior_sl_first_set_unclamped(self, snow_conn):
+        # FLO-419: when pos.sl is 0.0 (no prior SL), the clamp must NOT
+        # block the initial trail set. Verifies the `old_sl > 0.0` gate.
+        _insert_base_plan(status="active", ticket=111_222)
+        actions, exe, _ = _make_actions()
+        exe.positions = [_PositionLike(direction="SELL", open_price=4725.0,
+                                        sl=0.0, current_price=4720.0)]
+        fire = _contingency_fire(
+            action=ActionTrailSL(trail_pips=10),
+            direction=Direction.SELL,
+        )
+        result = actions.execute_action(fire)
+        assert result.status == STATUS_SUCCESS
+        modify_call = next(c for c in exe.calls if c[0] == "modify_position")
+        assert modify_call[2]["new_sl"] == pytest.approx(4721.0)
 
     def test_close_full_success_marks_closed(self, snow_conn):
         _insert_base_plan(status="active", ticket=111_222)

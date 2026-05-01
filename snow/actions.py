@@ -893,8 +893,21 @@ class SnowActions:
         pip = 0.1  # XAUUSD
         price = float(pos.current_price)
         if payload.plan_direction == Direction.BUY:
-            return price - float(trail_pips) * pip
-        return price + float(trail_pips) * pip
+            candidate = price - float(trail_pips) * pip
+        else:
+            candidate = price + float(trail_pips) * pip
+        # FLO-419 monotonic invariant: a trailing stop must never loosen.
+        # Without this clamp, plans with `fires=every_time` recompute
+        # SL = current_price ± trail every cycle and walk SL backward
+        # through the lock zone when price reverses (PLAN-20260501-013
+        # lost $6.16 on exactly this path: SL drifted 4593.54 → 4596.84).
+        old_sl = float(pos.sl or 0.0)
+        if old_sl > 0.0:
+            if payload.plan_direction == Direction.BUY and candidate < old_sl:
+                candidate = old_sl
+            elif payload.plan_direction == Direction.SELL and candidate > old_sl:
+                candidate = old_sl
+        return candidate
 
     def _call_with_retry(
         self, fn,
