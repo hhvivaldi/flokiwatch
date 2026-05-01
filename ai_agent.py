@@ -2152,6 +2152,16 @@ class AIAgent:
                 }
                 if not openai_tools:
                     kwargs["response_format"] = {"type": "json_object"}
+                # FLO-419 Phase 2: reasoning_effort is Gemini-only on the
+                # OpenAI-compat layer. Apply ONLY when the destination is
+                # Gemini; the qwen/kimi/openai fallback paths reject or
+                # 400 on this kwarg. Gated on config.FLOKI_REASONING_EFFORT
+                # being a non-empty string in the allowed set so an
+                # operator can disable by setting `FLOKI_REASONING_EFFORT=`.
+                if _is_gemini_target:
+                    _re = (getattr(config, "FLOKI_REASONING_EFFORT", "") or "").strip().lower()
+                    if _re in ("none", "low", "medium", "high"):
+                        kwargs["reasoning_effort"] = _re
                 return _client.chat.completions.create(**kwargs)
 
             try:

@@ -571,6 +571,19 @@ FLOKI_FALLBACK_API_KEY = os.environ.get("FLOKI_FALLBACK_API_KEY", "")
 FLOKI_FALLBACK_MODEL = os.environ.get("FLOKI_FALLBACK_MODEL", "qwen/qwen3.6-plus")
 FLOKI_CALL_INTERVAL = int(os.environ.get("FLOKI_CALL_INTERVAL", "300") or "300")
 
+# FLO-419 Phase 2 (CEO directive 2026-05-01): reasoning_effort knob for the
+# Gemini OpenAI-compat layer. Gemini 3 Pro accepts "none" / "low" / "medium" /
+# "high" via the OpenAI-compat reasoning_effort parameter; default behaviour
+# without this flag is roughly "medium" thinking budget. Empirical Floki
+# decision quality (counter-trend justification, thesis-vs-concerns weighing)
+# improves at "high" with ~2-3x output tokens (=$4-5/day extra) and
+# additional 30-90s latency — both fine for the 30-min cadence.
+#
+# Stripped automatically for non-Gemini providers (qwen / kimi / openai) at
+# the call site so flipping LLM_PROVIDER doesn't 400 on the fallback path.
+# Set to empty string to disable entirely on Gemini too.
+FLOKI_REASONING_EFFORT = os.environ.get("FLOKI_REASONING_EFFORT", "high").strip().lower()
+
 # ============================================================================
 # FLO-403 Phase 2 — TRADE MANAGER AGENT
 # ============================================================================
