@@ -580,17 +580,20 @@ def _check_management_reachability(plan: Plan) -> list[str]:
 _MGMT_BE_FLOOR_PIPS: int = 100
 
 # FLO-419 Phase 2 (CEO directive 2026-05-01) — minimum analysis.confidence for
-# any submitted plan. Empirical bucketing of 15 Gemini-era executed plans
-# through 2026-05-01:
+# any submitted plan. Empirical bucketing of 15 Gemini-era executed plans:
 #   65-69%   n=3   wins=0   net -$17.86
 #   70-74%   n=4   wins=0   net -$30.08
 #   75-79%   n=8   wins=3   net +$8.98
-# Zero wins below 75% across 15 trades. All 3 wins were at exactly 75%.
-# Floor raised from 70 to 75 — only submit plans Floki strongly believes
-# in. Combined with the prompt's 50%-ceiling rule when concerns name the
-# failure mode, this auto-rejects every concerns-named-failure plan
-# (50 < 75). Floki must either resolve the concern or not submit.
-_CONFIDENCE_FLOOR: int = 75
+#
+# Floor was set to 75 for Gemini's calibration. Lowered to 70 (CEO 2026-05-01
+# pre-Claude switch) to accommodate Claude Opus 4.6's more cautious calibration
+# — Claude tends to author at lower confidence values for the same setup
+# quality, and the Gemini-era 75% bucket data is not directly comparable. The
+# 70-74% bucket showed 0/4 wins on Gemini; we accept that risk for this
+# evaluation period and will revisit empirically after 20-30 Claude-authored
+# trades land. Combined with the prompt's 50%-ceiling rule for concerns-named-
+# failure-mode plans, the floor still auto-rejects them (50 < 70).
+_CONFIDENCE_FLOOR: int = 70
 
 
 def _check_confidence_floor(plan: Plan) -> list[str]:
