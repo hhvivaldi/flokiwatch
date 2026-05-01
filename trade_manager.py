@@ -191,6 +191,21 @@ class TradeManager:
                 f"reason={decision.get('reason', '')[:80]!r} | "
                 f"shadow={self._shadow} | executed={executed} | {latency_ms}ms"
             )
+
+            # FLO-419 follow-up: persist decision to agent_events so the
+            # Trade Room UI surfaces TM activity. Author "QWEN_TM"
+            # distinguishes TM cycles from Floki's FLOKI_DECISION rows;
+            # the existing _build_trade_room_messages reads agent_events
+            # and forwards the `author` field to the frontend without
+            # change, so this is the only wire-up needed.
+            self._persist_decision_event(
+                decision=decision,
+                ctx=ctx,
+                trigger_type=trigger_type,
+                executed=executed,
+                latency_ms=latency_ms,
+            )
+
             return {
                 "success": True,
                 **decision,
@@ -203,6 +218,60 @@ class TradeManager:
     # =========================================================================
     # Internals
     # =========================================================================
+
+    def _persist_decision_event(
+        self,
+        *,
+        decision: Dict[str, Any],
+        ctx: Dict[str, Any],
+        trigger_type: str,
+        executed: bool,
+        latency_ms: int,
+    ) -> None:
+        """Write the TM cycle's decision to agent_events so the Trade
+        Room dashboard surfaces it. Never throws — logs and swallows."""
+        try:
+            decision_type = str(decision.get("decision") or "NO_OP").upper()
+            reason = str(decision.get("reason") or "")[:200]
+
+            pos = ctx.get("position") or {}
+            ticket = pos.get("ticket")
+
+            # Human-readable summary line. The Trade Room renders
+            # `content` directly; keep it scannable.
+            ticket_tag = f"#{ticket}" if ticket else "no-position"
+            shadow_tag = " [SHADOW]" if self._shadow else ""
+            exec_tag = "" if executed or decision_type == "NO_OP" else " (not executed)"
+            content = (
+                f"{decision_type} {ticket_tag}{shadow_tag}{exec_tag}: {reason}"
+            )
+
+            payload = {
+                "decision": decision_type,
+                "reason": reason,
+                "executed": bool(executed),
+                "shadow": bool(self._shadow),
+                "latency_ms": int(latency_ms),
+                "trigger_type": trigger_type,
+                "ticket": ticket,
+                "new_sl": decision.get("new_sl"),
+                "new_tp": decision.get("new_tp"),
+                "plan_id": decision.get("plan_id"),
+                "current_sl": pos.get("sl"),
+                "current_tp": pos.get("tp"),
+                "unrealised_pips": pos.get("unrealised_pips"),
+                "unrealised_usd": pos.get("current_pnl"),
+            }
+
+            from db_writer import record_agent_event
+            record_agent_event(
+                event_type=f"TM_{decision_type}",
+                content=content,
+                payload=payload,
+                author="QWEN_TM",
+            )
+        except Exception as e:
+            log.warning(f"TM: persist_decision_event failed: {e}")
 
     def _gather_context(
         self, trigger_type: str, trigger_data: dict,

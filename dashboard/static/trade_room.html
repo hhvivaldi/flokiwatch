@@ -20,6 +20,7 @@
   --clr-simba:   #00E5FF;
   --clr-sage:    #FFB300;
   --clr-echo:    #00BCD4;
+  --clr-qwen-tm: #5EEAD4;
   --clr-luna:    #E040FB;
   --clr-oracle:  #FFD700;
 
@@ -195,6 +196,10 @@ table { border-collapse: collapse; width: 100%; }
 .avatar-sage  { background: rgba(255,179,0,0.08); border: 1.5px solid rgba(255,179,0,0.35); }
 .avatar-echo  { background: rgba(0,188,212,0.08); border: 1.5px solid rgba(0,188,212,0.35); }
 .avatar-luna  { background: rgba(224,64,251,0.08); border: 1.5px solid rgba(224,64,251,0.35); }
+.avatar-qwen-tm { background: rgba(94,234,212,0.10); border: 1.5px solid rgba(94,234,212,0.45); }
+.avatar-qwen-tm .av-placeholder { color: var(--clr-qwen-tm); font-weight: 800; letter-spacing: 0.06em; }
+.bubble-qwen-tm { border-left: 2px solid rgba(94,234,212,0.55); background: rgba(94,234,212,0.06); }
+.name-qwen-tm   { color: var(--clr-qwen-tm); font-weight: 700; letter-spacing: 0.08em; }
 .avatar-regime{ background: rgba(255,215,0,0.06); border: 1.5px solid rgba(255,215,0,0.30); }
 .avatar-oracle{ background: rgba(255,215,0,0.08); border: 1.5px solid rgba(255,215,0,0.38); }
 
@@ -3234,9 +3239,10 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             var isSage = author === 'SAGE';
             var isEcho = author === 'ECHO';
             var isLuna = author === 'LUNA';
+            var isQwenTm = author === 'QWEN_TM';
 
             // Allow known agent events to display as feed messages.
-            if (!isFloki && !isRex && !isSimba && !isSage && !isEcho && !isLuna) {
+            if (!isFloki && !isRex && !isSimba && !isSage && !isEcho && !isLuna && !isQwenTm) {
               continue;
             }
             // FLO-202: Skip Floki REX_CONSULT messages (duplicate of FLOKI_DECISION)
@@ -3294,6 +3300,11 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
                 nameCls = 'name-luna';
               }
             }
+            if (isQwenTm) {
+              sideCls = 'msg-row msg-left';
+              bubbleCls = 'msg-bubble bubble-qwen-tm';
+              nameCls = 'name-qwen-tm';
+            }
 
             var avatarClass = isRex ? 'avatar-rex' : 'avatar-floki';
             var avatarText = isRex ? 'RX' : 'FL';
@@ -3312,6 +3323,10 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
             if (isLuna) {
               avatarClass = 'avatar-luna';
               avatarText = 'L';
+            }
+            if (isQwenTm) {
+              avatarClass = 'avatar-qwen-tm';
+              avatarText = 'TM';
             }
 
             var avatarImg = null;

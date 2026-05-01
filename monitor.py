@@ -377,6 +377,49 @@ class PositionMonitor:
                 except Exception as e:
                     log.warning(f"Monitor: update_trade_open_price failed for #{pos.ticket}: {e}")
 
+                # FLO-419 follow-up: ensure a trades-table row exists for this
+                # position. Snow's open path (snow/actions.py:_dispatch_execute_market)
+                # does not call record_trade_open — only updates snow_plans —
+                # so positions opened via Snow had no row in `trades`. The
+                # downstream record_trade_close then warned "ticket not found
+                # in SQLite" and the row only appeared on the next bot restart
+                # via main.py:_reconcile_with_mt5. Result: /history dashboard
+                # missed recent trades and Sage's daily auditor returned all
+                # zeros. record_trade_open uses INSERT OR IGNORE so this is
+                # safe when a row already exists (Floki direct path or
+                # EA bridge ticket=0 path remapped above).
+                try:
+                    from db_writer import record_trade_open
+                    cmt = pos.comment or ""
+                    if cmt.startswith("snow:"):
+                        dec_source = "snow"
+                    elif (
+                        cmt.startswith("Brain-")
+                        or cmt.startswith("Bot-")
+                        or cmt.startswith("Agent-")
+                    ):
+                        dec_source = "floki_agent"
+                    else:
+                        dec_source = None
+                    record_trade_open(
+                        ticket=pos.ticket,
+                        direction=pos.direction,
+                        volume=pos.volume,
+                        open_price=pos.open_price,
+                        sl=pos.sl or 0.0,
+                        tp=pos.tp or 0.0,
+                        open_time=(
+                            pos.open_time.isoformat()
+                            if getattr(pos, "open_time", None) else None
+                        ),
+                        comment=cmt,
+                        decision_source=dec_source,
+                    )
+                except Exception as e:
+                    log.warning(
+                        f"Monitor: record_trade_open fallback failed for #{pos.ticket}: {e}"
+                    )
+
         # Check if EA bridge is handling position management
         ea_handles_trailing = False
         if getattr(config, 'USE_EA_BRIDGE', False):
