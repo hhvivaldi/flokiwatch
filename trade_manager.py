@@ -127,7 +127,12 @@ class TradeManager:
         try:
             # --- 1. Gather context (server-side, no LLM yet) ---
             ctx = self._gather_context(trigger_type, trigger_data or {})
-            if not ctx.get("position"):
+            # FLO-418: pass through to LLM if EITHER a position is open
+            # OR Snow has an awaiting opposing-decision. Pre-FLO-418 we
+            # short-circuited on no-position, but TM now also decides
+            # on opposing plans (cancel / override) which can fire
+            # AFTER a position has just closed.
+            if not ctx.get("position") and not ctx.get("awaiting_decisions"):
                 latency_ms = int((time.time() - t0) * 1000)
                 log.info(
                     f"TM_CYCLE | trigger={trigger_type} | NO_OP | "
@@ -210,7 +215,21 @@ class TradeManager:
             "plan": {},
             "market": {},
             "trigger": {"type": trigger_type, "data": trigger_data},
+            "awaiting_decisions": [],
         }
+
+        # FLO-418: gather any plans Snow is holding pending Floki/TM
+        # decision (opposing position detected). Always populated —
+        # TM may have NO open position but still need to decide on
+        # an awaiting plan.
+        try:
+            from snow.db import list_plans_with_awaiting_decision
+            ctx["awaiting_decisions"] = list_plans_with_awaiting_decision()
+        except Exception as e:
+            log.debug(
+                f"TM_GATHER | list_plans_with_awaiting_decision failed: {e}"
+            )
+            ctx["awaiting_decisions"] = []
 
         # 1. Inventory — pick first managed position. Multi-position
         # case is bounded (max 3 per CLAUDE.md); for v1 the TM cycles
@@ -223,6 +242,9 @@ class TradeManager:
             log.debug(f"TM_GATHER | get_open_positions failed: {e}")
             positions = []
         if not positions:
+            # No open position. If there ARE awaiting decisions, ctx
+            # already carries them — run_cycle will pass through to
+            # the LLM only if awaiting_decisions is non-empty.
             return ctx
 
         # Prefer the trigger's ticket if provided; otherwise first.
@@ -352,7 +374,8 @@ class TradeManager:
         d = decision["decision"]
         if d == "NO_OP" or d == "HOLD_TRADE":
             return False
-        # Both ADJUST_TRADE and CLOSE_TRADE are execute-class.
+        # CLOSE_TRADE / ADJUST_TRADE / CANCEL_PLAN / OVERRIDE_OPPOSING_BLOCK
+        # are all execute-class.
         if self._shadow:
             log.info(
                 f"TRADE_MANAGER_SHADOW | would_{d} | "
@@ -360,7 +383,40 @@ class TradeManager:
                 f"NOT executed (TRADE_MANAGER_ENABLED=False)"
             )
             return False
-        # Production path (Step 5 will wire caller_role here).
+
+        # FLO-418: opposing-decision branches don't need the open
+        # position's ticket — they target a specific awaiting plan_id.
+        if d in ("CANCEL_PLAN", "OVERRIDE_OPPOSING_BLOCK"):
+            plan_id = str(decision.get("plan_id") or "").strip()
+            if not plan_id:
+                log.warning(
+                    f"TRADE_MANAGER_EXECUTE | {d} | missing plan_id; "
+                    f"NOT executed"
+                )
+                return False
+            try:
+                if d == "CANCEL_PLAN":
+                    result = self._tools.cancel_plan(
+                        plan_id, reason=decision.get("reason", ""),
+                    )
+                else:
+                    result = self._tools.override_opposing_block(
+                        plan_id, reason=decision.get("reason", ""),
+                    )
+                ok = bool(isinstance(result, dict) and result.get("success"))
+                log.info(
+                    f"TRADE_MANAGER_EXECUTE | {d} | plan_id={plan_id} | "
+                    f"success={ok} | result={result}"
+                )
+                return ok
+            except Exception as e:
+                log.error(
+                    f"TRADE_MANAGER_EXECUTE | {d} | plan_id={plan_id} | "
+                    f"raised {type(e).__name__}: {e}"
+                )
+                return False
+
+        # CLOSE_TRADE / ADJUST_TRADE need an open position ticket.
         ticket = int((ctx.get("position") or {}).get("ticket") or 0)
         if not ticket:
             return False

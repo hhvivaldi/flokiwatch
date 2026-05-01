@@ -414,5 +414,47 @@ class TradeManagerTools:
             result["tm_reason"] = str(reason or "")[:200]
         return result
 
+    # =========================================================================
+    # FLO-418 Phase 1 — Opposing-positions decision tools
+    # =========================================================================
+    #
+    # When Snow detects an opposing-direction position while a plan's
+    # entry conditions are all-true, the plan stays PENDING with an
+    # awaiting_decision flag (FLO-418). TM sees the plan in its
+    # context and chooses one of three actions:
+    #   (a) cancel_plan        — abandon the awaiting branch
+    #   (b) close_trade        — close the opposing position; Snow
+    #                            auto-fires the awaiting plan on next tick
+    #   (c) override_opposing_block — allow both legs simultaneously
+    #
+    # Both new tools delegate to existing AgentTools impls — TM
+    # composes Floki's tool surface; audit trail and state-write
+    # logic lives in one place.
+
+    def cancel_plan(self, plan_id: str, reason: str) -> Dict[str, Any]:
+        """Cancel a PENDING Snow plan. Choose (a) on an awaiting
+        opposing-decision — abandon the new opposing branch and
+        stick with the existing position. `reason` required."""
+        result = self._floki_tools.cancel_plan(
+            str(plan_id), str(reason or ""),
+        )
+        if isinstance(result, dict):
+            result["tm_caller"] = "trade_manager"
+        return result
+
+    def override_opposing_block(
+        self, plan_id: str, reason: str,
+    ) -> Dict[str, Any]:
+        """FLO-418 — bypass the opposing-positions gate for one Snow
+        plan. Choose (c) on an awaiting opposing-decision — allow
+        both legs simultaneously (hedge thesis). 5-min TTL on the
+        override stamp. `reason` required."""
+        result = self._floki_tools.override_opposing_block(
+            str(plan_id), str(reason or ""),
+        )
+        if isinstance(result, dict):
+            result["tm_caller"] = "trade_manager"
+        return result
+
 
 __all__ = ["TradeManagerTools"]

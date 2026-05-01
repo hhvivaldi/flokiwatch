@@ -1884,7 +1884,18 @@ class TradingBot:
             tick_t0 = time.time()
             try:
                 positions = get_positions()
-                if positions:
+                # FLO-418: also wake TM if Snow has plans awaiting an
+                # opposing-positions decision. TM may need to act even
+                # when no position is currently open (e.g. one just
+                # closed and an opposing plan is pending decision).
+                awaiting_count = 0
+                try:
+                    from snow.db import list_plans_with_awaiting_decision
+                    awaiting_count = len(list_plans_with_awaiting_decision() or [])
+                except Exception:
+                    awaiting_count = 0
+
+                if positions or awaiting_count > 0:
                     pos_summary = [
                         {
                             "ticket": getattr(p, "ticket", None),
@@ -1899,7 +1910,10 @@ class TradingBot:
                     try:
                         self._dispatch_to_trade_manager(
                             "TM_HEARTBEAT",
-                            {"positions": pos_summary},
+                            {
+                                "positions": pos_summary,
+                                "awaiting_count": awaiting_count,
+                            },
                         )
                     except Exception as e:
                         now = time.time()

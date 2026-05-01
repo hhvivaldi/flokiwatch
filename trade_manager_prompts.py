@@ -21,22 +21,29 @@ from typing import Any, Optional
 
 SYSTEM_PROMPT = """\
 You are the Trade Manager for FlokiWatch's XAU/USD trading bot. You
-supervise OPEN positions only — you never author plans, never open
-positions, and never call any tool not in your roster.
+supervise OPEN positions and OPPOSING-PLAN DECISIONS — you never
+author plans, never open positions, and never call any tool not in
+your roster.
 
 DECISION SPACE (return ONE strict JSON):
-  HOLD_TRADE   — actively decided to wait; thesis intact
-  ADJUST_TRADE — change SL/TP; requires {new_sl, new_tp}
-  CLOSE_TRADE  — thesis broken or critical news
-  NO_OP        — nothing requires LLM judgment; let Snow + monitor.py
-                 handle it deterministically
+  HOLD_TRADE              — actively decided to wait; thesis intact
+  ADJUST_TRADE            — change SL/TP; requires {new_sl, new_tp}
+  CLOSE_TRADE             — thesis broken or critical news
+  CANCEL_PLAN             — cancel an awaiting opposing plan;
+                            requires {plan_id, reason}
+  OVERRIDE_OPPOSING_BLOCK — allow opposing plan to fire alongside
+                            existing position; requires {plan_id, reason}
+  NO_OP                   — nothing requires LLM judgment; let Snow +
+                            monitor.py handle it deterministically
 
 OUTPUT (JSON, no prose, no markdown fences):
 {
-  "decision": "HOLD_TRADE" | "ADJUST_TRADE" | "CLOSE_TRADE" | "NO_OP",
+  "decision": "HOLD_TRADE" | "ADJUST_TRADE" | "CLOSE_TRADE" |
+              "CANCEL_PLAN" | "OVERRIDE_OPPOSING_BLOCK" | "NO_OP",
   "reason": "<<=80 chars>",
   "new_sl": <float, only for ADJUST_TRADE>,
-  "new_tp": <float, only for ADJUST_TRADE>
+  "new_tp": <float, only for ADJUST_TRADE>,
+  "plan_id": "<str, only for CANCEL_PLAN | OVERRIDE_OPPOSING_BLOCK>"
 }
 
 DEFAULT BIAS — NO_OP. Snow's plan exit/management contingencies
@@ -46,16 +53,40 @@ You exist for the LLM-judgment edge cases those rules miss — usually
 that's CLOSE_TRADE on an unanticipated regime flip or an Echo CRITICAL
 news event the plan didn't pre-encode.
 
-DON'T preempt Snow. If the position has a Snow `exit` contingency
-that will fire on the same condition you're seeing, return NO_OP and
-let Snow take it. Closing redundantly creates audit-trail noise.
+OPPOSING-PLAN DECISIONS (FLO-418). When the context contains an
+`awaiting_decisions` list, an opposing-direction Snow plan has
+conditions all-true while your existing position is open. Snow is
+HOLDING that plan in PENDING until you decide. Three resolutions:
+
+  1. CLOSE_TRADE the existing position
+     → use when the awaiting plan's thesis is now stronger than the
+       existing position's thesis (regime flipped, opposing setup
+       confirmed). Snow auto-fires the awaiting plan on the next 5s
+       tick after the close.
+
+  2. CANCEL_PLAN the awaiting plan
+     → use when your existing position's thesis is still valid and
+       the opposing plan was a what-if branch that no longer applies.
+       `plan_id` is the AWAITING plan (not the open position's plan).
+
+  3. OVERRIDE_OPPOSING_BLOCK
+     → use when both legs are deliberately wanted (hedge thesis,
+       complementary setups). Both positions run simultaneously
+       (net-zero exposure, double spread). Use sparingly — this is
+       the rare case.
+
+DON'T preempt Snow on routine management. If the position has a Snow
+`exit` contingency that will fire on the same condition you're
+seeing, return NO_OP and let Snow take it. Closing redundantly
+creates audit-trail noise.
 
 DON'T author. You receive a 1-line plan thesis as context; do not
 critique it, do not propose a new plan. If the thesis is broken,
 CLOSE_TRADE with the reason; the next Floki cycle (30-min schedule)
 will re-author.
 
-If the position list is empty: return NO_OP immediately.
+If the position list is empty AND awaiting_decisions is empty:
+return NO_OP immediately.
 """
 
 
@@ -93,6 +124,31 @@ def build_user_prompt(context: dict) -> str:
 
     contingencies = plan.get("contingencies_remaining") or []
 
+    # FLO-418: render <awaiting_decisions> block when Snow has plans
+    # holding for an opposing-position decision.
+    awaiting = context.get("awaiting_decisions") or []
+    awaiting_block = ""
+    if awaiting:
+        lines = ["<awaiting_decisions>"]
+        for a in awaiting:
+            ad = a.get("awaiting_decision") or {}
+            ap = a.get("plan") or {}
+            entry_blk = ap.get("entry") or {}
+            opp_tickets = ad.get("opposing_tickets") or []
+            opp_str = ",".join(f"#{t}" for t in opp_tickets) if opp_tickets else "n/a"
+            lines.append(
+                f"  - plan_id: {_fmt(a.get('plan_id'))}, "
+                f"direction: {_fmt(ad.get('attempted_direction'))}, "
+                f"thesis: {_fmt((ap.get('analysis') or {}).get('thesis'))}, "
+                f"entry: {_fmt(entry_blk.get('entry_price'))}, "
+                f"sl: {_fmt(entry_blk.get('initial_sl'))}, "
+                f"tp: {_fmt(entry_blk.get('initial_tp'))}, "
+                f"opposing_tickets: {opp_str}, "
+                f"noticed_at: {_fmt(ad.get('noticed_at'))}"
+            )
+        lines.append("</awaiting_decisions>")
+        awaiting_block = "\n".join(lines) + "\n\n"
+
     return (
         "<position>\n"
         f"ticket: {_fmt(pos.get('ticket'))}\n"
@@ -113,7 +169,8 @@ def build_user_prompt(context: dict) -> str:
         f"thesis: {_fmt(plan.get('thesis'))}\n"
         f"contingencies_remaining: {json.dumps(contingencies)}\n"
         "</plan>\n\n"
-        "<market>\n"
+        + awaiting_block
+        + "<market>\n"
         f"current_price: {_fmt(market.get('current_price'))}\n"
         f"regime_changed: {_fmt(market.get('regime_changed'))}\n"
         f"M5_RSI: {_fmt(m5.get('RSI'))}\n"
@@ -142,6 +199,8 @@ def build_user_prompt(context: dict) -> str:
 
 _VALID_DECISIONS = frozenset({
     "HOLD_TRADE", "ADJUST_TRADE", "CLOSE_TRADE", "NO_OP",
+    # FLO-418 — opposing-positions decisions
+    "CANCEL_PLAN", "OVERRIDE_OPPOSING_BLOCK",
 })
 
 
@@ -195,6 +254,14 @@ def parse_decision_json(raw: str) -> Optional[dict]:
             return None
         out["new_sl"] = float(new_sl)
         out["new_tp"] = float(new_tp)
+    if decision in ("CANCEL_PLAN", "OVERRIDE_OPPOSING_BLOCK"):
+        # FLO-418: both decisions act on a specific awaiting plan.
+        # plan_id is required; reject the decision if missing or
+        # malformed (caller maps None → NO_OP, safer default).
+        plan_id = parsed.get("plan_id")
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return None
+        out["plan_id"] = plan_id.strip()
     return out
 
 

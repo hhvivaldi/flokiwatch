@@ -188,15 +188,23 @@ class TestDecisionParser:
 
 
 class TestSystemPrompt:
-    def test_under_500_token_budget(self):
-        """Token estimate (chars/4) must clear the 500-token directive."""
-        from trade_manager_prompts import SYSTEM_PROMPT
-        # rough char/token ratio; design budget is ≤500 tokens
-        assert len(SYSTEM_PROMPT) < 500 * 5  # comfortable headroom
+    def test_under_token_budget(self):
+        """Token estimate (chars/4) must clear the design budget.
 
-    def test_lists_all_four_decisions(self):
+        Original FLO-403 directive was ≤500 tokens. FLO-418 added the
+        opposing-plan decision section (3 options + plan_id schema), a
+        legitimate scope expansion. Budget bumped to ≤800 tokens.
+        """
         from trade_manager_prompts import SYSTEM_PROMPT
-        for d in ("HOLD_TRADE", "ADJUST_TRADE", "CLOSE_TRADE", "NO_OP"):
+        assert len(SYSTEM_PROMPT) < 800 * 5  # ~4000 chars, headroom over 3136
+
+    def test_lists_all_decisions(self):
+        from trade_manager_prompts import SYSTEM_PROMPT
+        # FLO-418: 4 routine + 2 opposing-decision
+        for d in (
+            "HOLD_TRADE", "ADJUST_TRADE", "CLOSE_TRADE", "NO_OP",
+            "CANCEL_PLAN", "OVERRIDE_OPPOSING_BLOCK",
+        ):
             assert d in SYSTEM_PROMPT
 
     def test_default_bias_no_op(self):
@@ -832,3 +840,197 @@ class TestConfigDefaults:
         import config as _cfg
         _cfg = importlib.reload(_cfg)
         assert _cfg.TRADE_MANAGER_HEARTBEAT_SECONDS == 60
+
+
+# =============================================================================
+# FLO-418 — Opposing-decision parser + prompt + dispatch
+# =============================================================================
+
+class TestFLO418DecisionParser:
+    """Parser must accept the two new decisions when plan_id is present
+    and reject them when plan_id is missing/malformed."""
+
+    def test_accepts_cancel_plan_with_plan_id(self):
+        from trade_manager_prompts import parse_decision_json
+        out = parse_decision_json(
+            '{"decision":"CANCEL_PLAN","reason":"opposing thesis weak",'
+            '"plan_id":"PLAN-20260501-010"}'
+        )
+        assert out is not None
+        assert out["decision"] == "CANCEL_PLAN"
+        assert out["plan_id"] == "PLAN-20260501-010"
+        assert out["reason"] == "opposing thesis weak"
+
+    def test_accepts_override_opposing_block_with_plan_id(self):
+        from trade_manager_prompts import parse_decision_json
+        out = parse_decision_json(
+            '{"decision":"OVERRIDE_OPPOSING_BLOCK","reason":"hedge thesis",'
+            '"plan_id":"PLAN-20260501-010"}'
+        )
+        assert out is not None
+        assert out["decision"] == "OVERRIDE_OPPOSING_BLOCK"
+        assert out["plan_id"] == "PLAN-20260501-010"
+
+    def test_rejects_cancel_plan_without_plan_id(self):
+        from trade_manager_prompts import parse_decision_json
+        out = parse_decision_json(
+            '{"decision":"CANCEL_PLAN","reason":"r"}'
+        )
+        assert out is None  # caller maps None → NO_OP
+
+    def test_rejects_override_with_empty_plan_id(self):
+        from trade_manager_prompts import parse_decision_json
+        out = parse_decision_json(
+            '{"decision":"OVERRIDE_OPPOSING_BLOCK","reason":"r","plan_id":""}'
+        )
+        assert out is None
+
+
+class TestFLO418ContextInjection:
+    """User-prompt builder includes <awaiting_decisions> block when
+    Snow has plans pending decision."""
+
+    def test_awaiting_decisions_renders_when_present(self):
+        from trade_manager_prompts import build_user_prompt
+        ctx = {
+            "position": {"ticket": 555, "direction": "BUY"},
+            "plan": {},
+            "market": {},
+            "trigger": {"type": "TM_HEARTBEAT", "data": {}},
+            "awaiting_decisions": [{
+                "plan_id": "PLAN-20260501-010",
+                "awaiting_decision": {
+                    "attempted_direction": "SELL",
+                    "opposing_tickets": [1623236154],
+                    "noticed_at": "2026-05-01T05:56:53Z",
+                    "reason": "FLO-85 opposing",
+                },
+                "plan": {
+                    "analysis": {"thesis": "breakdown reversal"},
+                    "entry": {
+                        "entry_price": 4602.0,
+                        "initial_sl": 4615.0,
+                        "initial_tp": 4581.0,
+                    },
+                },
+            }],
+        }
+        msg = build_user_prompt(ctx)
+        assert "<awaiting_decisions>" in msg
+        assert "PLAN-20260501-010" in msg
+        assert "SELL" in msg
+        assert "1623236154" in msg
+        assert "breakdown reversal" in msg
+
+    def test_no_awaiting_block_when_empty(self):
+        from trade_manager_prompts import build_user_prompt
+        ctx = {
+            "position": {"ticket": 555, "direction": "BUY"},
+            "plan": {},
+            "market": {},
+            "trigger": {"type": "TM_HEARTBEAT", "data": {}},
+            "awaiting_decisions": [],
+        }
+        msg = build_user_prompt(ctx)
+        assert "<awaiting_decisions>" not in msg
+
+
+class TestFLO418SystemPrompt:
+    """SYSTEM_PROMPT must guide TM through the 3 options."""
+
+    def test_three_options_documented(self):
+        from trade_manager_prompts import SYSTEM_PROMPT
+        # Each option referenced by name + decision keyword
+        assert "CLOSE_TRADE" in SYSTEM_PROMPT
+        assert "CANCEL_PLAN" in SYSTEM_PROMPT
+        assert "OVERRIDE_OPPOSING_BLOCK" in SYSTEM_PROMPT
+        # Behavioural guidance hints
+        assert "OPPOSING-PLAN DECISIONS" in SYSTEM_PROMPT or "FLO-418" in SYSTEM_PROMPT
+
+
+class TestFLO418ToolsSurface:
+    """TradeManagerTools exposes the two new methods that delegate to
+    the existing AgentTools impls."""
+
+    def test_cancel_plan_method_exists(self):
+        from trade_manager_tools import TradeManagerTools
+        assert hasattr(TradeManagerTools, "cancel_plan")
+        assert callable(TradeManagerTools.cancel_plan)
+
+    def test_override_opposing_block_method_exists(self):
+        from trade_manager_tools import TradeManagerTools
+        assert hasattr(TradeManagerTools, "override_opposing_block")
+        assert callable(TradeManagerTools.override_opposing_block)
+
+
+class TestFLO418Dispatch:
+    """_dispatch must route the two new decisions correctly:
+    no broker call, no ticket needed, plan_id is the target."""
+
+    def test_cancel_plan_dispatches_without_ticket(self):
+        """CANCEL_PLAN doesn't touch the open position — it cancels
+        a different (awaiting) plan. Should work even when no
+        open-position ticket is in ctx."""
+        from trade_manager import TradeManager
+
+        class _StubTools:
+            calls = []
+            def cancel_plan(self, plan_id, reason):
+                _StubTools.calls.append(("cancel_plan", plan_id, reason))
+                return {"success": True, "plan_id": plan_id}
+
+        tm = TradeManager.__new__(TradeManager)
+        tm._tools = _StubTools()
+        tm._shadow = False
+        decision = {
+            "decision": "CANCEL_PLAN",
+            "reason": "thesis still valid",
+            "plan_id": "PLAN-20260501-010",
+        }
+        # ctx with NO position — must still execute
+        ctx = {"position": None, "awaiting_decisions": []}
+        ok = tm._dispatch(decision, ctx)
+        assert ok is True
+        assert _StubTools.calls == [
+            ("cancel_plan", "PLAN-20260501-010", "thesis still valid"),
+        ]
+
+    def test_override_opposing_block_dispatches_without_ticket(self):
+        from trade_manager import TradeManager
+
+        class _StubTools:
+            calls = []
+            def override_opposing_block(self, plan_id, reason):
+                _StubTools.calls.append(("override", plan_id, reason))
+                return {"success": True, "plan_id": plan_id}
+
+        tm = TradeManager.__new__(TradeManager)
+        tm._tools = _StubTools()
+        tm._shadow = False
+        decision = {
+            "decision": "OVERRIDE_OPPOSING_BLOCK",
+            "reason": "hedge thesis",
+            "plan_id": "PLAN-X",
+        }
+        ctx = {"position": None}
+        ok = tm._dispatch(decision, ctx)
+        assert ok is True
+        assert _StubTools.calls == [("override", "PLAN-X", "hedge thesis")]
+
+    def test_cancel_plan_missing_plan_id_skips(self):
+        from trade_manager import TradeManager
+
+        class _StubTools:
+            calls = []
+            def cancel_plan(self, plan_id, reason):
+                _StubTools.calls.append("cancel")
+                return {"success": True}
+
+        tm = TradeManager.__new__(TradeManager)
+        tm._tools = _StubTools()
+        tm._shadow = False
+        # Decision missing plan_id — should NOT dispatch
+        decision = {"decision": "CANCEL_PLAN", "reason": "r"}
+        ok = tm._dispatch(decision, {"position": None})
+        assert ok is False
+        assert _StubTools.calls == []
