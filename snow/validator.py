@@ -620,49 +620,54 @@ def _check_confidence_floor(plan: Plan) -> list[str]:
 
 
 def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
-    """FLO-419 hybrid architecture (CEO directive 2026-05-01):
-    Snow's role on management contingencies is a SAFETY NET only.
-    Tactical SL management belongs to Qwen Trade Manager via
-    adjust_trade on the 60s heartbeat — TM sees regime, momentum,
-    S/R levels, news cadence; Snow's mechanical contingencies do not.
+    """FLO-419 Phase 3 / Escola 2 (CEO directive 2026-05-01, evening):
+    Claude authors full SL management (BE trigger + trail distance)
+    in each plan. Snow executes mechanically. Qwen Trade Manager is
+    DISABLED for active SL management (regime-driven closes burned
+    a +125p MFE trade for +11p — PLAN-042 evidence).
+
+    Escola 2 patterns Claude is taught to use:
+      - Option A: BE when MFE reaches 60% of TP distance
+      - Option B: BE when MFE reaches 1R (= SL distance)
+      - After BE: trail SL at fixed distance (typ. 100-150p) behind price
+      - Claude picks the rule that fits each setup's geometry
 
     Permitted management contents:
-      (a) empty (plan opts out of Snow safety net), OR
-      (b) exactly one move_sl_to_breakeven contingency with
-          mfe_reached.pips >= _MGMT_BE_FLOOR_PIPS (= 100)
+      (a) empty (plan opts out of all Snow management), OR
+      (b) up to TWO contingencies, each one of:
+          - move_sl_to_breakeven with mfe_reached.pips > 0
+          - trail_sl with mfe_reached.pips > 0 and trail_pips > 0
+            (schema enforces trail_pips > 0)
 
     Rejected:
-      - trail_sl actions (TM owns trailing now)
-      - adjust_sl / move_sl_to_price actions (TM owns tactical SL)
-      - move_sl_to_breakeven below 100 pips (= tactical, not safety)
-      - move_sl_to_breakeven without an mfe_reached condition
-        (signal class must be MFE so the floor is comparable)
-      - more than one management contingency
+      - adjust_sl / move_sl_to_price (still raw tactical — Claude
+        should express SL intent through BE+trail, not bare price moves)
+      - move_sl_to_breakeven / trail_sl without an mfe_reached condition
+      - move_sl_to_breakeven / trail_sl with mfe_reached.pips <= 0
+      - more than two management contingencies
 
-    SUPERSEDES FLO-416, which had REQUIRED a trail_sl when BE was
-    set. The Gemini-era audit showed that trail_sl with fires=
-    every_time + null guards walked SL backward through the lock
-    zone (PLAN-20260501-013 lost $6.16 on exactly this path; see
-    commits a9a8f4a and 7a1a1c9). The hybrid architecture removes
-    trail_sl from Snow entirely and shifts tactical management to
-    TM's adjust_trade so the SL placement can condition on context.
+    Monotonic SL guard at executor.modify_position (FLO-419, commits
+    a9a8f4a + 7a1a1c9) prevents trail_sl from walking SL backward —
+    the failure mode that motivated banning trail_sl in the previous
+    iteration of this function. Re-enabled on top of that guard.
 
-    Reference: data/_audits/gemini_era_trade_audit_2026-05-01.md.
+    Reference: data/_audits/gemini_era_trade_audit_2026-05-01.md
+    (PLAN-042 evidence motivates the TM-disable + Escola-2 pivot).
     """
     if not plan.management:
         return []
 
     errors: list[str] = []
+    _MAX = 2
+    _ALLOWED = {"move_sl_to_breakeven", "trail_sl"}
 
-    if len(plan.management) > 1:
+    if len(plan.management) > _MAX:
         names = ", ".join(f"{m.name!r}" for m in plan.management)
         errors.append(
-            f"management: hybrid architecture (FLO-419) allows at most "
-            f"ONE safety-net contingency per plan. Got "
-            f"{len(plan.management)}: {names}. Tactical SL management "
-            f"belongs to Qwen Trade Manager (adjust_trade); Snow "
-            f"handles only the safety floor at mfe_reached >= "
-            f"{int(_MGMT_BE_FLOOR_PIPS)} pips."
+            f"management: Escola 2 architecture (FLO-419 Phase 3) "
+            f"allows at most {_MAX} contingencies per plan. Got "
+            f"{len(plan.management)}: {names}. Typical pattern is one "
+            f"`move_sl_to_breakeven` + one `trail_sl`."
         )
 
     for mi, mgmt in enumerate(plan.management):
@@ -671,22 +676,17 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
         except Exception:
             action_type = ""
 
-        if action_type != "move_sl_to_breakeven":
+        if action_type not in _ALLOWED:
             errors.append(
                 f"management[{mi}] ({mgmt.name!r}): action.type="
-                f"{action_type!r} not allowed under FLO-419 hybrid "
-                f"architecture. The only permitted management action "
-                f"is `move_sl_to_breakeven` (safety net at mfe_reached "
-                f">= {int(_MGMT_BE_FLOOR_PIPS)}). Tactical actions "
-                f"(trail_sl, adjust_sl, move_sl_to_price) are now Qwen "
-                f"Trade Manager's responsibility via adjust_trade on "
-                f"the 60s heartbeat — TM sees regime, momentum, and "
-                f"S/R context that Snow's mechanical contingencies do "
-                f"not."
+                f"{action_type!r} not allowed under Escola 2. Permitted "
+                f"actions are `move_sl_to_breakeven` and `trail_sl`. "
+                f"Express SL intent through BE+trail, not raw "
+                f"adjust_sl/move_sl_to_price."
             )
             continue
 
-        # action is move_sl_to_breakeven — require mfe_reached >= floor
+        # BE and trail both require an mfe_reached trigger > 0.
         mfe_pips: Optional[float] = None
         for c in mgmt.conditions:
             if getattr(c, "type", None) == "mfe_reached":
@@ -696,21 +696,15 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
 
         if mfe_pips is None:
             errors.append(
-                f"management[{mi}] ({mgmt.name!r}): "
-                f"move_sl_to_breakeven safety-net must trigger on "
-                f"`mfe_reached`. Got conditions with no mfe_reached. "
-                f"Replace conditions with `mfe_reached: pips >= "
-                f"{int(_MGMT_BE_FLOOR_PIPS)}` so the safety floor is "
-                f"comparable across plans."
+                f"management[{mi}] ({mgmt.name!r}): {action_type} must "
+                f"trigger on `mfe_reached`. Got conditions with no "
+                f"mfe_reached. Add `mfe_reached: pips >= N` (Escola 2: "
+                f"60% of TP distance, or 1R)."
             )
-        elif mfe_pips < _MGMT_BE_FLOOR_PIPS:
+        elif mfe_pips <= 0:
             errors.append(
-                f"management[{mi}] ({mgmt.name!r}): "
-                f"move_sl_to_breakeven triggers at mfe_reached"
-                f"({mfe_pips:.0f}) but the FLO-419 safety-net floor "
-                f"is {int(_MGMT_BE_FLOOR_PIPS)} pips. Anything below "
-                f"{int(_MGMT_BE_FLOOR_PIPS)} is tactical management — "
-                f"raise the threshold or move the BE move to Qwen TM."
+                f"management[{mi}] ({mgmt.name!r}): {action_type} "
+                f"trigger mfe_reached.pips must be > 0 (got {mfe_pips})."
             )
 
     return errors

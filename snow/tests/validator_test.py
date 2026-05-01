@@ -1185,26 +1185,33 @@ class TestManagementHybridConstraints:
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok, errors
 
-    # --- Rejection: trail_sl banned -----------------------------------------
+    # --- Acceptance: trail_sl re-enabled (FLO-419 Phase 3 / Escola 2) -------
 
-    def test_trail_sl_alone_rejected(self, valid_plan_dict):
-        valid_plan_dict["management"] = [self._trail(15.0)]
+    def test_trail_sl_alone_accepted(self, valid_plan_dict):
+        # Escola 2 permits trail_sl without prior BE. Monotonic SL guard
+        # at executor level prevents the backward-walk failure mode that
+        # motivated banning trail in the prior iteration.
+        valid_plan_dict["management"] = [self._trail(120.0)]
         ok, _, errors = validate_plan(valid_plan_dict)
-        assert not ok
-        assert any("trail_sl" in e for e in errors), errors
+        assert ok, errors
 
-    def test_trail_sl_alongside_be_rejected(self, valid_plan_dict):
-        # Even with a valid BE@100, the trail_sl makes management invalid.
-        # Multiple-management rule fires before the per-action rule.
-        valid_plan_dict["management"] = [self._be_at(100.0), self._trail(120.0)]
+    def test_be_plus_trail_accepted(self, valid_plan_dict):
+        # Canonical Escola 2 shape: BE at MFE = 1R, trail after BE.
+        valid_plan_dict["management"] = [
+            self._be_at(200.0, name="be_at_1R"),
+            self._trail(220.0, name="trail_120p"),
+        ]
         ok, _, errors = validate_plan(valid_plan_dict)
-        assert not ok
-        # Either the count-rule or the action-type-rule must fire.
-        assert any(
-            "at most ONE" in e or "trail_sl" in e for e in errors
-        ), errors
+        assert ok, errors
 
-    # --- Rejection: adjust_sl / move_sl_to_price banned ---------------------
+    def test_be_below_old_floor_accepted(self, valid_plan_dict):
+        # Old floor was 100p. Escola 2 has no fixed floor — Option A
+        # (60% of TP) on a small TP can be well under 100p and is fine.
+        valid_plan_dict["management"] = [self._be_at(30.0)]
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    # --- Rejection: adjust_sl / move_sl_to_price still banned ---------------
 
     def test_adjust_sl_in_management_rejected(self, valid_plan_dict):
         valid_plan_dict["management"] = [self._adjust_sl()]
@@ -1214,20 +1221,13 @@ class TestManagementHybridConstraints:
             "adjust_sl" in e or "not allowed" in e for e in errors
         ), errors
 
-    # --- Rejection: BE below floor ------------------------------------------
+    # --- Rejection: BE/trail trigger pips must be > 0 -----------------------
 
-    def test_be_at_15_pips_rejected(self, valid_plan_dict):
-        # The PLAN-20260430-020 shape — was the highest-cost forfeit.
-        valid_plan_dict["management"] = [self._be_at(15.0)]
+    def test_be_at_zero_pips_rejected(self, valid_plan_dict):
+        valid_plan_dict["management"] = [self._be_at(0.0)]
         ok, _, errors = validate_plan(valid_plan_dict)
         assert not ok
-        assert any("100" in e and "floor" in e for e in errors), errors
-
-    def test_be_at_99_pips_rejected(self, valid_plan_dict):
-        valid_plan_dict["management"] = [self._be_at(99.0)]
-        ok, _, errors = validate_plan(valid_plan_dict)
-        assert not ok
-        assert any("99" in e for e in errors), errors
+        assert any("> 0" in e or "pips" in e for e in errors), errors
 
     # --- Rejection: BE without mfe_reached condition ------------------------
 
@@ -1243,16 +1243,17 @@ class TestManagementHybridConstraints:
         assert not ok
         assert any("mfe_reached" in e for e in errors), errors
 
-    # --- Rejection: more than one management contingency --------------------
+    # --- Rejection: more than two management contingencies -----------------
 
-    def test_two_be_contingencies_rejected(self, valid_plan_dict):
+    def test_three_contingencies_rejected(self, valid_plan_dict):
         valid_plan_dict["management"] = [
             self._be_at(100.0, name="be1"),
             self._be_at(150.0, name="be2"),
+            self._trail(180.0, name="trail1"),
         ]
         ok, _, errors = validate_plan(valid_plan_dict)
         assert not ok
-        assert any("at most ONE" in e for e in errors), errors
+        assert any("at most 2" in e or "Escola 2" in e for e in errors), errors
 
 
 # =============================================================================

@@ -1326,21 +1326,31 @@ class TradingBot:
 
             # FLO-415: TM_HEARTBEAT emitter — wakes the Qwen Trade
             # Manager every TRADE_MANAGER_HEARTBEAT_SECONDS (default 60s)
-            # whenever there's an open position. Without this thread,
-            # TM had no path to wake mid-trade — empirical evidence
-            # 2026-04-30 #1622387680 ran 30 min unmanaged for $20 of
-            # paper profit lost to a BE retrace.
-            try:
-                self._tm_heartbeat_thread = threading.Thread(
-                    target=self._trade_manager_heartbeat_loop,
-                    name="TMHeartbeat", daemon=True,
+            # whenever there's an open position.
+            #
+            # FLO-419 Phase 3 / Escola 2 (CEO 2026-05-01 evening): TM
+            # is OFF by default. Active SL management belongs to Claude's
+            # plan (BE+trail contingencies validated by Snow), executed
+            # mechanically by Snow on triggers. TM closed a +125p MFE
+            # trade for +11p on regime noise (PLAN-042); not acceptable.
+            # Set TRADE_MANAGER_ENABLED=True to re-spawn this thread.
+            if bool(getattr(config, "TRADE_MANAGER_ENABLED", False)):
+                try:
+                    self._tm_heartbeat_thread = threading.Thread(
+                        target=self._trade_manager_heartbeat_loop,
+                        name="TMHeartbeat", daemon=True,
+                    )
+                    self._tm_heartbeat_thread.start()
+                    _tm_cadence = int(getattr(config, "TRADE_MANAGER_HEARTBEAT_SECONDS", 60))
+                    log.info(f"TM_HEARTBEAT spawned (cadence={_tm_cadence}s)")
+                except Exception as e:
+                    log.error(f"tm_heartbeat.spawn_failed: {e}")
+                    log.error(traceback.format_exc())
+            else:
+                log.info(
+                    "TM_HEARTBEAT disabled (TRADE_MANAGER_ENABLED=False) "
+                    "— Escola 2 architecture, Snow executes Claude-authored BE+trail"
                 )
-                self._tm_heartbeat_thread.start()
-                _tm_cadence = int(getattr(config, "TRADE_MANAGER_HEARTBEAT_SECONDS", 60))
-                log.info(f"TM_HEARTBEAT spawned (cadence={_tm_cadence}s)")
-            except Exception as e:
-                log.error(f"tm_heartbeat.spawn_failed: {e}")
-                log.error(traceback.format_exc())
 
         write_state(self)
 
