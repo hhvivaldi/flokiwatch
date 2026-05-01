@@ -577,141 +577,105 @@ def _check_management_reachability(plan: Plan) -> list[str]:
     return errors
 
 
-def _check_be_requires_trail(plan: Plan) -> list[str]:
-    """FLO-416 (CEO directive 2026-04-30, two-trade pattern): a plan
-    with a `move_sl_to_breakeven` management contingency MUST also
-    have a `trail_sl` contingency at a STRICTLY HIGHER `mfe_reached`
-    threshold. Otherwise the plan locks in zero and gives back all
-    profit on retrace.
+_MGMT_BE_FLOOR_PIPS: int = 100
 
-    Empirical:
-      PLAN-20260430-009: move_sl_to_be@mfe(30), no trail. Peak +29
-                         pips → BE hit → P&L $0.00.
-      PLAN-20260430-020: lock_be@mfe(15), no trail. Peak +101.7 pips
-                         (~$20) → BE hit → P&L -$0.10.
 
-    Both Floki-authored, both same shape, both lost paper profit.
+def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
+    """FLO-419 hybrid architecture (CEO directive 2026-05-01):
+    Snow's role on management contingencies is a SAFETY NET only.
+    Tactical SL management belongs to Qwen Trade Manager via
+    adjust_trade on the 60s heartbeat — TM sees regime, momentum,
+    S/R levels, news cadence; Snow's mechanical contingencies do not.
 
-    Acceptance rules:
-      * No move_sl_to_breakeven at all → accepted (no risk of footgun)
-      * BE + trail with trail's mfe_reached > BE's max mfe_reached →
-        accepted
-      * BE + trail with trail triggered by something OTHER than
-        mfe_reached (e.g. profit_pips, profit_retraced_from_peak) →
-        accepted; operator picked an alternative ratchet signal,
-        assume intentional. Validator only enforces the
-        "trail-must-exist" half; signal class is operator's choice.
+    Permitted management contents:
+      (a) empty (plan opts out of Snow safety net), OR
+      (b) exactly one move_sl_to_breakeven contingency with
+          mfe_reached.pips >= _MGMT_BE_FLOOR_PIPS (= 100)
 
-    Rejection cases:
-      * BE present, no trail of any kind → reject
-      * BE present, trail present but trail's mfe_reached <= BE's max
-        mfe_reached → reject (trail at same/lower MFE is shadowed by
-        the BE move and adds no protection on the upside)
+    Rejected:
+      - trail_sl actions (TM owns trailing now)
+      - adjust_sl / move_sl_to_price actions (TM owns tactical SL)
+      - move_sl_to_breakeven below 100 pips (= tactical, not safety)
+      - move_sl_to_breakeven without an mfe_reached condition
+        (signal class must be MFE so the floor is comparable)
+      - more than one management contingency
 
-    Multi-BE plans: a plan may legitimately have multiple BE actions
-    at staggered MFE levels (e.g. +15 then +30). The trail must fire
-    at MFE strictly higher than the LARGEST BE threshold to add value.
+    SUPERSEDES FLO-416, which had REQUIRED a trail_sl when BE was
+    set. The Gemini-era audit showed that trail_sl with fires=
+    every_time + null guards walked SL backward through the lock
+    zone (PLAN-20260501-013 lost $6.16 on exactly this path; see
+    commits a9a8f4a and 7a1a1c9). The hybrid architecture removes
+    trail_sl from Snow entirely and shifts tactical management to
+    TM's adjust_trade so the SL placement can condition on context.
+
+    Reference: data/_audits/gemini_era_trade_audit_2026-05-01.md.
     """
     if not plan.management:
         return []
 
-    def _action_type(mgmt) -> str:
-        try:
-            return str(getattr(mgmt.action, "type", "") or "")
-        except Exception:
-            return ""
+    errors: list[str] = []
 
-    def _max_mfe_threshold(mgmt) -> Optional[float]:
-        """Return the largest mfe_reached.pips threshold across the
-        contingency's conditions. None if no mfe_reached condition
-        present (the contingency uses a different trigger signal)."""
-        max_pips: Optional[float] = None
+    if len(plan.management) > 1:
+        names = ", ".join(f"{m.name!r}" for m in plan.management)
+        errors.append(
+            f"management: hybrid architecture (FLO-419) allows at most "
+            f"ONE safety-net contingency per plan. Got "
+            f"{len(plan.management)}: {names}. Tactical SL management "
+            f"belongs to Qwen Trade Manager (adjust_trade); Snow "
+            f"handles only the safety floor at mfe_reached >= "
+            f"{int(_MGMT_BE_FLOOR_PIPS)} pips."
+        )
+
+    for mi, mgmt in enumerate(plan.management):
+        try:
+            action_type = str(getattr(mgmt.action, "type", "") or "")
+        except Exception:
+            action_type = ""
+
+        if action_type != "move_sl_to_breakeven":
+            errors.append(
+                f"management[{mi}] ({mgmt.name!r}): action.type="
+                f"{action_type!r} not allowed under FLO-419 hybrid "
+                f"architecture. The only permitted management action "
+                f"is `move_sl_to_breakeven` (safety net at mfe_reached "
+                f">= {int(_MGMT_BE_FLOOR_PIPS)}). Tactical actions "
+                f"(trail_sl, adjust_sl, move_sl_to_price) are now Qwen "
+                f"Trade Manager's responsibility via adjust_trade on "
+                f"the 60s heartbeat — TM sees regime, momentum, and "
+                f"S/R context that Snow's mechanical contingencies do "
+                f"not."
+            )
+            continue
+
+        # action is move_sl_to_breakeven — require mfe_reached >= floor
+        mfe_pips: Optional[float] = None
         for c in mgmt.conditions:
             if getattr(c, "type", None) == "mfe_reached":
-                pips = float(getattr(c, "pips", 0) or 0)
-                if max_pips is None or pips > max_pips:
-                    max_pips = pips
-        return max_pips
+                p = float(getattr(c, "pips", 0) or 0)
+                if mfe_pips is None or p > mfe_pips:
+                    mfe_pips = p
 
-    be_contingencies = [
-        m for m in plan.management
-        if _action_type(m) == "move_sl_to_breakeven"
-    ]
-    trail_contingencies = [
-        m for m in plan.management
-        if _action_type(m) == "trail_sl"
-    ]
+        if mfe_pips is None:
+            errors.append(
+                f"management[{mi}] ({mgmt.name!r}): "
+                f"move_sl_to_breakeven safety-net must trigger on "
+                f"`mfe_reached`. Got conditions with no mfe_reached. "
+                f"Replace conditions with `mfe_reached: pips >= "
+                f"{int(_MGMT_BE_FLOOR_PIPS)}` so the safety floor is "
+                f"comparable across plans."
+            )
+        elif mfe_pips < _MGMT_BE_FLOOR_PIPS:
+            errors.append(
+                f"management[{mi}] ({mgmt.name!r}): "
+                f"move_sl_to_breakeven triggers at mfe_reached"
+                f"({mfe_pips:.0f}) but the FLO-419 safety-net floor "
+                f"is {int(_MGMT_BE_FLOOR_PIPS)} pips. Anything below "
+                f"{int(_MGMT_BE_FLOOR_PIPS)} is tactical management — "
+                f"raise the threshold or move the BE move to Qwen TM."
+            )
 
-    if not be_contingencies:
-        return []  # no BE → no risk of this footgun
+    return errors
 
-    # Compute the largest BE-trigger MFE threshold across all BE
-    # contingencies. A trail must fire above THIS to add value.
-    be_max_pips: Optional[float] = None
-    be_names_at_max: list[str] = []
-    for be in be_contingencies:
-        be_pips = _max_mfe_threshold(be)
-        if be_pips is None:
-            # BE contingency triggered by something other than
-            # mfe_reached. Skip — we can't compare thresholds across
-            # signal classes.
-            continue
-        if be_max_pips is None or be_pips > be_max_pips:
-            be_max_pips = be_pips
-            be_names_at_max = [be.name]
-        elif be_pips == be_max_pips:
-            be_names_at_max.append(be.name)
-
-    if be_max_pips is None:
-        # All BE contingencies use non-mfe triggers — can't compare
-        # apples to oranges. Operator knows what they're doing.
-        return []
-
-    if not trail_contingencies:
-        be_names_str = ", ".join(f"{n!r}" for n in be_names_at_max)
-        return [(
-            f"management: move_sl_to_breakeven contingency(s) "
-            f"{be_names_str} fire at mfe_reached({be_max_pips:.0f}) "
-            f"but no trail_sl contingency exists. BE alone gives back "
-            f"all profit if price retraces — the SL never advances "
-            f"past breakeven. Add a trail_sl contingency with "
-            f"mfe_reached > {be_max_pips:.0f} to ratchet SL up as "
-            f"price advances. Empirical: PLAN-20260430-020 made +101 "
-            f"pips MFE with this exact shape, then closed at BE "
-            f"-$0.10 because no trail followed."
-        )]
-
-    # Trail(s) exist — verify at least one fires at MFE strictly
-    # above the BE's max. If a trail uses a non-mfe trigger
-    # (profit_pips / profit_retraced_from_peak / etc.) it counts as
-    # acceptable: the operator chose a different ratchet signal.
-    has_qualifying_trail = False
-    for trail in trail_contingencies:
-        trail_pips = _max_mfe_threshold(trail)
-        if trail_pips is None:
-            # Non-mfe trigger — acceptable per signal-class rule.
-            has_qualifying_trail = True
-            break
-        if trail_pips > be_max_pips:
-            has_qualifying_trail = True
-            break
-
-    if not has_qualifying_trail:
-        be_names_str = ", ".join(f"{n!r}" for n in be_names_at_max)
-        trail_summary = ", ".join(
-            f"{t.name!r} @ mfe({_max_mfe_threshold(t):.0f})"
-            for t in trail_contingencies
-            if _max_mfe_threshold(t) is not None
-        )
-        return [(
-            f"management: trail_sl contingency exists ({trail_summary}) "
-            f"but fires at MFE <= move_sl_to_breakeven threshold "
-            f"({be_max_pips:.0f}). Trail at same-or-lower MFE is "
-            f"shadowed by the BE move and adds no protection on the "
-            f"upside. Set the trail's mfe_reached strictly greater "
-            f"than {be_max_pips:.0f} (BE contingency: {be_names_str})."
-        )]
-    return []
 
 
 def _check_ema_relation_period_consistency(plan: Plan) -> list[str]:
@@ -923,7 +887,7 @@ def validate_plan(
     errors += _check_management_threshold_floor(plan)
     errors += _check_min_entry_conditions(plan)
     errors += _check_management_reachability(plan)
-    errors += _check_be_requires_trail(plan)
+    errors += _check_management_hybrid_constraints(plan)
 
     if errors:
         return False, plan, errors

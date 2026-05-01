@@ -57,23 +57,17 @@ def _wrap_plan(conditions: list, schema_version: int = 1) -> dict:
             "volume": 0.02,
             "conditions": conditions,
             "initial_sl": 4500.0,
-            "initial_tp": 4520.0,
+            "initial_tp": 4540.0,  # 300p TP envelope so BE@100 leaves room
             "entry_price": 4510.0,
         },
         "management": [{
-            "name": "be",
+            # FLO-419 hybrid: single safety-net BE at MFE >= 100.
+            # Tactical management lives in Qwen TM, not Snow plans.
+            "name": "safety_net_be",
             "priority": 7,
-            "conditions": [{"type": "mfe_reached", "pips": 20.0}],
+            "conditions": [{"type": "mfe_reached", "pips": 100.0}],
             "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0},
             "fires": "once",
-        }, {
-            # FLO-416 mandatory pairing — every BE contingency must
-            # have a trail companion at strictly higher MFE.
-            "name": "trail_after_be",
-            "priority": 5,
-            "conditions": [{"type": "mfe_reached", "pips": 40.0}],
-            "action": {"type": "trail_sl", "trail_pips": 20.0},
-            "fires": "every_time",
         }],
         "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
         "emergency": {

@@ -53,11 +53,14 @@ _BASE_PLAN: dict[str, Any] = {
         "initial_tp": 4710.0,
     },
     "management": [
+        # FLO-419 hybrid architecture: management is Snow's safety-net
+        # only — at most one move_sl_to_breakeven contingency at
+        # mfe_reached >= 100 pips. Tactical SL belongs to Qwen TM.
         {
-            "name": "lock_10_at_support",
+            "name": "safety_net_be",
             "priority": 7,
-            "conditions": [{"type": "price_below", "level": 4720.0}],
-            "action": {"type": "move_sl_to_price", "price": 4727.0},
+            "conditions": [{"type": "mfe_reached", "pips": 100.0}],
+            "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0},
             "fires": "once",
             "guards": {"only_if_tighter_sl": True, "cooldown_seconds": 60},
         }
