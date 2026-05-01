@@ -2362,13 +2362,24 @@ class AIAgent:
                     total_input_tokens += _last_prompt_tokens
                     total_output_tokens += usage.completion_tokens or 0
                     last_model = resp.model or self.model
-                    # FLO-96: Log context caching metrics if available
+                    # FLO-96 / FLO-419 Phase 2: log context caching metrics.
+                    # The Anthropic adapter (floki_anthropic_adapter.anthropic_to_oai_response)
+                    # surfaces both cache_read (under prompt_tokens_details.cached_tokens
+                    # for OpenAI-shape parity) AND cache_creation (top-level on usage).
+                    # Logging both makes "is caching actually working?" answerable from
+                    # logs alone — non-zero cache_creation on cold turns + non-zero
+                    # cache_read on warm turns is the empirical signature.
                     try:
                         _ptd = getattr(usage, "prompt_tokens_details", None)
-                        if _ptd:
-                            _cached = getattr(_ptd, "cached_tokens", 0) or 0
-                            if _cached > 0:
-                                logger.info(f"FLOKI_CACHE | iter={iteration} cached={_cached}/{_last_prompt_tokens} ({_cached/_last_prompt_tokens*100:.0f}%)")
+                        _cached = (getattr(_ptd, "cached_tokens", 0) or 0) if _ptd else 0
+                        _created = getattr(usage, "cache_creation_input_tokens", 0) or 0
+                        if _cached > 0 or _created > 0:
+                            _ratio = (_cached / _last_prompt_tokens * 100) if _last_prompt_tokens else 0
+                            logger.info(
+                                f"FLOKI_CACHE | iter={iteration} read={_cached} "
+                                f"create={_created} total={_last_prompt_tokens} "
+                                f"read_ratio={_ratio:.0f}%"
+                            )
                     except Exception:
                         pass
             except Exception:

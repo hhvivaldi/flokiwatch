@@ -428,8 +428,15 @@ def call_anthropic_with_oai_kwargs(
     create_kwargs["temperature"] = float(temperature)
     if timeout is not None:
         create_kwargs["timeout"] = timeout
-    # Beta header for 1h cache TTL
-    create_kwargs["extra_headers"] = {"anthropic-beta": "extended-cache-ttl-2025-04-11"}
+    # Beta headers — both flags to unblock any dashboard detector that
+    # keys on the older prompt-caching opt-in. Base caching has been GA
+    # for a while and works without the header, but the Anthropic
+    # console's "you're not using prompt caching" indicator was firing
+    # post-restart even though cache_read_input_tokens > 0 in the
+    # responses. Belt + suspenders: include both betas.
+    create_kwargs["extra_headers"] = {
+        "anthropic-beta": "prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11",
+    }
 
     resp = client.messages.create(**create_kwargs)
     return anthropic_to_oai_response(resp)
