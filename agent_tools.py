@@ -4091,23 +4091,27 @@ class AgentTools:
                 "QUIET": "Below-average volume and ATR. Narrow candle ranges.",
             }
 
-            # FLO-419 (CEO directive 2026-05-01): the prior FLO-298 hint
-            # ("price action and volume are more reliable than regime
-            # labels") gave Floki license to override the regime classifier
-            # with vibes — exactly what happened on PLAN-20260501-022, a
-            # SELL pullback fade authored at 75% confidence in a TRANSITIONAL
-            # regime with 38 changes/24h. The new hint constrains setup
-            # selection to what is appropriate when the regime is unstable.
+            # FLO-419 (CEO directive 2026-05-01, softened revision): the
+            # prior FLO-298 hint ("price action and volume are more
+            # reliable than regime labels") gave Floki license to override
+            # the classifier with vibes — exactly what happened on
+            # PLAN-20260501-022. A first revision blocked trend and
+            # counter-trend plans entirely in high-turnover conditions,
+            # but volatile regimes are when CEO most wants coverage.
+            # Goal: QUALITY plans not FEWER plans. The hint guides
+            # confidence + risk sizing for the uncertainty rather than
+            # restricting setup choice.
             _hint = hint_map.get(_rn, "")
             if regime_changes_24h > 20:
                 _hint = (
                     (_hint + " ") if _hint else ""
                 ) + (
                     f"High regime turnover ({regime_changes_24h} changes/24h) — "
-                    "prefer WAIT or range-bound setups. Do NOT author "
-                    "trend-continuation or counter-trend plans when the regime "
-                    "is unstable. If you must act, use breakout plans with "
-                    "tight invalidation levels."
+                    "regime labels are unreliable. Prioritize breakout and "
+                    "range setups with clear invalidation levels. If authoring "
+                    "trend-continuation or counter-trend plans, use lower "
+                    "confidence (cap 60%) and tighter stop losses — the "
+                    "regime may flip during the plan's lifetime."
                 )
 
             payload = {
