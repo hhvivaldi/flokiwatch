@@ -5415,15 +5415,14 @@ class TradingBot:
                     self._consecutive_no_timer = 0
 
                 if post_next_check_mtime == pre_next_check_mtime:
-                    # FLO-403 Phase 1 fallback fix — Floki forgot to call
-                    # set_next_check. Apply the SAME floor as
-                    # AgentTools.set_next_check: 30-min default; 10-min
-                    # only when no plan AND no position (fresh-authoring
-                    # window). The pre-existing progressive backoff
-                    # (5→10→15…→60) and the position-mode 3-min fallback
-                    # both pre-dated FLO-403 and silently re-introduced
-                    # the 5-min cycle cost Phase 1 removes when Floki
-                    # forgets the timer. Same conservative-on-error
+                    # FLO-403 Phase 1 fallback fix / FLO-419 Phase 2 —
+                    # Floki forgot to call set_next_check. Apply the SAME
+                    # floor as AgentTools.set_next_check: 60-min default
+                    # (raised from 30, FLO-419 2026-05-01); 10-min only
+                    # when no plan AND no position (fresh-authoring
+                    # window). Also apply the same H1 snap (cycles >= 30
+                    # min land at next XX:01 UTC) and the same 21:00-22:00
+                    # UTC break dodge. Same conservative-on-error
                     # direction as the canonical set_next_check path.
                     _cnt = getattr(self, "_consecutive_no_timer", 0) + 1
                     self._consecutive_no_timer = _cnt
@@ -5436,13 +5435,29 @@ class TradingBot:
                     except Exception:
                         _no_plan = False  # conservative — assume plan exists
                     _no_position = not has_open_position
-                    fallback_minutes = 10 if (_no_plan and _no_position) else 30
+                    fallback_minutes = 10 if (_no_plan and _no_position) else 60
                     now_utc = datetime.utcnow()
                     next_at = now_utc + timedelta(minutes=fallback_minutes)
+                    _h1_synced = False
+                    if fallback_minutes >= 30:
+                        _snapped = next_at.replace(minute=1, second=0, microsecond=0)
+                        if _snapped < next_at:
+                            _snapped = _snapped + timedelta(hours=1)
+                        if _snapped != next_at:
+                            next_at = _snapped
+                            _h1_synced = True
+                    _break_dodged = False
+                    if next_at.hour == 21:
+                        next_at = next_at.replace(hour=22, minute=1, second=0, microsecond=0)
+                        _break_dodged = True
                     payload = {
                         "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
                         "requested_minutes": fallback_minutes,
                     }
+                    if _h1_synced:
+                        payload["h1_synced"] = True
+                    if _break_dodged:
+                        payload["break_dodged"] = True
 
                     try:
                         os.makedirs(os.path.dirname(next_path), exist_ok=True)
@@ -5452,37 +5467,23 @@ class TradingBot:
                         os.replace(tmp_path, next_path)
                         _mode_label = (
                             "fresh-authoring (10m floor)" if (fallback_minutes == 10)
-                            else "30m floor (plan or position)"
+                            else "60m floor (plan or position)"
                         )
                         log.info(
                             f"FLOKI_SCHEDULE | Agent did not call set_next_check — defaulting to {fallback_minutes} minutes ({_mode_label})"
                         )
                     except Exception as e:
                         log.debug(f"FLOKI_SCHEDULE | default schedule write failed (ignored): {e}")
-                elif has_open_position:
-                    try:
-                        with open(next_path, "r", encoding="utf-8") as f:
-                            payload = json.load(f)
-                        if isinstance(payload, dict):
-                            requested_minutes = payload.get("requested_minutes")
-                            capped_minutes = get_scheduled_minutes(requested_minutes, True)
-                            if requested_minutes is None or int(capped_minutes) != int(requested_minutes):
-                                now_utc = datetime.utcnow()
-                                next_at = now_utc + timedelta(minutes=capped_minutes)
-                                capped_payload = {
-                                    "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
-                                    "requested_minutes": capped_minutes,
-                                }
-                                os.makedirs(os.path.dirname(next_path), exist_ok=True)
-                                tmp_path = next_path + ".tmp"
-                                with open(tmp_path, "w", encoding="utf-8") as f:
-                                    json.dump(capped_payload, f, ensure_ascii=False, indent=2)
-                                os.replace(tmp_path, next_path)
-                                log.info(
-                                    f"FLOKI_SCHEDULE | Open position cap applied — next check set to {capped_minutes} minutes"
-                                )
-                    except Exception as e:
-                        log.debug(f"FLOKI_SCHEDULE | schedule cap write failed (ignored): {e}")
+                # FLO-419 Phase 2 (2026-05-01): position-mode re-cap removed.
+                # The previous branch read the just-written next_check file
+                # and re-applied get_scheduled_minutes(...) with
+                # FLOKI_MAX_CHECK_WITH_POSITION (= 2 min in config), which
+                # silently overrode the 60-min H1-synced floor that
+                # agent_tools.set_next_check just wrote when a position was
+                # open. Position-mode tactical management belongs to the
+                # Qwen Trade Manager (60s heartbeat); Floki's cadence is
+                # decided by set_next_check and the canonical fallback
+                # above. No re-cap here.
             except Exception:
                 pass
 
