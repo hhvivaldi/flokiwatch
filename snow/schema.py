@@ -633,9 +633,17 @@ class PlanAnalysis(BaseModel):
     confidence_reason: Optional[str] = Field(
         default=None,
         min_length=20,
-        max_length=150,
+        max_length=500,
         description="Free-text rationale supporting the confidence score "
-                    "(20-150 chars). Required for schema_version >= 3.",
+                    "(20-500 chars). Required for schema_version >= 3. "
+                    "FLO-419 Phase 2: cap raised from 150 to 500 chars on "
+                    "2026-05-01 — the PLAN-AUTHORING DISCIPLINE prompt now "
+                    "mandates four explicit checks (thesis-vs-concerns, "
+                    "counter-trend justification, management exception, "
+                    "RM acknowledgment). 150 chars was too tight; Claude "
+                    "got rejected and dropped the RM acknowledgment to "
+                    "fit on his first production cycle. 500 chars fits "
+                    "all four checks comfortably.",
     )
 
 

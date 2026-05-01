@@ -208,14 +208,21 @@ class TestConfidenceReasonLength:
         a = self._analysis("a" * 20)
         assert len(a.confidence_reason) == 20
 
-    def test_150_chars_accepted(self):
+    def test_500_chars_accepted(self):
+        # FLO-419 Phase 2 (CEO 2026-05-01): cap raised 150 -> 500 to fit
+        # the PLAN-AUTHORING DISCIPLINE four-check format Claude needs.
+        a = self._analysis("a" * 500)
+        assert len(a.confidence_reason) == 500
+
+    def test_501_chars_rejected(self):
+        with pytest.raises(ValidationError) as ei:
+            self._analysis("a" * 501)
+        assert "confidence_reason" in str(ei.value)
+
+    def test_150_chars_still_accepted(self):
+        # Backward-compat: previously-valid 150-char reasons still pass.
         a = self._analysis("a" * 150)
         assert len(a.confidence_reason) == 150
-
-    def test_151_chars_rejected(self):
-        with pytest.raises(ValidationError) as ei:
-            self._analysis("a" * 151)
-        assert "confidence_reason" in str(ei.value)
 
 
 # ---------------------------------------------------------------------------
