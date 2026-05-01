@@ -1170,8 +1170,25 @@ class TestManagementHybridConstraints:
 
     # --- Acceptance cases ---------------------------------------------------
 
-    def test_empty_management_accepted(self, valid_plan_dict):
+    def test_empty_management_rejected_when_tp_wide(self, valid_plan_dict):
+        # FLO-419 Phase 3.5 (CEO 2026-05-01): empty management rejected
+        # when TP-from-entry >= 100 pips. The base fixture has a wide TP,
+        # so empty management must be rejected.
         valid_plan_dict["management"] = []
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("empty management" in e for e in errors), errors
+
+    def test_empty_management_accepted_when_tp_tight(self, valid_plan_dict):
+        # Carve-out: TP-from-entry < 100 pips → empty management OK.
+        # Set entry_price 9 USD inside TP (= 90 pips for XAUUSD).
+        valid_plan_dict["management"] = []
+        sl = float(valid_plan_dict["entry"]["initial_sl"])
+        tp = float(valid_plan_dict["entry"]["initial_tp"])
+        if valid_plan_dict["entry"]["direction"] == "BUY":
+            valid_plan_dict["entry"]["entry_price"] = tp - 9.0
+        else:
+            valid_plan_dict["entry"]["entry_price"] = tp + 9.0
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok, errors
 

@@ -352,7 +352,7 @@ Permitted action types in `management`: `move_sl_to_breakeven` and `trail_sl` on
 
 Authoring guidance:
 - Name the rule you used in `confidence_reason`: e.g. "Escola 2 Option A: BE@MFE 258p (60% of 430p TP); trail 120p after BE." This is your audit trail.
-- Picking neither rule is allowed only when TP-distance-from-entry is small enough that BE+trail adds no value (typical < 50 pips). Document the carve-out in `confidence_reason`.
+- Empty `management` is REJECTED by the validator unless TP-distance-from-entry < 100 pips (the only carve-out: scalps too tight for any meaningful BE). For every other plan you author you MUST include at least one BE or trail contingency. Opting out of management on a wide-TP plan is the PLAN-036/037 pattern that this rule exists to prevent — if your geometry doesn't fit BE+trail, either widen TP or shrink SL until it does. Document the carve-out in `confidence_reason` if you ever rely on it.
 - Set both contingencies' `fires` to "once" for BE and "every_time" for trail. trail_sl with fires=once would only nudge SL once and freeze it — you want it to track price.
 - Pick `trail_pips` deliberately. 100p is loose enough to survive normal pullbacks on H1 swings; 150p suits volatile sessions; tighter than 80p risks getting walked off on noise.
 

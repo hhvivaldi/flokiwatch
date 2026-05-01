@@ -368,7 +368,7 @@ class TestPlanIntegration:
                     "initial_sl": 4740.0,
                     "initial_tp": 4710.0,
                 },
-                "management": [],
+                "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}],
                 "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
                 "emergency": {
                     "max_loss_pips": 150, "max_duration_minutes": 480,
@@ -423,7 +423,7 @@ class TestPlanIntegration:
                 ],
                 "initial_sl": 4710.0, "initial_tp": 4730.0,
             },
-            "management": [], "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
+            "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}], "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
             "emergency": {"max_loss_pips": 150, "max_duration_minutes": 480,
                           "on_broker_error": "alert_floki"},
         }

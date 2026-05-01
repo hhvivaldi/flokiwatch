@@ -653,11 +653,37 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
 
     Reference: data/_audits/gemini_era_trade_audit_2026-05-01.md
     (PLAN-042 evidence motivates the TM-disable + Escola-2 pivot).
-    """
-    if not plan.management:
-        return []
 
+    Empty-management policy (CEO directive 2026-05-01 evening, addendum):
+    Empty `management` is REJECTED unless TP-distance-from-entry < 100
+    pips (too tight for any meaningful BE). This prevents the
+    PLAN-20260501-036/037 opt-out pattern where Floki authored zero
+    management and let losers run to full SL with no protection.
+    """
     errors: list[str] = []
+
+    if not plan.management:
+        try:
+            entry = plan.entry
+            if entry.entry_price is not None:
+                tp_distance_pips = abs(entry.initial_tp - entry.entry_price) / 0.1
+            else:
+                tp_distance_pips = abs(entry.initial_tp - entry.initial_sl) / 0.1
+        except Exception:
+            tp_distance_pips = 0.0  # conservative — force rejection on geometry error
+        if tp_distance_pips >= 100.0:
+            errors.append(
+                f"management: empty management is rejected under Escola "
+                f"2 when TP-distance-from-entry ({tp_distance_pips:.0f} "
+                f"pips) >= 100 pips. Author at least one contingency "
+                f"(`move_sl_to_breakeven` or `trail_sl`) on `mfe_reached`. "
+                f"Empty-management is the PLAN-036/037 opt-out pattern "
+                f"that the Escola 2 architecture exists to prevent. The "
+                f"<100 pip carve-out is the only exception; below that "
+                f"BE+trail adds no meaningful protection."
+            )
+        return errors
+
     _MAX = 2
     _ALLOWED = {"move_sl_to_breakeven", "trail_sl"}
 

@@ -105,7 +105,7 @@ def _mk_plan(direction: str = "BUY", key_levels=None) -> dict[str, Any]:
             ],
             "initial_sl": 4540.0, "initial_tp": 4570.0,
         },
-        "management": [],
+        "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}],
         "exit": [{
             "name": "fallback", "priority": 1,
             "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}],

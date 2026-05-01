@@ -126,7 +126,7 @@ _BASE_PLAN: dict[str, Any] = {
         "initial_sl": 4740.0,
         "initial_tp": 4710.0,
     },
-    "management": [],
+    "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}],
     "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
     "emergency": {
         "max_loss_pips": 150,
