@@ -4355,7 +4355,14 @@ class TradingBot:
             except Exception:
                 pass
 
-            if not _has_open_position:
+            # FLO-419 (CEO directive 2026-05-01): debate runs every cycle
+            # regardless of open positions. Under the prior `if not
+            # _has_open_position` gate, plans 2-4 of a multi-plan cycle
+            # were authored without any Rex Bull/Bear or RM challenge —
+            # PLAN-20260501-019 and PLAN-20260501-022 were both authored
+            # this way. Cost: ~3s latency + ~300 tokens; saves $4-12
+            # per bad plan.
+            if True:
              try:
                 from rex_validator import run_bull_bear_debate
 
@@ -4616,8 +4623,6 @@ class TradingBot:
                     self._last_verdict_result = _verdict_result
              except Exception:
                 pass
-            else:
-                log.info("REX_DEBATE | SKIPPED — position open, RM only for entry decisions")
 
             # FLO-139: Inject market regime into trigger_context
             # FLO-290 commit 5: gated on AUTO_CONTEXT_MODE. Floki fetches via
