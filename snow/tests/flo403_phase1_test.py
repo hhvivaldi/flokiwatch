@@ -244,19 +244,19 @@ class TestSetNextCheckFloor:
         return tools
 
     def test_floor_30_when_position_open(self, monkeypatch):
-        """Position exists → floor=30. Floki cannot fast-iterate while
-        a trade is in flight (Snow + monitor.py manage it)."""
+        """Position exists → floor=60 (FLO-419 raised from 30). Floki
+        cannot fast-iterate while a trade is in flight (TM manages it)."""
         tools = self._make_tools(monkeypatch, no_plan=True, no_position=False)
         result = tools.set_next_check(minutes=5)
         assert result["success"] is True
-        assert result["requested_minutes"] == 30
+        assert result["requested_minutes"] == 60
 
     def test_floor_30_when_plan_pending(self, monkeypatch):
-        """Pending plan exists → floor=30. Snow is watching for entry;
-        Floki doesn't need to re-author."""
+        """Pending plan exists → floor=60 (FLO-419). Snow is watching
+        for entry; Floki doesn't need to re-author."""
         tools = self._make_tools(monkeypatch, no_plan=False, no_position=True)
         result = tools.set_next_check(minutes=5)
-        assert result["requested_minutes"] == 30
+        assert result["requested_minutes"] == 60
 
     def test_floor_10_when_no_plan_and_no_position(self, monkeypatch):
         """Fresh-authoring window: nothing in flight, allow 10-min for
@@ -273,15 +273,15 @@ class TestSetNextCheckFloor:
 
     def test_inverted_default_db_failure_keeps_30(self, monkeypatch):
         """CTO-flagged inversion: if the snow.db lookup raises, the
-        conservative default is 'plan exists' — floor stays 30. Failing
-        the other way (defaulting to 'no plan' on error) would let a
-        single transient DB error open the 10-min path during an
-        active trade window."""
+        conservative default is 'plan exists' — floor stays 60 (FLO-419,
+        was 30). Failing the other way (defaulting to 'no plan' on
+        error) would let a single transient DB error open the 10-min
+        path during an active trade window."""
         tools = self._make_tools(
             monkeypatch, no_plan=True, no_position=True, plan_raises=True,
         )
         result = tools.set_next_check(minutes=5)
-        assert result["requested_minutes"] == 30
+        assert result["requested_minutes"] == 60
 
     def test_inverted_default_position_failure_keeps_30(self, monkeypatch):
         """Same protection on the executor side."""
@@ -289,17 +289,17 @@ class TestSetNextCheckFloor:
             monkeypatch, no_plan=True, no_position=True, position_raises=True,
         )
         result = tools.set_next_check(minutes=5)
-        assert result["requested_minutes"] == 30
+        assert result["requested_minutes"] == 60
 
     def test_both_failures_keeps_30(self, monkeypatch):
         """Belt and braces: if BOTH lookups fail, both flip to
-        conservative — 30-min floor."""
+        conservative — 60-min floor (FLO-419)."""
         tools = self._make_tools(
             monkeypatch, no_plan=True, no_position=True,
             plan_raises=True, position_raises=True,
         )
         result = tools.set_next_check(minutes=5)
-        assert result["requested_minutes"] == 30
+        assert result["requested_minutes"] == 60
 
 
 class TestSetNextCheckFloor_SourceContract:
@@ -325,7 +325,9 @@ class TestSetNextCheckFloor_SourceContract:
     def test_source_carries_floor_constant(self):
         from agent_tools import AgentTools
         src = inspect.getsource(AgentTools.set_next_check)
-        assert "_floor = 30" in src
+        # FLO-419 (2026-05-01): default floor raised 30 -> 60. The
+        # 10-min fast-iteration path (no plan AND no position) is preserved.
+        assert "_floor = 60" in src
         assert "_floor = 10" in src
 
 

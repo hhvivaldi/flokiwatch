@@ -48,14 +48,13 @@ class AgentTools:
                 m = 5
             _original_requested = int(m)
 
-            # FLO-403 Phase 1 — 30-min default floor; 10-min only when
-            # NO plan AND NO position exists (fresh-authoring fast iteration
-            # window). Inverted-default fix per CTO review: floor STARTS at
-            # 30 and is only lowered to 10 on positive confirmation that
-            # both stores are empty. If either lookup raises, the
-            # conservative 30-min floor stays — failure-safe direction is
-            # "slower cadence" because faster-than-30 is the privilege case.
-            _floor = 30
+            # FLO-419 Phase 2 (CEO directive 2026-05-01): floor raised
+            # 30 -> 60. Cycle is synchronised to the H1 candle close
+            # (snapped below). Faster cadence (10-min) still allowed
+            # only when NO plan AND NO position exists — fresh-authoring
+            # fast-iteration window. Conservative direction on lookup
+            # failure: keep the 60-min floor.
+            _floor = 60
             try:
                 from snow import db as _snow_db
                 _no_plan = not _snow_db.list_plans_by_status(
@@ -93,10 +92,42 @@ class AgentTools:
 
             now = datetime.utcnow()
             next_at = now + timedelta(minutes=int(m))
+
+            # FLO-419 Phase 2 (CEO directive 2026-05-01): H1 synchronisation.
+            # Cycles >= 30 min are normal-cadence and must land at minute 1
+            # of an hour (1 minute after the H1 candle closes) so Floki
+            # always analyses with a COMPLETE H1 candle in hand. Cycles
+            # < 30 min are emergency/news-driven shorts and bypass the snap.
+            # The snap pushes next_at FORWARD to the next XX:01 boundary;
+            # the actual delay may exceed Floki's request by up to 60
+            # minutes when a request lands mid-hour. The response payload
+            # surfaces both the original request and the snapped time.
+            _h1_synced = False
+            if int(m) >= 30:
+                _snapped = next_at.replace(minute=1, second=0, microsecond=0)
+                if _snapped < next_at:
+                    _snapped = _snapped + timedelta(hours=1)
+                if _snapped != next_at:
+                    next_at = _snapped
+                    _h1_synced = True
+
+            # FLO-419 Phase 2: 21:00-22:00 UTC daily break window. Never
+            # schedule a cycle inside this hour — broker/data systems may
+            # be in maintenance and there's no fresh H1 candle to analyse.
+            # Push to 22:01 UTC. Applies regardless of cycle length.
+            _break_dodged = False
+            if next_at.hour == 21:
+                next_at = next_at.replace(hour=22, minute=1, second=0, microsecond=0)
+                _break_dodged = True
+
             payload = {
                 "next_check_at": next_at.isoformat(timespec="seconds") + "Z",
                 "requested_minutes": int(m),
             }
+            if _h1_synced:
+                payload["h1_synced"] = True
+            if _break_dodged:
+                payload["break_dodged"] = True
 
             ok = self._write_json_atomic(self._next_check_path(), payload)
             if not ok:
