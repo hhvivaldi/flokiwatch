@@ -17,7 +17,18 @@ POPULATION_B_MIN_TICKET = 8
 POPULATION_B_MIN_OPEN_TIME = "2026-02-16"
 
 # FLO-189: Only analyze Floki trades — exclude legacy agent_gemini/brain/NULL
-FLOKI_SOURCE_FILTER = "decision_source IN ('floki_agent', 'agent_floki')"
+FLOKI_SOURCE_FILTER = (
+    # FLO-419 Phase 2 (CEO 2026-05-01): Snow execution path (commit
+    # e3257e3) writes `decision_source='snow'` for plan-driven entries.
+    # Pre-Snow Floki trades are tagged 'floki_agent' / 'agent_floki';
+    # legacy entries land with NULL because the column post-dates them.
+    # Sage's filter previously only matched the two pre-Snow tags, so
+    # every Snow-executed trade (the entire current trading mode) and
+    # every NULL legacy trade was excluded — symptom: weekly report
+    # "0 trades $+0.00" while 13 trades closed today.
+    "(decision_source IN ('floki_agent', 'agent_floki', 'snow') "
+    " OR decision_source IS NULL)"
+)
 
 
 def _utc_now_iso() -> str:
