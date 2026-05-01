@@ -62,7 +62,19 @@ def compute_volume_profile(
         if bucket_size <= 0:
             return None
 
-        end = datetime.now()
+        # FLO-96 fix (2026-05-01): copy_rates_range expects broker-local
+        # naive datetimes. datetime.now() on a UTC system produces UTC,
+        # which MT5 interprets as broker-time = N hours stale (N=3 on
+        # Capital Point). Same root cause as the tick_pressure bug GPT-5.4
+        # surfaced in the model-comparison test. Use the live tick's time
+        # as the canonical broker now (mfe_backfill uses the same pattern).
+        try:
+            _t = mt5.symbol_info_tick(symbol)
+            end = (datetime.utcfromtimestamp(int(_t.time))
+                   if _t and _t.time > 0
+                   else datetime.utcnow() + timedelta(hours=3))
+        except Exception:
+            end = datetime.utcnow() + timedelta(hours=3)
         start = end - timedelta(hours=window_hours)
         tf = _pick_timeframe(window_hours)
 

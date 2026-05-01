@@ -31,6 +31,33 @@ _WINDOW_MIN_SEC = 30
 _WINDOW_MAX_SEC = 3600
 
 
+def _broker_now(symbol: str) -> datetime:
+    """Return current broker-local naive datetime — what mt5.copy_ticks_range
+    expects.
+
+    FLO-96 fix (2026-05-01): the prior code used `datetime.now()`, which on
+    a UTC system produces UTC. MT5 interprets the start/end args as
+    broker-local, so a UTC datetime queries ticks from N hours ago (where
+    N = broker offset; ~3h on Capital Point). Empirical impact: cycle
+    2026-05-01T14:56:54Z saw price ~4632 in chart_patterns / S/R / regime
+    evidence, but get_tick_pressure returned price_end=4578.07 — a 54-USD
+    gap matching the 3-hour stale window. GPT-5.4 caught this in the
+    model-comparison test.
+
+    Canonical broker now = mt5.symbol_info_tick().time interpreted as a
+    UTC epoch yields a naive datetime equal to broker wall clock. Same
+    pattern used by mfe_backfill._utc_to_broker_naive."""
+    try:
+        t = mt5.symbol_info_tick(symbol)
+        if t and t.time > 0:
+            return datetime.utcfromtimestamp(int(t.time))
+    except Exception:
+        pass
+    # Fallback: system UTC + 3h (Capital Point typical broker offset).
+    # Worse than the live-tick path but better than naive datetime.now().
+    return datetime.utcnow() + timedelta(hours=3)
+
+
 def compute_tick_pressure(
     symbol: str = "XAUUSD",
     window_seconds: int = 300,
@@ -41,7 +68,7 @@ def compute_tick_pressure(
         window_seconds = max(_WINDOW_MIN_SEC, min(_WINDOW_MAX_SEC, int(window_seconds)))
         recent_seconds = max(5, min(window_seconds, int(recent_seconds)))
 
-        end = datetime.now()
+        end = _broker_now(symbol)
         start = end - timedelta(seconds=window_seconds)
         ticks = mt5.copy_ticks_range(symbol, start, end, mt5.COPY_TICKS_ALL)
         if ticks is None or len(ticks) < 2:
