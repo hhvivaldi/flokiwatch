@@ -410,7 +410,7 @@ class TestPlanIntegration:
             "expires_at": "2026-04-24T12:00:00Z",
             "status": "pending",
             "analysis": {"thesis": "test", "key_levels": [4720.0],
-                         "confidence": 50, "regime_assumed": "RANGING"},
+                         "confidence": 70, "regime_assumed": "RANGING"},
             "entry": {
                 "direction": "BUY", "volume": 0.02,
                 # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.

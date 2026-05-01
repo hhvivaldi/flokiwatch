@@ -55,7 +55,7 @@ _BASE_PLAN: dict[str, Any] = {
     "analysis": {
         "thesis": "test",
         "key_levels": [4720.0],
-        "confidence": 60,
+        "confidence": 70,
         "regime_assumed": "RANGING",
         "setup_type": "pullback_trend",
         "context_tags": {

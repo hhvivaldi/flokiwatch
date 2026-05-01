@@ -1253,3 +1253,64 @@ class TestManagementHybridConstraints:
         ok, _, errors = validate_plan(valid_plan_dict)
         assert not ok
         assert any("at most ONE" in e for e in errors), errors
+
+
+# =============================================================================
+# FLO-419 Phase 2 — confidence floor (CEO directive 2026-05-01)
+#
+# Hard code gate: reject plans with confidence < 70. Replaces the
+# prompt-only "self-cap to 50% when concerns name failure mode" rule
+# which Floki routinely violated (PLAN-014, PLAN-022, PLAN-035, PLAN-037
+# all authored above 50% with concerns describing the failure mode).
+# Combined with the prompt's 50% ceiling, plans where Floki names the
+# failure mode in concerns are now auto-rejected (50% < 70%).
+# =============================================================================
+
+class TestConfidenceFloor:
+
+    def test_69_rejected(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 69
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        assert any("confidence 69%" in e and "70%" in e for e in errors), errors
+
+    def test_50_rejected(self, valid_plan_dict):
+        # The prompt's THESIS-VS-CONCERNS ceiling is 50% — verify the floor
+        # auto-rejects that too, so concerns-named-failure-mode plans
+        # cannot be submitted.
+        valid_plan_dict["analysis"]["confidence"] = 50
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        assert any("Plan rejected: confidence 50%" in e for e in errors), errors
+
+    def test_0_rejected(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 0
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+
+    def test_70_accepted(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 70
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_75_accepted(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 75
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_100_accepted(self, valid_plan_dict):
+        valid_plan_dict["analysis"]["confidence"] = 100
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_error_message_actionable(self, valid_plan_dict):
+        """The rejection message must tell Floki what to do, not just
+        that he failed. Anchor the key phrases."""
+        valid_plan_dict["analysis"]["confidence"] = 65
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok is False
+        msg = " ".join(errors)
+        assert "Plan rejected" in msg
+        assert "65%" in msg
+        assert "70%" in msg
+        assert "Strengthen your thesis or don't submit" in msg
