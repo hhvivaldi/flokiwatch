@@ -745,6 +745,14 @@ _SINGLETON_TOOLS: frozenset = frozenset({
                                   # (3 internal tools + LLM cycles);
                                   # shouldn't race with Floki's other
                                   # reads in the same turn.
+    # --- External-network reads (slow + cache-writing) ---
+    # FLO-419 Phase 2: get_analyst_research is Google-grounded (3-8s
+    # HTTP roundtrip on miss, writes data/floki_research_cache.json on
+    # successful fetch). Classified singleton to: (a) avoid latency
+    # spikes when batched with parallel reads, (b) silence the FLO-385
+    # "tool not classified" warning that fired every cycle on Claude's
+    # first production run.
+    "get_analyst_research",
 })
 
 # Read-only state-polling tools, idempotent and side-effect-free. Safe
@@ -780,6 +788,12 @@ _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     "get_snow_tags_reference",
     # --- Luna / Echo / sentinel reads ---
     "get_luna_brief", "get_echo_alerts",
+    # --- Research Manager verdict (FLO-419 Phase 2) ---
+    # get_oracle_verdict is a pure read of data/oracle_verdict.json
+    # (the latest RM debate winner + Bull/Bear cases). Refreshed by
+    # main.py at the END of every Floki cycle (commit 6624c12). Read-
+    # only, idempotent, safe to batch with other parallel reads.
+    "get_oracle_verdict",
 })
 
 
@@ -1532,6 +1546,11 @@ class AIAgent:
             {
                 "name": "get_analyst_research",
                 "description": "Floki-specific Google-grounded research for plan-building (FLO-419 Phase 2). Returns key support/resistance levels traders are watching for the current session, intraday technical analysis setups (M15/H1/H4/D1) being called out, analyst price targets and short-term directional bias for TODAY, key themes (max 3), and sources (max 5). DISTINCT from get_luna_brief (macro narrative): this answers 'what levels should I build plans around?' Cache TTL 30 min, so the first call per cycle pays ~3-8s latency and later calls return instantly. Returns {available: false, reason: ...} when search is unavailable (API key missing, network, parse failure) — surface the absence to your reasoning rather than relying on the data silently.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_oracle_verdict",
+                "description": "Read the latest Research Manager verdict for THIS cycle (FLO-419 Phase 2). Returns: winner ('BULL'|'BEAR'), recommendation ('ENTER_BUY'|'ENTER_SELL'|null), conviction (1-10), RM's reasoning, plus the full Rex Bull and Rex Bear case texts and the entry/SL/target each side proposed. Refreshed by main.py at the start of every Floki cycle. REQUIRED for FLO-419 PLAN-AUTHORING DISCIPLINE rule (4): every plan's confidence_reason must name this cycle's RM verdict and state whether the plan ALIGNS with it or OVERRIDES it. If override: cite the specific evidence that justifies going against RM. Returns {success: false, reason: ...} when the verdict file is missing or unparseable — surface the absence in your reasoning rather than skip the rule.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {

@@ -4276,6 +4276,80 @@ class AgentTools:
             elapsed = round((time.time() - start) * 1000, 1)
             return {"success": False, "reason": f"luna_brief_error: {e}", "latency_ms": elapsed}
 
+    def get_oracle_verdict(self) -> Dict[str, Any]:
+        """FLO-419 Phase 2: read the latest Research Manager verdict.
+
+        Returns the Bull/Bear debate winner, RM's recommendation
+        (ENTER_BUY / ENTER_SELL / null), conviction (1-10), reasoning,
+        and the full Bull / Bear case texts. Refreshed by main.py at
+        the END of every Floki cycle (commit 6624c12) — so the verdict
+        Floki sees on cycle N is the one computed at cycle N's start.
+
+        This tool exists because the FLO-419 PLAN-AUTHORING DISCIPLINE
+        prompt rule (4) requires every plan's confidence_reason to name
+        the cycle's RM verdict and state ALIGN or OVERRIDE. Claude
+        flagged the missing tool in his first production cycle's
+        data_needs.feature_requests; this is the requested wire-up.
+
+        Cache file: data/oracle_verdict.json (overwrite-on-cycle).
+        Returns {success: false, reason: ...} when the file is missing
+        or unparseable so Floki can surface the absence in reasoning.
+        """
+        start = time.time()
+        try:
+            from pathlib import Path as _Path
+            import os as _os
+            import json as _json
+
+            verdict_path = _Path(_os.path.dirname(_os.path.abspath(__file__))) / "data" / "oracle_verdict.json"
+            if not verdict_path.exists():
+                self._log_tool("get_oracle_verdict", start, "no verdict file")
+                return {"success": False, "reason": "verdict file not yet written for this cycle"}
+
+            try:
+                data = _json.loads(verdict_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                self._log_tool("get_oracle_verdict", start, f"parse_error={e}")
+                return {"success": False, "reason": f"verdict file unparseable: {e}"}
+
+            # Surface the freshness so Floki can decide whether to trust
+            # the verdict (cycle-N's verdict still holds within the cycle,
+            # but a long-stale verdict from a prior cycle is suspect).
+            age_minutes = None
+            ts = data.get("timestamp")
+            if isinstance(ts, str):
+                try:
+                    from datetime import datetime, timezone
+                    vt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    age_minutes = round((datetime.now(timezone.utc) - vt).total_seconds() / 60, 1)
+                except Exception:
+                    pass
+
+            self._log_tool(
+                "get_oracle_verdict", start,
+                f"winner={data.get('winner')} rec={data.get('recommendation')} "
+                f"conv={data.get('conviction')} age_min={age_minutes}"
+            )
+            return {
+                "success": True,
+                "winner": data.get("winner"),
+                "recommendation": data.get("recommendation"),
+                "conviction": data.get("conviction"),
+                "reasoning": data.get("reasoning"),
+                "entry": data.get("entry"),
+                "sl": data.get("sl"),
+                "target": data.get("target"),
+                "trigger_buy": data.get("trigger_buy"),
+                "trigger_sell": data.get("trigger_sell"),
+                "rex_bull": data.get("rex_bull"),
+                "rex_bear": data.get("rex_bear"),
+                "timestamp": ts,
+                "age_minutes": age_minutes,
+            }
+        except Exception as e:
+            self._log_tool("get_oracle_verdict", start, f"error={type(e).__name__}:{e}")
+            return {"success": False, "reason": f"oracle_verdict_error: {e}"}
+
     def get_rex_monitor(self) -> Dict[str, Any]:
         """Read latest Rex proactive monitoring scan (FLO-211)."""
         start = time.time()
