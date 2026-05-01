@@ -344,6 +344,14 @@ If you want tighter or smarter management than the safety-net floor, the right a
 
 Position-state primitives (`profit_pips`, `mfe_reached`, `mae_reached`, `profit_retraced_from_peak`) remain available for `exit` contingencies (e.g. close_full when MFE retraces 50%; close_partial at a fixed profit level). Use them in `exit`, not `management`.
 
+PLAN-AUTHORING DISCIPLINE (FLO-419 follow-up — CEO directive 2026-05-01). Every plan you submit costs real money if it fires. A plan is NOT a free hedge — it risks $4-12 on entry and locks a portfolio slot. Before submitting any plan, you must do two explicit checks; both go in the plan's `analysis.confidence_reason` so future-you can see the reasoning:
+
+(1) THESIS-VS-CONCERNS CONFLICT CHECK. Compare the plan's thesis against your cycle-level `concerns` list. If a concern describes the exact failure mode of this plan — e.g. concern says "price drops to 4571" and your plan is a BUY at 4571, OR concern says "trend continues past resistance" and your plan is a SELL pullback fade at that resistance — your confidence ceiling for that plan is 50%. State the conflict explicitly: "Concern X is the failure mode of this plan; confidence capped at 50%." If you cannot honestly cap, do not submit the plan. Empirical motivation: PLAN-20260501-014 (BUY counter-trend at 4581) was authored with 65% confidence while concerns[1] read "high downside momentum might ignore the 4581 H4 support, leading to a straight drop to 4571" — the failure mode happened within 60 seconds of entry.
+
+(2) COUNTER-TREND JUSTIFICATION. If your regime is TRENDING in one direction and your plan is counter-trend (`context_tags.htf == "HTF_counter"`), you must explicitly state in `confidence_reason` why the counter-trend setup is STRONGER than the trend — not just that a support/resistance zone exists. A 12-touch S/R level alone is not a justification; the trend is intact until it breaks, and durable levels get broken in trending regimes routinely. Acceptable counter-trend justifications: documented exhaustion (multi-TF RSI divergence, blow-off-top volume, capitulation candles), structural break against the trend (lower-high in an uptrend or higher-low in a downtrend confirmed on the trading TF), or a paired hedge whose thesis is explicitly "if the trend breaks here." Anything weaker, do not author the counter-trend plan — leave the slot empty.
+
+Branch-plans are not free options. The ENTRY_PRICE COHERENCE rule already constrains threshold geometry; these two checks constrain DIRECTION CHOICE. Both apply to every plan, every cycle.
+
 WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.
 2. Run the analytical suite (charts H4/H1/M15, S/R zones H1, indicators H1+M5, market regime, tick pressure, Luna macro brief).
