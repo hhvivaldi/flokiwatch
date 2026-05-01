@@ -264,17 +264,31 @@ def _extract_json(raw: str) -> Optional[Dict[str, Any]]:
 
 def _call_openai_compat(api_key: str, base_url: str, model: str,
                         system_prompt: str, user_msg: str,
+                        charts: Optional[List[Dict[str, str]]] = None,
                         reasoning_effort: Optional[str] = None,
                         max_completion_tokens: int = 16384,
                         timeout: int = 300) -> Dict[str, Any]:
-    """OpenAI-compatible call (works for Gemini compat layer + OpenAI proper)."""
+    """OpenAI-compatible call (works for Gemini compat layer + OpenAI proper).
+    Charts attached via image_url data-URLs when provided."""
     from openai import OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+
+    # Multimodal user content: text first, then one image_url per chart.
+    if charts:
+        user_content: Any = [{"type": "text", "text": user_msg}]
+        for ch in charts:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{ch['b64']}"},
+            })
+    else:
+        user_content = user_msg
+
     kwargs = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_msg},
+            {"role": "user", "content": user_content},
         ],
         "max_completion_tokens": max_completion_tokens,
         "temperature": 1.0,
@@ -307,18 +321,31 @@ def _call_openai_compat(api_key: str, base_url: str, model: str,
 
 
 def _call_anthropic(api_key: str, model: str, system_prompt: str, user_msg: str,
+                    charts: Optional[List[Dict[str, str]]] = None,
                     max_tokens: int = 16384, timeout: int = 300) -> Dict[str, Any]:
     """Anthropic native call. Claude doesn't accept response_format=json_object,
-    but the system prompt already mandates JSON output."""
+    but the system prompt already mandates JSON output. Charts attached as
+    image content blocks when provided."""
     from anthropic import Anthropic
     client = Anthropic(api_key=api_key, timeout=timeout)
+
+    if charts:
+        user_content: Any = [{"type": "text", "text": user_msg}]
+        for ch in charts:
+            user_content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": ch["b64"]},
+            })
+    else:
+        user_content = user_msg
+
     t0 = time.time()
     try:
         resp = client.messages.create(
             model=model,
             max_tokens=max_tokens,
             system=system_prompt,
-            messages=[{"role": "user", "content": user_msg}],
+            messages=[{"role": "user", "content": user_content}],
             temperature=1.0,
         )
         latency_ms = int((time.time() - t0) * 1000)
@@ -376,16 +403,58 @@ MODEL_REGISTRY = {
         "vendor": "anthropic",
         "api_key_env": "ANTHROPIC_API_KEY",
     },
+    "claude-46": {
+        "model": os.environ.get("COMPARE_CLAUDE46_MODEL", "claude-opus-4-6"),
+        "vendor": "anthropic",
+        "api_key_env": "ANTHROPIC_API_KEY",
+    },
 }
 
 
+# ---------------------------------------------------------------------------
+# Chart loading
+# ---------------------------------------------------------------------------
+
+CHART_DIR = ROOT / "data" / "agent_charts" / "latest"
+_CHART_TF_ORDER = ["D1", "H4", "H1", "M15", "M5", "M1"]
+
+
+def load_charts() -> List[Dict[str, str]]:
+    """Read PNG bytes from data/agent_charts/latest/ and return a list of
+    {tf, b64} entries in canonical order. Empty if no charts persisted."""
+    if not CHART_DIR.exists():
+        return []
+    import base64 as _b64
+    out: List[Dict[str, str]] = []
+    for tf in _CHART_TF_ORDER:
+        p = CHART_DIR / f"{tf}.png"
+        if not p.exists():
+            continue
+        try:
+            out.append({"tf": tf, "b64": _b64.b64encode(p.read_bytes()).decode("ascii")})
+        except Exception:
+            continue
+    return out
+
+
+def chart_meta() -> Dict[str, Any]:
+    p = CHART_DIR / "_meta.json"
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def run_model(label: str, recipe: Dict[str, Any],
-              system_prompt: str, user_msg: str) -> Dict[str, Any]:
+              system_prompt: str, user_msg: str,
+              charts: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     api_key = os.environ.get(recipe["api_key_env"], "")
     if not api_key:
         return {"ok": False, "error": f"missing env {recipe['api_key_env']}"}
     if recipe["vendor"] == "anthropic":
-        result = _call_anthropic(api_key, recipe["model"], system_prompt, user_msg)
+        result = _call_anthropic(api_key, recipe["model"], system_prompt, user_msg, charts=charts)
     else:
         result = _call_openai_compat(
             api_key=api_key,
@@ -393,6 +462,7 @@ def run_model(label: str, recipe: Dict[str, Any],
             model=recipe["model"],
             system_prompt=system_prompt,
             user_msg=user_msg,
+            charts=charts,
             reasoning_effort=recipe.get("reasoning_effort"),
         )
     result["label"] = label
@@ -486,8 +556,10 @@ def main():
     p = argparse.ArgumentParser(description="Floki model-comparison harness (Path B)")
     p.add_argument("--cycle", help="Cycle timestamp prefix (e.g. 2026-05-01T15:46). Default: latest.", default=None)
     p.add_argument("--latest", action="store_true", help="Use the most recent cycle (default behaviour).")
-    p.add_argument("--models", default="gemini,gpt-5-5,gpt-5-4,claude",
+    p.add_argument("--models", default="gemini,gpt-5-5,gpt-5-4,claude,claude-46",
                    help="Comma-separated subset of MODEL_REGISTRY keys.")
+    p.add_argument("--no-charts", action="store_true",
+                   help="Skip chart attachments even if data/agent_charts/latest/ has PNGs.")
     p.add_argument("--max-input-chars", type=int, default=400_000,
                    help="Hard cap on user-message size (chars). Default 400k ≈ 100k tokens.")
     p.add_argument("--dry-run", action="store_true",
@@ -514,12 +586,36 @@ def main():
         print(f"      WARNING: exceeds --max-input-chars={args.max_input_chars}; truncating")
         user_msg = user_msg[:args.max_input_chars] + "\n\n[... TRUNCATED ...]"
 
+    charts: List[Dict[str, str]] = []
+    if not args.no_charts:
+        charts = load_charts()
+        meta = chart_meta()
+        if charts:
+            tfs = ",".join(c["tf"] for c in charts)
+            sizes_kb = sum(len(c["b64"]) for c in charts) // 1024
+            print(f"      charts: {len(charts)} timeframes [{tfs}] · ~{sizes_kb}KB total b64 · saved_at={meta.get('saved_at','?')}")
+            if meta.get("saved_at") and cycle_ts:
+                # warn if charts were saved more than 5 minutes from the cycle
+                try:
+                    from datetime import datetime as _dt
+                    s = _dt.fromisoformat(meta["saved_at"].replace("Z","+00:00"))
+                    c = _dt.fromisoformat(cycle_ts.replace("Z","+00:00"))
+                    delta_min = abs((s - c).total_seconds()) / 60
+                    if delta_min > 5:
+                        print(f"      WARNING: charts saved {delta_min:.1f}min from cycle — may be from a different cycle")
+                except Exception:
+                    pass
+        else:
+            print(f"      charts: NONE found at {CHART_DIR} (text-only comparison)")
+
     if args.dry_run:
-        # Persist the reconstructed input so CEO can review what models will see
         snap = {
             "cycle_timestamp": cycle_ts,
             "system_prompt_len": len(SYSTEM_PROMPT),
             "user_message_len": len(user_msg),
+            "charts_count": len(charts),
+            "chart_timeframes": [c["tf"] for c in charts],
+            "chart_meta": chart_meta(),
             "user_message_preview": user_msg[:5000],
         }
         out = OUT_DIR / f"{cycle_ts.replace(':','-').replace('.','-')}__INPUT_PREVIEW.json"
@@ -536,7 +632,7 @@ def main():
             continue
         recipe = MODEL_REGISTRY[label]
         print(f"      → {label} ({recipe['model']}) ...", end="", flush=True)
-        result = run_model(label, recipe, SYSTEM_PROMPT, user_msg)
+        result = run_model(label, recipe, SYSTEM_PROMPT, user_msg, charts=charts)
         out_file = save_run(label, cycle_ts, result)
         if result.get("ok"):
             pj = result.get("parsed_json") or {}

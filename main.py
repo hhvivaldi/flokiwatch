@@ -5278,6 +5278,38 @@ class TradingBot:
             if chart_images:
                 tools_obj._chart_images = chart_images
                 trigger_context += "\n<chart_status>pre-captured this cycle — get_chart_screenshots returns cached frames.</chart_status>\n"
+                # FLO-419 Phase 2: persist chart bytes to disk so the
+                # model-comparison harness (scripts/floki_model_compare.py)
+                # can attach the same images to test models. tools._chart_images
+                # is in-memory only and dies with the cycle. Latest-only:
+                # overwritten every cycle. Off the hot path — failures are
+                # logged but never block the cycle.
+                try:
+                    import base64 as _b64lib
+                    from pathlib import Path as _Path
+                    from tz_utils import utc_iso as _utc_iso
+                    _chart_dir = _Path("data") / "agent_charts" / "latest"
+                    _chart_dir.mkdir(parents=True, exist_ok=True)
+                    for _old in _chart_dir.glob("*.png"):
+                        try: _old.unlink()
+                        except Exception: pass
+                    _meta_tfs = []
+                    for _k, _v in chart_images.items():
+                        if not _k.endswith("_b64") or not _v:
+                            continue
+                        _tf = _k[:-4]
+                        try:
+                            (_chart_dir / f"{_tf}.png").write_bytes(_b64lib.b64decode(_v))
+                            _meta_tfs.append(_tf)
+                        except Exception:
+                            continue
+                    (_chart_dir / "_meta.json").write_text(
+                        json.dumps({"saved_at": _utc_iso(), "timeframes": _meta_tfs},
+                                   ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                except Exception as _ce:
+                    log.debug(f"chart_persist | failed (non-blocking): {_ce}")
             else:
                 trigger_context += "\n<chart_status>not pre-captured this cycle — get_chart_screenshots will fetch on demand.</chart_status>\n"
 
