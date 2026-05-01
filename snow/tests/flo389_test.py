@@ -165,11 +165,13 @@ class TestInvalidProviderFailsLoudly:
         assert "claude" in msg.lower()  # echoes the bad value back
 
     def test_invalid_provider_error_references_flo389(self, monkeypatch):
+        # `anthropic` became a valid provider in FLO-419 Phase 2, so use a
+        # truly bogus string as the negative-test sentinel.
         with pytest.raises(ValueError) as exc_info:
-            _reload_config(monkeypatch, LLM_PROVIDER="anthropic")
+            _reload_config(monkeypatch, LLM_PROVIDER="not_a_real_provider")
         msg = str(exc_info.value)
-        # FLO-389 ticket reference helps operators trace the gate
-        assert "FLO-389" in msg or "FLO-384" in msg
+        # Ticket reference helps operators trace the gate
+        assert "FLO-389" in msg or "FLO-384" in msg or "FLO-419" in msg
 
 
 # =============================================================================

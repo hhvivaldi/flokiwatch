@@ -902,6 +902,8 @@ class AIAgent:
                     return "Qwen"
                 if "googleapis.com" in _h:
                     return "Gemini"  # FLO-389
+                if "anthropic.com" in _h:
+                    return "Anthropic"  # FLO-419 Phase 2
                 if "openrouter.ai" in _h:
                     return "OpenRouter"
                 if "openai.com" in _h:
@@ -910,7 +912,31 @@ class AIAgent:
 
             try:
                 from openai import OpenAI
-                if _qwen_key and _qwen_base:
+                # FLO-419 Phase 2: when LLM_PROVIDER=anthropic, primary
+                # client is the native Anthropic SDK (not OpenAI-compat).
+                # Fallback (OpenRouter/Qwen) below is unaffected and stays
+                # on the OpenAI client.
+                _llm_provider = (getattr(config, "LLM_PROVIDER", "qwen") or "qwen").lower()
+                if _llm_provider == "anthropic":
+                    if not _qwen_key:
+                        logger.warning(
+                            "AI Agent: LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY/FLOKI_API_KEY empty"
+                        )
+                        self.enabled = False
+                        return False
+                    try:
+                        import anthropic as _anthropic_mod
+                    except ImportError:
+                        logger.error("anthropic package not installed. Run: pip install anthropic")
+                        self.enabled = False
+                        return False
+                    self.client = _anthropic_mod.Anthropic(api_key=_qwen_key, timeout=90)
+                    _primary_provider = "Anthropic"
+                    logger.info(
+                        f"AI Agent: primary client = Anthropic native SDK "
+                        f"(model={getattr(config, 'FLOKI_MODEL', 'claude-opus-4-6')}, timeout=90s)"
+                    )
+                elif _qwen_key and _qwen_base:
                     self.client = OpenAI(api_key=_qwen_key, base_url=_qwen_base, timeout=90, max_retries=0)
                     _primary_provider = _provider_label(_qwen_base)
                     logger.info(
@@ -2162,6 +2188,32 @@ class AIAgent:
                     _re = (getattr(config, "FLOKI_REASONING_EFFORT", "") or "").strip().lower()
                     if _re in ("none", "low", "medium", "high"):
                         kwargs["reasoning_effort"] = _re
+
+                # FLO-419 Phase 2: when the destination is the Anthropic
+                # native SDK client, route through the format adapter
+                # (floki_anthropic_adapter). The adapter accepts the same
+                # OpenAI-shaped kwargs we already built and returns an
+                # OpenAI-shaped response, so the rest of the agentic loop
+                # (assistant tool_calls, role=tool messages, .choices[0]
+                # access patterns) keeps working unchanged. Cache_control
+                # is applied internally to system + tools for 1h ephemeral
+                # caching (~85KB cached prompt → ~$0.40/cycle savings).
+                try:
+                    import anthropic as _anth_mod
+                    _is_anthropic = isinstance(_client, _anth_mod.Anthropic)
+                except Exception:
+                    _is_anthropic = False
+                if _is_anthropic:
+                    from floki_anthropic_adapter import call_anthropic_with_oai_kwargs
+                    return call_anthropic_with_oai_kwargs(
+                        _client,
+                        model=kwargs["model"],
+                        messages=kwargs["messages"],
+                        tools=kwargs.get("tools"),
+                        max_completion_tokens=int(kwargs.get("max_completion_tokens", self.max_tokens)),
+                        temperature=float(kwargs.get("temperature", 1.0)),
+                        timeout=PER_CALL_TIMEOUT,
+                    )
                 return _client.chat.completions.create(**kwargs)
 
             try:
@@ -3010,6 +3062,26 @@ class AIAgent:
         messages.append({"role": "user", "content": retry_prompt})
 
         def _sync_retry_call():
+            # FLO-419 Phase 2: route through the Anthropic adapter when
+            # self.client is the native Anthropic SDK. Same kwargs shape
+            # as the primary call, ignored extras (response_format) handled
+            # by the adapter.
+            try:
+                import anthropic as _anth_mod
+                _is_anth_retry = isinstance(self.client, _anth_mod.Anthropic)
+            except Exception:
+                _is_anth_retry = False
+            if _is_anth_retry:
+                from floki_anthropic_adapter import call_anthropic_with_oai_kwargs
+                return call_anthropic_with_oai_kwargs(
+                    self.client,
+                    model=self.model,
+                    messages=messages,
+                    tools=None,
+                    max_completion_tokens=int(self.max_tokens),
+                    temperature=0.7,
+                    timeout=20,
+                )
             return self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,

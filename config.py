@@ -543,6 +543,21 @@ elif LLM_PROVIDER == "qwen":
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
     FLOKI_API_KEY = os.environ.get("QWEN_API_KEY", "")
+elif LLM_PROVIDER == "anthropic":
+    # FLO-419 Phase 2 (CEO directive 2026-05-01): Floki primary on Claude
+    # Opus 4.6 via the native Anthropic SDK. The `FLOKI_API_BASE` value is
+    # informational only here — the Anthropic client picks up its own
+    # base URL from anthropic.Anthropic(base_url=...) when needed.
+    # FLOKI_API_KEY carries ANTHROPIC_API_KEY so the existing config-key
+    # lookup works.
+    FLOKI_MODEL = os.environ.get(
+        "ANTHROPIC_MODEL", os.environ.get("FLOKI_MODEL", "claude-opus-4-6"),
+    )
+    FLOKI_API_BASE = os.environ.get(
+        "ANTHROPIC_BASE_URL",
+        os.environ.get("FLOKI_API_BASE", "https://api.anthropic.com"),
+    )
+    FLOKI_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 elif LLM_PROVIDER == "openai":
     # FLO-404 follow-up: temporary fallback to OpenAI/GPT-5.4 after
     # Gemini hit the 250 req/day quota wall on 2026-04-29 (post mandatory-
@@ -562,7 +577,7 @@ elif LLM_PROVIDER == "openai":
 else:
     raise ValueError(
         f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen', "
-        f"'kimi', 'gemini', or 'openai'). FLO-384/389 fails loudly to "
+        f"'kimi', 'gemini', 'openai', or 'anthropic'). FLO-384/389/419 fails loudly to "
         f"avoid silently routing Floki to an unintended provider."
     )
 
