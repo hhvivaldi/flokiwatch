@@ -68,13 +68,34 @@ def compute_volume_profile(
         # Capital Point). Same root cause as the tick_pressure bug GPT-5.4
         # surfaced in the model-comparison test. Use the live tick's time
         # as the canonical broker now (mfe_backfill uses the same pattern).
+        import time as _time_mod
+        _src = "tick.time"
+        _offset = 10800
         try:
             _t = mt5.symbol_info_tick(symbol)
-            end = (datetime.utcfromtimestamp(int(_t.time))
-                   if _t and _t.time > 0
-                   else datetime.utcnow() + timedelta(hours=3))
+            if _t and _t.time > 0:
+                end = datetime.utcfromtimestamp(int(_t.time))
+                _offset = int(_t.time) - int(_time_mod.time())
+                if not (7200 <= _offset <= 14400):
+                    end = datetime.utcnow() + timedelta(hours=3)
+                    _offset = 10800
+                    _src = "FALLBACK"
+            else:
+                end = datetime.utcnow() + timedelta(hours=3)
+                _src = "constant"
         except Exception:
             end = datetime.utcnow() + timedelta(hours=3)
+            _src = "constant"
+        try:
+            log.info(
+                "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=volume_profile.compute".format(
+                    _offset, _src,
+                    datetime.utcnow().strftime("%H:%M:%S"),
+                    end.strftime("%H:%M:%S"),
+                )
+            )
+        except Exception:
+            pass
         start = end - timedelta(hours=window_hours)
         tf = _pick_timeframe(window_hours)
 

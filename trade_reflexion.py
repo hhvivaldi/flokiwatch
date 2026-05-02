@@ -496,17 +496,32 @@ def _get_post_close_prices(close_time_str: str, direction: str, entry_price: flo
         if close_dt_utc.tzinfo is None:
             close_dt_utc = close_dt_utc.replace(tzinfo=timezone.utc)
 
+        _src = "tick.time"
         try:
             tick = mt5.symbol_info_tick("XAUUSD")
             server_offset_s = (int(tick.time) - int(_time.time())) if (tick and tick.time) else 10800
+            if not tick or not tick.time:
+                _src = "constant"
         except Exception:
             server_offset_s = 10800
+            _src = "constant"
         # Plausibility band — see snow/instrumentation.py for the same
         # market-closed defense (Sage runs at 21:00 UTC, around close).
         if not (7200 <= server_offset_s <= 14400):
             server_offset_s = 10800
+            _src = "FALLBACK"
 
         close_dt = datetime.fromtimestamp(int(close_dt_utc.timestamp()) + server_offset_s)
+        try:
+            log.info(
+                "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=trade_reflexion.post_close_drift".format(
+                    server_offset_s, _src,
+                    close_dt_utc.strftime("%H:%M:%S"),
+                    close_dt.strftime("%H:%M:%S"),
+                )
+            )
+        except Exception:
+            pass
         target_1h = close_dt + timedelta(hours=1)
         bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, target_1h)
 
@@ -950,16 +965,31 @@ def run_eod_counterfactuals() -> int:
                 # FLO-96 fix (2026-05-02 audit): same root cause as the
                 # post-close-drift path above. UTC -> broker-stored unix
                 # -> naive. now_dt also needs broker-naive conversion.
+                _src = "tick.time"
                 try:
                     tick = mt5.symbol_info_tick("XAUUSD")
                     server_offset_s = (int(tick.time) - int(_time.time())) if (tick and tick.time) else 10800
+                    if not tick or not tick.time:
+                        _src = "constant"
                 except Exception:
                     server_offset_s = 10800
+                    _src = "constant"
                 if not (7200 <= server_offset_s <= 14400):
                     server_offset_s = 10800
+                    _src = "FALLBACK"
 
                 close_broker = datetime.fromtimestamp(int(close_dt.timestamp()) + server_offset_s)
                 now_broker = datetime.fromtimestamp(int(_time.time()) + server_offset_s)
+                try:
+                    log.info(
+                        "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=trade_reflexion.counterfactual_replay".format(
+                            server_offset_s, _src,
+                            close_dt.strftime("%H:%M:%S"),
+                            close_broker.strftime("%H:%M:%S"),
+                        )
+                    )
+                except Exception:
+                    pass
                 bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_broker, now_broker)
 
                 if bars is None or len(bars) == 0:

@@ -47,15 +47,43 @@ def _broker_now(symbol: str) -> datetime:
     Canonical broker now = mt5.symbol_info_tick().time interpreted as a
     UTC epoch yields a naive datetime equal to broker wall clock. Same
     pattern used by mfe_backfill._utc_to_broker_naive."""
+    import time as _time
     try:
         t = mt5.symbol_info_tick(symbol)
         if t and t.time > 0:
-            return datetime.utcfromtimestamp(int(t.time))
+            broker_now = datetime.utcfromtimestamp(int(t.time))
+            offset_s = int(t.time) - int(_time.time())
+            src = "tick.time"
+            if not (7200 <= offset_s <= 14400):
+                # tick is stale (market closed) — fall back.
+                broker_now = datetime.utcnow() + timedelta(hours=3)
+                offset_s = 10800
+                src = "FALLBACK"
+            try:
+                log.info(
+                    "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=tick_pressure._broker_now".format(
+                        offset_s, src,
+                        datetime.utcnow().strftime("%H:%M:%S"),
+                        broker_now.strftime("%H:%M:%S"),
+                    )
+                )
+            except Exception:
+                pass
+            return broker_now
     except Exception:
         pass
     # Fallback: system UTC + 3h (Capital Point typical broker offset).
-    # Worse than the live-tick path but better than naive datetime.now().
-    return datetime.utcnow() + timedelta(hours=3)
+    broker_now = datetime.utcnow() + timedelta(hours=3)
+    try:
+        log.info(
+            "TIMEZONE_AUDIT | offset=10800s (constant) | utc={} | broker={} | site=tick_pressure._broker_now".format(
+                datetime.utcnow().strftime("%H:%M:%S"),
+                broker_now.strftime("%H:%M:%S"),
+            )
+        )
+    except Exception:
+        pass
+    return broker_now
 
 
 def compute_tick_pressure(

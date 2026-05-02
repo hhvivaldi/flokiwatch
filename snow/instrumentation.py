@@ -329,19 +329,35 @@ def _compute_mfe_pips(
         close_dt_utc = _dt.datetime.fromisoformat(
             close_time_iso.replace("Z", "+00:00")
         )
+        _src = "tick.time"
         try:
             _t = mt5.symbol_info_tick("XAUUSD")
             _server_offset_s = (int(_t.time) - int(_time.time())) if (_t and _t.time) else 10800
+            if not _t or not _t.time:
+                _src = "constant"
         except Exception:
             _server_offset_s = 10800
+            _src = "constant"
         # Plausibility band: real broker offset is ~+3h. When market is
         # closed, tick.time is the last tick of the prior session and
         # `tick.time - now()` becomes wildly negative (saw -9.8h in the
         # 2026-05-02 audit). Fall back to the cached default.
         if not (7200 <= _server_offset_s <= 14400):
             _server_offset_s = 10800
+            _src = "FALLBACK"
         open_dt = _dt.datetime.fromtimestamp(int(open_dt_utc.timestamp()) + _server_offset_s)
         close_dt = _dt.datetime.fromtimestamp(int(close_dt_utc.timestamp()) + _server_offset_s)
+        try:
+            from logger import log as _log
+            _log.info(
+                "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=snow.instrumentation._compute_mfe_pips".format(
+                    _server_offset_s, _src,
+                    close_dt_utc.strftime("%H:%M:%S"),
+                    close_dt.strftime("%H:%M:%S"),
+                )
+            )
+        except Exception:
+            pass
         # Single attempt, no retry. Cost of MFE failure = null field;
         # cost of retry-induced latency = blocking close detection.
         rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, open_dt, close_dt)

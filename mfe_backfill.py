@@ -54,11 +54,28 @@ def _utc_to_broker_naive(dt_utc: datetime) -> Optional[datetime]:
     """
     try:
         tick = mt5.symbol_info_tick("XAUUSD")
+        _src = "tick.time"
         if tick and tick.time:
             server_offset_s = int(tick.time) - int(_time.time())
-            # Shift UTC unix → broker-stored unix, then render as local naive.
-            broker_unix = int(dt_utc.timestamp()) + server_offset_s
-            return datetime.fromtimestamp(broker_unix)
+        else:
+            server_offset_s = 10800
+            _src = "constant"
+        if not (7200 <= server_offset_s <= 14400):
+            server_offset_s = 10800
+            _src = "FALLBACK"
+        broker_unix = int(dt_utc.timestamp()) + server_offset_s
+        broker_naive = datetime.fromtimestamp(broker_unix)
+        try:
+            log.info(
+                "TIMEZONE_AUDIT | offset={}s ({}) | utc={} | broker={} | site=mfe_backfill._utc_to_broker_naive".format(
+                    server_offset_s, _src,
+                    dt_utc.strftime("%H:%M:%S"),
+                    broker_naive.strftime("%H:%M:%S"),
+                )
+            )
+        except Exception:
+            pass
+        return broker_naive
     except Exception:
         pass
     return None
