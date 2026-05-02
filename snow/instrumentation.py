@@ -314,13 +314,34 @@ def _compute_mfe_pips(
     """
     try:
         import datetime as _dt
+        import time as _time
         from mt5_safe import mt5
-        open_dt = _dt.datetime.fromisoformat(
+        # FLO-96 fix (2026-05-02 audit): copy_rates_range expects broker-local
+        # naive datetimes. Parsing the ISO UTC and stripping tzinfo passed
+        # naive UTC to MT5, which interpreted it as broker-time → bars from
+        # ~3h before the trade actually happened (wrong window for MFE).
+        # Convert UTC -> broker-stored unix -> naive via live tick offset
+        # (same pattern as mfe_backfill._utc_to_broker_naive +
+        # tick_pressure._broker_now).
+        open_dt_utc = _dt.datetime.fromisoformat(
             open_time_iso.replace("Z", "+00:00")
-        ).replace(tzinfo=None)
-        close_dt = _dt.datetime.fromisoformat(
+        )
+        close_dt_utc = _dt.datetime.fromisoformat(
             close_time_iso.replace("Z", "+00:00")
-        ).replace(tzinfo=None)
+        )
+        try:
+            _t = mt5.symbol_info_tick("XAUUSD")
+            _server_offset_s = (int(_t.time) - int(_time.time())) if (_t and _t.time) else 10800
+        except Exception:
+            _server_offset_s = 10800
+        # Plausibility band: real broker offset is ~+3h. When market is
+        # closed, tick.time is the last tick of the prior session and
+        # `tick.time - now()` becomes wildly negative (saw -9.8h in the
+        # 2026-05-02 audit). Fall back to the cached default.
+        if not (7200 <= _server_offset_s <= 14400):
+            _server_offset_s = 10800
+        open_dt = _dt.datetime.fromtimestamp(int(open_dt_utc.timestamp()) + _server_offset_s)
+        close_dt = _dt.datetime.fromtimestamp(int(close_dt_utc.timestamp()) + _server_offset_s)
         # Single attempt, no retry. Cost of MFE failure = null field;
         # cost of retry-induced latency = blocking close detection.
         rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, open_dt, close_dt)

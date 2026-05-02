@@ -487,19 +487,26 @@ def _get_post_close_prices(close_time_str: str, direction: str, entry_price: flo
             return None
 
         # FLO-198: DB close_time is in MT5 server time (UTC+N), not UTC.
-        # Compute server offset dynamically and convert to UTC for copy_rates_range.
-        close_dt = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
-        if close_dt.tzinfo is None:
-            close_dt = close_dt.replace(tzinfo=timezone.utc)
+        # FLO-96 fix (2026-05-02 audit): copy_rates_range expects broker-local
+        # naive datetimes. Prior code SUBTRACTED the offset and passed a
+        # tz-aware datetime — wrong direction (gave a window ~3h before the
+        # close) and tz-aware behavior is implementation-defined in MT5.
+        # Correct: UTC -> broker-stored unix -> naive datetime.fromtimestamp.
+        close_dt_utc = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+        if close_dt_utc.tzinfo is None:
+            close_dt_utc = close_dt_utc.replace(tzinfo=timezone.utc)
 
         try:
             tick = mt5.symbol_info_tick("XAUUSD")
-            if tick and tick.time:
-                server_offset_s = int(tick.time) - int(_time.time())
-                close_dt = close_dt - timedelta(seconds=server_offset_s)
+            server_offset_s = (int(tick.time) - int(_time.time())) if (tick and tick.time) else 10800
         except Exception:
-            pass
+            server_offset_s = 10800
+        # Plausibility band — see snow/instrumentation.py for the same
+        # market-closed defense (Sage runs at 21:00 UTC, around close).
+        if not (7200 <= server_offset_s <= 14400):
+            server_offset_s = 10800
 
+        close_dt = datetime.fromtimestamp(int(close_dt_utc.timestamp()) + server_offset_s)
         target_1h = close_dt + timedelta(hours=1)
         bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, target_1h)
 
@@ -940,17 +947,20 @@ def run_eod_counterfactuals() -> int:
                 if close_dt.tzinfo is None:
                     close_dt = close_dt.replace(tzinfo=timezone.utc)
 
-                # Adjust for server time offset
+                # FLO-96 fix (2026-05-02 audit): same root cause as the
+                # post-close-drift path above. UTC -> broker-stored unix
+                # -> naive. now_dt also needs broker-naive conversion.
                 try:
                     tick = mt5.symbol_info_tick("XAUUSD")
-                    if tick and tick.time:
-                        server_offset_s = int(tick.time) - int(_time.time())
-                        close_dt = close_dt - timedelta(seconds=server_offset_s)
+                    server_offset_s = (int(tick.time) - int(_time.time())) if (tick and tick.time) else 10800
                 except Exception:
-                    pass
+                    server_offset_s = 10800
+                if not (7200 <= server_offset_s <= 14400):
+                    server_offset_s = 10800
 
-                now_dt = datetime.utcnow()
-                bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_dt, now_dt)
+                close_broker = datetime.fromtimestamp(int(close_dt.timestamp()) + server_offset_s)
+                now_broker = datetime.fromtimestamp(int(_time.time()) + server_offset_s)
+                bars = mt5.copy_rates_range("XAUUSD", mt5.TIMEFRAME_M5, close_broker, now_broker)
 
                 if bars is None or len(bars) == 0:
                     continue
