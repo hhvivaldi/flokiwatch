@@ -1331,3 +1331,94 @@ class TestConfidenceFloor:
         assert "60%" in msg
         assert "70%" in msg
         assert "Only submit plans you strongly believe in" in msg
+
+
+# =============================================================================
+# FLO-419 — entry-condition dynamic-level ban (CEO 2026-05-04)
+#
+# Bans price_at_sr_zone / price_at_pivot / price_at_fibonacci in
+# entry.conditions. These primitives resolve their target price from
+# the live SemanticCache; if Brain re-ranks the nearest level the
+# trigger silently shifts. Plans must commit to a literal price.
+# Empirical motivation: PLAN-20260503-001.
+# =============================================================================
+
+class TestEntryDynamicLevelBan:
+
+    def _replace_first_entry_cond(self, plan_dict, new_cond):
+        plan_dict["entry"]["conditions"][0] = new_cond
+        return plan_dict
+
+    # --- Rejections -------------------------------------------------------
+
+    def test_sr_zone_in_entry_rejected(self, valid_plan_dict):
+        self._replace_first_entry_cond(valid_plan_dict, {
+            "type": "price_at_sr_zone", "zone_type": "support",
+            "tolerance_pips": 8.0,
+        })
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("price_at_sr_zone" in e and "live" in e for e in errors), errors
+
+    def test_pivot_in_entry_rejected(self, valid_plan_dict):
+        self._replace_first_entry_cond(valid_plan_dict, {
+            "type": "price_at_pivot", "pivot_set": "classic",
+            "level": "R1", "tolerance_pips": 5.0,
+        })
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("price_at_pivot" in e for e in errors), errors
+
+    def test_fib_in_entry_rejected(self, valid_plan_dict):
+        self._replace_first_entry_cond(valid_plan_dict, {
+            "type": "price_at_fibonacci", "level": 0.618,
+            "tolerance_pips": 8.0,
+        })
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        assert any("price_at_fibonacci" in e for e in errors), errors
+
+    def test_all_three_offenders_reported(self, valid_plan_dict):
+        # Replace all entry conditions with banned primitives so we can
+        # confirm the validator names each one (saves a re-submit cycle).
+        valid_plan_dict["entry"]["conditions"] = [
+            {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 8.0},
+            {"type": "price_at_pivot", "pivot_set": "classic", "level": "PP", "tolerance_pips": 5.0},
+        ]
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert not ok
+        joined = " ".join(errors)
+        assert "price_at_sr_zone" in joined
+        assert "price_at_pivot" in joined
+
+    # --- Acceptances ------------------------------------------------------
+
+    def test_price_above_in_entry_accepted(self, valid_plan_dict):
+        self._replace_first_entry_cond(valid_plan_dict, {
+            "type": "price_above", "level": 4660.0,
+        })
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_price_below_in_entry_accepted(self, valid_plan_dict):
+        self._replace_first_entry_cond(valid_plan_dict, {
+            "type": "price_below", "level": 4620.0,
+        })
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors
+
+    def test_sr_zone_in_exit_still_accepted(self, valid_plan_dict):
+        # Ban is entry-only: exit/management blocks may still use the
+        # primitive (the live-structure semantic is intentional there).
+        valid_plan_dict["exit"] = [{
+            "name": "structural_invalidation",
+            "priority": 9,
+            "conditions": [{
+                "type": "price_at_sr_zone", "zone_type": "support",
+                "tolerance_pips": 8.0,
+            }],
+            "action": {"type": "close_full"},
+            "fires": "once",
+        }]
+        ok, _, errors = validate_plan(valid_plan_dict)
+        assert ok, errors

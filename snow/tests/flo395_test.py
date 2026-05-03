@@ -82,14 +82,17 @@ def _wrap_plan(conditions: list, schema_version: int = 1) -> dict:
 # VOCABULARY EXAMPLES section. Any drift between prompt and test
 # triggers test failure — locks the prompt examples as a contract.
 PROMPT_EXAMPLES = [
+    # FLO-419 (CEO 2026-05-04): entry-condition dynamic-level ban
+    # forced these 4 examples to use fixed price levels in entries.
+    # Test fixtures track the prompt verbatim.
     ("bb_squeeze_breakout", 1, [
         {"type": "bollinger_position", "tf": "H1", "relation": "above_upper"},
         {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.0},
-        {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0},
+        {"type": "price_above", "level": 4660.0},
     ]),
     ("trend_pullback_ma_confluence", 1, [
         {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
-        {"type": "price_at_fibonacci", "level": 0.618, "tolerance_pips": 8.0},
+        {"type": "price_below", "level": 4622.0},
         {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0},
     ]),
     ("macd_momentum_continuation", 1, [
@@ -99,11 +102,11 @@ PROMPT_EXAMPLES = [
     ]),
     ("divergence_play_reversal", 1, [
         {"type": "indicator_divergence", "indicator": "macd", "direction": "bearish"},
-        {"type": "price_at_sr_zone", "zone_type": "resistance", "tolerance_pips": 5.0},
+        {"type": "price_above", "level": 4647.0},
         {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70},
     ]),
     ("pivot_level_rejection", 1, [
-        {"type": "price_at_pivot", "pivot_set": "classic", "level": "R1", "tolerance_pips": 5.0},
+        {"type": "price_above", "level": 4665.95},
         {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
         {"type": "rsi", "tf": "M15", "op": "above", "threshold": 70},
     ]),
@@ -119,7 +122,7 @@ PROMPT_EXAMPLES = [
     ("mtf_trend_alignment_entry", 1, [
         {"type": "ema_relation", "tf": "H4", "relation": "aligned_bull"},
         {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
-        {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0},
+        {"type": "price_below", "level": 4620.0},
     ]),
 ]
 
@@ -172,10 +175,10 @@ class TestB1PromptExamples:
         # accidental matches in unrelated prompt text are unlikely.
         anchors = {
             "bb_squeeze_breakout": '"relation": "above_upper"',
-            "trend_pullback_ma_confluence": '"level": 0.618, "tolerance_pips": 8.0',
+            "trend_pullback_ma_confluence": '"type": "price_below", "level": 4622.0',
             "macd_momentum_continuation": '"threshold": 0.05',
             "divergence_play_reversal": '"indicator": "macd", "direction": "bearish"',
-            "pivot_level_rejection": '"pivot_set": "classic", "level": "R1"',
+            "pivot_level_rejection": '"type": "price_above", "level": 4665.95',
             "stateful_crossover_entry": '"indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0',
             "failed_breakdown_reclaim": '"level": 4707.0, "direction": "below"',
             "mtf_trend_alignment_entry": '"tf": "H4", "relation": "aligned_bull"',

@@ -413,17 +413,17 @@ class TestPlanIntegration:
                          "confidence": 75, "regime_assumed": "RANGING"},
             "entry": {
                 "direction": "BUY", "volume": 0.02,
-                # FLO-Path4: 2 conditions to satisfy _check_min_entry_conditions.
-                # Test purpose is fib-level acceptance, not entry shape — second
-                # condition (rsi H1 > 50) is benign and orthogonal.
+                # FLO-419 (CEO 2026-05-04): price_at_fibonacci banned in
+                # entry. Test purpose (extended fib level 1.0 round-trips
+                # through validate_plan) is preserved by moving the fib
+                # condition into the exit block where it's still legal.
                 "conditions": [
-                    {"type": "price_at_fibonacci", "level": 1.0,
-                     "tolerance_pips": 8},
+                    {"type": "price_above", "level": 4720.0},
                     {"type": "rsi", "tf": "H1", "op": "above", "threshold": 50},
                 ],
                 "initial_sl": 4710.0, "initial_tp": 4730.0,
             },
-            "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}], "exit": [{"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
+            "management": [{"name": "be", "priority": 7, "conditions": [{"type": "mfe_reached", "pips": 100.0}], "action": {"type": "move_sl_to_breakeven", "offset_pips": 0.0}, "fires": "once"}], "exit": [{"name": "fib_target", "priority": 5, "conditions": [{"type": "price_at_fibonacci", "level": 1.0, "tolerance_pips": 8}], "action": {"type": "close_full"}, "fires": "once"}, {"name": "fallback_target", "priority": 1, "conditions": [{"type": "profit_pips", "op": "above", "threshold": 9999}], "action": {"type": "close_full"}, "fires": "once"}],  # FLO-401 floor
             "emergency": {"max_loss_pips": 150, "max_duration_minutes": 480,
                           "on_broker_error": "alert_floki"},
         }

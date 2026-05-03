@@ -233,7 +233,7 @@ EXPLORATORY SCENARIO EXAMPLE — a "what-if branch" plan: countertrend BUY at H4
                                 "htf": "HTF_counter", "news_session": []},
                "confidence_reason": "H4 4500 is a 4-touch swing-low cluster; macd_divergence requirement gates entry on momentum confirmation, not just price touch."},
   "entry":    {"direction": "BUY", "volume": 0.02,
-               "conditions": [{"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 8.0},
+               "conditions": [{"type": "price_below", "level": 4500.0},
                               {"type": "indicator_divergence", "indicator": "macd", "direction": "bullish"}],
                "initial_sl": 4485.0, "initial_tp": 4540.0,
                "entry_price": 4500.0},
@@ -258,13 +258,13 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
 "conditions": [
   {"type": "bollinger_position", "tf": "H1", "relation": "above_upper"},
   {"type": "macd_histogram", "tf": "H1", "op": "above", "threshold": 0.0},
-  {"type": "price_at_sr_zone", "zone_type": "any", "tolerance_pips": 5.0}
+  {"type": "price_above", "level": 4660.0}
 ]
 
-(2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend:
+(2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend. Lock the entry to the literal Fib price your chart shows (here 4622, the H1 0.618 level read from the current swing):
 "conditions": [
   {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
-  {"type": "price_at_fibonacci", "level": 0.618, "tolerance_pips": 8.0},
+  {"type": "price_below", "level": 4622.0},
   {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0}
 ]
 
@@ -275,16 +275,16 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "price_above", "level": 4720.0}
 ]
 
-(4) DIVERGENCE-PLAY REVERSAL — bearish MACD divergence at HTF resistance:
+(4) DIVERGENCE-PLAY REVERSAL — bearish MACD divergence at HTF resistance. Lock the entry price to the resistance level your thesis names (here 4647, the D1 38-touch zone):
 "conditions": [
   {"type": "indicator_divergence", "indicator": "macd", "direction": "bearish"},
-  {"type": "price_at_sr_zone", "zone_type": "resistance", "tolerance_pips": 5.0},
+  {"type": "price_above", "level": 4647.0},
   {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}
 ]
 
-(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion. Required fields: `pivot_set` (∈ classic | fibonacci), `level` (∈ PP, R1, R2, R3, S1, S2, S3), `tolerance_pips` (gt=0; typical 3-5 for tight pivot tag, 8-10 for wider zones). Use `pivot_set: classic` for the standard PP±H+L formula or `pivot_set: fibonacci` for fib-weighted pivots — pick whichever your chart-reading actually uses; the levels enum is identical:
+(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion. Pull the literal R1 price from `get_pivot_points` and write it into a `price_above` (or `price_below` for support pivots) — entry triggers do NOT use `price_at_pivot` (the pivot value is recomputed from the prior session's H/L/C and would silently shift on day-rollover; commit to the number you analyzed):
 "conditions": [
-  {"type": "price_at_pivot", "pivot_set": "classic", "level": "R1", "tolerance_pips": 5.0},
+  {"type": "price_above", "level": 4665.95},
   {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
   {"type": "rsi", "tf": "M15", "op": "above", "threshold": 70}
 ]
@@ -302,11 +302,11 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "indicator_was", "indicator": "rsi", "tf": "H1", "op": "below", "threshold": 30, "within_bars": 4}
 ]
 
-(8) MTF TREND-ALIGNMENT ENTRY — both HTF and working-TF EMAs aligned, structural pullback:
+(8) MTF TREND-ALIGNMENT ENTRY — both HTF and working-TF EMAs aligned, structural pullback. Lock the trigger to the literal support price your thesis names (here 4620, the H4 17-touch CONF SUP):
 "conditions": [
   {"type": "ema_relation", "tf": "H4", "relation": "aligned_bull"},
   {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
-  {"type": "price_at_sr_zone", "zone_type": "support", "tolerance_pips": 5.0}
+  {"type": "price_below", "level": 4620.0}
 ]
 
 EMA_RELATION — `aligned_bull` vs `price_above` are different gates. Picking the wrong one is the #1 reason a momentum-thesis plan fails to trigger even when the chart says it should:
@@ -321,7 +321,7 @@ These eight shapes cover ~80% of the analytical surface available to you. Notice
 Condition primitives:
 - Price (point-in-time): price_above, price_below.
 - Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).
-- Structural / level proximity (point-in-time): price_at_sr_zone (zone_type ∈ support|resistance|any, **mandatory `tolerance_pips`** — typical 3-5 pips for tight S/R, 8-10 for wider zones), price_at_fibonacci (extended levels: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips, defaults to 5 if omitted), price_at_pivot (pivot_set ∈ classic|fibonacci, level ∈ PP/R1/R2/R3/S1/S2/S3, **mandatory `tolerance_pips`** — typical 3-5 pips). The mandatory `tolerance_pips` is Pydantic-enforced (gt=0); omitting it on sr_zone or pivot rejects the plan with a validation error.
+- Structural / level proximity (point-in-time): price_at_sr_zone (zone_type ∈ support|resistance|any, **mandatory `tolerance_pips`** — typical 3-5 pips for tight S/R, 8-10 for wider zones), price_at_fibonacci (extended levels: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips, defaults to 5 if omitted), price_at_pivot (pivot_set ∈ classic|fibonacci, level ∈ PP/R1/R2/R3/S1/S2/S3, **mandatory `tolerance_pips`** — typical 3-5 pips). The mandatory `tolerance_pips` is Pydantic-enforced (gt=0); omitting it on sr_zone or pivot rejects the plan with a validation error. **ENTRY-BAN (FLO-419, CEO 2026-05-04):** all three primitives — `price_at_sr_zone`, `price_at_pivot`, `price_at_fibonacci` — are REJECTED in `entry.conditions`. They resolve their target price from the live cache at trigger time, so the trigger silently shifts whenever Brain re-ranks the nearest zone / pivot / fib level. For entries you must commit to the literal number your thesis names: read the price from `get_sr_zones` / `get_pivot_points` / `get_fibonacci_levels`, then write it into `price_above {level: N}` or `price_below {level: N}`. If the structure shifts, author a new plan next cycle rather than letting the old one fire at a price you never analyzed. These primitives remain permitted in `exit` and `management` blocks where live-structure semantics are the intended behavior.
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.
 - Stateful (carry memory across ticks — Phase 8b additions):

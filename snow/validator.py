@@ -409,6 +409,59 @@ def _check_min_entry_conditions(plan: Plan) -> list[str]:
     return []
 
 
+# FLO-419 (CEO 2026-05-04): structural / level-proximity primitives that
+# resolve their target price from live SemanticCache data at trigger
+# time. Banned in entry.conditions because the trigger price would
+# silently shift if Brain re-ranks the nearest zone / pivot / fib level.
+# The plan must commit to the exact number Floki authored — if the
+# structure shifts, author a new plan next cycle. These primitives
+# remain permitted in exit / management blocks where live-structure
+# semantics are intended.
+_DYNAMIC_LEVEL_ENTRY_BAN: frozenset[str] = frozenset({
+    "price_at_sr_zone",
+    "price_at_pivot",
+    "price_at_fibonacci",
+})
+
+
+def _check_no_dynamic_level_in_entry(plan: Plan) -> list[str]:
+    """Reject entry conditions that resolve their target price from the
+    live SemanticCache (price_at_sr_zone / price_at_pivot /
+    price_at_fibonacci). Trigger price would silently move if Brain's
+    zone / pivot / fib ranking changes between authoring and fire.
+    Force fixed price_above / price_below with the exact level Floki's
+    thesis names.
+
+    Empirical motivation (PLAN-20260503-001, 2026-05-04): authored with
+    nearest-support cluster at 4605-4612 in mind, used `price_at_sr_zone
+    zone_type=support tolerance_pips=8` (no fixed price). If
+    support_resistance later demoted those zones and surfaced 4585 as
+    the new nearest support, the plan would have fired at a price with
+    no thesis behind it.
+    """
+    bad = [
+        (i, getattr(c, "type", None))
+        for i, c in enumerate(plan.entry.conditions)
+        if getattr(c, "type", None) in _DYNAMIC_LEVEL_ENTRY_BAN
+    ]
+    if not bad:
+        return []
+    # Report all offenders, not just the first — saves a re-submit cycle.
+    msgs = []
+    for i, t in bad:
+        msgs.append(
+            f"entry.conditions[{i}]: {t!r} resolves its target price "
+            f"from the live S/R / pivot / fib cache at trigger time "
+            f"and would silently shift if Brain re-ranks the nearest "
+            f"level. Plans must commit to the exact price your thesis "
+            f"names. Replace with `price_above {{level: N}}` or "
+            f"`price_below {{level: N}}` using the literal number from "
+            f"your analysis. {t!r} remains permitted in exit and "
+            f"management blocks where live-structure semantics apply."
+        )
+    return msgs
+
+
 # =============================================================================
 # FLO-391 / FLO-392 — management primitive reachability (semantic coherence)
 # =============================================================================
@@ -945,6 +998,7 @@ def validate_plan(
     errors += _check_entry_price_in_range(plan)
     errors += _check_management_threshold_floor(plan)
     errors += _check_min_entry_conditions(plan)
+    errors += _check_no_dynamic_level_in_entry(plan)
     errors += _check_management_reachability(plan)
     errors += _check_management_hybrid_constraints(plan)
     errors += _check_confidence_floor(plan)
