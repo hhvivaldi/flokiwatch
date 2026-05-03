@@ -604,6 +604,237 @@ def alert_pending_fill(
     )
 
 
+# FLO-419 (CEO 2026-05-03): story-format trade-close alert.
+# Outcome -> Discord embed sidebar color. Outcome strings match
+# executor.py's classification (WIN / LOSS / BE on a 0.5-pip dead zone)
+# so this is one source of truth, not two.
+_CLOSE_COLORS = {"WIN": 0x00FF00, "LOSS": 0xFF0000, "BE": 0xFFFF00}
+_CLOSE_LABELS = {"WIN": "🟢 WIN", "LOSS": "🔴 LOSS", "BE": "🟡 BREAKEVEN"}
+_MFE_BACKFILL_TIMEOUT_S = 3.0  # never block a notification on slow MT5
+
+
+def _lookup_plan_context(ticket: int) -> Optional[Dict]:
+    """Join trades.ticket -> snow_plans.trade_ticket and return the bits
+    of plan context the alert renders. Returns None for legacy / EA-direct
+    trades that have no Snow plan, so the alert can omit the plan section
+    gracefully."""
+    if not ticket:
+        return None
+    try:
+        import sqlite3, json
+        db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT id, plan_json FROM snow_plans WHERE trade_ticket = ? LIMIT 1",
+                (int(ticket),),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return None
+        plan_id, plan_json = row[0], row[1]
+        p = json.loads(plan_json) if plan_json else {}
+        a = p.get("analysis") or {}
+        e = p.get("entry") or {}
+        return {
+            "plan_id": plan_id,
+            "thesis": (a.get("thesis") or "").strip(),
+            "confidence": a.get("confidence"),
+            "initial_sl": e.get("initial_sl"),
+            "initial_tp": e.get("initial_tp"),
+        }
+    except Exception as ex:
+        log.debug(f"alert_trade_closed | plan lookup failed for #{ticket}: {ex}")
+        return None
+
+
+def _lookup_mfe_mae(
+    ticket: int,
+    direction: str,
+    entry_price: Optional[float],
+    open_iso: Optional[str],
+    close_iso: Optional[str],
+) -> tuple:
+    """Return (mfe_pips, mae_pips). Tier 1: trades table (already populated
+    by record_trade_close in normal flow). Tier 2: mfe_backfill from M1 with
+    a hard 3s wall-clock budget — notifications must never wait on slow MT5.
+    Falls back to (None, None) on any failure or timeout."""
+    # Tier 1 — DB read
+    try:
+        import sqlite3
+        db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT mfe_points, mae_points FROM trades WHERE ticket = ? LIMIT 1",
+                (int(ticket),),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row and row[0] is not None and row[1] is not None:
+            return float(row[0]), float(row[1])
+    except Exception as ex:
+        log.debug(f"alert_trade_closed | mfe DB read failed for #{ticket}: {ex}")
+
+    # Tier 2 — backfill from M1, with timeout. Bail if any input is missing.
+    if not (entry_price and open_iso and close_iso and direction):
+        return (None, None)
+    try:
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TE
+        from mfe_backfill import backfill_mfe_mae_from_m1
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(
+                backfill_mfe_mae_from_m1,
+                int(ticket), str(direction), float(entry_price), open_iso, close_iso,
+            )
+            try:
+                mfe, mae = fut.result(timeout=_MFE_BACKFILL_TIMEOUT_S)
+                return (mfe, mae)
+            except _TE:
+                log.debug(f"alert_trade_closed | mfe backfill timed out (>{_MFE_BACKFILL_TIMEOUT_S}s) for #{ticket} — degrading to N/A")
+                return (None, None)
+    except Exception as ex:
+        log.debug(f"alert_trade_closed | mfe backfill failed for #{ticket}: {ex}")
+        return (None, None)
+
+
+def _compute_day_pnl_usd() -> float:
+    """Sum of `profit` for trades closed since the current broker midnight
+    (broker midnight = 22:00 UTC the previous day for our +2h broker, but
+    we use the broker_offset_hours=3 used by executor.py for actual EEST).
+    Returns 0.0 on no data."""
+    try:
+        import sqlite3
+        from tz_utils import trading_day_broker_aligned
+        broker_day = trading_day_broker_aligned(broker_offset_hours=3)
+        # broker midnight `broker_day` 00:00 = UTC `broker_day` minus 3h.
+        broker_midnight_utc = datetime.fromisoformat(broker_day + "T00:00:00") - timedelta(hours=3)
+        cutoff_iso = broker_midnight_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(profit), 0.0) FROM trades "
+                "WHERE close_time IS NOT NULL AND profit IS NOT NULL "
+                "  AND close_time >= ?",
+                (cutoff_iso,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return float(row[0] if row else 0.0)
+    except Exception as ex:
+        log.debug(f"alert_trade_closed | day P&L compute failed: {ex}")
+        return 0.0
+
+
+def _format_duration_iso(open_iso: Optional[str], close_iso: Optional[str]) -> str:
+    """h/m/s formatter from two UTC ISO-8601 strings. 'N/A' if either missing
+    or parse fails. Pattern lifted from agent_data_builder.py:882."""
+    if not open_iso or not close_iso:
+        return "N/A"
+    try:
+        dt_o = datetime.fromisoformat(str(open_iso).replace("Z", "+00:00"))
+        dt_c = datetime.fromisoformat(str(close_iso).replace("Z", "+00:00"))
+        secs = int((dt_c - dt_o).total_seconds())
+        if secs < 0:
+            return "N/A"
+        h, rem = divmod(secs, 3600)
+        m, s = divmod(rem, 60)
+        if h > 0:
+            return f"{h}h {m}m {s}s"
+        if m > 0:
+            return f"{m}m {s}s"
+        return f"{s}s"
+    except Exception:
+        return "N/A"
+
+
+def _classify_outcome(profit: Optional[float], outcome_arg: Optional[str]) -> str:
+    """Use the outcome arg if the caller already classified (executor.py is
+    the canonical source). Fallback for legacy callers: $0.50 USD dead zone
+    on profit."""
+    if outcome_arg in ("WIN", "LOSS", "BE"):
+        return outcome_arg
+    if outcome_arg == "BREAKEVEN":  # rendering label, normalize back
+        return "BE"
+    if profit is None:
+        return "BE"
+    if profit > 0.50:
+        return "WIN"
+    if profit < -0.50:
+        return "LOSS"
+    return "BE"
+
+
+def _build_close_description(
+    *,
+    outcome: str,
+    direction: str,
+    plan_ctx: Optional[Dict],
+    entry_price: Optional[float],
+    exit_price: Optional[float],
+    profit: float,
+    pips: Optional[float],
+    duration_str: str,
+    mfe_pips: Optional[float],
+    mae_pips: Optional[float],
+    day_pnl: float,
+    reason: Optional[str],
+) -> str:
+    """Story-format multi-line description body. Matches the mockup
+    approved by CEO 2026-05-03."""
+    lines: List[str] = []
+    header_label = _CLOSE_LABELS.get(outcome, "⚪ CLOSED")
+    lines.append(f"{header_label} — {direction} XAU/USD")
+    lines.append("━━━━━━━━━━━━━━━━━━━")
+
+    if plan_ctx:
+        lines.append(f"📋 Plan: {plan_ctx.get('plan_id', 'N/A')}")
+        thesis = plan_ctx.get("thesis") or ""
+        if thesis:
+            # Discord description has a 4096-char ceiling but a thesis can be 2000.
+            # Trim long theses to first sentence or 200 chars to keep the card scannable.
+            short = thesis.split(". ")[0]
+            if len(short) > 200:
+                short = short[:197] + "..."
+            lines.append(f"💡 Thesis: {short}")
+        conf = plan_ctx.get("confidence")
+        if conf is not None:
+            lines.append(f"🎯 Confidence: {int(conf)}%")
+        lines.append("")
+
+    def _px(v):
+        return f"${v:,.2f}" if v is not None else "N/A"
+
+    lines.append(f"📊 Entry: {_px(entry_price)}")
+    lines.append(f"📊 Exit:  {_px(exit_price)}")
+    if plan_ctx and (plan_ctx.get("initial_sl") is not None or plan_ctx.get("initial_tp") is not None):
+        lines.append(f"📊 SL: {_px(plan_ctx.get('initial_sl'))} | TP: {_px(plan_ctx.get('initial_tp'))}")
+    lines.append("")
+
+    pips_str = f"{pips:+.1f} pips" if pips is not None else "N/A"
+    lines.append(f"💰 P&L: {profit:+.2f} USD ({pips_str})")
+    lines.append(f"⏱️ Duration: {duration_str}")
+    # MFE/MAE are stored as positive magnitudes (favorable / adverse pips
+    # from entry). Render MFE as +N (favorable) and MAE as -N (adverse) to
+    # match the mockup convention CEO approved 2026-05-03.
+    if mfe_pips is not None:
+        lines.append(f"📈 Best:  +{abs(mfe_pips):.1f} pips (MFE)")
+    else:
+        lines.append("📈 Best:  N/A")
+    if mae_pips is not None:
+        lines.append(f"📉 Worst: -{abs(mae_pips):.1f} pips (MAE)")
+    else:
+        lines.append("📉 Worst: N/A")
+    lines.append("")
+
+    lines.append(f"📅 Day P&L: {day_pnl:+.2f} USD")
+    if reason:
+        lines.append(f"🏷️ Close reason: {reason}")
+    return "\n".join(lines)
+
+
 def alert_trade_closed(
     ticket: int,
     direction: str,
@@ -617,49 +848,76 @@ def alert_trade_closed(
     pips: Optional[float] = None,
     duration: Optional[str] = None,
     phase: Optional[str] = None,
+    open_time_iso: Optional[str] = None,
+    close_time_iso: Optional[str] = None,
 ):
-    """Alert: Trade closed"""
+    """Alert: Trade closed.
+
+    FLO-419 (CEO 2026-05-03): enriched story format. Joins to snow_plans
+    via ticket to surface the originating plan's thesis/confidence/SL/TP,
+    pulls MFE/MAE (DB tier 1, MT5 backfill tier 2 with 3s timeout), and
+    appends the day's running broker-aligned P&L.
+
+    The 5 monitor.py callers continue to pass the same kwargs they did
+    pre-FLO-419 — every new field is optional and looked up internally.
+    `open_time_iso` / `close_time_iso` are new optional kwargs; supplying
+    them lets the alert compute duration and Tier-2 MFE/MAE backfill
+    without an extra DB hop.
+    """
+    # Pending path stays terse — no plan join needed.
     if pending and outcome:
         if outcome == "WIN":
-            emoji = "💰"
-            color = 0x00ff00
+            color = 0x00FF00
+            pnl_value = "WIN — Awaiting confirmation"
         elif outcome == "LOSS":
-            emoji = "❌"
-            color = 0xff0000
+            color = 0xFF0000
+            pnl_value = "LOSS — Awaiting confirmation"
         else:
-            emoji = "⚪"
-            color = 0x95a5a6
-        pnl_value = f"{outcome} — Awaiting confirmation"
-    else:
-        if profit >= 0:
-            emoji = "💰"
-            color = 0x00ff00
-        else:
-            emoji = "❌"
-            color = 0xff0000
-        pnl_value = f"{_format_price(profit)} ({profit_percent:+.1f}%)"
+            color = 0x95A5A6
+            pnl_value = f"{outcome} — Awaiting confirmation"
+        discord_router.send_embed(
+            CHANNEL_TRADES,
+            title=f"⏳ TRADE CLOSED — {direction} #{ticket}",
+            description=f"Position closed; final P&L pending broker confirmation.\n\n**P&L:** {pnl_value}",
+            color=color,
+            fields=[],
+        )
+        return
 
+    # Compute pips locally if caller didn't.
     if pips is None and entry_price is not None and exit_price is not None:
         pips = (exit_price - entry_price) / 0.1 if direction == "BUY" else (entry_price - exit_price) / 0.1
 
-    fields = [
-        {"name": "Entry", "value": _format_price(entry_price), "inline": True},
-        {"name": "Exit", "value": _format_price(exit_price), "inline": True},
-        {"name": "P&L", "value": f"{pnl_value} ({_format_pips(pips)})", "inline": True},
-        {"name": "Close reason", "value": reason, "inline": True},
-    ]
+    classified = _classify_outcome(profit, outcome)
+    color = _CLOSE_COLORS.get(classified, 0x95A5A6)
 
-    if duration:
-        fields.append({"name": "Duration", "value": duration, "inline": True})
-    if phase:
-        fields.append({"name": "Phase at close", "value": phase, "inline": True})
+    # Enrichments. Each helper internally degrades to None / 0.0 on failure.
+    plan_ctx = _lookup_plan_context(ticket)
+    mfe_pips, mae_pips = _lookup_mfe_mae(ticket, direction, entry_price, open_time_iso, close_time_iso)
+    day_pnl = _compute_day_pnl_usd()
+    duration_str = duration or _format_duration_iso(open_time_iso, close_time_iso)
+
+    description = _build_close_description(
+        outcome=classified,
+        direction=direction,
+        plan_ctx=plan_ctx,
+        entry_price=entry_price,
+        exit_price=exit_price,
+        profit=profit,
+        pips=pips,
+        duration_str=duration_str,
+        mfe_pips=mfe_pips,
+        mae_pips=mae_pips,
+        day_pnl=day_pnl,
+        reason=reason,
+    )
 
     discord_router.send_embed(
         CHANNEL_TRADES,
-        title=f"{emoji} TRADE CLOSED — {direction} #{ticket}",
-        description="Position has been closed.",
+        title=f"{_CLOSE_LABELS.get(classified, '⚪ CLOSED')} #{ticket}",
+        description=description,
         color=color,
-        fields=fields,
+        fields=[],
     )
 
 
