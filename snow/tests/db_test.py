@@ -142,6 +142,39 @@ class TestPlanInsertGet:
         assert len(rehydrated.management) == len(sample_plan.management)
         assert len(rehydrated.exit) == len(sample_plan.exit)
 
+    def test_get_plan_as_model_hydrates_entered_at(
+        self, snow_conn, sample_plan
+    ):
+        """FLO-419 (CEO 2026-05-04): plan_json freezes entered_at as
+        null at submit time. The DB column gets populated when entry
+        fires (update_plan_trade_ticket), but the JSON is never
+        re-serialized. get_plan_as_model must hydrate the column onto
+        the model so evaluate_duration_exceeds reads from the live
+        position open time, not from plan creation time. PLAN-002
+        forensics: cap was 360min from entered_at by intent; fired at
+        created_at + 360 = 5h after entry instead of 6h."""
+        snow_db.insert_plan(sample_plan)
+        # Pre-entry: entered_at is None on both row and model.
+        pre = snow_db.get_plan_as_model(sample_plan.id)
+        assert pre.entered_at is None
+
+        # Snow stamps entered_at when entry fires.
+        snow_db.update_plan_trade_ticket(sample_plan.id, 1234567)
+        post = snow_db.get_plan_as_model(sample_plan.id)
+        assert post.entered_at is not None, (
+            "entered_at must hydrate from DB column onto model after "
+            "entry fires (FLO-419 duration_exceeds clock-origin fix)"
+        )
+        assert post.entered_at.endswith("Z"), (
+            "entered_at hydration must preserve the Z-suffixed UTC "
+            "ISO string the column carries (Rule 22)"
+        )
+        # Also verify closed_at hydration when the plan terminates.
+        snow_db.mark_plan_terminal(sample_plan.id, "cancelled")
+        terminal = snow_db.get_plan_as_model(sample_plan.id)
+        assert terminal.closed_at is not None
+        assert terminal.closed_at.endswith("Z")
+
     def test_schema_version_column_matches_json(
         self, snow_conn, sample_plan
     ):

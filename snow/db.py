@@ -337,11 +337,30 @@ def get_plan(plan_id: str) -> Optional[dict[str, Any]]:
 
 
 def get_plan_as_model(plan_id: str) -> Optional[Plan]:
-    """Return the plan re-hydrated as a Pydantic Plan, or None."""
+    """Return the plan re-hydrated as a Pydantic Plan, or None.
+
+    FLO-419 (CEO 2026-05-04): hydrate `entered_at` and `closed_at` from
+    the dedicated DB columns onto the Plan model. The `plan_json` blob
+    is written at submit time when those fields are still null; Snow
+    later writes them to the columns via `mark_entered` / terminal
+    transitions but does NOT re-serialize the JSON. Without this
+    hydration, evaluators that read `plan.entered_at` (notably
+    `evaluate_duration_exceeds`) silently fall back to `created_at` and
+    burn the pending-window time against the cap. PLAN-20260504-002
+    forensics: cap was 360 min from entered_at by intent; fired at
+    created_at + 360 = 5h after entry instead of 6h.
+    """
     row = get_plan(plan_id)
     if row is None:
         return None
-    return Plan.model_validate_json(row["plan_json"])
+    plan = Plan.model_validate_json(row["plan_json"])
+    # Hydrate the lifecycle timestamps from the row columns. These are
+    # the operational truth — `plan_json` was frozen at submit time.
+    if row.get("entered_at"):
+        plan.entered_at = row["entered_at"]
+    if row.get("closed_at"):
+        plan.closed_at = row["closed_at"]
+    return plan
 
 
 def list_plans_by_status(
