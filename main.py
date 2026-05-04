@@ -1276,9 +1276,22 @@ class TradingBot:
             # to spawn. Operator handles it; a fresh restart with MT5
             # connected reconciles correctly.
             self._snow_thread = None
+            # FLO-419 (CEO 2026-05-04): create the PerPlanTracker ONCE
+            # and thread it through both reconcile_on_startup AND the
+            # SnowLoop spawn. Pre-fix: tracker=None passed to recovery,
+            # so _seed_tracker was gated off and active plans at restart
+            # never had their MFE/MAE re-seeded. Loop then spun up a
+            # fresh empty tracker. Result: BE / trail / profit_pips
+            # contingencies returned False forever for plans that were
+            # active before restart. Live evidence: PLAN-20260504-006
+            # reached +166p MFE (well past its 156p BE trigger) but BE
+            # never fired — tracker.has(plan_id) was False the entire
+            # 4-hour life of the trade post-restart.
+            from snow.evaluators import PerPlanTracker
+            _snow_tracker = PerPlanTracker()
             try:
                 _summary = _snow_recovery.reconcile_on_startup(
-                    tracker=None,
+                    tracker=_snow_tracker,
                 )
                 log.info(f"snow.recovery.complete {_summary.as_log_kvs()}")
                 _spawn_loop = True
@@ -1298,6 +1311,7 @@ class TradingBot:
                 try:
                     self._snow_thread = threading.Thread(
                         target=_snow_loop.run_forever, args=(self,),
+                        kwargs={"tracker": _snow_tracker},
                         name="SnowLoop", daemon=True,
                     )
                     self._snow_thread.start()

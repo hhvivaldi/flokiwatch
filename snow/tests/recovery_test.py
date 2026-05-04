@@ -515,6 +515,125 @@ class TestActive:
 
 
 # =============================================================================
+# FLO-419 (CEO 2026-05-04) — end-to-end reseed against the REAL tracker
+#
+# The existing tests above use FakeTracker, which only records seed() calls.
+# That doesn't catch the failure mode actually observed in production: main.py
+# was passing tracker=None to reconcile_on_startup, the recovery code's
+# `if tracker is not None: _seed_tracker(...)` gate failed silently, and
+# active plans had their MFE/MAE state forever invisible to evaluators.
+#
+# These tests use the REAL PerPlanTracker so we verify the contract that
+# really matters: after recovery returns, an active plan with a live MT5
+# position must have tracker.has(plan_id) == True and the tracker's MFE
+# must read 0.0 (not None) — proving the seed propagated all the way.
+#
+# A failure here means the production wiring in main.py:1281 (the call to
+# reconcile_on_startup) is passing the wrong thing. PLAN-20260504-006 BE
+# never fired against +166p MFE because of exactly this gap.
+# =============================================================================
+
+class TestActiveReseedsRealTracker:
+
+    def test_real_tracker_has_plan_after_recovery(
+        self, snow_conn, valid_plan_dict
+    ):
+        from snow.evaluators import PerPlanTracker
+        real_tracker = PerPlanTracker()
+        _insert_plan(
+            valid_plan_dict,
+            plan_id="PLAN-20260504-901",
+            status=PlanStatus.ACTIVE.value,
+            trade_ticket=99001,
+        )
+        pos = FakePosition(ticket=99001, open_price=4590.43)
+        summary = reconcile_on_startup(
+            tracker=real_tracker,
+            mt5_proxy=FakeMT5(positions=(pos,)),
+            magic=123456,
+        )
+        assert summary.tracker_reseeds == 1
+        # The contract that actually matters for evaluators: the tracker
+        # must KNOW about this plan. Pre-fix, evaluators called
+        # tracker.mfe_pips(plan_id) which returned None because the
+        # tracker had no entry for the plan, so mfe_reached returned
+        # False forever.
+        assert real_tracker.has("PLAN-20260504-901"), (
+            "real tracker must know about the active plan after recovery"
+        )
+        # MFE must be 0.0 (initial) not None (unseeded).
+        assert real_tracker.mfe_pips("PLAN-20260504-901") == 0.0
+        # And entry_price must match the broker's open_price (recovery
+        # uses MT5 as authority). Exercise profit_pips to confirm the
+        # entry_price was actually persisted to the tracker (not just
+        # tracker.has() returning True with a stub state).
+        # 1 USD price move = 10 pips on XAUUSD. Direction-agnostic
+        # assertion: |profit_pips| should be 10 regardless of BUY/SELL.
+        profit = real_tracker.profit_pips("PLAN-20260504-901", 4591.43)
+        assert profit is not None
+        assert abs(abs(profit) - 10.0) < 0.01, (
+            f"profit_pips({4591.43}) should be ±10 pips from entry "
+            f"4590.43; got {profit}"
+        )
+
+    def test_passing_none_tracker_still_works_but_skips_reseed(
+        self, snow_conn, valid_plan_dict
+    ):
+        """Belt-and-braces: confirms the underlying recovery code's
+        backwards-compat branch (tracker=None is allowed; recovery just
+        skips the reseed step). Production must not rely on this path —
+        main.py is asserted-against by test_main_py_passes_real_tracker
+        below — but recovery itself remains tolerant for tests / one-off
+        scripts that don't need the tracker."""
+        _insert_plan(
+            valid_plan_dict,
+            plan_id="PLAN-20260504-902",
+            status=PlanStatus.ACTIVE.value,
+            trade_ticket=99002,
+        )
+        pos = FakePosition(ticket=99002, open_price=4600.0)
+        summary = reconcile_on_startup(
+            tracker=None,
+            mt5_proxy=FakeMT5(positions=(pos,)),
+            magic=123456,
+        )
+        # Recovery still runs successfully — just no reseed.
+        assert summary.tracker_reseeds == 0
+
+    def test_main_py_passes_real_tracker(self):
+        """Static contract check on main.py — the production call site
+        must NOT pass tracker=None. PLAN-20260504-006 BE-failure was
+        caused by exactly that. If a future edit reverts this, fail
+        loudly so it gets caught in CI before another live trade is
+        affected."""
+        with open("main.py", "r", encoding="utf-8") as f:
+            src = f.read()
+        # The bug pattern: reconcile_on_startup(...tracker=None...)
+        # The fix pattern: reconcile_on_startup(tracker=_snow_tracker)
+        # We assert the bug pattern is absent and the fix pattern present.
+        import re
+        # Find all reconcile_on_startup(...) calls and inspect their tracker= arg.
+        for m in re.finditer(
+            r"reconcile_on_startup\s*\(\s*([^)]*?)\s*\)", src, re.DOTALL,
+        ):
+            args = m.group(1)
+            assert "tracker=None" not in args, (
+                f"main.py call site passes tracker=None to "
+                f"reconcile_on_startup — this is the FLO-419 BE-failure "
+                f"bug. Args found: {args!r}"
+            )
+            assert "tracker=" in args, (
+                f"main.py call site must explicitly pass a tracker= arg. "
+                f"Args found: {args!r}"
+            )
+        # And the spawn must pass the same tracker through to the loop.
+        assert "kwargs={\"tracker\":" in src or "kwargs={'tracker':" in src, (
+            "main.py must thread the tracker into snow_loop.run_forever "
+            "via kwargs, otherwise the loop spins up a fresh empty tracker"
+        )
+
+
+# =============================================================================
 # Fail-loud contract
 # =============================================================================
 

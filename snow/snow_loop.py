@@ -669,11 +669,25 @@ def _direction_label(direction: Any) -> str:
     return direction.value if isinstance(direction, Direction) else str(direction)
 
 
-def run_forever(bot: Any, symbol: Optional[str] = None) -> None:
+def run_forever(
+    bot: Any,
+    symbol: Optional[str] = None,
+    tracker: Optional[PerPlanTracker] = None,
+) -> None:
     """Module-level entry point for `threading.Thread(target=...)`.
 
     Mirrors the calling convention documented in RFC §5.1:
         threading.Thread(target=snow_loop.run_forever, args=(self,), ...)
+
+    FLO-419 (CEO 2026-05-04): the optional `tracker` arg lets the caller
+    supply a PerPlanTracker instance that was already used by
+    `snow.recovery.reconcile_on_startup` to reseed ACTIVE plans. Without
+    this, recovery seeds a transient tracker and the loop creates a
+    fresh empty one — so MFE/MAE state on plans active at restart was
+    silently lost. The live PLAN-20260504-006 BE-failure was caused by
+    exactly this gap (main.py was passing tracker=None to recovery, the
+    loop spun up a new tracker with no seeds). The shared instance must
+    be created once in main.py and threaded through both call sites.
     """
-    loop = SnowLoop(bot, symbol=symbol)
+    loop = SnowLoop(bot, symbol=symbol, tracker=tracker)
     loop.run_forever()
