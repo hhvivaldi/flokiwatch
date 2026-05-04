@@ -728,6 +728,58 @@ def _compute_day_pnl_usd() -> float:
         return 0.0
 
 
+def _lookup_close_reason(ticket: int, fallback: str) -> str:
+    """FLO-419 (CEO 2026-05-04): map a closed broker ticket to the Snow
+    contingency name that actually fired the close, when available.
+    Falls back to the MT5 deal reason string for legacy / EA-direct
+    trades or paths Snow didn't drive (broker SL/TP, manual close,
+    drawdown auto-close, timeout-close).
+
+    Empirical motivation: PLAN-009 close alert showed "Expert Advisor"
+    (the raw MT5 DEAL_REASON_EXPERT label) — useless for forensics.
+    The actual close was driven by Snow's exit-side close_full action
+    or by broker SL; the contingency name (e.g. "give_back_protection",
+    "thesis_invalidation_sweep_failed", "duration_cap") is the
+    operationally meaningful attribution.
+
+    Query: most recent close_full / close_partial trigger for the plan
+    owning this ticket, with execution_status='success'. Excludes
+    `_user_cancel` (operator-driven cancels are not closes) so the
+    fallback applies in that case.
+
+    Returns:
+      "Snow: <contingency_name>"  when a snow_triggers row matches
+      fallback                    otherwise
+    """
+    if not ticket:
+        return fallback
+    try:
+        import sqlite3
+        db_path = os.path.abspath(getattr(config, "HISTORY_DB_PATH", "data/history.db"))
+        conn = sqlite3.connect(db_path, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT t.contingency_name "
+                "FROM snow_triggers t "
+                "JOIN snow_plans p ON p.id = t.plan_id "
+                "WHERE p.trade_ticket = ? "
+                "  AND t.action_type IN ('close_full', 'close_partial') "
+                "  AND t.execution_status = 'success' "
+                "  AND t.contingency_name != '_user_cancel' "
+                "ORDER BY t.id DESC LIMIT 1",
+                (int(ticket),),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row and row[0]:
+            cname = str(row[0]).strip()
+            if cname:
+                return f"Snow: {cname}"
+    except Exception as ex:
+        log.debug(f"alert_trade_closed | close_reason lookup failed for #{ticket}: {ex}")
+    return fallback
+
+
 def _format_duration_iso(open_iso: Optional[str], close_iso: Optional[str]) -> str:
     """h/m/s formatter from two UTC ISO-8601 strings. 'N/A' if either missing
     or parse fails. Pattern lifted from agent_data_builder.py:882."""
@@ -896,6 +948,7 @@ def alert_trade_closed(
     mfe_pips, mae_pips = _lookup_mfe_mae(ticket, direction, entry_price, open_time_iso, close_time_iso)
     day_pnl = _compute_day_pnl_usd()
     duration_str = duration or _format_duration_iso(open_time_iso, close_time_iso)
+    close_reason_str = _lookup_close_reason(ticket, fallback=reason)
 
     description = _build_close_description(
         outcome=classified,
@@ -909,7 +962,7 @@ def alert_trade_closed(
         mfe_pips=mfe_pips,
         mae_pips=mae_pips,
         day_pnl=day_pnl,
-        reason=reason,
+        reason=close_reason_str,
     )
 
     discord_router.send_embed(

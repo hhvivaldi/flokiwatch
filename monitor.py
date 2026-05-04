@@ -19,6 +19,22 @@ from executor import (
 from risk_manager import calculate_breakeven_sl, calculate_trailing_stop
 
 
+# FLO-419 (CEO 2026-05-04): tiny helper for the alert_trade_closed call
+# sites in this file. The alert helper expects ISO-8601 strings with the
+# Z suffix (Rule 22) so it can compute trade duration. PositionInfo /
+# deal records carry datetime objects; this function normalises them.
+def _iso_z(dt_obj):
+    """Format a datetime as a Z-suffixed UTC ISO-8601 string. Returns
+    None on missing or invalid input — alert helper falls back to
+    'N/A' for duration when either timestamp is None."""
+    if dt_obj is None:
+        return None
+    try:
+        return dt_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except Exception:
+        return None
+
+
 class PositionMonitor:
     """Monitor and manage open positions"""
     
@@ -853,7 +869,9 @@ class PositionMonitor:
                 direction=pos.direction,
                 profit=actual_profit,
                 profit_percent=profit_percent,
-                reason=f"Timeout ({config.MAX_POSITION_HOURS}h)"
+                reason=f"Timeout ({config.MAX_POSITION_HOURS}h)",
+                open_time_iso=_iso_z(pos.open_time),
+                close_time_iso=_iso_z(deal.get('close_time') if deal else None),
             )
 
             self._append_agent_monitor_event(
@@ -904,7 +922,9 @@ class PositionMonitor:
                 direction=pos.direction,
                 profit=actual_profit,
                 profit_percent=profit_percent,
-                reason="Excessive drawdown"
+                reason="Excessive drawdown",
+                open_time_iso=_iso_z(pos.open_time),
+                close_time_iso=_iso_z(deal.get('close_time') if deal else None),
             )
 
             self._append_agent_monitor_event(
@@ -1022,7 +1042,9 @@ class PositionMonitor:
                     profit_percent=profit_percent,
                     reason=reason,
                     pending=is_pending,
-                    outcome=outcome
+                    outcome=outcome,
+                    open_time_iso=_iso_z(deal.get('open_time')),
+                    close_time_iso=_iso_z(deal.get('close_time')),
                 )
 
                 if not is_pending:
@@ -1095,6 +1117,8 @@ class PositionMonitor:
                     profit_percent=profit_percent,
                     reason="Closed by broker (details unavailable)",
                     pending=is_pending,
+                    open_time_iso=_iso_z(pos.open_time),
+                    close_time_iso=utc_iso(),  # close just happened; record now
                 )
 
                 if not is_pending:
@@ -1243,7 +1267,9 @@ class PositionMonitor:
                     direction=pos.direction,
                     profit=actual_profit,
                     profit_percent=profit_percent,
-                    reason=reason
+                    reason=reason,
+                    open_time_iso=_iso_z(pos.open_time),
+                    close_time_iso=_iso_z(deal.get('close_time') if deal else None),
                 )
                 
                 self._cleanup_position(pos.ticket)
