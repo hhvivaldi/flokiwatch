@@ -585,73 +585,81 @@ class TestPromptV3_3ChartSuite:
 # FLO-347 Phase 7.2 (v3.4) — paired-plans regression guards
 # =============================================================================
 
-class TestPromptV3_4PairedPlans:
-    """v3.4 introduces PAIRED PLANS — submit TWO plans (one BUY-leg, one
-    SELL-leg) in the same cycle for genuinely bidirectional setups
-    (pre-event, undecided breakout, post-news whip). Empirically motivated:
-    PLAN-20260424-001 was a unidirectional BUY plan in a setup whose
-    own thesis enumerated 5 bearish + 1 bullish + 1 neutral signals —
-    the missing SELL-leg plan was a v3.x prompt gap, not a Floki failure.
-    These tests pin the v3.4 fix so a future edit can't silently drop it."""
+class TestPromptNoQuotaPressure:
+    """FLO-419 follow-up (CEO 2026-05-04): the v3.4 PAIRED PLANS contract
+    was REVERSED. Floki was previously directed to author paired BUY+SELL
+    plans for "ambiguous" setups; this manufactured fake scenarios at
+    levels Floki didn't have a real thesis for (PLAN-20260504-010 SELL
+    forensic: authored as the "bounce fails" leg of a paired set in a
+    Iran/Hormuz CRITICAL-bullish news context, lost -$40.30 at SL).
+    These tests pin the new direction:
+      - No "PAIRED PLANS" directive section
+      - No "do not hesitate to submit two plans"
+      - No "canonical shape for ambiguous setups"
+      - WORKED FLOW thesis options no longer include "bidirectional"
+      - Slot-filling pressure removed (no "MUST include slot ledger")
+    A future edit that re-introduces these patterns must update or
+    remove these tests — and explain WHY in the commit message."""
 
-    def test_paired_plans_section_present(self):
+    def test_no_paired_plans_directive(self):
         from agent_prompts import SYSTEM_PROMPT
-        assert "PAIRED PLANS" in SYSTEM_PROMPT, (
-            "v3.4: PAIRED PLANS section header missing"
-        )
-
-    def test_paired_plans_describes_two_plans_one_per_direction(self):
-        """The mechanic: two plans per cycle, one BUY-leg + one SELL-leg.
-        Catches an edit that keeps the section header but softens the
-        two-plans-per-cycle rule."""
-        from agent_prompts import SYSTEM_PROMPT
-        # "TWO plans" wording (case-insensitive, allows future copy edits).
-        assert ("TWO plans" in SYSTEM_PROMPT
-                or "two plans" in SYSTEM_PROMPT), (
-            "v3.4: 'two plans' core mechanic missing from PAIRED PLANS"
-        )
-        # Both leg directions must be named.
-        assert "BUY scenario" in SYSTEM_PROMPT or "BUY-leg" in SYSTEM_PROMPT, (
-            "v3.4: BUY-leg not explicitly named in PAIRED PLANS"
-        )
-        assert "SELL scenario" in SYSTEM_PROMPT or "SELL-leg" in SYSTEM_PROMPT, (
-            "v3.4: SELL-leg not explicitly named in PAIRED PLANS"
+        assert "paired plans" not in SYSTEM_PROMPT.lower(), (
+            "FLO-419: paired-plans directive must not return. The PLAN-010 "
+            "loss showed that nudging Floki toward bidirectional coverage "
+            "produces plans without independent theses."
         )
 
-    def test_paired_plans_use_cases_present(self):
-        """Three triggering use-cases must be enumerated so Floki recognises
-        when a paired plan is the right shape vs a single-direction plan."""
+    def test_no_dual_direction_pressure_phrases(self):
         from agent_prompts import SYSTEM_PROMPT
-        # At least two of the three use-case keywords must be present.
-        markers = ("pre-event", "undecided breakout", "whip", "balanced",
-                   "inflection")
-        hits = sum(1 for m in markers if m in SYSTEM_PROMPT)
-        assert hits >= 2, (
-            f"v3.4: PAIRED PLANS use-case examples insufficient "
-            f"(found {hits}/{len(markers)} markers; need >=2)"
+        forbidden = (
+            "do not hesitate",
+            "both breakout directions",
+            "genuinely bidirectional",
+            "BUY-leg + SELL-leg",
+        )
+        for p in forbidden:
+            assert p.lower() not in SYSTEM_PROMPT.lower(), (
+                f"FLO-419: removed phrase '{p}' must not return — it pushes "
+                f"Floki to author counter-direction plans without a thesis."
+            )
+
+    def test_ambiguous_setups_section_present(self):
+        """The replacement section name. Locks in the new direction:
+        'When the market is ambiguous, analyze and take a position. You
+        are not required to cover both directions.'"""
+        from agent_prompts import SYSTEM_PROMPT
+        assert "AMBIGUOUS SETUPS" in SYSTEM_PROMPT, (
+            "FLO-419: AMBIGUOUS SETUPS section must be present (replaces "
+            "PAIRED PLANS) — explicitly removes pressure to author both "
+            "directions."
+        )
+        assert "not required to cover both directions" in SYSTEM_PROMPT, (
+            "FLO-419: explicit 'not required to cover both directions' "
+            "phrasing must be present."
         )
 
-    def test_paired_plans_independence_described(self):
-        """Critical to teach: paired plans don't interfere with each other.
-        Snow watches them independently; the loser expires harmlessly."""
+    def test_no_quota_section_present(self):
+        """Slot-filling pressure replaced by THERE IS NO QUOTA framing."""
         from agent_prompts import SYSTEM_PROMPT
-        assert ("do not interfere" in SYSTEM_PROMPT
-                or "watches both independently" in SYSTEM_PROMPT
-                or "the other expires" in SYSTEM_PROMPT), (
-            "v3.4: paired-plan independence / harmless-expiry semantics "
-            "must be taught explicitly"
+        assert "THERE IS NO QUOTA" in SYSTEM_PROMPT, (
+            "FLO-419: 'THERE IS NO QUOTA' header must be present (replaces "
+            "JUSTIFY THE GAP)."
+        )
+        # The previous mandatory slot-ledger format is gone.
+        assert "MUST include an explicit slot ledger" not in SYSTEM_PROMPT, (
+            "FLO-419: mandatory slot-ledger format must not return."
         )
 
-    def test_worked_flow_acknowledges_paired_option(self):
-        """WORKED FLOW step that frames the thesis must offer the
-        bidirectional option alongside directional bias and observation."""
+    def test_worked_flow_no_bidirectional_thesis_shape(self):
+        """The thesis-shape menu in WORKED FLOW must NOT include
+        'bidirectional' as a third option — that wording channelled
+        Floki toward paired plans."""
         from agent_prompts import SYSTEM_PROMPT
-        # Look for "bidirectional" mentioned somewhere in the WORKED FLOW
-        # neighbourhood.
-        assert "bidirectional" in SYSTEM_PROMPT, (
-            "v3.4: WORKED FLOW or PAIRED PLANS must name 'bidirectional' "
-            "as a thesis shape"
-        )
+        # 'bidirectional' as a thesis shape is gone. Note: 'bidirectional'
+        # may still appear elsewhere if a future edit adds it back; what
+        # we forbid is the directive coupling.
+        assert "or genuinely bidirectional" not in SYSTEM_PROMPT
+        assert "paired BUY-leg + SELL-leg" not in SYSTEM_PROMPT
 
 
 # =============================================================================

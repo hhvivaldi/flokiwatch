@@ -444,12 +444,18 @@ class TestMultiPlanBatchingPromptAddition:
             "abbreviated deltas on subsequent calls in same turn)"
         )
 
-    def test_prompt_keeps_paired_plans_section(self):
-        """PAIRED PLANS is the canonical "two plans, one cycle" shape;
-        the new MULTI-PLAN BATCHING DISCIPLINE is a sibling that
-        clarifies turn boundaries — it must not erase PAIRED PLANS."""
+    def test_prompt_no_paired_plans_section(self):
+        """FLO-419 (CEO 2026-05-04): PAIRED PLANS contract was reversed.
+        The MULTI-PLAN BATCHING DISCIPLINE remains (it's a turn-boundary
+        rule that applies to ANY multi-plan cycle), but the PAIRED PLANS
+        directive that forced Floki toward bidirectional coverage is
+        gone. See validator_test.TestPromptNoQuotaPressure for the new
+        contract."""
         from agent_prompts import SYSTEM_PROMPT
-        assert "PAIRED PLANS" in SYSTEM_PROMPT
+        assert "PAIRED PLANS" not in SYSTEM_PROMPT
+        # MULTI-PLAN BATCHING DISCIPLINE stays — it's about turn
+        # boundaries, not direction quotas.
+        assert "MULTI-PLAN BATCHING DISCIPLINE" in SYSTEM_PROMPT
 
 
 # =============================================================================

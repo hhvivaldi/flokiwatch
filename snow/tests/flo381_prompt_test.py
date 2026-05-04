@@ -146,8 +146,13 @@ class TestV310AdditiveContract:
         for prim in ("indicator_crossover", "indicator_was", "price_crossed_level"):
             assert prim in SYSTEM_PROMPT
 
-    def test_v34_paired_plans_preserved(self):
-        assert "PAIRED PLANS" in SYSTEM_PROMPT
+    def test_v34_paired_plans_reversed(self):
+        # FLO-419 (CEO 2026-05-04): the v3.4 PAIRED PLANS contract was
+        # reversed. The directive now forbids pressuring Floki toward
+        # bidirectional plans. See validator_test.TestPromptNoQuotaPressure
+        # for the new contract.
+        assert "PAIRED PLANS" not in SYSTEM_PROMPT
+        assert "AMBIGUOUS SETUPS" in SYSTEM_PROMPT
 
     def test_v32_cycle_start_check_preserved(self):
         assert "CYCLE-START CHECK" in SYSTEM_PROMPT
