@@ -27,6 +27,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+# FLO-419 (CEO 2026-05-04): test isolation. Earlier test runs polluted
+# production data/history.db with 203 agent_events rows (author=QWEN_TM,
+# ticket=999) because trade_manager.run_cycle internally calls
+# db_writer.record_agent_event after dispatching a decision. This file
+# exercises run_cycle with mocked positions / mocked LLM responses /
+# mocked floki executor — but record_agent_event was the one un-mocked
+# I/O sink and it wrote straight to the production DB. Autouse fixture
+# below patches the function module-wide so EVERY test in this file
+# (current and future) is isolated from production storage.
+#
+# If a future test genuinely needs to verify what TM tried to persist,
+# read the captured-call list from the patched MagicMock. Do NOT remove
+# this fixture without an alternative isolation mechanism in place.
+@pytest.fixture(autouse=True)
+def _isolate_record_agent_event():
+    from unittest.mock import patch as _patch
+    with _patch("db_writer.record_agent_event") as _mock:
+        yield _mock
+
+
 # =============================================================================
 # Shared fakes
 # =============================================================================
@@ -628,9 +648,15 @@ class TestTradeManager_NoOpenPosition:
 
 class TestTradeManager_HappyPath:
     def test_runs_full_cycle(self):
+        # FLO-419 (CEO 2026-05-04): the LLM-path happy case requires
+        # shadow=False now. shadow=True early-returns NO_OP without
+        # building a prompt or calling the LLM (zero-Qwen-tokens
+        # gate). Production-mode test below in TestProductionMode
+        # already covers shadow=False; this case explicitly verifies
+        # the LLM is reached and parsed.
         tm, _, _ = _make_tm(
-            shadow=True,
-            positions=[_FakePosition(ticket=999, comment="snow:PLAN-X")],
+            shadow=False,
+            positions=[_FakePosition(ticket=999, comment="floki")],
             llm_response='{"decision": "HOLD_TRADE", "reason": "thesis intact"}',
         )
         result = tm.run_cycle("TM_HEARTBEAT", {})
@@ -683,9 +709,11 @@ class TestTradeManager_ConcurrencyLock:
 
 class TestTradeManager_LLMFailure:
     def test_llm_raises_returns_noop(self):
+        # FLO-419: LLM-failure path only reachable with shadow=False;
+        # shadow=True short-circuits before _call_llm.
         tm, _, _ = _make_tm(
-            shadow=True,
-            positions=[_FakePosition(ticket=1)],
+            shadow=False,
+            positions=[_FakePosition(ticket=1, comment="floki")],
         )
         tm._call_llm.side_effect = RuntimeError("provider 503")
         result = tm.run_cycle("TM_HEARTBEAT", {})
@@ -697,9 +725,10 @@ class TestTradeManager_LLMFailure:
 
 class TestTradeManager_ParseFailure:
     def test_unparseable_response_returns_noop(self):
+        # FLO-419: parse-failure path only reachable with shadow=False.
         tm, _, _ = _make_tm(
-            shadow=True,
-            positions=[_FakePosition(ticket=1)],
+            shadow=False,
+            positions=[_FakePosition(ticket=1, comment="floki")],
             llm_response="this is not JSON at all",
         )
         result = tm.run_cycle("TM_HEARTBEAT", {})
@@ -715,9 +744,19 @@ class TestTradeManager_ParseFailure:
 
 
 class TestShadowMode:
-    def test_close_decision_does_not_execute_in_shadow(self):
-        """TRADE_MANAGER_ENABLED=False (shadow): decision logged but
-        close_trade NEVER called on the executor or floki tools."""
+    """FLO-419 (CEO 2026-05-04): shadow=True (= TRADE_MANAGER_ENABLED=
+    False) is now a HARD gate. Pre-fix behavior: LLM was called, decision
+    parsed, dispatch took the shadow branch and skipped execution.
+    Post-fix behavior: cycle short-circuits with NO_OP / reason=
+    trade_manager_disabled BEFORE prompt build / LLM call. Zero Qwen
+    tokens billed when ENABLED=False.
+
+    The test purpose ("executor never touched in shadow") is preserved
+    and strictly stronger — the LLM isn't even reached, so by extension
+    no decision can be dispatched.
+    """
+
+    def test_shadow_skips_llm_and_returns_noop(self):
         tm, _, floki = _make_tm(
             shadow=True,
             positions=[_FakePosition(ticket=999, comment="snow:PLAN-X")],
@@ -726,11 +765,15 @@ class TestShadowMode:
             ),
         )
         result = tm.run_cycle("TM_CHECK", {"ticket": 999})
-        assert result["decision"] == "CLOSE_TRADE"
+        assert result["decision"] == "NO_OP"
+        assert result["reason"] == "trade_manager_disabled"
         assert result["executed"] is False
+        # The LLM must NOT be called — the whole point of the gate.
+        tm._call_llm.assert_not_called()
+        # Executor side preserved from the prior test contract.
         floki.close_trade.assert_not_called()
 
-    def test_adjust_decision_does_not_execute_in_shadow(self):
+    def test_shadow_skips_llm_on_adjust_path(self):
         tm, _, floki = _make_tm(
             shadow=True,
             positions=[_FakePosition(ticket=999, comment="floki")],
@@ -740,8 +783,10 @@ class TestShadowMode:
             ),
         )
         result = tm.run_cycle("TM_CHECK", {"ticket": 999})
-        assert result["decision"] == "ADJUST_TRADE"
+        assert result["decision"] == "NO_OP"
+        assert result["reason"] == "trade_manager_disabled"
         assert result["executed"] is False
+        tm._call_llm.assert_not_called()
         floki.adjust_trade.assert_not_called()
 
 

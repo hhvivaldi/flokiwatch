@@ -146,6 +146,39 @@ class TradeManager:
                     "latency_ms": latency_ms,
                 }
 
+            # FLO-419 (CEO 2026-05-04): hard gate on shadow_mode.
+            # Pre-fix the daemon ran the LLM on every wake even when
+            # TRADE_MANAGER_ENABLED=False, billing Qwen tokens for
+            # decisions that could never execute. CEO directive:
+            # "ENABLED=False = zero Qwen tokens." Early-return NO_OP
+            # before the prompt build / LLM call. Context gathering
+            # above is cheap (six local tool calls, no LLM) and is
+            # preserved so the persisted shadow event still carries
+            # position state for the Trade Room UI.
+            if self._shadow:
+                latency_ms = int((time.time() - t0) * 1000)
+                pos = ctx.get("position") or {}
+                ticket_str = f"#{pos.get('ticket')}" if pos.get("ticket") else ""
+                log.info(
+                    f"TM_CYCLE | trigger={trigger_type} | NO_OP {ticket_str} | "
+                    f"reason=trade_manager_disabled | shadow=True | {latency_ms}ms"
+                )
+                # Persist a SHADOW NO_OP so the Trade Room reflects the
+                # cycle ran. Same code path as the post-decision persist
+                # below, but with an inert decision dict.
+                inert = {"decision": "NO_OP", "reason": "trade_manager_disabled"}
+                self._persist_decision_event(
+                    decision=inert, ctx=ctx, executed=False,
+                    latency_ms=latency_ms, trigger_type=trigger_type,
+                )
+                return {
+                    "success": True,
+                    "decision": "NO_OP",
+                    "reason": "trade_manager_disabled",
+                    "executed": False,
+                    "latency_ms": latency_ms,
+                }
+
             # --- 2. Build prompts ---
             user_msg = build_user_prompt(ctx)
 
