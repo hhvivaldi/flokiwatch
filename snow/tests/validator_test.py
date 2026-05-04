@@ -1436,3 +1436,136 @@ class TestEntryDynamicLevelBan:
         }]
         ok, _, errors = validate_plan(valid_plan_dict)
         assert ok, errors
+
+
+# =============================================================================
+# FLO-419 — exit-vs-SL geometry gate (CEO 2026-05-04)
+#
+# Reject plans whose price-side exit triggers are positioned beyond the
+# broker SL — the broker SL fires first, the exit never arms. Empirical:
+# 4/10 last closed plans had this bug (009/010/012/002), plus 2 boundary
+# cases (006/031) with exit-level == SL providing no earlier capture.
+# Sandbox script: data/_audits/test_exit_geometry_validator.py.
+# =============================================================================
+
+class TestExitGeometryVsSL:
+
+    def _exit_with_price(self, name, op, level):
+        return {
+            "name": name,
+            "priority": 9,
+            "conditions": [{"type": op, "level": level}],
+            "action": {"type": "close_full"},
+            "fires": "once",
+        }
+
+    def _force_buy(self, plan_dict):
+        # The base fixture is SELL with SL > entry > TP. Flip to a BUY
+        # geometry so price_below exits are the "invalidation" side.
+        plan_dict["entry"]["direction"] = "BUY"
+        plan_dict["entry"]["initial_sl"] = 4543.0
+        plan_dict["entry"]["initial_tp"] = 4605.0
+        plan_dict["entry"]["entry_price"] = 4574.0
+        # Exit conditions in fixture reference SELL geometry — replace.
+        plan_dict["exit"] = [self._exit_with_price(
+            "fallback", "price_above", 9999.0,
+        )]
+        return plan_dict
+
+    def _force_sell(self, plan_dict):
+        plan_dict["entry"]["direction"] = "SELL"
+        plan_dict["entry"]["initial_sl"] = 4574.0
+        plan_dict["entry"]["initial_tp"] = 4512.0
+        plan_dict["entry"]["entry_price"] = 4555.0
+        plan_dict["exit"] = [self._exit_with_price(
+            "fallback", "price_below", 1.0,
+        )]
+        return plan_dict
+
+    def test_buy_invalidation_below_sl_rejected(self, valid_plan_dict):
+        """BUY entry 4574, SL 4543. exit price_below 4525 is BELOW SL —
+        broker SL fires first, exit never arms. Reject with both
+        numbers in the error message (PLAN-009 shape)."""
+        plan = self._force_buy(valid_plan_dict)
+        plan["exit"] = [self._exit_with_price(
+            "thesis_invalidation_sweep_failed", "price_below", 4525.0,
+        )]
+        ok, _, errors = validate_plan(plan)
+        assert not ok
+        msg = " ".join(errors)
+        assert "4525" in msg, f"error must name exit level: {errors}"
+        assert "4543" in msg, f"error must name SL: {errors}"
+        assert "AT OR BELOW" in msg, f"error must explain geometry: {errors}"
+        assert "BUY" in msg, f"error must name direction: {errors}"
+
+    def test_buy_invalidation_above_sl_accepted(self, valid_plan_dict):
+        """BUY entry 4574, SL 4543. exit price_below 4555 is ABOVE SL —
+        exit fires first when price drops to 4555, before broker SL at
+        4543. Correct geometry."""
+        plan = self._force_buy(valid_plan_dict)
+        plan["exit"] = [self._exit_with_price(
+            "thesis_invalidation", "price_below", 4555.0,
+        )]
+        ok, _, errors = validate_plan(plan)
+        assert ok, errors
+
+    def test_sell_invalidation_above_sl_rejected(self, valid_plan_dict):
+        """SELL entry 4555, SL 4574. exit price_above 4580 is ABOVE SL —
+        broker SL fires first when price rises to 4574, exit at 4580
+        never armed (PLAN-010 shape)."""
+        plan = self._force_sell(valid_plan_dict)
+        plan["exit"] = [self._exit_with_price(
+            "bounce_reclaim_invalidation", "price_above", 4580.0,
+        )]
+        ok, _, errors = validate_plan(plan)
+        assert not ok
+        msg = " ".join(errors)
+        assert "4580" in msg
+        assert "4574" in msg
+        assert "AT OR ABOVE" in msg
+        assert "SELL" in msg
+
+    def test_sell_invalidation_below_sl_accepted(self, valid_plan_dict):
+        """SELL entry 4555, SL 4574. exit price_above 4570 is BELOW SL —
+        exit fires first when price rises to 4570, before broker SL at
+        4574. Correct geometry."""
+        plan = self._force_sell(valid_plan_dict)
+        plan["exit"] = [self._exit_with_price(
+            "thesis_invalidation", "price_above", 4570.0,
+        )]
+        ok, _, errors = validate_plan(plan)
+        assert ok, errors
+
+    def test_buy_take_profit_side_no_constraint(self, valid_plan_dict):
+        """BUY entry 4574, SL 4543. exit price_above 4605 is a TP-side
+        trigger (testing favorable price action, not invalidation) —
+        no SL-ordering constraint applies. Should pass."""
+        plan = self._force_buy(valid_plan_dict)
+        plan["exit"] = [self._exit_with_price(
+            "take_profit_at_resistance", "price_above", 4605.0,
+        )]
+        ok, _, errors = validate_plan(plan)
+        assert ok, errors
+
+    def test_compound_exit_only_price_legs_checked(self, valid_plan_dict):
+        """Compound exit with a profit_pips leg + an rsi leg + a
+        price_below leg. Only the price_below leg is geometry-checked;
+        the other two evaluate via their own primitives. The bad
+        price_below leg must still trigger rejection."""
+        plan = self._force_buy(valid_plan_dict)
+        plan["exit"] = [{
+            "name": "compound_exit",
+            "priority": 9,
+            "conditions": [
+                {"type": "profit_pips", "op": "above", "threshold": 200.0},
+                {"type": "rsi", "tf": "H1", "op": "above", "threshold": 65.0},
+                {"type": "price_below", "level": 4525.0},
+            ],
+            "action": {"type": "close_full"},
+            "fires": "once",
+        }]
+        ok, _, errors = validate_plan(plan)
+        assert not ok
+        msg = " ".join(errors)
+        assert "4525" in msg
+        assert "4543" in msg

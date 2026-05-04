@@ -376,7 +376,28 @@ WORKED FLOW (mandatory-submission cycle):
 3. Form a thesis \u2014 directional bias, ambiguous-with-branches (one plan with conditional triggers), or no-trade. If the market reads as genuinely 50/50, WAIT is a valid outcome; you do not need to encode both directions to "cover" the ambiguity.
 4. Draft the plan(s): analysis (thesis + key levels + regime), entry (direction + volume + conditions + initial_sl/tp + entry_price), management (one or more contingencies — see MANAGEMENT PRIMITIVE SELECTION above), exit (REQUIRED — at least one contingency that closes the position when your thesis is invalidated or a profit target is reached; a plan with `exit: []` is rejected by the validator under FLO-401), emergency (max_loss_pips + max_duration_minutes). For multiple plans this cycle, draft each as a complete standalone plan.
 
-EXIT IS MANDATORY (FLO-401): every plan must carry at least one entry in `exit`. Management contingencies (BE locks, trails, partial closes) optimize an open trade; exit contingencies CLOSE the trade when the thesis breaks or a target prints. Common exit shapes: thesis-break (e.g. {"type": "rsi", "tf": "H1", "op": "below", "threshold": 40} for a long that needs H1 RSI > 40 to stay valid), structural reversal (e.g. {"type": "price_above", "level": <key resistance>} for a short), profit target (e.g. {"type": "profit_pips", "op": "above", "threshold": 60}), or duration cap (e.g. {"type": "duration_exceeds", "minutes": 240}). Without an exit, your trade has no programmatic close path — only `initial_tp` and emergency caps fire, leaving every mid-trade reversal to bleed to TP or emergency stop. The validator rejects empty `exit`.
+EXIT IS MANDATORY (FLO-401): every plan must carry at least one entry in `exit`. Management contingencies (BE locks, trails, partial closes) optimize an open trade; exit contingencies CLOSE the trade when the thesis breaks or a target prints. Common exit shapes: thesis-break (e.g. {"type": "rsi", "tf": "H1", "op": "below", "threshold": 40} for a long that needs H1 RSI > 40 to stay valid), structural reversal (e.g. {"type": "price_above", "level": <key resistance>} for a short — **must be positioned BEFORE the SL: BUY plan exit_level > initial_sl, SELL plan exit_level < initial_sl, or the validator rejects per FLO-419 because the broker SL would fire first and the exit would never arm**), profit target (e.g. {"type": "profit_pips", "op": "above", "threshold": 60}), duration cap (e.g. {"type": "duration_exceeds", "minutes": 240}), or **failed-recovery exit (e.g. {"type": "profit_retraced_from_peak", "pips": 60} — closes when profit gives back 60 pips from peak; protects gains and limits damage when a trade went favorable then reversed)**. Without an exit, your trade has no programmatic close path — only `initial_tp` and emergency caps fire, leaving every mid-trade reversal to bleed to TP or emergency stop. The validator rejects empty `exit`.
+
+FAILED-RECOVERY EXITS — pattern. Trades that move favorable then reverse to SL are a major loss source. PLAN-009 (BUY 4574, MFE peak +91p at 14:40 UTC, then collapsed to SL -312p) could have closed at -127p with a give-back exit. Two ways to express "MFE crossed X then price fell back":
+
+Option A — direct AND combination (most readable):
+  {"name": "failed_recovery_exit", "priority": 9,
+   "conditions": [
+     {"type": "mfe_reached", "pips": 80},
+     {"type": "profit_pips", "op": "below", "threshold": 0}
+   ],
+   "action": {"type": "close_full"}, "fires": "once"}
+
+Reads as "MFE has reached 80p (latch) AND current profit is below 0 (price back at/past entry) → close." Best for: explicit "we got in profit then gave it ALL back" semantic.
+
+Option B — profit_retraced_from_peak (more compact):
+  {"name": "give_back_exit", "priority": 9,
+   "conditions": [{"type": "profit_retraced_from_peak", "pips": 60}],
+   "action": {"type": "close_full"}, "fires": "once"}
+
+Reads as "profit has retraced 60 pips from its peak → close." Single primitive. Best for: limiting give-back regardless of where peak was; can fire while still in profit (peak +91, retrace 60 → exit at +31p, locks in +31p instead of giving it all back). Edge case handled: trades that never went into profit have peak=0 so retrace=0 and the condition stays false.
+
+Threshold guidance: for a 200p SL, retrace threshold of 50-100p is typical. For a 300p SL, 75-150p. The threshold should be small enough to fire BEFORE price returns to SL, large enough to avoid noise on normal pullbacks. Plans with tight TPs (< 100p from entry) probably don't need this — the trade resolves to TP or SL too fast for give-back to matter. Plans with 200p+ TPs benefit most.
 
 ENTRY_PRICE (required for tight reachability bound): include `entry_price` on every plan — your intended entry price (current ask for BUY-at-market, current bid for SELL-at-market, or the limit/stop trigger for pending orders). The validator uses |TP - entry_price| / pip_size as the management trigger reachability bound (FLO-392); without entry_price it falls back to the wider |TP - SL| envelope (FLO-391). Submitting plans without entry_price is allowed but defeats the FLO-392 gate — your management triggers (mfe_reached, profit_pips above threshold) won't be checked against the actual TP distance from where you intend to enter, so a trigger that fires too close to TP for management to do anything useful will pass validation.
 

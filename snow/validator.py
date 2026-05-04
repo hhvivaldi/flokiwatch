@@ -462,6 +462,82 @@ def _check_no_dynamic_level_in_entry(plan: Plan) -> list[str]:
     return msgs
 
 
+def _check_exit_geometry_vs_sl(plan: Plan) -> list[str]:
+    """FLO-419 (CEO 2026-05-04): reject plans whose exit contingencies use
+    a price-side trigger positioned beyond the broker SL — making the exit
+    geometrically unreachable.
+
+    Empirical motivation: PLAN-20260504-009 (BUY entry 4574, SL 4543, exit
+    price_below 4525 = 18 USD past SL) lost -$65 with the thesis_invalidation
+    exit never armed. Audit of last 10 closed plans showed 4 broken plans
+    (009, 010, 012, 002) plus 2 boundary cases (006, 031) — six of ten with
+    exits incapable of firing before broker SL.
+
+    Rule:
+      BUY plan + exit `price_below level` : level MUST be > initial_sl
+      SELL plan + exit `price_above level`: level MUST be < initial_sl
+
+    The opposite shapes (BUY+price_above, SELL+price_below) are TP-side
+    triggers (testing favorable price action, not invalidation) and have
+    no SL-ordering constraint — skipped here.
+
+    Boundary case `level == initial_sl` is rejected (strict inequality)
+    because it provides no earlier capture than the broker SL itself.
+
+    Compound exit conditions: only the price_above/price_below leg(s) are
+    geometry-checked. Other legs (rsi, profit_pips, duration_exceeds, etc.)
+    are evaluated by their own primitives and don't depend on price
+    reaching SL first.
+    """
+    errors: list[str] = []
+    # plan.entry.direction is a Direction enum; .value gives "BUY"/"SELL".
+    # Belt-and-braces: tolerate raw string too (defensive).
+    _d = getattr(plan.entry, "direction", None)
+    direction = str(getattr(_d, "value", _d) or "").upper()
+    if direction not in ("BUY", "SELL"):
+        return errors  # let other validators flag the bad direction
+    sl = float(plan.entry.initial_sl)
+
+    for ei, ex in enumerate(plan.exit or []):
+        name = getattr(ex, "name", f"exit[{ei}]")
+        for c in (ex.conditions or []):
+            ctype = getattr(c, "type", None)
+            if ctype not in ("price_above", "price_below"):
+                continue
+
+            level = float(getattr(c, "level"))
+
+            if direction == "BUY" and ctype == "price_below":
+                if level <= sl:
+                    errors.append(
+                        f"exit[{ei}] ({name!r}): price_below {level} is "
+                        f"AT OR BELOW the SL {sl}. For a BUY plan, the "
+                        f"broker SL fires when price drops to {sl}; this "
+                        f"exit's trigger at {level} would never be reached "
+                        f"BEFORE the broker SL. Set the exit level ABOVE "
+                        f"the SL (typical: 1-2 USD above SL = 10-20 pips "
+                        f"buffer) so the exit fires first, giving Snow the "
+                        f"chance to close on thesis break before the broker "
+                        f"hits SL. Or remove this exit if the broker SL is "
+                        f"the intended invalidation level."
+                    )
+            elif direction == "SELL" and ctype == "price_above":
+                if level >= sl:
+                    errors.append(
+                        f"exit[{ei}] ({name!r}): price_above {level} is "
+                        f"AT OR ABOVE the SL {sl}. For a SELL plan, the "
+                        f"broker SL fires when price rises to {sl}; this "
+                        f"exit's trigger at {level} would never be reached "
+                        f"BEFORE the broker SL. Set the exit level BELOW "
+                        f"the SL (typical: 1-2 USD below SL = 10-20 pips "
+                        f"buffer) so the exit fires first, giving Snow the "
+                        f"chance to close on thesis break before the broker "
+                        f"hits SL. Or remove this exit if the broker SL is "
+                        f"the intended invalidation level."
+                    )
+    return errors
+
+
 # =============================================================================
 # FLO-391 / FLO-392 — management primitive reachability (semantic coherence)
 # =============================================================================
@@ -999,6 +1075,7 @@ def validate_plan(
     errors += _check_management_threshold_floor(plan)
     errors += _check_min_entry_conditions(plan)
     errors += _check_no_dynamic_level_in_entry(plan)
+    errors += _check_exit_geometry_vs_sl(plan)
     errors += _check_management_reachability(plan)
     errors += _check_management_hybrid_constraints(plan)
     errors += _check_confidence_floor(plan)
