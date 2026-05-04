@@ -1121,12 +1121,18 @@ class TestPromptV3_8SnowPositionVisibility:
 
     def test_existing_floki_management_path_preserved(self):
         """Backward compat: positions Floki opened directly (no
-        snow: comment) still get the existing tool guidance. The
-        adjust_trade / close_trade / set_watch_conditions trio
-        should still be named for the Floki-managed branch."""
+        snow: comment) still get the existing tool guidance.
+
+        FLO-419 (CEO 2026-05-04): set_watch_conditions removed from
+        Floki's roster (Simba deprecated). The remaining pair
+        (adjust_trade, close_trade) is what now appears in the prompt
+        for Floki-managed positions."""
         from agent_prompts import SYSTEM_PROMPT
-        # The Floki-managed branch still names the trio.
-        assert "adjust_trade, close_trade, set_watch_conditions" in SYSTEM_PROMPT
+        assert "adjust_trade, close_trade" in SYSTEM_PROMPT
+        # And the deprecated tool must NOT appear in the prompt anymore.
+        assert "set_watch_conditions" not in SYSTEM_PROMPT, (
+            "set_watch_conditions removed from roster; should not appear"
+        )
 
 
 # =============================================================================

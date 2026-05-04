@@ -717,8 +717,9 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     "save_lesson",                # writes trade_lessons row
     "forget_lesson",              # deletes trade_lessons row
     "set_next_check",             # writes data/next_check.json
-    "set_wake_conditions",        # writes wake_conditions persistent state
-    "set_watch_conditions",       # writes per-ticket watch conditions
+    # FLO-419 (CEO 2026-05-04): the two Simba-fed wake/watch tools were
+    # removed from Floki's roster. Sole consumer was Simba (deprecated);
+    # Snow exit contingencies replace the wake-on-condition semantic.
     # --- Broker side effects (MT5 / executor) ---
     "execute_trade",              # opens an MT5 position
     # FLO-403 Phase 2 Step 4 — close_trade / adjust_trade removed
@@ -1358,38 +1359,15 @@ class AIAgent:
                     "additionalProperties": False,
                 },
             },
-            {
-                "name": "set_watch_conditions",
-                "description": "After opening a trade, set watch conditions for Simba to monitor the position. Two modes:\n\nMODE 1 — SINGLE CONDITION (wakes you when met; you decide action): price_touch (level + optional tolerance), pnl_threshold (value in dollars; negative=loss, positive=profit), pnl_below (value; wakes when profit drops below), pnl_above (level; wakes when profit crosses above), indicator_threshold (indicator + direction + level; supports rsi, macd_histogram, adx, vix), bb_position (value: above_upper | below_lower | upper_band | lower_band | middle), mfe_drawdown (pct 0-100; fires when profit drops pct% from peak MFE).\n\nMODE 2 — COMPOUND CONDITION (Simba executes autonomously when ALL sub-conditions true, then wakes you to evaluate). Shape: {all_of: [<leaf1>, <leaf2>, ...], action: 'wake' | 'close' | 'adjust_sl', description: '...', sl_value: <price> (required for adjust_sl)}. Examples:\n  - {all_of: [{type:'pnl_above', level:50}, {type:'indicator_threshold', indicator:'rsi', direction:'above', level:75}], action:'close', description:'Overbought exit'}\n  - {all_of: [{type:'pnl_above', level:30}], action:'adjust_sl', sl_value:4862.0, description:'Move SL to breakeven at +$30'}\n  - {all_of: [{type:'bb_position', value:'above_upper'}, {type:'mfe_drawdown', pct:25}], action:'close', description:'BB top + giving back peak'}\n\nCompound conditions fire ONCE (fired_at timestamp prevents re-fire). SL-widening guard: adjust_sl only tightens (BUY new_sl > old_sl, SELL new_sl < old_sl). After Simba executes, you wake immediately with trigger_type=SIMBA_EXIT_EXECUTED and see what happened.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "ticket": {"type": "integer"},
-                        "conditions": {
-                            "type": "array",
-                            "items": {"type": "object"},
-                        },
-                    },
-                    "required": ["ticket", "conditions"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "set_wake_conditions",
-                "description": "When deciding WAIT with no open position, set wake conditions for Simba to monitor (every 30s) and wake you when conditions are met. Supported types: price_above/price_below (level field), rsi_above/rsi_below (value field, H1 RSI), volume_above (value field, H1 tick volume), adx_above (value field, H1 ADX), scanner_pattern (pattern field — e.g. 'engulfing', 'pin_bar', 'doji', 'hammer'), indicator_above/indicator_below (indicator + threshold fields — works for any cached indicator like 'macd', 'ema_9', 'atr'). Optional 'group' field: conditions in same group use AND logic (all must be met). Different groups or ungrouped conditions use OR. Example: {type: 'rsi_above', value: 70, group: 'A'} + {type: 'volume_above', value: 15000, group: 'A'} = wake when RSI > 70 AND volume > 15K.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "max_sleep_minutes": {"type": "integer"},
-                        "conditions": {
-                            "type": "array",
-                            "items": {"type": "object"},
-                        },
-                    },
-                    "required": ["max_sleep_minutes", "conditions"],
-                    "additionalProperties": False,
-                },
-            },
+            # FLO-419 (CEO 2026-05-04): the two Simba-fed wake/watch
+            # tool schemas were removed from Floki's roster. Sole
+            # consumer was Simba (deprecated); both wrote files that
+            # Simba alone read, so post-deprecation Floki would have
+            # received `success: true` while no wake ever fired
+            # (silent contract violation). Snow exit contingencies
+            # encode the same wake-on-condition semantic and evaluate
+            # every Snow tick (~5s). The agent_tools method bodies are
+            # retained for backwards compat with non-roster callers.
             # FLO-403 Phase 2 Step 4 — close_trade / adjust_trade
             # tool definitions removed. The Trade Manager owns those
             # decisions on its own lean tool surface. The validation
@@ -2443,7 +2421,7 @@ class AIAgent:
                         if n == "submit_plan_to_snow": return 0
                         if n == "place_pending_order": return 1
                         if n in ("write_session_memory", "write_trading_journal", "save_lesson"): return 2
-                        if n in ("set_watch_conditions", "set_wake_conditions", "set_next_check"): return 3
+                        if n in ("set_next_check",): return 3  # FLO-419: Simba-fed wake/watch tools removed (Simba deprecated)
                         # FLO-418: override flag must land before any submit/
                         # close on the same plan. Priority 4 (between writes
                         # and unknowns) ensures cancel still runs last.

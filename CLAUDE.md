@@ -31,6 +31,17 @@ python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 
 **NOTE:** `simba_watcher.py` is dead code. Canonical Simba is `agent_monitor.py`.
 
+## Deprecated subsystems
+
+- **Simba (`agent_monitor.py`, `simba_watcher.py`) — deprecated 2026-05-04 (CEO directive Option A).** Out-of-cycle wake/watch detection. The Simba process still runs in the bot for backward compatibility (no breaking changes), but its outputs land nowhere actionable:
+  - `SIMBA_WAKE` / `SIMBA_WATCH` events route to the Trade Manager (currently disabled — `TRADE_MANAGER_ENABLED=False` gate at `trade_manager.run_cycle` makes them inert NO_OPs, no Qwen call).
+  - The two Floki-side tools that wrote conditions for Simba to evaluate (`set_watch_conditions`, `set_wake_conditions`) have been removed from Floki's roster. Encode equivalent semantics as **Snow exit contingencies** instead — Snow's per-tick (~5s) evaluation against `price_above` / `price_below` / `mfe_reached` / indicator-side primitives covers the same wake-on-condition surface.
+  - The agent_tools.py method bodies for the removed tools are RETAINED (no breaking changes for non-roster callers / tests).
+  - Routing wires (`SIMBA_WAKE` in `main.py:tm_allowed`) intentionally preserved — re-enabling Simba is a config flag flip, not a code restoration.
+  - Discord `#simba-watch` channel removed by operator. Trade Room UI Simba section will go quiet (no errors, just no events streaming).
+  - Replacement: Snow contingency engine (`snow/snow_loop.py` + `snow/evaluators/`).
+  - Removal target: future ticket once Snow's contingency surface is confirmed to cover all use cases (target window: after the next 3-5 trade reviews validate coverage).
+
 ## Model Independence
 
 Each agent has its OWN model config variable — NEVER share between agents:

@@ -1,3 +1,43 @@
+"""
+DEPRECATED 2026-05-04 — Simba subsystem.
+
+Marked deprecated per CEO directive (FLO-419 follow-up, Option A).
+Simba's detection / wake / watch logic continues to run in this process
+for backward compatibility (no breaking changes), but its outputs land
+nowhere actionable:
+
+  - SIMBA_WAKE / SIMBA_WATCH events route to the Trade Manager. TM is
+    disabled by default (TRADE_MANAGER_ENABLED=False) and the gate at
+    trade_manager.run_cycle early-returns NO_OP without an LLM call,
+    so wake events become inert.
+  - SCHEDULED / SIMBA_EXIT_EXECUTED / PLAN_TERMINAL Floki-routing paths
+    survive but Simba no longer drives the SIMBA_WAKE -> Floki branch
+    (FLO-403 Phase 1).
+  - The Floki-side tools that wrote conditions for Simba to evaluate
+    (the "set wake/watch conditions" pair) have been removed from
+    Floki's tool roster as of 2026-05-04. Conditions previously
+    authored that way are now encoded as Snow exit contingencies.
+
+Replacement: Snow contingency engine (snow/snow_loop.py + snow/evaluators).
+Snow evaluates plan-authored entry/management/exit conditions every tick
+(~5s cadence) against the live indicator surface. The "wake-when-X-met"
+semantic is replicated by Snow's exit-side primitives (price_above,
+price_below, mfe_reached, indicator-side conditions, etc.).
+
+Maintenance posture:
+  - Do not extend this file. No new features.
+  - Bug fixes only if a downstream consumer still breaks.
+  - The Simba MFE/MAE in-memory dicts (max_profit_seen_points_by_ticket
+    etc.) are kept because internal Simba code still references them;
+    nothing external depends on them (Snow has its own PerPlanTracker).
+  - A future ticket will remove this module entirely once Snow's
+    contingency surface is confirmed to cover all use cases (target:
+    after the next 3-5 trade reviews validate the coverage).
+
+Routing wires (SIMBA_WAKE in main.py:tm_allowed) intentionally
+preserved. Re-enabling Simba means flipping a config flag, not
+restoring code.
+"""
 import json
 import os
 import time

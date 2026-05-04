@@ -62,8 +62,9 @@ class TestSingletonSetMembership:
         "save_lesson",
         "forget_lesson",
         "set_next_check",
-        "set_wake_conditions",
-        "set_watch_conditions",
+        # FLO-419 (CEO 2026-05-04): set_wake_conditions and
+        # set_watch_conditions removed from Floki's roster (Simba
+        # deprecated). They no longer appear in _SINGLETON_TOOLS.
         "execute_trade",
         "close_trade",
         "adjust_trade",

@@ -1,3 +1,17 @@
+"""
+DEPRECATED 2026-05-04 — Dead code.
+
+This module was an earlier Simba implementation, superseded by
+agent_monitor.AgentMonitor before the FLO-403 routing changes. No
+production code imports it (verified 2026-05-04 via grep across
+*.py -- zero `from simba_watcher import` / `import simba_watcher`
+references outside test files). The canonical Simba implementation,
+also now deprecated, lives in agent_monitor.py.
+
+Safe to delete in a future cleanup ticket. Kept for now to avoid
+churning git history during the broader Simba deprecation
+(FLO-419 follow-up, CEO directive 2026-05-04).
+"""
 import json
 import os
 import time
