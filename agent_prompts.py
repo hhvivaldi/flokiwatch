@@ -273,11 +273,18 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70}
 ]
 
-(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion. Pull the literal R1 price from `get_pivot_points` and write it into a `price_above` (or `price_below` for support pivots) — entry triggers do NOT use `price_at_pivot` (the pivot value is recomputed from the prior session's H/L/C and would silently shift on day-rollover; commit to the number you analyzed):
+(5) PIVOT-LEVEL REJECTION — price tagging a daily pivot Resistance level with momentum exhaustion. Pull the literal R1 price from `get_pivot_points` and write it into a `price_above` (or `price_below` for support pivots) — entry triggers do NOT use `price_at_pivot` (the pivot value is recomputed from the prior session's H/L/C and would silently shift on day-rollover; commit to the number you analyzed). For the rejection part of the thesis, the stochastic primitive matters: bare `stochastic above 80` fires while it's still climbing (= NOT yet rejecting); `indicator_crossover stochastic direction=below threshold=80` fires only on the actual rejection tick. The rejection thesis wants the second:
 "conditions": [
   {"type": "price_above", "level": 4665.95},
-  {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
+  {"type": "indicator_crossover", "indicator": "stochastic", "tf": "M15", "direction": "below", "threshold": 80.0},
   {"type": "rsi", "tf": "M15", "op": "above", "threshold": 70}
+]
+
+(5b) REVERSAL CONFIRMATION — bare stochastic vs crossover, the choice that maps thesis to primitive. Bare `stochastic op=above threshold=80` fires WHILE stoch is sitting at any value ≥ 80 — including while it's still climbing toward 90 (= NOT yet reversing). `indicator_crossover stochastic direction=below threshold=80` fires only on the literal tick stoch transitions ≥80 → <80 (= the reversal actually happening). When your thesis says "rejection / fade / overbought reversal" the trigger you want is the second; when your thesis says "confirm we're in extreme territory" (a corroborator alongside another trigger) the first is correct. Same shape inverted for oversold-bounce setups (stoch crosses ABOVE 20 from below). Audit of 147 recent plans: 64% of stochastic-using reversal-thesis plans reached for the bare primitive when the crossover would have matched the thesis literally:
+"conditions": [
+  {"type": "price_above", "level": 4647.0},
+  {"type": "indicator_crossover", "indicator": "stochastic", "tf": "M15", "direction": "below", "threshold": 80.0},
+  {"type": "indicator_divergence", "indicator": "macd", "direction": "bearish"}
 ]
 
 (6) STATEFUL CROSSOVER ENTRY — the crossing event itself, not a sustained state. Latches on first cross. Requires schema_version >= 2 (auto-stamped):
@@ -311,7 +318,7 @@ These eight shapes cover ~80% of the analytical surface available to you. Notice
 
 Condition primitives:
 - Price (point-in-time): price_above, price_below.
-- Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean).
+- Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean). **For "rejection from extreme" theses, prefer `indicator_crossover` over bare `stochastic` / `rsi` — the crossover fires on the actual reversal tick (e.g. stoch ≥80 → <80), not while still climbing inside the extreme zone (bare `stoch above 80` fires at 81, 85, 90 too). Same logic for RSI > 70 / < 30 reversal theses. See worked example (5b) above for the side-by-side primitive contrast.**
 - Structural / level proximity (point-in-time): price_at_sr_zone (zone_type ∈ support|resistance|any, **mandatory `tolerance_pips`** — typical 3-5 pips for tight S/R, 8-10 for wider zones), price_at_fibonacci (extended levels: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips, defaults to 5 if omitted), price_at_pivot (pivot_set ∈ classic|fibonacci, level ∈ PP/R1/R2/R3/S1/S2/S3, **mandatory `tolerance_pips`** — typical 3-5 pips). The mandatory `tolerance_pips` is Pydantic-enforced (gt=0); omitting it on sr_zone or pivot rejects the plan with a validation error. **ENTRY-BAN (FLO-419, CEO 2026-05-04):** all three primitives — `price_at_sr_zone`, `price_at_pivot`, `price_at_fibonacci` — are REJECTED in `entry.conditions`. They resolve their target price from the live cache at trigger time, so the trigger silently shifts whenever Brain re-ranks the nearest zone / pivot / fib level. For entries you must commit to the literal number your thesis names: read the price from `get_sr_zones` / `get_pivot_points` / `get_fibonacci_levels`, then write it into `price_above {level: N}` or `price_below {level: N}`. If the structure shifts, author a new plan next cycle rather than letting the old one fire at a price you never analyzed. These primitives remain permitted in `exit` and `management` blocks where live-structure semantics are the intended behavior.
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.

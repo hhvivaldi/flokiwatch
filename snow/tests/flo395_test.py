@@ -105,10 +105,23 @@ PROMPT_EXAMPLES = [
         {"type": "price_above", "level": 4647.0},
         {"type": "rsi", "tf": "H1", "op": "above", "threshold": 70},
     ]),
-    ("pivot_level_rejection", 1, [
+    # FLO-419 (CEO 2026-05-05): pivot-level rejection example updated to
+    # use indicator_crossover for the rejection trigger (replaces bare
+    # stochastic which fires while still climbing). Now schema_version 2
+    # because indicator_crossover is stateful.
+    ("pivot_level_rejection", 2, [
         {"type": "price_above", "level": 4665.95},
-        {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 80.0},
+        {"type": "indicator_crossover", "indicator": "stochastic", "tf": "M15", "direction": "below", "threshold": 80.0},
         {"type": "rsi", "tf": "M15", "op": "above", "threshold": 70},
+    ]),
+    # FLO-419 (CEO 2026-05-05): new (5b) example explicitly contrasting
+    # bare stochastic vs indicator_crossover for reversal-confirmation
+    # theses. Audit found 64% of stochastic-using reversal-thesis plans
+    # reached for the bare primitive instead of the crossover.
+    ("reversal_confirmation", 2, [
+        {"type": "price_above", "level": 4647.0},
+        {"type": "indicator_crossover", "indicator": "stochastic", "tf": "M15", "direction": "below", "threshold": 80.0},
+        {"type": "indicator_divergence", "indicator": "macd", "direction": "bearish"},
     ]),
     ("stateful_crossover_entry", 2, [
         {"type": "indicator_crossover", "indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0},
@@ -178,7 +191,12 @@ class TestB1PromptExamples:
             "trend_pullback_ma_confluence": '"type": "price_below", "level": 4622.0',
             "macd_momentum_continuation": '"threshold": 0.05',
             "divergence_play_reversal": '"indicator": "macd", "direction": "bearish"',
-            "pivot_level_rejection": '"type": "price_above", "level": 4665.95',
+            # FLO-419 (CEO 2026-05-05): updated anchor — the example
+            # now uses indicator_crossover for the rejection trigger.
+            "pivot_level_rejection": '"indicator_crossover", "indicator": "stochastic", "tf": "M15", "direction": "below", "threshold": 80.0',
+            # FLO-419 (CEO 2026-05-05): new (5b) reversal_confirmation
+            # example explicitly contrasts bare stochastic vs crossover.
+            "reversal_confirmation": '"price_above", "level": 4647.0',
             "stateful_crossover_entry": '"indicator": "macd_histogram", "tf": "H1", "direction": "above", "threshold": 0.0',
             "failed_breakdown_reclaim": '"level": 4707.0, "direction": "below"',
             "mtf_trend_alignment_entry": '"tf": "H4", "relation": "aligned_bull"',
