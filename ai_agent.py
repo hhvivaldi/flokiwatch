@@ -844,6 +844,57 @@ def _apply_singleton_clamp(calls_to_process):
     return list(calls_to_process), []
 
 
+# FLO-420: Image pruning. Charts ride history once for the immediate
+# reasoning turn (iter N+1), then iter N+2 onward sees text placeholders
+# only. Cuts ~20-25k tokens per iteration after the first reasoning turn
+# (chars saved per cycle ~= 280k tokens × cache-read price). Mutates
+# `messages` in place: each pending image-message's content list is
+# replaced with one text block per timeframe carrying symbol + original
+# capture timestamp. Drains entries with iter_appended <= iteration - 2
+# (i.e. the model has had exactly one turn to absorb the visuals).
+def _apply_chart_prunes(messages, pending, iteration, symbol="XAUUSD", logger_fn=None):
+    if not pending:
+        return []
+    pruned_log = []
+    keep = []
+    for entry in pending:
+        if iteration >= entry["iter_appended"] + 2:
+            idx = entry["msg_index"]
+            tfs = entry["timeframes"]
+            ts = entry["timestamp_iso"]
+            placeholder_blocks = [
+                {"type": "text", "text": f"[chart {symbol} {tf} — shown at {ts}, visual analysis incorporated]"}
+                for tf in tfs
+            ]
+            try:
+                messages[idx]["content"] = placeholder_blocks
+            except (IndexError, KeyError, TypeError):
+                continue
+            placeholder_chars = sum(len(b["text"]) for b in placeholder_blocks)
+            est_tokens = max(1, placeholder_chars // 4)
+            pruned_log.append({
+                "iter_appended": entry["iter_appended"],
+                "iter_pruned": iteration,
+                "msg_index": idx,
+                "images_pruned": len(tfs),
+                "placeholder_est_tokens": est_tokens,
+            })
+            if logger_fn is not None:
+                try:
+                    logger_fn(
+                        f"FLOKI_CHART_PRUNE | iter_appended={entry['iter_appended']} "
+                        f"iter_pruned={iteration} msg_index={idx} "
+                        f"images_pruned={len(tfs)} "
+                        f"placeholder_est_tokens={est_tokens}"
+                    )
+                except Exception:
+                    pass
+        else:
+            keep.append(entry)
+    pending[:] = keep
+    return pruned_log
+
+
 class AIAgent:
     """
     AI Agent that makes trading decisions using Claude.
@@ -2075,6 +2126,9 @@ class AIAgent:
         tool_trace: List[Dict[str, Any]] = []
         had_execution_followup = False
         had_incomplete_followup = False  # FLO-324: retry once on missing `decision` field
+        # FLO-420: tracks queued image-message prunes. Each entry:
+        # {iter_appended, msg_index, timeframes, timestamp_iso}
+        _chart_prunes_pending: List[Dict[str, Any]] = []
 
         system_prompt = ""
         try:
@@ -2126,6 +2180,120 @@ class AIAgent:
 
         PER_CALL_TIMEOUT = 90  # httpx timeout set at client level; this is a fallback
         MAX_ITERATIONS = int(self.max_tool_calls) + 2
+        _ctx_prev_blocks = 0
+
+        def _ctx_json(value: Any) -> str:
+            try:
+                return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+            except Exception:
+                return str(value)
+
+        def _ctx_est_tokens(value: Any) -> int:
+            return max(1, len(_ctx_json(value)) // 4)
+
+        def _ctx_blocks_for_message(msg: Dict[str, Any], msg_index: int) -> List[Dict[str, Any]]:
+            role = str(msg.get("role") or "?")
+            out: List[Dict[str, Any]] = []
+
+            def _add(kind: str, value: Any, label: str = "") -> None:
+                raw = _ctx_json(value)
+                out.append({
+                    "msg_index": msg_index,
+                    "role": role,
+                    "kind": kind,
+                    "tokens": max(1, len(raw) // 4),
+                    "chars": len(raw),
+                    "label": label[:80],
+                })
+
+            content = msg.get("content")
+            if isinstance(content, list):
+                for bi, block in enumerate(content):
+                    if isinstance(block, dict):
+                        btype = str(block.get("type") or "block")
+                        label = btype
+                        if btype == "image_url":
+                            try:
+                                url = ((block.get("image_url") or {}).get("url") or "")
+                                label = f"image_url len={len(url)}"
+                            except Exception:
+                                label = "image_url"
+                        elif btype == "text":
+                            label = str(block.get("text") or "")[:80]
+                        _add(f"content:{btype}", block, label)
+                    else:
+                        _add("content:raw", block, str(block)[:80])
+            else:
+                label = ""
+                if role == "tool":
+                    label = str(msg.get("tool_call_id") or "")
+                else:
+                    label = str(content or "")[:80]
+                _add("content:text", content or "", label)
+
+            tool_calls = msg.get("tool_calls") or []
+            if isinstance(tool_calls, list):
+                for ti, tc in enumerate(tool_calls):
+                    name = ""
+                    try:
+                        if isinstance(tc, dict):
+                            name = str(((tc.get("function") or {}).get("name")) or "")
+                        else:
+                            name = str(getattr(getattr(tc, "function", None), "name", "") or "")
+                    except Exception:
+                        name = ""
+                    _add("assistant:tool_call", tc, name or f"tool_call[{ti}]")
+
+            return out
+
+        def _log_context_snapshot(iteration: int, call_label: str = "pre_call") -> None:
+            nonlocal _ctx_prev_blocks
+            try:
+                blocks: List[Dict[str, Any]] = []
+                for mi, m in enumerate(messages):
+                    if isinstance(m, dict):
+                        blocks.extend(_ctx_blocks_for_message(m, mi))
+
+                total_tokens = sum(int(b.get("tokens", 0)) for b in blocks)
+                delta_blocks = blocks[_ctx_prev_blocks:] if _ctx_prev_blocks <= len(blocks) else blocks
+                delta_tokens = sum(int(b.get("tokens", 0)) for b in delta_blocks)
+
+                by_role: Dict[str, int] = {}
+                by_kind: Dict[str, int] = {}
+                for b in blocks:
+                    by_role[str(b["role"])] = by_role.get(str(b["role"]), 0) + int(b["tokens"])
+                    by_kind[str(b["kind"])] = by_kind.get(str(b["kind"]), 0) + int(b["tokens"])
+
+                logger.info(
+                    "FLOKI_CONTEXT | "
+                    f"iter={iteration} phase={call_label} messages={len(messages)} "
+                    f"blocks={len(blocks)} est_tokens={total_tokens} "
+                    f"delta_blocks={len(delta_blocks)} delta_tokens={delta_tokens} "
+                    f"by_role={by_role} by_kind={by_kind}"
+                )
+
+                for rank, b in enumerate(sorted(blocks, key=lambda x: int(x.get("tokens", 0)), reverse=True)[:10], start=1):
+                    logger.info(
+                        "FLOKI_CONTEXT_TOP | "
+                        f"iter={iteration} rank={rank} msg={b['msg_index']} "
+                        f"role={b['role']} kind={b['kind']} "
+                        f"tokens={b['tokens']} chars={b['chars']} label={b['label']!r}"
+                    )
+
+                for rank, b in enumerate(sorted(delta_blocks, key=lambda x: int(x.get("tokens", 0)), reverse=True)[:10], start=1):
+                    logger.info(
+                        "FLOKI_CONTEXT_DELTA_TOP | "
+                        f"iter={iteration} rank={rank} msg={b['msg_index']} "
+                        f"role={b['role']} kind={b['kind']} "
+                        f"tokens={b['tokens']} chars={b['chars']} label={b['label']!r}"
+                    )
+
+                _ctx_prev_blocks = len(blocks)
+            except Exception as e:
+                try:
+                    logger.debug(f"FLOKI_CONTEXT | iter={iteration} log_failed={e}")
+                except Exception:
+                    pass
 
         for iteration in range(MAX_ITERATIONS):
             if (time.time() - start_time) >= float(self.timeout):
@@ -2134,6 +2302,11 @@ class AIAgent:
                     "content": json.dumps({"decision": "DEFER_TO_BRAIN", "confidence": 0, "reasoning": "timeout during tool loop", "key_factors": [], "concerns": ["timeout"]}),
                     "input_tokens": total_input_tokens, "output_tokens": total_output_tokens, "context_tokens": _last_prompt_tokens, "model": last_model, "tool_trace": tool_trace,
                 }
+
+            # FLO-420: prune image_url blocks from history once Floki has had
+            # one full reasoning turn over them. iter N appends → iter N+1 sees
+            # them → at top of iter N+2 we replace with text placeholders.
+            _apply_chart_prunes(messages, _chart_prunes_pending, iteration, logger_fn=logger.info)
 
             # FLO-299: Alibaba (primary) → OpenRouter (same Qwen 3.6-Plus) → suspend.
             # Decide which client to use this iteration:
@@ -2214,6 +2387,7 @@ class AIAgent:
                 return _client.chat.completions.create(**kwargs)
 
             try:
+                _log_context_snapshot(iteration, "pre_call")
                 resp = await loop.run_in_executor(None, _sync_call_on, _primary_client, _primary_model)
                 # Success bookkeeping:
                 # - If we just succeeded on Alibaba while cooldown was active,
@@ -2353,10 +2527,12 @@ class AIAgent:
                         _created = getattr(usage, "cache_creation_input_tokens", 0) or 0
                         if _cached > 0 or _created > 0:
                             _ratio = (_cached / _last_prompt_tokens * 100) if _last_prompt_tokens else 0
+                            _anth_call = getattr(resp, "_anthropic_cache_call_id", "")
+                            _anth_suffix = f" call={_anth_call}" if _anth_call else ""
                             logger.info(
                                 f"FLOKI_CACHE | iter={iteration} read={_cached} "
                                 f"create={_created} total={_last_prompt_tokens} "
-                                f"read_ratio={_ratio:.0f}%"
+                                f"read_ratio={_ratio:.0f}%{_anth_suffix}"
                             )
                     except Exception:
                         pass
@@ -2559,7 +2735,19 @@ class AIAgent:
                     result = self._execute_tool(tools, fname, fargs)
                     dt_ms = int((time.time() - t0) * 1000)
                     tool_trace.append({"name": fname, "input": fargs, "result": result, "latency_ms": dt_ms})
-                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False, default=str)})
+                    _tool_content = json.dumps(result, ensure_ascii=False, default=str)
+                    try:
+                        _success = bool(isinstance(result, dict) and result.get("success", True) is not False)
+                        _keys = sorted(list(result.keys()))[:12] if isinstance(result, dict) else []
+                        logger.info(
+                            "FLOKI_TOOL_PAYLOAD | "
+                            f"iter={iteration} tool={fname} latency_ms={dt_ms} "
+                            f"chars={len(_tool_content)} est_tokens={max(1, len(_tool_content) // 4)} "
+                            f"success={str(_success).lower()} keys={_keys}"
+                        )
+                    except Exception:
+                        pass
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": _tool_content})
 
                     # FLO-262 / FLO-385: build chart-image user message
                     # and DEFER appending until the full tool-response
@@ -2575,6 +2763,16 @@ class AIAgent:
                                 _img_blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_ci[_b64_key]}", "detail": "high"}})
                                 _img_blocks.append({"type": "text", "text": f"Above: XAUUSD {_tf} ({_tf_labels.get(_tf, _tf)}) chart."})
                         if len(_img_blocks) > 1:
+                            try:
+                                _img_chars = len(_ctx_json(_img_blocks))
+                                _img_count = sum(1 for _b in _img_blocks if isinstance(_b, dict) and _b.get("type") == "image_url")
+                                logger.info(
+                                    "FLOKI_CHART_PAYLOAD | "
+                                    f"iter={iteration} requested={_requested_tfs} images={_img_count} "
+                                    f"chars={_img_chars} est_tokens={max(1, _img_chars // 4)}"
+                                )
+                            except Exception:
+                                pass
                             _deferred_user_msgs.append({"role": "user", "content": _img_blocks})
                             logger.info(f"FLOKI | chart images queued (deferred to end of batch): {_requested_tfs}")
 
@@ -2582,7 +2780,32 @@ class AIAgent:
                 # the full tool-response sequence — preserves the
                 # contiguous assistant→tool[1..N] invariant.
                 if _deferred_user_msgs:
+                    _first_idx = len(messages)
                     messages.extend(_deferred_user_msgs)
+                    # FLO-420: record each appended image-message for pruning
+                    # at iter+2. Captures timeframes + capture timestamp from
+                    # the deferred entry's text labels (preserves original
+                    # timing for the placeholder).
+                    _capture_ts = utc_iso()
+                    for _offset, _dum in enumerate(_deferred_user_msgs):
+                        _content = _dum.get("content") if isinstance(_dum, dict) else None
+                        if not isinstance(_content, list):
+                            continue
+                        _tfs = []
+                        for _b in _content:
+                            if isinstance(_b, dict) and _b.get("type") == "text":
+                                _t = str(_b.get("text", ""))
+                                for _tf in ("D1", "H4", "H1", "M15", "M5", "M1"):
+                                    if f"XAUUSD {_tf} " in _t and _tf not in _tfs:
+                                        _tfs.append(_tf)
+                        if not _tfs:
+                            continue
+                        _chart_prunes_pending.append({
+                            "iter_appended": iteration,
+                            "msg_index": _first_idx + _offset,
+                            "timeframes": _tfs,
+                            "timestamp_iso": _capture_ts,
+                        })
 
                 continue
 
