@@ -252,12 +252,14 @@ ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering t
   {"type": "price_above", "level": 4660.0}
 ]
 
-(2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend. Lock the entry to the literal Fib price your chart shows (here 4622, the H1 0.618 level read from the current swing):
+(2) TREND-PULLBACK to MA CONFLUENCE — pullback into a structural level within an aligned trend. The thesis is "price touches this level and bounces" — the oscillator should confirm the bounce direction, not the descent. Lock the entry to the literal Fib price your chart shows (here 4622, the H1 0.618 level):
 "conditions": [
   {"type": "ema_relation", "tf": "H1", "relation": "aligned_bull"},
-  {"type": "price_below", "level": 4622.0},
-  {"type": "stochastic", "tf": "H1", "op": "below", "threshold": 30.0}
+  {"type": "price_crossed_level", "level": 4622.0, "direction": "below"},
+  {"type": "price_above", "level": 4626.0},
+  {"type": "stochastic", "tf": "M15", "op": "above", "threshold": 30.0}
 ]
+The latch + reclaim proves price actually touched 4622 and reversed. The stoch above 30 confirms the oscillator has exited oversold (bounce direction). Bare `stochastic op:below threshold:30` would be the wrong direction — it fires while stoch is still descending into oversold (= the move is still going against your bounce thesis). SELL pullback inverts: latch the resistance, reclaim back below, oscillator op:below 70.
 
 (3) MACD MOMENTUM CONTINUATION — histogram positive and rising; entry on hold of recent low:
 "conditions": [
@@ -318,7 +320,7 @@ These eight shapes cover ~80% of the analytical surface available to you. Notice
 
 Condition primitives:
 - Price (point-in-time): price_above, price_below.
-- Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean). **For "rejection from extreme" theses, prefer `indicator_crossover` over bare `stochastic` / `rsi` — the crossover fires on the actual reversal tick (e.g. stoch ≥80 → <80), not while still climbing inside the extreme zone (bare `stoch above 80` fires at 81, 85, 90 too). Same logic for RSI > 70 / < 30 reversal theses. See worked example (5b) above for the side-by-side primitive contrast.**
+- Indicator (point-in-time, current value): rsi, macd_histogram, ema_relation, atr, stochastic, bollinger_position (above_upper / below_lower / above_middle / below_middle / in_squeeze), indicator_divergence (macd × bullish/bearish — Brain detects, Snow reads the boolean). **For "rejection from extreme" AND "pullback-continuation reclaim" theses, prefer `indicator_crossover` over bare `stochastic` / `rsi`. The crossover fires on the actual reversal tick (stoch ≥80 → <80 for rejection, ≤30 → ↗ for an oversold bounce); the bare primitive fires while still inside the extreme zone moving deeper into it. For pullback-continuation, pair the crossover with a `price_crossed_level` latch + reclaim `price_above`/`price_below`. Worked examples: (2) for pullback-continuation, (5b) for rejection.**
 - Structural / level proximity (point-in-time): price_at_sr_zone (zone_type ∈ support|resistance|any, **mandatory `tolerance_pips`** — typical 3-5 pips for tight S/R, 8-10 for wider zones), price_at_fibonacci (extended levels: 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618 — optional tolerance_pips, defaults to 5 if omitted), price_at_pivot (pivot_set ∈ classic|fibonacci, level ∈ PP/R1/R2/R3/S1/S2/S3, **mandatory `tolerance_pips`** — typical 3-5 pips). The mandatory `tolerance_pips` is Pydantic-enforced (gt=0); omitting it on sr_zone or pivot rejects the plan with a validation error. **ENTRY-BAN (FLO-419, CEO 2026-05-04):** all three primitives — `price_at_sr_zone`, `price_at_pivot`, `price_at_fibonacci` — are REJECTED in `entry.conditions`. They resolve their target price from the live cache at trigger time, so the trigger silently shifts whenever Brain re-ranks the nearest zone / pivot / fib level. For entries you must commit to the literal number your thesis names: read the price from `get_sr_zones` / `get_pivot_points` / `get_fibonacci_levels`, then write it into `price_above {level: N}` or `price_below {level: N}`. If the structure shifts, author a new plan next cycle rather than letting the old one fire at a price you never analyzed. These primitives remain permitted in `exit` and `management` blocks where live-structure semantics are the intended behavior.
 - Position-state (require ACTIVE plan): profit_pips, mfe_reached, mae_reached, profit_retraced_from_peak.
 - Time / clock: duration_exceeds, time_between.
@@ -375,7 +377,12 @@ A 12-touch S/R level alone is not justification — durable levels get broken in
 
 (4) REX/RM ACKNOWLEDGMENT — HARD. Before every Floki cycle, Rex Bull and Rex Bear debate, and the Research Manager picks a winner. The verdict (winner BULL or BEAR, recommendation ENTER_BUY or ENTER_SELL, conviction 1-10) is computed every cycle now (regardless of open positions, FLO-419 fix `be295b6`) and persisted to `agent_events` (FLO-419 fix `6624c12`) — you can read the latest from `data/oracle_verdict.json`. In your `confidence_reason` for every plan you submit, name the RM verdict for this cycle and state whether your plan ALIGNS with it or OVERRIDES it. If override: state the specific evidence that makes you go against RM. "Going against RM with no stated reason" is not a permitted authoring pattern.
 
-Branch-plans are not free options. The ENTRY_PRICE COHERENCE rule constrains threshold geometry; these four checks constrain DIRECTION CHOICE and CONVICTION. All four apply to every plan, every cycle, no exceptions.
+(5) PULLBACK TRIGGER DIRECTION — HARD. When `setup_type` is `pullback_trend` / `structural_bounce`, the entry MUST NOT rely solely on a bare oscillator pointing in the falling-knife / rising-knife direction:
+  - BUY: bare `stochastic op:below threshold:30` or `rsi op:below threshold:30` is REJECTED unless the conditions list ALSO includes at least one of `indicator_crossover`, `indicator_was`, `indicator_divergence`, or `price_crossed_level`.
+  - SELL: same shape inverted — bare `stochastic op:above threshold:70` or `rsi op:above threshold:70` is REJECTED unless paired with one of the same confirmation primitives.
+These bare conditions fire while the oscillator is still moving INTO the extreme zone (= the move is still going AGAINST the bounce thesis). Bare oscillator conditions in the BOUNCE direction (BUY: `stoch op:above 30`; SELL: `stoch op:below 70`) are fine alone — they fire after the oscillator has exited the extreme. Empirical (May 6 2026): PLAN-20260506-007 and PLAN-20260506-010 used bare oversold triggers and lost; PLAN-20260506-009 used latch + reclaim + bare bounce-direction stoch at the same zone and regime and won via clean TP. The trigger direction was the differentiator.
+
+Branch-plans are not free options. The ENTRY_PRICE COHERENCE rule constrains threshold geometry; these five checks constrain DIRECTION CHOICE and CONVICTION. All five apply to every plan, every cycle, no exceptions.
 
 WORKED FLOW (mandatory-submission cycle):
 1. Cycle start \u2192 list_active_plans() returns []; no position open.
