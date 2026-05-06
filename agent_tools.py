@@ -1,11 +1,197 @@
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tz_utils import utc_iso, utc_now  # FLO-286 / FLO-309
 from typing import Any, Dict, Optional, List, Tuple
 
 from logger import log
+
+
+# FLO-422 Step 3 — passive author-time regime snapshot.
+# When Floki successfully submits a plan with one of these setup_types,
+# we compute a regime snapshot using breakout_regime.compute_regime_snapshot
+# and persist to snow_plans.author_regime_snapshot_json. Fail-soft —
+# any failure logs a warning and exits cleanly; the plan submission
+# itself never fails because the snapshot couldn't be taken.
+_FLO422_LIFECYCLE_SETUPS = (
+    "breakout_range",
+    "continuation_momentum",
+    "pullback_trend",
+    "structural_bounce",
+)
+
+
+def _maybe_persist_author_regime_snapshot(parsed_plan) -> None:
+    """Compute + persist the author-time regime snapshot for lifecycle-
+    sensitive plans. Fail-soft — never raises. Called immediately after
+    a successful insert_plan(). No-op for non-qualifying setup_types.
+
+    The snapshot captures the volatility-regime state Floki was authoring
+    against. A separate trigger-time snapshot (Step 5) captures the same
+    schema at the moment the entry conditions actually fire; comparing
+    the two yields drift detection.
+    """
+    try:
+        # Extract plan fields. The Plan is a Pydantic model from
+        # snow.plan_schema; .analysis and .entry are nested models.
+        plan_id = getattr(parsed_plan, "id", None)
+        analysis = getattr(parsed_plan, "analysis", None)
+        entry = getattr(parsed_plan, "entry", None)
+        if plan_id is None or analysis is None or entry is None:
+            return  # malformed — submission would have failed validation already
+
+        setup_type = getattr(analysis, "setup_type", None)
+        if setup_type not in _FLO422_LIFECYCLE_SETUPS:
+            return  # not lifecycle-sensitive — nothing to snapshot
+
+        direction = getattr(entry, "direction", None)
+        entry_price = getattr(entry, "entry_price", None)
+        if direction not in ("BUY", "SELL"):
+            return
+
+        # Snapshot timestamp = now (plan was just authored).
+        snap_ts = datetime.now(timezone.utc)
+
+        # ---- Fetch M5 candles via the proxy ----
+        m5_candles = _flo422_fetch_m5_candles(snap_ts, n=30)
+
+        # ---- Fetch analyses for the wider 24h window in a SINGLE query;
+        #      filter the 4h slice in Python. One DB round-trip instead of two.
+        analyses_24h = _flo422_fetch_analyses(snap_ts, minutes_back=24 * 60)
+        cutoff_4h = (snap_ts.replace(tzinfo=None) if snap_ts.tzinfo else snap_ts) \
+            - timedelta(minutes=240)
+        cutoff_4h_iso = cutoff_4h.isoformat()[:19]
+        analyses_4h = [a for a in analyses_24h
+                       if a.get("timestamp") and a["timestamp"] >= cutoff_4h_iso]
+
+        # ---- Determine current_price ----
+        # Prefer the most recent M5 close; fall back to entry_price.
+        current_price: float
+        if m5_candles:
+            current_price = float(m5_candles[-1].get("close") or entry_price or 0.0)
+        elif entry_price is not None:
+            current_price = float(entry_price)
+        else:
+            return  # genuinely no price reference; skip silently
+
+        # ---- Compute snapshot via the FLO-422 helper ----
+        from breakout_regime import compute_regime_snapshot
+        snapshot = compute_regime_snapshot(
+            ts=snap_ts,
+            direction=direction,
+            setup_type=setup_type,
+            breakout_level=float(entry_price) if entry_price is not None else None,
+            current_price=current_price,
+            candles_m5=m5_candles,
+            analyses_4h=analyses_4h,
+            analyses_24h=analyses_24h,
+            stage="author",
+        )
+
+        # ---- Persist via UPDATE ----
+        _flo422_persist_snapshot(plan_id, snapshot)
+
+        # ---- Single-line audit log. Stable precision for grep-friendliness:
+        #      percentages -> 2 decimals; pip distances -> 1 decimal; counts/ints
+        #      raw. None values render as "None" so absence is visible at a glance.
+        def _fmt_pct(v): return f"{v:+.2f}%" if isinstance(v, (int, float)) else "None"
+        warn_str = ",".join(snapshot.get("computation_warnings", []))
+        log.info(
+            f"BREAKOUT_REGIME_SNAPSHOT | plan={plan_id} | snapshot_version=1 | "
+            f"stage=author | setup={setup_type} | dir={direction} | "
+            f"impulse_total={snapshot.get('impulse_total_60m')} | "
+            f"bb_width_4h={_fmt_pct(snapshot.get('bb_width_4h_pct'))} | "
+            f"atr_4h={_fmt_pct(snapshot.get('atr_4h_pct'))} | "
+            f"breakout_age_bars={snapshot.get('breakout_age_bars')} | "
+            f"warnings=[{warn_str}]"
+        )
+    except Exception as e:
+        # Fail-soft: snapshot is observability, must not break submission.
+        try:
+            log.warning(
+                f"FLO-422 author snapshot failed for "
+                f"{getattr(parsed_plan, 'id', '?')}: {type(e).__name__}: {e}"
+            )
+        except Exception:
+            pass
+
+
+def _flo422_fetch_m5_candles(ts: datetime, n: int) -> list:
+    """Pull last `n` M5 candles ending at `ts`. Returns list of dicts with
+    open/high/low/close keys. Empty list on any failure."""
+    try:
+        from mt5_safe import mt5, mt5_lock
+        with mt5_lock:
+            if not mt5.initialize():
+                return []
+            mt5.symbol_select("XAUUSD", True)
+            ts_naive = ts.replace(tzinfo=None) if ts.tzinfo else ts
+            rates = mt5.copy_rates_from("XAUUSD", mt5.TIMEFRAME_M5, ts_naive, n)
+        if rates is None:
+            return []
+        out = []
+        for r in rates:
+            out.append({
+                "open": float(r["open"]),
+                "high": float(r["high"]),
+                "low": float(r["low"]),
+                "close": float(r["close"]),
+            })
+        return out
+    except Exception:
+        return []
+
+
+def _flo422_fetch_analyses(ts: datetime, minutes_back: int) -> list:
+    """Fetch `analyses` rows from history.db for the window
+    [ts - minutes_back, ts]. Returns list of dicts. Empty list on failure."""
+    try:
+        import sqlite3
+        import config as _cfg
+        db_path = getattr(_cfg, "HISTORY_DB_PATH", "data/history.db")
+        end = ts.replace(tzinfo=None) if ts.tzinfo else ts
+        start = end - timedelta(minutes=minutes_back)
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT timestamp, current_price, atr_14, rsi_14, ema_50,
+                          bb_upper, bb_middle, bb_lower, adx_14
+                     FROM analyses
+                    WHERE timestamp >= ? AND timestamp <= ?
+                    ORDER BY timestamp""",
+                (start.isoformat()[:19], end.isoformat()[:19]),
+            )
+            cols = ["timestamp", "current_price", "atr_14", "rsi_14", "ema_50",
+                    "bb_upper", "bb_middle", "bb_lower", "adx_14"]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def _flo422_persist_snapshot(plan_id: str, snapshot: dict) -> None:
+    """UPDATE snow_plans.author_regime_snapshot_json. Fail-soft."""
+    try:
+        import sqlite3
+        import config as _cfg
+        db_path = getattr(_cfg, "HISTORY_DB_PATH", "data/history.db")
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "UPDATE snow_plans SET author_regime_snapshot_json = ? WHERE id = ?",
+                (json.dumps(snapshot, default=str), plan_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        try:
+            log.warning(f"FLO-422 snapshot persist failed for {plan_id}: {e}")
+        except Exception:
+            pass
 
 
 # FLO-141: per-ticket adjustment rate limiter (in-memory, lost on restart)
@@ -5128,6 +5314,12 @@ class AgentTools:
                         "validation_errors": list(errors),
                     }
                 _snow_db.insert_plan(parsed)
+                # FLO-422 Step 3: passive author-time regime snapshot for
+                # lifecycle-sensitive setup_types. Fail-soft — submission
+                # never fails because the snapshot path errored. Helper
+                # filters by setup_type internally; non-qualifying plans
+                # are no-ops.
+                _maybe_persist_author_regime_snapshot(parsed)
                 # Include cwd + db path in the success log line so future
                 # operators auditing `logs/trading_bot_*.log` can tell at
                 # a glance whether the call came from production, a pytest
