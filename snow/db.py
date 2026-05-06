@@ -222,6 +222,13 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str], ...] = (
     # FLO-359 Phase 8b commit 1: state cache column for stateful primitives.
     # NULL for v1 plans and for any v2 plan that has not yet flushed state.
     ("state_cache_json", "ALTER TABLE snow_plans ADD COLUMN state_cache_json TEXT"),
+    # FLO-422 Step 2: regime snapshots and drift JSON for breakout-style plans.
+    # NULL for plans authored before the auto-snapshot ships in Step 3, and
+    # for plans that don't qualify (out-of-scope setup_types). Schema in
+    # data/_design/FLO-422_breakout_regime_observability.md.
+    ("author_regime_snapshot_json",  "ALTER TABLE snow_plans ADD COLUMN author_regime_snapshot_json TEXT"),
+    ("trigger_regime_snapshot_json", "ALTER TABLE snow_plans ADD COLUMN trigger_regime_snapshot_json TEXT"),
+    ("regime_drift_json",            "ALTER TABLE snow_plans ADD COLUMN regime_drift_json TEXT"),
 )
 
 
