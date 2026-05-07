@@ -4110,6 +4110,26 @@ class TradingBot:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         next_path = os.path.join(base_dir, "data", "agent_next_check.json")
 
+        # FLO-423 — Pre-cycle structural gate, SHADOW MODE.
+        # Computes 15 signals, classifies as would_skip / would_escalate,
+        # persists row. Floki STILL runs every cycle; this is observation
+        # only. Activation requires a separate future commit after 7 days
+        # of shadow data shows zero false-negatives + ≥20% skip rate.
+        # Fail-soft: any failure logs a warning and continues.
+        _gate_row_id: Optional[int] = None
+        try:
+            from gate_shadow import (
+                init_gate_shadow_table,
+                shadow_log_cycle_entry,
+            )
+            init_gate_shadow_table()
+            _gate_row_id = shadow_log_cycle_entry(now_ts=utc_now())
+        except Exception as _gate_err:
+            log.warning(
+                f"FLO-423 gate shadow entry failed (non-blocking): "
+                f"{type(_gate_err).__name__}: {_gate_err}"
+            )
+
         if trigger_type == "SIMBA_WAKE":
             try:
                 now_ts = time.time()
@@ -5807,6 +5827,49 @@ class TradingBot:
             _cf_compute(snapshot_time_iso, _tool_trace, "proactive")
         except Exception:
             pass
+
+        # FLO-423 — Pre-cycle structural gate, SHADOW outcome update.
+        # Populate the gate row with what Floki actually did this cycle so
+        # the post-7-day evaluation can compare gate decisions against
+        # actual outcomes (false-negative detection). Fail-soft.
+        try:
+            if _gate_row_id is not None:
+                from gate_shadow import shadow_log_cycle_outcome
+                _tt_gate = getattr(agent_result, "tool_trace", None) or []
+                _plans_submitted = sum(
+                    1 for _t in _tt_gate
+                    if isinstance(_t, dict)
+                    and _t.get("name") == "submit_plan_to_snow"
+                    and isinstance(_t.get("result"), dict)
+                    and _t["result"].get("success")
+                )
+                _plans_cancelled = sum(
+                    1 for _t in _tt_gate
+                    if isinstance(_t, dict)
+                    and _t.get("name") == "cancel_plan"
+                    and isinstance(_t.get("result"), dict)
+                    and _t["result"].get("success")
+                )
+                _position_actions = [
+                    {"tool": _t.get("name"), "input": _t.get("input", {})}
+                    for _t in _tt_gate
+                    if isinstance(_t, dict)
+                    and _t.get("name") in ("execute_trade", "close_trade", "adjust_trade")
+                    and isinstance(_t.get("result"), dict)
+                    and _t["result"].get("success")
+                ]
+                shadow_log_cycle_outcome(
+                    row_id=_gate_row_id,
+                    actual_decision=str(getattr(agent_result, "decision", "?") or "?"),
+                    actual_plans_submitted=_plans_submitted,
+                    actual_plans_cancelled=_plans_cancelled,
+                    actual_position_actions=_position_actions,
+                )
+        except Exception as _gate_outcome_err:
+            log.warning(
+                f"FLO-423 gate shadow outcome failed (non-blocking): "
+                f"{type(_gate_outcome_err).__name__}: {_gate_outcome_err}"
+            )
 
         try:
             # Store for dashboard
