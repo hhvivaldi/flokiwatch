@@ -748,6 +748,72 @@ def _check_confidence_floor(plan: Plan) -> list[str]:
     return []
 
 
+def _flo424_safety_circuit_active() -> bool:
+    """FLO-424 — temporary safety circuit gate.
+
+    Returns True while the circuit is active (i.e., breakout_range plans
+    should be rejected). Reads `config.FLO424_SAFETY_CIRCUIT_UNTIL`
+    (env-overridable) and compares to current UTC time. If the constant
+    is missing or unparseable, fail-safe: returns False (circuit
+    disabled) so a misconfiguration cannot accidentally block all plans.
+
+    Designed to self-disable after the until-timestamp passes, so a
+    forgotten circuit does not silently block authoring forever.
+    """
+    try:
+        import config as _cfg
+        until_str = getattr(_cfg, "FLO424_SAFETY_CIRCUIT_UNTIL", None)
+        if not until_str:
+            return False
+        until = _parse_utc_z(until_str)
+        if until is None:
+            return False
+        now = _dt.datetime.now(_dt.timezone.utc)
+        return now < until
+    except Exception:
+        return False
+
+
+def _check_flo424_safety_circuit(plan: Plan) -> list[str]:
+    """FLO-424 — temporary safety circuit for breakout_range setup_type.
+
+    Empirical 15-day window (Apr 23 – May 7, 2026):
+      breakout_range:        9 fired, 22% WR, -236p net
+      continuation_momentum: 10 fired, 70% WR, +349p net (UNCHANGED)
+
+    While the safety circuit is active (config.FLO424_SAFETY_CIRCUIT_UNTIL),
+    breakout_range plans are rejected at submit time. Floki's trend-
+    continuation theses should re-author as continuation_momentum, which
+    is profitable on the same window with the same triggers.
+
+    Other setup_types (pullback_trend, structural_bounce, etc.) are NOT
+    affected — only breakout_range is gated. The circuit self-disables
+    once now() >= FLO424_SAFETY_CIRCUIT_UNTIL.
+    """
+    if not _flo424_safety_circuit_active():
+        return []
+    setup_type = getattr(plan.analysis, "setup_type", None)
+    if setup_type != "breakout_range":
+        return []
+    try:
+        import config as _cfg
+        until = getattr(_cfg, "FLO424_SAFETY_CIRCUIT_UNTIL", "(unknown)")
+    except Exception:
+        until = "(unknown)"
+    return [(
+        f"Plan rejected: setup_type='breakout_range' is temporarily "
+        f"disabled by the FLO-424 safety circuit until {until}. "
+        f"Empirical 15-day window: 9 fired plans, 22% WR, -236p net. "
+        f"continuation_momentum on the same window was 70% WR (+349p). "
+        f"Re-author as setup_type='continuation_momentum' if your thesis "
+        f"is trend-continuation; otherwise wait for the circuit to expire "
+        f"or for the post-review formula update. Other setup_types "
+        f"(pullback_trend, structural_bounce, mean_reversion_extreme, "
+        f"liquidity_sweep, divergence_play, paired_hedge, news_reaction, "
+        f"session_open_break, continuation_momentum) are unaffected."
+    )]
+
+
 def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
     """FLO-419 Phase 3 / Escola 2 (CEO directive 2026-05-01, evening):
     Claude authors full SL management (BE trigger + trail distance)
@@ -1079,6 +1145,7 @@ def validate_plan(
     errors += _check_management_reachability(plan)
     errors += _check_management_hybrid_constraints(plan)
     errors += _check_confidence_floor(plan)
+    errors += _check_flo424_safety_circuit(plan)
 
     if errors:
         return False, plan, errors

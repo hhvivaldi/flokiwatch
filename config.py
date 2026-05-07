@@ -711,4 +711,19 @@ GHOST_GUARDS_ENABLED = os.environ.get("GHOST_GUARDS_ENABLED", "true").lower() in
 SNOW_ENABLED = os.environ.get("SNOW_ENABLED", "false").lower() in ("true", "1", "yes")
 SNOW_DRY_RUN = os.environ.get("SNOW_DRY_RUN", "true").lower() in ("true", "1", "yes")
 
+# FLO-424 — temporary safety circuit for breakout_range setup_type.
+# Empirical 15-day window (Apr 23 – May 7, 2026): 9 fired breakout_range plans,
+# 22% WR, -236p net. continuation_momentum on the same window was 70% WR (+349p).
+# Hard-disable breakout_range plan submission until the until-timestamp passes.
+# Floki's trend-continuation theses should re-author as continuation_momentum.
+# Other setup_types (pullback_trend, structural_bounce, mean_reversion_extreme,
+# liquidity_sweep, news_reaction, divergence_play, paired_hedge, session_open_break,
+# continuation_momentum) are NOT affected — only breakout_range is gated.
+# Override via env: FLO424_SAFETY_CIRCUIT_UNTIL="2026-05-22T00:00:00Z" (default 14d
+# from 2026-05-08). Set to a past timestamp to disable the circuit early.
+FLO424_SAFETY_CIRCUIT_UNTIL = os.environ.get(
+    "FLO424_SAFETY_CIRCUIT_UNTIL",
+    "2026-05-22T00:00:00Z",
+)
+
 # ============================================================================
