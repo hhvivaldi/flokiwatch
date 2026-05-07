@@ -383,9 +383,76 @@ Concretely this means:
 
 ---
 
-## 11. Frozen for reference — change log
+## 11. Caching — forward-looking note (added 2026-05-07)
+
+Step 3 ships without any caching layer. Operational profile review
+confirmed cost is negligible at current volume:
+
+- ~25 lifecycle-sensitive plans authored/day (estimated from 7-day
+  baseline; most cancelled).
+- Per submission: 1 MT5 M5 pull (~30ms) + 1 analyses SELECT (~30-100ms)
+  + 1 UPDATE (~10ms) ≈ 70-150ms.
+- Total Step 3 bot-time: ~3-4s/day spread across 24h. Below profiling
+  threshold.
+- Multi-plan burst (2 plans ~5-10s apart, sequential turns per FLO-408)
+  fetches nearly-identical M5 + analyses twice. Wasteful but cheap.
+- mt5_lock overhead: <0.2% additional hold time vs Snow's per-tick
+  background acquisition rate. Negligible new contention.
+- None of the existing memoization patterns (`_volume_profile_cache`,
+  `_tick_pressure_cache`, `_session_context_cache`) apply to this read
+  path; Step 3 is not bypassing them, it just doesn't have a cached
+  layer for raw analyses+M5 inputs.
+
+**Reconsider caching when Step 5 ships.** Step 5 adds trigger-time
+snapshots (~5-15/day) plus drift computation. Total snapshot calls
+roughly double. Burst patterns can compound — e.g., a plan authored
+at T=0 and triggered at T=300s would re-fetch nearly-identical
+analyses. At that point a small TTL cache becomes worth ~5-10s/day
+in bot-time savings AND removes redundant `mt5_lock` acquisitions
+during high-frequency tick periods.
+
+**Pre-Step-5 investigation:** check whether `self._bot.data_package`
+(or a similar Brain-cycle artifact) is reachable from
+`submit_plan_to_snow` and `snow/snow_loop.py` and contains the M5
+candles + analyses series the snapshot needs. If yes, design Step 5's
+snapshot-fetch path to prefer the cached data_package over raw
+re-fetch. If no, plan a small `_regime_input_cache` on `self._bot`
+mirroring the `_volume_profile_cache` pattern.
+
+**Cache shape (when added):** cache the FETCHED INPUTS, not the
+computed per-plan snapshots. Per-plan parameters (direction,
+breakout_level, setup_type) vary; the time-series inputs (M5 OHLC,
+analyses window) are identical across plans authored within seconds.
+
+```
+# Sketch of the future cache structure (NOT YET IMPLEMENTED):
+key:   ("m5_candles_30",)              # shared M5 series
+       ("analyses_24h", floor(ts/15))  # 15s timestamp-bucket TTL
+value: raw list[dict] inputs
+TTL:   ~30s
+location: self._bot._regime_input_cache (single dict, mirrors
+          _volume_profile_cache pattern in agent_tools.py:2027)
+```
+
+Caching computed snapshot OUTPUTS would not help — every plan needs
+a different snapshot because direction/breakout_level/setup_type
+differ. The savings are entirely on the input side.
+
+**Operational check pending:** confirm `data/history.db` `journal_mode`
+during the next restart window. If WAL is off, concurrent reader
+serialization could surface under Step 5 load. One-line check:
+```
+python -c "import sqlite3; c=sqlite3.connect('data/history.db'); \
+print('journal_mode:', c.execute('PRAGMA journal_mode').fetchone()); c.close()"
+```
+
+## 12. Frozen for reference — change log
 
 - **2026-05-06**: Initial design (sections 1-10). Replaces prior
   "compression + momentum building" framing falsified in Track 4 backfill.
   Setup-type-aware interpretation. No hard rules. Dual snapshot
   architecture with drift tracking.
+- **2026-05-07**: Step 3 shipped (passive author-time snapshot in
+  `agent_tools.py`). Added section 11 (caching forward-look) capturing
+  the operational profile review and pre-Step-5 investigation tasks.
+  Cache shape preference: input-caching not snapshot-caching.
