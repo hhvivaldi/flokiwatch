@@ -610,6 +610,19 @@ class SnowLoop:
                     "snow.loop.dispatch_failed plan_id=%s contingency=%s",
                     fire.plan_id, fire.contingency_name,
                 )
+            else:
+                # FLO-422 Step 5: capture trigger-time regime snapshot for
+                # entry fires. Runs only after a successful dispatch —
+                # observability only, never blocks order execution.
+                # Module is fail-soft internally; the outer guard here is
+                # belt-and-suspenders against import errors.
+                try:
+                    from snow.regime_capture import maybe_capture_trigger_snapshot
+                    maybe_capture_trigger_snapshot(
+                        fire.plan_id, fire.contingency_name, fire.plan_list_order,
+                    )
+                except Exception:
+                    pass
 
     def _runtime_reconcile_safe(self) -> None:
         """FLO-379 — call into runtime_reconcile.reconcile_runtime
