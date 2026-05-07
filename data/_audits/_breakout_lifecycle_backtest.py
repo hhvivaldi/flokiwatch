@@ -103,31 +103,75 @@ def _load_closed_plans() -> List[Dict[str, Any]]:
 
 def _fetch_m5_around(ts_iso: str, minutes_after: int = 0,
                     n_bars: int = 30) -> List[Dict[str, Any]]:
-    """Pull last `n_bars` M5 candles ending `minutes_after` after ts_iso."""
+    """Pull `n_bars` M5 candles ending at (eval_ts = ts_iso + minutes_after),
+    INCLUSIVE of the bar that contains eval_ts.
+
+    PR-A1 fix. Two issues stacked:
+      (a) copy_rates_from(end, count) returned bars STRICTLY BEFORE the
+          given timestamp — excluded the entry bar at offset=0, which
+          made PLAN-004 / PLAN-007 backtest as BUILDUP.
+      (b) MT5's `end` parameter is interpreted with an empirical +2h
+          shift beyond BROKER_OFFSET_HOURS (likely a server-DST quirk
+          on this broker). Passing a "naive broker wallclock" derived
+          purely from BROKER_OFFSET_HOURS=3 returned bars 2h earlier
+          than expected.
+
+    Robust strategy: oversize the request cushion (5h beyond eval_ts),
+    then TRIM the returned bars to those whose timestamp <= the bar
+    that contains eval_ts. Trim is by the bar's epoch directly, which
+    the broker stamps consistently as "broker_wallclock_as_utc".
+    """
     if not ts_iso:
         return []
     try:
         ts_utc = datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
     except Exception:
         return []
-    end_broker = (ts_utc + timedelta(hours=BROKER_OFFSET_HOURS, minutes=minutes_after)) \
-        .replace(tzinfo=None)
+    eval_utc = ts_utc + timedelta(minutes=minutes_after)
+
+    # The bar that "contains" eval_utc is the M5 bar whose 5-min open
+    # is <= eval_utc. The bar's epoch decodes-as-UTC to broker wallclock,
+    # which is real_utc + BROKER_OFFSET_HOURS.
+    keep_threshold_broker_naive = (
+        eval_utc + timedelta(hours=BROKER_OFFSET_HOURS)
+    ).replace(tzinfo=None)
+
+    # Oversized request cushion: +5h beyond eval (bigger than any
+    # plausible broker-DST shift). Empirically MT5 lags the requested
+    # end by ~2h on this server; +5h covers it with margin.
+    end_request = (
+        eval_utc + timedelta(hours=BROKER_OFFSET_HOURS + 5, minutes=5)
+    ).replace(tzinfo=None)
+
     with mt5_lock:
         if not mt5.initialize():
             return []
         mt5.symbol_select("XAUUSD", True)
-        rates = mt5.copy_rates_from("XAUUSD", mt5.TIMEFRAME_M5, end_broker, n_bars)
-    if rates is None:
+        rates = mt5.copy_rates_from(
+            "XAUUSD", mt5.TIMEFRAME_M5, end_request, n_bars + 60,
+        )
+    if rates is None or len(rates) == 0:
         return []
+
+    # Filter: keep bars whose stored time (decode_as_utc = broker
+    # wallclock) is at or before the bar containing eval_utc.
+    threshold_unix = keep_threshold_broker_naive.replace(
+        tzinfo=timezone.utc,
+    ).timestamp()
+
+    kept = [r for r in rates if int(r["time"]) <= int(threshold_unix)]
+    if not kept:
+        return []
+
     bars = []
-    for r in rates:
+    for r in kept:
         bars.append({
             "open": float(r["open"]),
             "high": float(r["high"]),
             "low": float(r["low"]),
             "close": float(r["close"]),
         })
-    return bars
+    return bars[-n_bars:]
 
 
 def _classify_at_offsets(plan_row: Dict[str, Any]) -> List[Dict[str, Any]]:
