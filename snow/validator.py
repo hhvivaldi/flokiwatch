@@ -814,6 +814,133 @@ def _check_flo424_safety_circuit(plan: Plan) -> list[str]:
     )]
 
 
+def _flo425_geometry_gate_active() -> bool:
+    """FLO-425 §16f — temporary anti-smuggling geometry gate.
+
+    Returns True while the gate is active. Reads
+    `config.FLO425_GEOMETRY_GATE_UNTIL` (env-overridable). If the
+    constant is missing or unparseable, fail-safe: returns False
+    (gate disabled) so a misconfiguration cannot accidentally
+    block all plans. Mirrors the FLO-424 pattern.
+    """
+    try:
+        import config as _cfg
+        until_str = getattr(_cfg, "FLO425_GEOMETRY_GATE_UNTIL", None)
+        if not until_str:
+            return False
+        until = _parse_utc_z(until_str)
+        if until is None:
+            return False
+        now = _dt.datetime.now(_dt.timezone.utc)
+        return now < until
+    except Exception:
+        return False
+
+
+def _flo425_get_current_price() -> Optional[float]:
+    """Read XAUUSD bid via the thread-safe MT5 proxy. Returns None on
+    any failure — the caller MUST treat None as fail-open (do not
+    block). Bounded work: one tick read, no candle fetch.
+    """
+    try:
+        from mt5_safe import mt5, mt5_lock
+        with mt5_lock:
+            if not mt5.initialize():
+                return None
+            tick = mt5.symbol_info_tick("XAUUSD")
+        if tick is None:
+            return None
+        bid = float(getattr(tick, "bid", 0) or 0)
+        return bid if bid > 0 else None
+    except Exception:
+        return None
+
+
+def _check_flo425_geometry_gate(plan: Plan) -> list[str]:
+    """FLO-425 §16f — anti-smuggling geometry gate.
+
+    Plan-independent validator rule. Rejects entries whose trigger
+    price sits more than FLO425_GEOMETRY_GATE_PIPS above current
+    price for BUY (or below current for SELL), regardless of
+    setup_type. Catches the "chase" geometry exemplified by
+    PLAN-20260507-007 (BUY 4756 vs current 4734.49 = +215p above)
+    that was smuggled as continuation_momentum after FLO-424
+    disabled breakout_range.
+
+    Plan-independent by design: setup_type is no longer the primary
+    truth (FLO-425 §19). The gate operates on entry geometry only.
+
+    Pullback shapes (BUY entry below current, SELL entry above
+    current) are unaffected — the geometric definition of "chase"
+    does not apply.
+
+    Does NOT catch at-current spike entries (PLAN-20260507-004's
+    class). That requires acceptance semantics (FLO-425 §17), out
+    of scope for this gate.
+
+    Fail-open posture:
+      - MT5 read fails → log+allow (do not block on infra failure)
+      - threshold env malformed → already fail-safe at config load;
+        if config attribute missing, allow
+      - gate_active_until past → no-op (gate inactive)
+    """
+    if not _flo425_geometry_gate_active():
+        return []
+
+    try:
+        import config as _cfg
+        threshold_pips = int(getattr(_cfg, "FLO425_GEOMETRY_GATE_PIPS", 0) or 0)
+        until_str = getattr(_cfg, "FLO425_GEOMETRY_GATE_UNTIL", "(unknown)")
+    except Exception:
+        return []
+
+    if threshold_pips <= 0:
+        return []  # disabled via env (FLO425_GEOMETRY_GATE_PIPS=0)
+
+    direction = getattr(plan.entry, "direction", None)
+    entry_price = getattr(plan.entry, "entry_price", None)
+    setup_type = getattr(plan.analysis, "setup_type", None)
+    if direction not in ("BUY", "SELL") or entry_price is None:
+        return []  # malformed; defensive — schema layer should have caught
+
+    current_price = _flo425_get_current_price()
+    if current_price is None:
+        # Fail-open. The validator does not block on infra failure.
+        # No log here — the validator pattern (cf. FLO-424) does not
+        # log; the caller will log "validation_passed" and downstream
+        # any actual issue surfaces in the broker leg.
+        return []
+
+    # Geometry: distance is positive only when entry is on the
+    # "chase side" relative to direction. Pullback shapes produce
+    # negative distance and are not subject to this gate.
+    if direction == "BUY":
+        distance_pips = round((float(entry_price) - current_price) * 10, 1)
+    else:  # SELL
+        distance_pips = round((current_price - float(entry_price)) * 10, 1)
+
+    if distance_pips <= threshold_pips:
+        return []  # under threshold OR pullback shape (negative distance)
+
+    return [(
+        f"Plan rejected: FLO-425 §16f anti-smuggling geometry gate. "
+        f"setup_type={setup_type!r} direction={direction} "
+        f"entry_price={float(entry_price):.2f} "
+        f"current_price={current_price:.2f} "
+        f"distance_pips={distance_pips:+.1f} "
+        f"threshold_pips={threshold_pips} "
+        f"gate_active_until={until_str}. "
+        f"This entry is more than {threshold_pips}p on the chase side "
+        f"of current price — a Phase-2-only break-attempt geometry "
+        f"that today's BUY-cluster losses shared (PLAN-007 was +215p "
+        f"above current). Re-author with entry price within "
+        f"±{threshold_pips}p of current, or wait for price to come "
+        f"to your structural level. Pullback shapes (BUY below "
+        f"current, SELL above current) are unaffected. Gate "
+        f"self-disables at {until_str}."
+    )]
+
+
 def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
     """FLO-419 Phase 3 / Escola 2 (CEO directive 2026-05-01, evening):
     Claude authors full SL management (BE trigger + trail distance)
@@ -1146,6 +1273,7 @@ def validate_plan(
     errors += _check_management_hybrid_constraints(plan)
     errors += _check_confidence_floor(plan)
     errors += _check_flo424_safety_circuit(plan)
+    errors += _check_flo425_geometry_gate(plan)
 
     if errors:
         return False, plan, errors

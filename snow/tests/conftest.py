@@ -371,3 +371,28 @@ def _redirect_tradinglogger_to_tmp(tmp_path_factory):
         pass
     for h in removed_handlers:
         trading_logger.addHandler(h)
+
+
+# ----------------------------------------------------------------------
+# FLO-425 §16f geometry gate — disable MT5 read during validator tests.
+#
+# The gate calls _flo425_get_current_price() which reads live MT5. The
+# pre-existing validator unit tests use synthetic plan fixtures with
+# entry prices far from live market (e.g., SELL @ 4555 when XAU is
+# trading at 4712). Without this fixture the gate would reject those
+# fixtures and break unrelated validator tests.
+#
+# Behavior under this fixture: _flo425_get_current_price() returns None,
+# which the gate treats as fail-open (allow plan) — preserving the
+# pre-flo425 validator contract for unit tests. Integration tests that
+# specifically exercise the gate (test_flo425_geometry_gate.py) are
+# standalone scripts run outside pytest and unaffected.
+# ----------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _flo425_disable_geometry_gate_mt5(monkeypatch):
+    try:
+        import snow.validator as _v
+        monkeypatch.setattr(_v, "_flo425_get_current_price", lambda: None)
+    except Exception:
+        pass
+    yield
