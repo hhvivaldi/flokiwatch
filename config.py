@@ -726,4 +726,41 @@ FLO424_SAFETY_CIRCUIT_UNTIL = os.environ.get(
     "2026-05-22T00:00:00Z",
 )
 
+# -----------------------------------------------------------------------
+# FLO-425 §16f anti-smuggling geometry gate (CEO directive 2026-05-07)
+# -----------------------------------------------------------------------
+# Plan-independent validator rule. Rejects entries whose trigger price
+# sits more than FLO425_GEOMETRY_GATE_PIPS above current price for BUY
+# (or below current price for SELL), regardless of setup_type.
+#
+# Catches the "chase" geometry that PLAN-20260507-007 exemplifies
+# (BUY entry 4756 vs current ~4734.49 = +215p above). Plan-independent
+# by design — Floki cannot bypass by relabeling setup_type.
+#
+# Does NOT catch at-current spike entries (PLAN-20260507-004's class).
+# That requires acceptance semantics (FLO-425 §17), out of scope here.
+#
+# Override via env:
+#   FLO425_GEOMETRY_GATE_PIPS=0  → disable the gate without code change
+#   FLO425_GEOMETRY_GATE_UNTIL="2026-05-22T00:00:00Z"  → match FLO-424
+# Set FLO425_GEOMETRY_GATE_UNTIL to a past timestamp to disable early.
+FLO425_GEOMETRY_GATE_PIPS = int(os.environ.get(
+    "FLO425_GEOMETRY_GATE_PIPS",
+    "50",
+))
+FLO425_GEOMETRY_GATE_UNTIL = os.environ.get(
+    "FLO425_GEOMETRY_GATE_UNTIL",
+    "2026-05-22T00:00:00Z",
+)
+
+# -----------------------------------------------------------------------
+# FLO-425 PR-A breakout lifecycle classifier — shadow logging toggle.
+# Default ON. Set to "0" to disable shadow JSONL emission and the
+# log line without removing the classifier code path.
+# -----------------------------------------------------------------------
+FLO425_LIFECYCLE_SHADOW_ENABLED = os.environ.get(
+    "FLO425_LIFECYCLE_SHADOW_ENABLED",
+    "1",
+) not in ("0", "false", "False", "", "no", "off")
+
 # ============================================================================

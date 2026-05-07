@@ -154,6 +154,18 @@ def maybe_capture_trigger_snapshot(
             f"breakout_age_bars={trigger_snapshot.get('breakout_age_bars')} | "
             f"warnings=[{warn_str}]"
         )
+
+        # FLO-425 PR-A — shadow lifecycle classification. Observational
+        # only: writes to JSONL audit channel + emits one log line. No
+        # consumer reads this output yet. Fail-soft inside.
+        _maybe_emit_lifecycle_shadow(
+            plan_id=plan_id,
+            plan_row=plan_row,
+            author_snapshot=author_snapshot,
+            trigger_snapshot=trigger_snapshot,
+            candles_m5=m5_candles,
+            snap_ts=snap_ts,
+        )
     except Exception as e:
         try:
             log.warning(
@@ -193,6 +205,92 @@ def _load_plan_row(plan_id: str) -> Optional[Dict[str, Any]]:
         }
     except Exception:
         return None
+
+
+def _maybe_emit_lifecycle_shadow(
+    *,
+    plan_id: str,
+    plan_row: Dict[str, Any],
+    author_snapshot: Optional[Dict[str, Any]],
+    trigger_snapshot: Dict[str, Any],
+    candles_m5: list,
+    snap_ts: datetime,
+) -> None:
+    """FLO-425 PR-A — shadow-mode classifier emit. Fail-soft. No
+    consumer reads this output yet; this is observability only,
+    accumulating the dataset for the eventual production gating
+    decision.
+
+    Disable via env: FLO425_LIFECYCLE_SHADOW_ENABLED=0.
+    """
+    try:
+        import config as _cfg
+        if not getattr(_cfg, "FLO425_LIFECYCLE_SHADOW_ENABLED", True):
+            return
+
+        # Reconstruct the minimal plan_dict shape the classifier consumes.
+        plan_dict = {
+            "id": plan_id,
+            "analysis": {"setup_type": plan_row["setup_type"]},
+            "entry": {
+                "direction": plan_row["direction"],
+                "entry_price": plan_row["entry_price"],
+            },
+        }
+
+        from breakout_lifecycle import classify_breakout_lifecycle
+        result = classify_breakout_lifecycle(
+            plan_dict=plan_dict,
+            author_snapshot=author_snapshot,
+            trigger_snapshot=trigger_snapshot,
+            candles_m5=candles_m5,
+            eval_ts=snap_ts,
+        )
+
+        # Append to JSONL audit channel.
+        _append_lifecycle_shadow_jsonl(plan_id, snap_ts, result)
+
+        # One concise log line for grep-friendly forensics.
+        log.info(
+            f"BREAKOUT_LIFECYCLE_SHADOW | plan={plan_id} | "
+            f"phase={result.get('phase')} | "
+            f"phase_confidence={result.get('phase_confidence')} | "
+            f"freshness={result.get('breakout_freshness')} | "
+            f"maturity={result.get('breakout_maturity')} | "
+            f"acceptance_quality={result.get('acceptance_quality')} | "
+            f"exhaustion_probability={result.get('exhaustion_probability')} | "
+            f"warnings={result.get('warnings')}"
+        )
+    except Exception as e:
+        try:
+            log.warning(
+                f"FLO-425 lifecycle shadow failed for {plan_id}: "
+                f"{type(e).__name__}: {e}"
+            )
+        except Exception:
+            pass
+
+
+def _append_lifecycle_shadow_jsonl(
+    plan_id: str,
+    snap_ts: datetime,
+    result: Dict[str, Any],
+) -> None:
+    """Append one JSONL row to data/_audits/breakout_lifecycle_shadow.jsonl.
+    Fail-soft. Includes plan_id + emit ts so rows are joinable to plans."""
+    try:
+        import os
+        path = os.path.join("data", "_audits", "breakout_lifecycle_shadow.jsonl")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        row = {
+            "plan_id": plan_id,
+            "emit_ts": snap_ts.isoformat().replace("+00:00", "Z"),
+            **result,
+        }
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, default=str) + "\n")
+    except Exception:
+        pass
 
 
 def _persist_trigger_snapshot(
