@@ -4940,56 +4940,10 @@ class AgentTools:
     # restart, that is expected until then, not a bug.
     # ---------------------------------------------------------------------
 
-    def get_snow_primitives_reference(
-        self, category: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Return the Pydantic-derived schema for Snow plan condition
-        primitives — names, parameter shapes, enum values, numeric
-        bounds. Use this when drafting a plan and you need to confirm
-        the exact field shape for a primitive.
-
-        FLO-357 Phase 7.4. Source of truth: `snow.schema.Condition`.
-        Schema and reference cannot drift — both are extracted from the
-        Pydantic models at import time.
-
-        Args:
-          category: Optional filter. One of "price" | "indicator" |
-            "structural" | "position_state" | "time". None returns all
-            18 primitives (~5 KB JSON, ~1500 tokens). With a filter,
-            output is 300–800 tokens. Prefer the filter when you know
-            which family you want.
-
-        Returns:
-          {"success": True, "categories": [...], "filter": str|None,
-           "count": int, "primitives": [{name, category, description,
-            params: {field: {type, values?, required, ...}}}, ...]}
-          {"success": False, "error": "...", "categories": [...]}
-        """
-        start = time.time()
-        try:
-            from snow.reference import get_primitive_reference
-        except Exception as e:
-            self._log_fail(
-                "get_snow_primitives_reference", start, f"import_error={e}"
-            )
-            return {
-                "success": False,
-                "error": f"snow.reference import failed: {e}",
-            }
-        try:
-            result = get_primitive_reference(category)
-            cat_str = category or "all"
-            count = result.get("count", 0)
-            self._log_tool(
-                "get_snow_primitives_reference", start,
-                f"category={cat_str} count={count}",
-            )
-            return result
-        except Exception as e:
-            self._log_fail(
-                "get_snow_primitives_reference", start, f"error={e}"
-            )
-            return {"success": False, "error": f"{type(e).__name__}: {e}"}
+    # FLO-422 Phase A1 (2026-05-07): get_snow_primitives_reference removed.
+    # Qwen-era scaffolding. Vocabulary lives in agent_prompts.py condition
+    # primitives section (line ~321) and validator errors carry the closed
+    # list inline. Module snow/reference.py also removed in same commit.
 
     def get_snow_recipe_book(
         self, category: Optional[str] = None,
@@ -5070,50 +5024,11 @@ class AgentTools:
             self._log_fail("get_snow_recipe_book", start, f"error={e}")
             return {"success": False, "reason": f"{type(e).__name__}: {e}"}
 
-    def get_snow_tags_reference(self) -> Dict[str, Any]:
-        """Return the FLO-366 setup-tagging vocabulary required for
-        schema_version >= 3 plans.
-
-        Three closed enum families plus a free-text confidence_reason:
-          - setup_type (10 values) — pick 1
-          - context_tags.trend / volatility / htf — pick 1 each
-          - context_tags.news_session — 0+ flags, with mutual-exclusion
-            on `near_news` ⊕ `post_news`
-          - confidence_reason — 20-150 chars
-
-        Source of truth: `snow.schema` (Pydantic Literal aliases).
-        Per-value descriptions and worked examples come from
-        `snow.tags_reference`. Adding a new enum value in the schema
-        without updating the reference shows up as `"(no description)"`.
-
-        Returns:
-          {"success": True, "schema_version": 3,
-           "setup_type": [...], "context_tags": {...},
-           "confidence_reason": {min_length, max_length},
-           "rules": [...], "examples": [...]}
-          {"success": False, "error": "..."}
-        """
-        start = time.time()
-        try:
-            from snow.tags_reference import get_tags_reference
-        except Exception as e:
-            self._log_fail(
-                "get_snow_tags_reference", start, f"import_error={e}"
-            )
-            return {
-                "success": False,
-                "error": f"snow.tags_reference import failed: {e}",
-            }
-        try:
-            result = get_tags_reference()
-            count = len(result.get("setup_type", []))
-            self._log_tool(
-                "get_snow_tags_reference", start, f"setup_count={count}",
-            )
-            return result
-        except Exception as e:
-            self._log_fail("get_snow_tags_reference", start, f"error={e}")
-            return {"success": False, "error": f"{type(e).__name__}: {e}"}
+    # FLO-422 Phase A1 (2026-05-07): get_snow_tags_reference removed.
+    # Qwen-era scaffolding. Vocabulary lives in agent_prompts.py
+    # (lines ~175-178: setup_type + context_tags closed lists) and
+    # validator errors carry the full closed list inline. Module
+    # snow/tags_reference.py also removed in same commit.
 
     def submit_plan_to_snow(
         self, plan: Optional[Dict[str, Any]] = None, **kwargs: Any,

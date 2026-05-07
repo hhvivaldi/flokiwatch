@@ -538,8 +538,8 @@ _CONDITION_PRIMITIVE_SCHEMA = {
         "the plan. Each variant is STRICT (additionalProperties: False) "
         "— do not invent fields like a duplicate `stochastic: \"M5\"` on "
         "the stochastic primitive; only the listed properties are "
-        "permitted. Call get_snow_primitives_reference for the canonical "
-        "field list when in doubt."
+        "permitted. The full per-primitive field shape is enumerated in "
+        "the system prompt vocabulary section."
     ),
     "oneOf": [
         # 1. price_above
@@ -785,8 +785,10 @@ _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     "get_rex_monitor", "rex_divergence_scan", "rex_correlation_check",
     "rex_regime_history", "rex_session_performance",
     # --- Snow reference reads (cached markdown / static maps) ---
-    "get_snow_recipe_book", "get_snow_primitives_reference",
-    "get_snow_tags_reference",
+    # FLO-422 Phase A1 (2026-05-07): tags_reference + primitives_reference
+    # removed — vocabulary lives in agent_prompts.py and validator errors
+    # carry the closed list inline.
+    "get_snow_recipe_book",
     # --- Luna / Echo / sentinel reads ---
     "get_luna_brief", "get_echo_alerts",
     # --- Research Manager verdict (FLO-419 Phase 2) ---
@@ -1676,8 +1678,8 @@ class AIAgent:
                     "While SNOW_DRY_RUN=true (default), fires are logged as "
                     "'*_would_fire' events in the snow_evaluations table — NO real "
                     "orders hit MT5. Plan shape: {analysis, entry, management, "
-                    "exit, emergency}. Call get_snow_primitives_reference(category) "
-                    "for the full condition-primitive schema. The validator returns "
+                    "exit, emergency}. Condition-primitive field shapes are documented "
+                    "in the system prompt. The validator returns "
                     "structured errors so you can revise and retry. The tool "
                     "overwrites id/created_by/created_at on submit — Floki-supplied "
                     "values for those fields are ignored."
@@ -1897,49 +1899,9 @@ class AIAgent:
                     "additionalProperties": True,
                 },
             },
-            {
-                "name": "get_snow_primitives_reference",
-                "description": (
-                    "Return the schema for Snow plan condition primitives — "
-                    "names, params, enum values, numeric bounds — derived live "
-                    "from snow/schema.py. Use this while drafting a plan to "
-                    "confirm exact field shapes. Optional `category` filter "
-                    "(price | indicator | structural | position_state | time) "
-                    "trims the response from ~1500 tokens to ~300-800. With "
-                    "no filter, returns all 18 primitives."
-                ),
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "enum": ["price", "indicator", "structural",
-                                     "position_state", "time"],
-                            "description": (
-                                "Filter to a single primitive category. Omit "
-                                "for all 18 primitives."
-                            ),
-                        },
-                    },
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "get_snow_tags_reference",
-                "description": (
-                    "Return the FLO-366 setup-tagging vocabulary required for "
-                    "schema_version >= 3 plans. Three closed enum families "
-                    "(setup_type, context_tags.trend / volatility / htf, "
-                    "context_tags.news_session) plus a 20–150 char "
-                    "confidence_reason. Includes worked examples for common "
-                    "setup shapes. No arguments; ~1.5 KB JSON."
-                ),
-                "input_schema": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": False,
-                },
-            },
+            # FLO-422 Phase A1: get_snow_primitives_reference and
+            # get_snow_tags_reference removed (Qwen-era scaffolding;
+            # vocabulary now lives in the prompt + validator errors).
             {
                 "name": "get_snow_recipe_book",
                 "description": (

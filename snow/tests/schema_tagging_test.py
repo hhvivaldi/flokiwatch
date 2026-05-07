@@ -258,11 +258,18 @@ class TestVersionConditionalValidator:
         with pytest.raises(ValidationError) as ei:
             Plan(**d)
         msg = str(ei.value)
-        # Error names the missing field(s) AND points Floki at the tool.
+        # FLO-422 Phase A1: error names the missing field(s) AND inlines
+        # the closed vocabulary directly (was: "Call get_snow_tags_reference()").
         assert "setup_type" in msg
         assert "context_tags" in msg
         assert "confidence_reason" in msg
-        assert "get_snow_tags_reference" in msg
+        # Inlined vocabulary should include canonical setup_type values
+        assert "breakout_range" in msg
+        assert "pullback_trend" in msg
+        # Inlined context_tags vocabulary
+        assert "trend_strong" in msg
+        assert "HTF_aligned" in msg
+        assert "session_overlap" in msg
 
     def test_v3_plan_with_valid_tagging_accepted(self, valid_plan_dict):
         p = Plan(**valid_plan_dict)
@@ -284,74 +291,12 @@ class TestVersionConditionalValidator:
         assert "missing field(s): context_tags" in msg
 
 
-# ---------------------------------------------------------------------------
-# Drift tests — tags_reference must enumerate every Literal value
-# ---------------------------------------------------------------------------
-
-class TestTagsReferenceDrift:
-    """If a new value is added to a schema Literal without a matching
-    description entry in `snow.tags_reference`, this test fails so the
-    operator notices before push."""
-
-    def _names(self, items):
-        return {i["name"] for i in items}
-
-    def test_setup_type_descriptions_cover_every_literal(self):
-        from typing import get_args
-        from snow.schema import SetupType
-        from snow.tags_reference import get_tags_reference
-        ref = get_tags_reference()
-        schema_values = set(get_args(SetupType))
-        ref_values = self._names(ref["setup_type"])
-        assert schema_values == ref_values, (
-            f"setup_type drift — schema has {schema_values - ref_values}, "
-            f"reference has extras {ref_values - schema_values}"
-        )
-        # No "(no description)" placeholders surviving to production.
-        for item in ref["setup_type"]:
-            assert "no description" not in item["description"], (
-                f"missing description for setup_type {item['name']!r}"
-            )
-
-    def test_context_tag_descriptions_cover_every_literal(self):
-        from typing import get_args
-        from snow.schema import HtfTag, NewsSessionTag, TrendTag, VolatilityTag
-        from snow.tags_reference import get_tags_reference
-        ref = get_tags_reference()["context_tags"]
-        for key, lit in (
-            ("trend", TrendTag),
-            ("volatility", VolatilityTag),
-            ("htf", HtfTag),
-            ("news_session", NewsSessionTag),
-        ):
-            schema_values = set(get_args(lit))
-            ref_values = self._names(ref[key])
-            assert schema_values == ref_values, (
-                f"context_tags.{key} drift — "
-                f"schema {schema_values - ref_values}, "
-                f"ref extras {ref_values - schema_values}"
-            )
-            for item in ref[key]:
-                assert "no description" not in item["description"], (
-                    f"missing description for {key} {item['name']!r}"
-                )
-
-    def test_examples_use_only_valid_enum_values(self):
-        from typing import get_args
-        from snow.schema import (
-            HtfTag, NewsSessionTag, SetupType, TrendTag, VolatilityTag,
-        )
-        from snow.tags_reference import get_tags_reference
-        ok_setup = set(get_args(SetupType))
-        ok_trend = set(get_args(TrendTag))
-        ok_vol = set(get_args(VolatilityTag))
-        ok_htf = set(get_args(HtfTag))
-        ok_news = set(get_args(NewsSessionTag))
-        for ex in get_tags_reference()["examples"]:
-            assert ex["setup_type"] in ok_setup
-            assert ex["context_tags"]["trend"] in ok_trend
-            assert ex["context_tags"]["volatility"] in ok_vol
-            assert ex["context_tags"]["htf"] in ok_htf
-            for n in ex["context_tags"].get("news_session", []):
-                assert n in ok_news
-            assert 20 <= len(ex["confidence_reason"]) <= 150
+# FLO-422 Phase A1 (2026-05-07): TestTagsReferenceDrift removed.
+# The drift tests verified that snow/tags_reference.py mirrored the
+# schema's Literal types. tags_reference.py is removed in this commit
+# (Qwen-era scaffolding); the canonical vocabulary now lives in:
+#   - agent_prompts.py (Floki-facing)
+#   - snow/schema.py Literal[...] (validator source of truth)
+#   - validator error messages (inlined closed lists)
+# A new schema-vs-prompt drift check belongs at a higher level (would
+# parse agent_prompts.py for the vocabulary listing); deferred.

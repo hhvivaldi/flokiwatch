@@ -750,10 +750,22 @@ class Plan(BaseModel):
             if self.analysis.confidence_reason is None:
                 missing.append("confidence_reason")
             if missing:
+                # FLO-422 Phase A1: vocabulary inlined in error message
+                # (was previously "Call get_snow_tags_reference()").
                 raise ValueError(
                     f"analysis: schema_version={self.schema_version} requires "
                     f"setup tagging — missing field(s): {', '.join(missing)}. "
-                    f"Call get_snow_tags_reference() for the closed vocabulary."
+                    f"Valid setup_type: breakout_range | pullback_trend | "
+                    f"mean_reversion_extreme | liquidity_sweep | "
+                    f"continuation_momentum | news_reaction | divergence_play | "
+                    f"paired_hedge | structural_bounce | session_open_break. "
+                    f"context_tags requires trend (trend_strong | trend_weak | "
+                    f"range_tight | range_wide), volatility (high_vol | low_vol), "
+                    f"htf (HTF_aligned | HTF_counter | HTF_neutral), and "
+                    f"news_session (list of zero or more from near_news, "
+                    f"post_news, session_overlap, session_thin; "
+                    f"near_news ⊕ post_news mutually exclusive). "
+                    f"confidence_reason: 20-150 char free text."
                 )
         return self
 

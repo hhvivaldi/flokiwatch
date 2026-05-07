@@ -140,7 +140,7 @@ class TestParallelSafeSetMembership:
         "rex_regime_history",
         "rex_session_performance",
         "get_snow_recipe_book",
-        "get_snow_primitives_reference",
+        # FLO-422 Phase A1: get_snow_primitives_reference removed.
         "read_session_memory",
         "get_trade_lessons",
         # FLO-385 follow-up (CEO directive 2026-04-29) additions —
@@ -351,11 +351,11 @@ class TestClampBehaviour:
                 "get_echo_alerts",
                 "get_rex_monitor",
                 "get_snow_recipe_book",
-                "get_snow_tags_reference",
+                # FLO-422 Phase A1: get_snow_tags_reference removed.
             ])
         ]
         kept, dropped = _apply_singleton_clamp(batch)
-        assert len(kept) == 15, (
+        assert len(kept) == 14, (
             "FLO-385 v2: the full mandatory suite must dispatch in one "
             "round-trip. Latency target ~25s/cycle vs ~95s under v1."
         )
