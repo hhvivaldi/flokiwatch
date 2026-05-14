@@ -1232,8 +1232,9 @@ def _check_regime_counter_trend_gate(
     REGIME_GATE_DEGRADED WARN. Paralysis risk on transient MT5/Brain
     hiccups outweighs fail-closed value.
     """
-    import logging
-    _log = logging.getLogger(__name__)
+    # FLO-427: route through the project TradingLogger so log lines land
+    # in logs/trading_bot_*.log; stdlib getLogger(__name__) is orphaned.
+    from logger import log as _log
 
     plan_id = getattr(plan, "id", None) or "<no-id>"
     direction = getattr(getattr(plan, "entry", None), "direction", None)
