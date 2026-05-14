@@ -2432,7 +2432,21 @@ class AIAgent:
                         self._on_openrouter = True
             except Exception as e:
                 _err_s = str(e).lower()
-                _non_retryable = any(k in _err_s for k in (
+                # FLO-426: Anthropic returns HTTP 400 with "credit balance is
+                # too low" for billing exhaustion. The error type is
+                # `invalid_request_error` (4xx) not 5xx, so it's permanent for
+                # this cycle — retrying 42 times burns ~2 min of compute and
+                # produces nothing. Match the canonical phrasing plus a few
+                # variants other providers use ("credits required",
+                # "billing", "402 Payment Required").
+                _billing_exhausted = any(k in _err_s for k in (
+                    "credit balance is too low",
+                    "credit balance too low",
+                    "credits required",
+                    "402",
+                    "billing.*upgrade",
+                ))
+                _non_retryable = _billing_exhausted or any(k in _err_s for k in (
                     "arrearage", "overdue-payment", "access denied",
                     "insufficient_quota", "invalid_api_key", "invalid api key",
                     "unauthorized", "forbidden", "451",
@@ -2446,7 +2460,9 @@ class AIAgent:
                     continue
 
                 # Non-retryable. Pick a human-readable reason.
-                if "arrearage" in _err_s or "overdue-payment" in _err_s:
+                if _billing_exhausted:
+                    short_reason = "Credit balance exhausted"
+                elif "arrearage" in _err_s or "overdue-payment" in _err_s:
                     short_reason = "Arrearage"
                 elif "insufficient_quota" in _err_s:
                     short_reason = "Insufficient quota"
