@@ -985,7 +985,36 @@ class AIAgent:
                 # Fallback (OpenRouter/Qwen) below is unaffected and stays
                 # on the OpenAI client.
                 _llm_provider = (getattr(config, "LLM_PROVIDER", "qwen") or "qwen").lower()
-                if _llm_provider == "anthropic":
+                if _llm_provider == "agent_sdk":
+                    # FLO-426: primary path is claude-agent-sdk (subscription).
+                    # `self.client` is still constructed as an Anthropic
+                    # native client so the exception-fallback in decide()
+                    # can route to floki_anthropic_adapter when API credits
+                    # are available. If ANTHROPIC_API_KEY is empty the
+                    # fallback is inert — SDK is the only working path.
+                    _anth_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                    if _anth_key:
+                        try:
+                            import anthropic as _anthropic_mod
+                            self.client = _anthropic_mod.Anthropic(api_key=_anth_key, timeout=90)
+                            _primary_provider = "AgentSDK (fallback=Anthropic-direct)"
+                            logger.info(
+                                f"AI Agent: primary = claude-agent-sdk (subscription), "
+                                f"fallback client = Anthropic direct "
+                                f"(model={getattr(config, 'FLOKI_MODEL', 'claude-opus-4-6')})"
+                            )
+                        except ImportError:
+                            logger.warning("anthropic package missing — SDK fallback inert")
+                            self.client = None
+                            _primary_provider = "AgentSDK (no fallback)"
+                    else:
+                        self.client = None
+                        _primary_provider = "AgentSDK (no fallback)"
+                        logger.info(
+                            "AI Agent: primary = claude-agent-sdk (subscription); "
+                            "ANTHROPIC_API_KEY empty so direct-API fallback is inert"
+                        )
+                elif _llm_provider == "anthropic":
                     if not _qwen_key:
                         logger.warning(
                             "AI Agent: LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY/FLOKI_API_KEY empty"
@@ -1166,11 +1195,46 @@ class AIAgent:
             except Exception as _bn_e:
                 logger.debug(f"boss_notes injection skipped (ignored): {_bn_e}")
 
-            response = await asyncio.wait_for(
-                self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
-                timeout=self.timeout,
-            )
-            
+            # FLO-426 — Agent SDK route (subscription auth).
+            # If LLM_PROVIDER=agent_sdk, run the cycle through claude-agent-sdk
+            # bound to the Max subscription pool. On ANY exception, fall back
+            # to the existing direct-API path so a malformed SDK call never
+            # leaves Floki silent.
+            _provider = (getattr(config, "LLM_PROVIDER", "qwen") or "qwen").lower()
+            response = None
+            if _provider == "agent_sdk":
+                try:
+                    from floki_agent_sdk_path import decide_via_agent_sdk
+                    from agent_prompts import get_system_prompt as _get_sp
+                    response = await decide_via_agent_sdk(
+                        system_prompt=_get_sp(),
+                        user_message=user_message,
+                        instance=tools,
+                        schemas=self._tool_schemas(),
+                        submit_decision_schema=SUBMIT_DECISION_TOOL,
+                        model=self.model,
+                        timeout=self.timeout,
+                        max_turns=int(getattr(config, "FLOKI_MAX_TOOL_CALLS", 40)),
+                        chart_images=(getattr(tools, "_chart_images", {}) or {}),
+                    )
+                    logger.info(
+                        f"FLOKI_SDK_PATH | elapsed={response.get('_sdk_elapsed_s', 0):.2f}s "
+                        f"submit_called={response.get('_sdk_submit_called')} "
+                        f"usage={response.get('_sdk_usage')}"
+                    )
+                except Exception as _sdk_e:
+                    logger.warning(
+                        f"FLOKI_SDK_PATH | failed: {type(_sdk_e).__name__}: {_sdk_e} — "
+                        f"falling back to direct-API path"
+                    )
+                    response = None
+
+            if response is None:
+                response = await asyncio.wait_for(
+                    self._call_openai_with_tools(user_message, tools=tools, chart_images=chart_images),
+                    timeout=self.timeout,
+                )
+
             # Calculate latency
             latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             

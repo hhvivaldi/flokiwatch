@@ -558,6 +558,17 @@ elif LLM_PROVIDER == "anthropic":
         os.environ.get("FLOKI_API_BASE", "https://api.anthropic.com"),
     )
     FLOKI_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+elif LLM_PROVIDER == "agent_sdk":
+    # FLO-426: Floki via claude-agent-sdk (subscription pool). Same Claude
+    # Opus model selection as the `anthropic` provider — the SDK manages
+    # auth via the bundled Claude Code CLI + ~/.claude/.credentials.json,
+    # so FLOKI_API_KEY is intentionally empty here. The actual subprocess
+    # is invoked from `floki_agent_sdk_path.decide_via_agent_sdk`.
+    FLOKI_MODEL = os.environ.get(
+        "ANTHROPIC_MODEL", os.environ.get("FLOKI_MODEL", "claude-opus-4-6"),
+    )
+    FLOKI_API_BASE = ""
+    FLOKI_API_KEY = ""
 elif LLM_PROVIDER == "openai":
     # FLO-404 follow-up: temporary fallback to OpenAI/GPT-5.4 after
     # Gemini hit the 250 req/day quota wall on 2026-04-29 (post mandatory-
@@ -577,8 +588,8 @@ elif LLM_PROVIDER == "openai":
 else:
     raise ValueError(
         f"LLM_PROVIDER={LLM_PROVIDER!r} not supported (expected 'qwen', "
-        f"'kimi', 'gemini', 'openai', or 'anthropic'). FLO-384/389/419 fails loudly to "
-        f"avoid silently routing Floki to an unintended provider."
+        f"'kimi', 'gemini', 'openai', 'anthropic', or 'agent_sdk'). FLO-384/389/419/426 "
+        f"fails loudly to avoid silently routing Floki to an unintended provider."
     )
 
 FLOKI_FALLBACK_API_BASE = os.environ.get("FLOKI_FALLBACK_API_BASE", "")
