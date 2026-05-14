@@ -484,7 +484,7 @@ AB_TEST_ENABLED = os.environ.get("AB_TEST_ENABLED", "false").lower() in ("true",
 USE_AI_AGENT = True                       # True = enable AI Agent, False = Brain-only mode
 AI_AGENT_MODE = "active"                  # shadow = Agent decides but Brain executes | gate = Agent controls entry | full = Agent controls all
 AI_AGENT_MODEL = os.environ.get("AI_AGENT_MODEL", "")  # Legacy (Anthropic) model name; unused for Gemini
-AI_AGENT_TIMEOUT = 300                    # Timeout in seconds for API calls (300s for Qwen's slower response)
+AI_AGENT_TIMEOUT = int(os.environ.get("AI_AGENT_TIMEOUT", "300"))  # Timeout in seconds for API calls (env-overridable; 600+ recommended under LLM_PROVIDER=agent_sdk per FLO-426)
 AI_AGENT_MAX_TOOL_CALLS = 40              # Max tool calls per decision (investigation + debate + execution)
 
 # FLO-130 / FLO-299 / FLO-384: Floki model.
