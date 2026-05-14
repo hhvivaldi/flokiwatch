@@ -7740,14 +7740,26 @@ class TradingBot:
         result = {"success": False}
 
         # FLO-262: Read all available timeframe PNGs
+        # FLO-426 diag: when all 6 TFs come back empty we need to know why —
+        # ready_key falsy vs PNG-not-exists vs read raised. Log each
+        # per-TF condition + sample one byte of the file to detect
+        # race-against-EA-write-flush.
+        _skipped_diag = []
         for tf, (cfg_key, ready_key, b64_key) in self._CHART_TF_MAP.items():
             png_path = getattr(config, cfg_key, '')
-            if ready.get(ready_key) and png_path and os.path.exists(png_path):
+            _flag = ready.get(ready_key)
+            _exists = bool(png_path) and os.path.exists(png_path)
+            _size = os.path.getsize(png_path) if _exists else 0
+            if _flag and _exists and _size > 0:
                 try:
                     with open(png_path, 'rb') as f:
                         result[b64_key] = _b64.b64encode(f.read()).decode('ascii')
                 except Exception as e:
                     log.warning(f"SCREENSHOT | failed to read {tf}: {e}")
+            else:
+                _skipped_diag.append(f"{tf}(flag={_flag!r},exists={_exists},size={_size})")
+        if _skipped_diag:
+            log.warning(f"SCREENSHOT_DIAG | skipped TFs: {' '.join(_skipped_diag)}")
 
         result["success"] = any(result.get(v[2]) for v in self._CHART_TF_MAP.values())
 
