@@ -314,6 +314,10 @@ async def decide_via_agent_sdk(
             setting_sources=[],
             env={"ANTHROPIC_API_KEY": ""},
             max_turns=max_turns,
+            # FLO-427 follow-up: 6 chart screenshots @ 86-103KB each base64
+            # to ~800KB, which exceeds the SDK's default 1MB JSON wire-message
+            # buffer. Bump to 8MB so chart-bearing tool results fit.
+            max_buffer_size=8 * 1024 * 1024,
         )
 
         usage = {"input": 0, "output": 0, "cache_create": 0, "cache_read": 0}
