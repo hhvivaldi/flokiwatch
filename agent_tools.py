@@ -5217,7 +5217,22 @@ class AgentTools:
                 # caller passed something else, overwrite to be safe.
                 candidate["status"] = "pending"
 
-                ok, parsed, errors = _validate(candidate)
+                # FLO-427: snapshot the live regime so the validator's
+                # counter-trend gate can read it without re-computing.
+                # Cheap dict-read from bot's in-memory state; fail-soft.
+                _author_regime: Optional[Dict[str, Any]] = None
+                try:
+                    _ctx = getattr(self._bot, "_last_regime_context", None)
+                    if isinstance(_ctx, dict):
+                        _author_regime = {
+                            "regime": _ctx.get("regime"),
+                            "confidence": _ctx.get("confidence"),
+                            "adx": _ctx.get("adx"),
+                        }
+                except Exception:
+                    _author_regime = None
+
+                ok, parsed, errors = _validate(candidate, author_regime=_author_regime)
                 if not ok:
                     self._log_fail(
                         "submit_plan_to_snow",

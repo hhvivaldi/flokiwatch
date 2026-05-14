@@ -527,7 +527,10 @@ class Contingency(BaseModel):
 # Required from schema_version >= 3 onward; v1/v2 plans omit them.
 # -----------------------------------------------------------------------------
 
-# 10 trading setups, mutually exclusive per plan.
+# 9 trading setups, mutually exclusive per plan.
+# FLO-427 (2026-05-14): paired_hedge removed — opposing-direction plans
+# violate FLO-85 (no simultaneous BUY+SELL) and the FLO-427 regime gate
+# rejects counter-trend entries in trending markets anyway.
 SetupType = Literal[
     "breakout_range",
     "pullback_trend",
@@ -536,7 +539,6 @@ SetupType = Literal[
     "continuation_momentum",
     "news_reaction",
     "divergence_play",
-    "paired_hedge",
     "structural_bounce",
     "session_open_break",
 ]
@@ -758,7 +760,7 @@ class Plan(BaseModel):
                     f"Valid setup_type: breakout_range | pullback_trend | "
                     f"mean_reversion_extreme | liquidity_sweep | "
                     f"continuation_momentum | news_reaction | divergence_play | "
-                    f"paired_hedge | structural_bounce | session_open_break. "
+                    f"structural_bounce | session_open_break. "
                     f"context_tags requires trend (trend_strong | trend_weak | "
                     f"range_tight | range_wide), volatility (high_vol | low_vol), "
                     f"htf (HTF_aligned | HTF_counter | HTF_neutral), and "

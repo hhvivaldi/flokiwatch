@@ -1216,8 +1216,119 @@ def _decode_known_string_paths(plan_dict: dict[str, Any]) -> dict[str, Any]:
 # Public entry point
 # =============================================================================
 
+def _check_regime_counter_trend_gate(
+    plan: Plan,
+    author_regime: Optional[dict[str, Any]],
+) -> list[str]:
+    """FLO-427 — block counter-trend plans in confirmed trending markets.
+
+    Fires when ALL hold:
+      - regime in {TRENDING_BULLISH, TRENDING_BEARISH}
+      - confidence in {high, strong}
+      - adx >= 25
+      - plan direction opposes the trend (BULLISH→SELL or BEARISH→BUY)
+
+    Fail-open: missing/UNKNOWN snapshot returns [] (allow) and emits a
+    REGIME_GATE_DEGRADED WARN. Paralysis risk on transient MT5/Brain
+    hiccups outweighs fail-closed value.
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    direction = getattr(getattr(plan, "entry", None), "direction", None)
+
+    if not author_regime:
+        _log.warning(
+            f"REGIME_GATE_DEGRADED | plan_id={plan_id} reason=no_snapshot "
+            f"direction={direction} | gate inactive this plan (FLO-427)"
+        )
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime=NONE adx=- confidence=- decision=DEGRADED"
+        )
+        return []
+
+    regime = author_regime.get("regime")
+    confidence = author_regime.get("confidence")
+    adx = author_regime.get("adx")
+
+    if not regime or regime == "UNKNOWN":
+        _log.warning(
+            f"REGIME_GATE_DEGRADED | plan_id={plan_id} reason=regime_unknown "
+            f"direction={direction}"
+        )
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime={regime!r} adx={adx} confidence={confidence!r} "
+            f"decision=DEGRADED"
+        )
+        return []
+
+    if regime not in ("TRENDING_BULLISH", "TRENDING_BEARISH"):
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime={regime} adx={adx} confidence={confidence} decision=ALLOW"
+        )
+        return []
+
+    if confidence not in ("high", "strong"):
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime={regime} adx={adx} confidence={confidence} "
+            f"decision=ALLOW (low_confidence)"
+        )
+        return []
+
+    try:
+        adx_val = float(adx) if adx is not None else 0.0
+    except (TypeError, ValueError):
+        adx_val = 0.0
+    if adx_val < 25.0:
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime={regime} adx={adx_val:.1f} confidence={confidence} "
+            f"decision=ALLOW (adx_below_floor)"
+        )
+        return []
+
+    counter_trend = (
+        (regime == "TRENDING_BULLISH" and direction == "SELL")
+        or (regime == "TRENDING_BEARISH" and direction == "BUY")
+    )
+    if not counter_trend:
+        _log.info(
+            f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+            f"regime={regime} adx={adx_val:.1f} confidence={confidence} "
+            f"decision=ALLOW (aligned)"
+        )
+        return []
+
+    aligned_direction = "BUY" if regime == "TRENDING_BULLISH" else "SELL"
+    trend_label = "bullish" if regime == "TRENDING_BULLISH" else "bearish"
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    msg = (
+        f"regime_gate: {direction} plan blocked — market regime is "
+        f"{regime} (ADX={adx_val:.1f}, confidence={confidence}) at {ts}. "
+        f"Counter-trend entries during confirmed trends are rejected "
+        f"(FLO-427). Author a {aligned_direction} plan aligned with the "
+        f"{trend_label} trend, or WAIT for a regime change. To gate-shop "
+        f"after a regime flip, call get_market_regime to refresh."
+    )
+    _log.info(
+        f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+        f"regime={regime} adx={adx_val:.1f} confidence={confidence} "
+        f"decision=REJECT"
+    )
+    return [msg]
+
+
 def validate_plan(
     plan_dict: dict[str, Any],
+    *,
+    author_regime: Optional[dict[str, Any]] = None,
 ) -> tuple[bool, Optional[Plan], list[str]]:
     """Validate a submitted plan dict.
 
@@ -1274,6 +1385,7 @@ def validate_plan(
     errors += _check_confidence_floor(plan)
     errors += _check_flo424_safety_circuit(plan)
     errors += _check_flo425_geometry_gate(plan)
+    errors += _check_regime_counter_trend_gate(plan, author_regime)
 
     if errors:
         return False, plan, errors
