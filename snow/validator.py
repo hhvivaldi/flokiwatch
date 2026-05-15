@@ -1216,6 +1216,65 @@ def _decode_known_string_paths(plan_dict: dict[str, Any]) -> dict[str, Any]:
 # Public entry point
 # =============================================================================
 
+def _check_active_plan_cap(plan: Plan) -> list[str]:
+    """FLO-428 — hard cap on live plan count.
+
+    Rejects new submissions when the in-flight count (status ∈
+    {pending, active, triggered, closing}) is already at MAX_ACTIVE_PLANS.
+    Belt-and-suspenders against the list_active_plans WAL-visibility bug
+    (overnight 2026-05-14/15: Floki saw count=0 from his tool but the DB
+    actually had pending plans, so 4 SELL plans stacked).
+
+    The check excludes the plan being submitted (in case it already has
+    its ID stamped). Fresh DB read every call — no caching.
+
+    Fail-open on DB error: paralysis risk on transient SQLite hiccups
+    outweighs the cap's value for one cycle. Logs ACTIVE_PLAN_CAP_DEGRADED.
+    """
+    from logger import log as _log
+
+    MAX_ACTIVE_PLANS = 2
+    plan_id = getattr(plan, "id", None)
+
+    try:
+        from snow.db import get_active_plans
+        rows = get_active_plans()
+    except Exception as e:
+        _log.warning(
+            f"ACTIVE_PLAN_CAP_DEGRADED | plan_id={plan_id} reason=db_error "
+            f"err={type(e).__name__}: {e} | gate inactive this plan (FLO-428)"
+        )
+        return []
+
+    # Exclude self (the row may already be in DB if a retry path
+    # inserted before validate, though normally validate runs first).
+    live = [r for r in rows if r.get("id") != plan_id]
+    count = len(live)
+
+    if count < MAX_ACTIVE_PLANS:
+        _log.info(
+            f"ACTIVE_PLAN_CAP | plan_id={plan_id} live_count={count}/"
+            f"{MAX_ACTIVE_PLANS} decision=ALLOW"
+        )
+        return []
+
+    live_ids = ", ".join(r.get("id", "?") for r in live[:5])
+    msg = (
+        f"active_plan_cap: this would be plan #{count + 1} in flight, but "
+        f"the cap is {MAX_ACTIVE_PLANS} (FLO-428). Currently live: "
+        f"{live_ids}. To author a new plan this cycle, cancel_plan(<id>) "
+        f"on one of the live plans first, OR wait for it to fire/expire/"
+        f"close. The cap exists because the list_active_plans tool can "
+        f"undercount due to a WAL-visibility bug — relying on it alone "
+        f"caused 4 SELL plans to stack overnight 2026-05-15."
+    )
+    _log.info(
+        f"ACTIVE_PLAN_CAP | plan_id={plan_id} live_count={count}/"
+        f"{MAX_ACTIVE_PLANS} decision=REJECT live=[{live_ids}]"
+    )
+    return [msg]
+
+
 def _check_regime_counter_trend_gate(
     plan: Plan,
     author_regime: Optional[dict[str, Any]],
@@ -1386,6 +1445,7 @@ def validate_plan(
     errors += _check_confidence_floor(plan)
     errors += _check_flo424_safety_circuit(plan)
     errors += _check_flo425_geometry_gate(plan)
+    errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
 
     if errors:
