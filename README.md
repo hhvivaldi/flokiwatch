@@ -56,9 +56,8 @@ The bot operates **100% autonomously** on MetaTrader 5:
 
 | Agent | Model | Role | Tools | Cadence |
 |-------|-------|------|-------|---------|
-| **Floki** | GPT-5.4 | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 28 | 5-30 min (self-scheduled) |
-| **Rex** | GPT-4o | Analyst — provides insights + Bull/Bear structured debate (FLO-190). 6 standard + 5 unique tools. | 11 | Bull/Bear every cycle + insights on demand |
-| **Research Mgr** | Gemini 3 Flash | Picks winner between Rex Bull and Rex Bear. Produces verdict with trigger levels (FLO-194). | — | Every Floki cycle (after debate) |
+| **Floki** | Claude Opus 4.6 | Portfolio manager — sole trading decisor (WAIT/OPEN/CLOSE/ADJUST) | 27 | 5-30 min (self-scheduled) |
+| **Rex Monitor** | Python (deterministic) | Background scan — divergence / correlation / regime / session findings. Floki pulls via get_rex_monitor. | — | Every 30 min (independent) |
 | **Simba** | Python (no AI cost) | Watchdog — monitors conditions, wakes Floki | — | Every 30s |
 | **Sage** | Gemini | Performance auditor — daily trade review + recommendations | — | Daily at 21:00 UTC |
 | **Echo** | MiMo-V2-Flash | News sentinel — 25 RSS feeds, classifies CRITICAL/IMPORTANT/ROUTINE | — | Every 5 min |
@@ -67,9 +66,9 @@ The bot operates **100% autonomously** on MetaTrader 5:
 ### Key Features
 
 - **Delta-based continuity**: Each cycle shows objective numeric deltas since the last cycle (price, RSI, ADX, MACD, regime). No thesis anchoring.
-- **Rex Bull/Bear debate (FLO-190/194)**: Before each Floki cycle, Rex Bull argues gold goes UP (BUY) and Rex Bear argues gold goes DOWN (SELL), both in parallel. Research Manager picks the winner and produces a verdict for Floki.
+- **Single-decisor pipeline (FLO-434, 2026-05-17)**: Brain → Screenshots → Floki (Claude Opus 4.6) → Plans. Rex Bull/Bear conversational debate + Research Manager removed; weaker-model intermediaries added noise.
 - **Cross-market context**: 15 MT5 instruments (metals, forex, indices, energy, crypto, futures) + Yahoo/FRED data.
-- **Rex market intelligence**: 11 tools (5 unique: session performance, divergence scan, correlation check, regime history, reflexion search). Provides insights, not approval.
+- **Rex deterministic monitor**: scans divergence, correlation, regime change, session performance every 30 min independently. Floki pulls via `get_rex_monitor` when he wants the findings.
 - **FOLLOWUP mechanism**: If Floki decides OPEN/CLOSE/ADJUST but forgets to call the tool, system injects a reminder turn.
 - **Position management**: Floki is sole manager — EA is pure executor with 9999-pip BE/trailing (never triggers).
 

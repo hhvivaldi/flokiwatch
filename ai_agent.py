@@ -741,11 +741,6 @@ _SINGLETON_TOOLS: frozenset = frozenset({
     # Reclassified to _PARALLEL_SAFE_TOOLS below; the deferral path
     # remains the single load-bearing protection. See
     # snow/tests/flo385_singleton_clamp_test.py contract inversion.
-    # --- Expensive sub-agent invocation ---
-    "debate_with_rex",            # invokes Rex full debate loop
-                                  # (3 internal tools + LLM cycles);
-                                  # shouldn't race with Floki's other
-                                  # reads in the same turn.
     # --- External-network reads (slow + cache-writing) ---
     # FLO-419 Phase 2: get_analyst_research is Google-grounded (3-8s
     # HTTP roundtrip on miss, writes data/floki_research_cache.json on
@@ -791,12 +786,6 @@ _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     "get_snow_recipe_book",
     # --- Luna / Echo / sentinel reads ---
     "get_luna_brief", "get_echo_alerts",
-    # --- Research Manager verdict (FLO-419 Phase 2) ---
-    # get_oracle_verdict is a pure read of data/oracle_verdict.json
-    # (the latest RM debate winner + Bull/Bear cases). Refreshed by
-    # main.py at the END of every Floki cycle (commit 6624c12). Read-
-    # only, idempotent, safe to batch with other parallel reads.
-    "get_oracle_verdict",
 })
 
 
@@ -1460,22 +1449,6 @@ class AIAgent:
                     "additionalProperties": False,
                 },
             },
-            {
-                "name": "debate_with_rex",
-                "description": "Debate with Rex (junior trader) for a second perspective. Max 5 turns per decision (auto-resets after 5 minutes).",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "my_direction": {"type": "string"},
-                        "my_reasoning": {"type": "string"},
-                        "my_confidence": {"type": "number"},
-                        "key_data": {},
-                        "rex_previous_response": {},
-                    },
-                    "required": ["my_direction", "my_reasoning", "my_confidence", "key_data"],
-                    "additionalProperties": False,
-                },
-            },
             # FLO-419 (CEO 2026-05-04): the two Simba-fed wake/watch
             # tool schemas were removed from Floki's roster. Sole
             # consumer was Simba (deprecated); both wrote files that
@@ -1644,11 +1617,6 @@ class AIAgent:
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
-                "name": "get_oracle_verdict",
-                "description": "Read the latest Research Manager verdict for THIS cycle (FLO-419 Phase 2). Returns: winner ('BULL'|'BEAR'), recommendation ('ENTER_BUY'|'ENTER_SELL'|null), conviction (1-10), RM's reasoning, plus the full Rex Bull and Rex Bear case texts and the entry/SL/target each side proposed. Refreshed by main.py at the start of every Floki cycle. REQUIRED for FLO-419 PLAN-AUTHORING DISCIPLINE rule (4): every plan's confidence_reason must name this cycle's RM verdict and state whether the plan ALIGNS with it or OVERRIDES it. If override: cite the specific evidence that justifies going against RM. Returns {success: false, reason: ...} when the verdict file is missing or unparseable — surface the absence in your reasoning rather than skip the rule.",
-                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
-            {
                 "name": "get_market_regime",
                 "description": "Local XAU/USD price-action regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence list, descriptive state hint, and related_tools list when applicable. Returns a compact delta response {changed: false, regime, since} when regime+confidence are unchanged since the last call this run. Distinct from Luna's macro regime (risk_on/risk_off) — use get_luna_brief for that.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -1719,7 +1687,6 @@ class AIAgent:
                 "description": "List all current pending orders with type, price, SL, TP, and volume.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-            # FLO-243: get_oracle_verdict removed — verdict now auto-injected at end of trigger_context
             {
                 "name": "write_trading_journal",
                 "description": "Write a persistent journal entry (reflection, lesson, frustration, idea, missing_data, market_observation). Accumulates over days — your product owner reads this.",

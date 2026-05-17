@@ -16,18 +16,19 @@ python -m uvicorn dashboard.server:app --host 0.0.0.0 --port 8080  # Dashboard
 python test_central_brain.py   # Unit tests (standalone scripts, no pytest)
 ```
 
-## Architecture — 8 Agents
+## Architecture — 6 Agents (FLO-434 reduced from 8)
 
 | Agent | Model | File | Role |
 |-------|-------|------|------|
-| Floki | GPT-5.4 | `ai_agent.py` | Sole trading decisor. 30 tools. Self-schedules 5-30 min. |
-| Rex | GPT-4o | `rex_validator.py` + `rex_monitor.py` | Analyst. 11 tools (6 standard + 5 unique). Bull/Bear debate (FLO-190). Proactive monitor every 30 min (FLO-211). |
-| Research Mgr | Gemini 3 Flash | `research_manager.py` | Picks winner between Rex Bull and Rex Bear. Produces verdict with triggers (FLO-194). |
-| Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. |
+| Floki | Claude Opus 4.6 | `ai_agent.py` | Sole trading decisor. Self-schedules 5-30 min. |
+| Rex Monitor | Python (deterministic) | `rex_monitor.py` | Background scan every 30 min — divergence / correlation / regime / session findings. Floki pulls via get_rex_monitor. |
+| Simba | Python | `agent_monitor.py` | Watchdog. 30s polling. Wakes Floki. (Deprecated — see Deprecated subsystems.) |
 | Sage | Gemini | `sage_auditor.py` | Daily auditor at 21:00 UTC. |
 | Echo | MiMo-V2-Flash | `echo_sentinel.py` | News sentinel. 25 RSS feeds. PULL-only. |
 | Luna | MiMo-V2-Flash | `luna_analyst.py` | Macro analyst. MT5+Yahoo+FRED. Observational output only (no env/risk/bias labels post-Bug G — Floki interprets). |
 | Brain | Python | `central_brain.py` | Data pipeline. 5-pillar analysis. No decisions. |
+
+**FLO-434 removed from the cycle (2026-05-17):** Rex Bull, Rex Bear, Research Manager. All three used weaker models than Floki (Claude Opus 4.6) and produced advisory output Floki either ignored or contradicted. The conversational Rex debate is gone (`debate_with_rex` tool deleted); the verdict-file machinery is gone (`get_oracle_verdict` tool deleted, `data/oracle_verdict.json` no longer written, `RM_VERDICT` events no longer recorded). `rex_validator.py` and `research_manager.py` are retained on disk for potential future re-enable but no live call path reaches them. The Rex monitor (deterministic 30-min scan, no LLM) stays — it's a useful observational source Floki polls when he wants it.
 
 **NOTE:** `simba_watcher.py` is dead code. Canonical Simba is `agent_monitor.py`.
 
@@ -66,9 +67,7 @@ main.py (orchestrator)
 
 ## Key Design Decisions
 
-- **Floki is sole decisor.** Rex is advisory ("DISAGREE is feedback, not a veto").
-- **Rex Bull/Bear debate (FLO-190/194):** Before each Floki cycle, Rex Bull argues gold goes UP (BUY) and Rex Bear argues gold goes DOWN (SELL) in parallel. Research Manager (Gemini) picks the winner → `<verdict>` block in trigger_context. If RM fails, falls back to `<debate>` block. Both Bull and Bear must succeed or neither is shown (Rule 1).
-- **Rex defaults to DISAGREE on failure.** Truncation/parse error = no agreement.
+- **Floki is sole decisor.** Brain → Screenshots → Floki (Claude Opus 4.6) → Plans. No intermediaries (FLO-434, 2026-05-17).
 - **EA is pure executor.** `FLOKI_MANAGES_POSITION = True`. 9999-pip triggers never fire.
 - **Echo is pull-based.** Floki pulls alerts via tool, Echo does not push.
 - **Rex monitor (FLO-211 / FLO-316):** Runs 4 tools every 30 min (divergence, correlation, regime, session). No LLM — deterministic classifier. Writes `data/rex_monitor.json`. Floki pulls via `get_rex_monitor`. FLO-316 removed prescriptive `alert_level` (QUIET/NORMAL/ELEVATED/CRITICAL) + `alert_context` + `alert_hint` + per-finding `severity` + `implication` fields. Output is now observational: each finding is `{type, observation, data}` (type ∈ DIVERGENCE/CORRELATION/REGIME/SESSION). Simba wake now gates on `findings_count >= 2` instead of `alert_level == CRITICAL` (2h debounce preserved). Bull/Bear debate injection of monitor findings already removed in Commit 1 (FLO-243 decoupling).

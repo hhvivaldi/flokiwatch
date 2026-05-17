@@ -478,22 +478,6 @@ def write_state(bot_instance: Any) -> None:
             log.debug(f"state_writer: snow summary skipped: {_se}")
             # Don't surface `snow` at all — frontend hides on absence.
 
-        # FLO-190: Inject debate results for dashboard
-        try:
-            _debate = getattr(bot_instance, "_last_debate_result", None)
-            if isinstance(_debate, dict):
-                _deb_out = {
-                    "status": _debate.get("status", "DISABLED"),
-                    "skip_reason": _debate.get("skip_reason"),
-                    "timestamp": utc_iso(),  # FLO-309
-                }
-                if _debate.get("status") == "INJECTED":
-                    _deb_out["rex_bull"] = _debate.get("rex_bull", {})
-                    _deb_out["rex_bear"] = _debate.get("rex_bear", {})
-                last_analysis["debate"] = _deb_out
-        except Exception:
-            pass
-
         # Diagnostic: surface data_needs from agent result
         try:
             _pa = last_analysis.get("proactive_analysis") if isinstance(last_analysis, dict) else None
@@ -505,22 +489,6 @@ def write_state(bot_instance: Any) -> None:
                 _dn = _ad.get("data_needs")
             if _dn:
                 last_analysis["data_needs"] = _dn
-        except Exception:
-            pass
-
-        # FLO-194: Inject Research Manager verdict for dashboard
-        try:
-            _verdict = getattr(bot_instance, "_last_verdict_result", None)
-            if isinstance(_verdict, dict):
-                _v_out = {
-                    "status": _verdict.get("status", "DISABLED"),
-                    "timestamp": utc_iso(),  # FLO-309
-                }
-                if _verdict.get("status") == "OK":
-                    for _vk in ("winner", "reasoning", "recommendation", "entry", "sl",
-                                "target", "trigger_buy", "trigger_sell", "conviction"):
-                        _v_out[_vk] = _verdict.get(_vk)
-                last_analysis["verdict"] = _v_out
         except Exception:
             pass
 

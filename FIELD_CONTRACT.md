@@ -101,41 +101,9 @@
 | `last_analysis.simba.summary` | string | `main.py` | Trade Room Simba card |
 | `last_analysis.simba.timestamp` | string (ISO) | `main.py` | Trade Room Simba card |
 
-### `last_analysis.debate` Object (FLO-190 Rex Bull/Bear)
+### `last_analysis.debate` and `last_analysis.verdict` — REMOVED (FLO-434, 2026-05-17)
 
-| Field | Type | Writer | Reader |
-|-------|------|--------|--------|
-| `last_analysis.debate.status` | string (`"INJECTED"` \| `"SKIPPED"` \| `"DISABLED"`) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.skip_reason` | string \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.timestamp` | string (ISO) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.direction` | string (`"BUY"` \| `"SELL"` \| `"NONE"`) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.case` | string | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.conviction` | int (1-10) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.entry` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.sl` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bull.target` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.direction` | string (`"SELL"`) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.case` | string | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.conviction` | int (1-10) | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.entry` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.sl` | float \| null | `state_writer.py` | Dashboard debate card |
-| `last_analysis.debate.rex_bear.target` | float \| null | `state_writer.py` | Dashboard debate card |
-
-### `last_analysis.verdict` Object (FLO-194 Research Manager)
-
-| Field | Type | Writer | Reader |
-|-------|------|--------|--------|
-| `last_analysis.verdict.status` | string (`"OK"` \| `"FAILED"` \| `"DISABLED"`) | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.winner` | string (`"BULL"` \| `"BEAR"` \| `"NEUTRAL"`) | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.reasoning` | string | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.recommendation` | string (`"ENTER_BUY"` \| `"ENTER_SELL"` \| `"NEUTRAL"`) | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.entry` | float \| null | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.sl` | float \| null | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.target` | float \| null | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.trigger_buy` | string \| null | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.trigger_sell` | string \| null | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.conviction` | int (1-10) | `state_writer.py` | Dashboard verdict card |
-| `last_analysis.verdict.timestamp` | string (ISO) | `state_writer.py` | Dashboard verdict card |
+The Rex Bull/Bear debate (FLO-190) and Research Manager verdict (FLO-194) were removed from the Floki cycle on 2026-05-17. `state_writer.py` no longer writes the `last_analysis.debate` or `last_analysis.verdict` objects to `bot_state.json`; the Trade Room dashboard debate/verdict cards will go empty (panel teardown is a follow-up ticket). `rex_validator.py` and `research_manager.py` remain on disk but are unused by the cycle. The conversational `debate_with_rex` tool and the verdict-reader `get_oracle_verdict` tool were both removed from Floki's roster. Floki (Claude Opus 4.6) is sole decisor — Brain → Screenshots → Floki → Plans.
 
 ### `pending_orders` Array (FLO-263 Pending Orders)
 

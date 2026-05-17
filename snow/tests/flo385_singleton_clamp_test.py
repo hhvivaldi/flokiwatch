@@ -87,9 +87,10 @@ class TestSingletonSetMembership:
     # reverting CEO directive 2026-04-29 and must surface explicitly.
     KNOWN_PROTOCOL_FRAGILE: tuple = ()
 
-    KNOWN_EXPENSIVE_SUBAGENT = (
-        "debate_with_rex",
-    )
+    # FLO-434 (2026-05-17): debate_with_rex removed from the cycle.
+    # No expensive-subagent tools currently — empty tuple parameterises
+    # to zero test instances.
+    KNOWN_EXPENSIVE_SUBAGENT: tuple = ()
 
     @pytest.mark.parametrize("tool", KNOWN_STATE_MUTATORS)
     def test_state_mutator_classified_singleton(self, tool):
