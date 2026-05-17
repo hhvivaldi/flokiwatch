@@ -761,7 +761,7 @@ _SINGLETON_TOOLS: frozenset = frozenset({
 _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     # --- Price + market state ---
     "get_current_price", "get_candles", "get_market_regime",
-    "get_market_context", "get_volume_profile",
+    "get_market_context", "get_volume_profile", "get_dxy_status",
     # --- Indicators + structural (point-in-time reads) ---
     "get_indicators", "get_sr_zones", "get_fibonacci_levels",
     "get_pivot_points", "get_chart_patterns", "get_tick_pressure",
@@ -1651,6 +1651,11 @@ class AIAgent:
             {
                 "name": "get_market_regime",
                 "description": "Local XAU/USD price-action regime (TRENDING_BULL, TRENDING_BEAR, RANGING, VOLATILE, BREAKOUT_IMMINENT, TRANSITIONAL, QUIET) with confidence, duration, stability, ADX, ATR, evidence list, descriptive state hint, and related_tools list when applicable. Returns a compact delta response {changed: false, regime, since} when regime+confidence are unchanged since the last call this run. Distinct from Luna's macro regime (risk_on/risk_off) — use get_luna_brief for that.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_dxy_status",
+                "description": "DXY (Dollar Index) snapshot — current price, 1-day return %, 5-day return %, 30-day correlation with gold (XAUUSD), and a coarse signal label: DXY_RISING (5d > +0.75%), DXY_FALLING (< -0.75%), or DXY_NEUTRAL. DXY is the primary inverse correlate of gold (typical 30d correlation -0.85 to -0.97 in bearish-gold regimes). 5-minute in-memory cache. Network or sparse-history failures return signal=DXY_UNKNOWN with an error field; never raises. FLO-432.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {

@@ -198,6 +198,124 @@ def _flo422_persist_snapshot(plan_id: str, snapshot: dict) -> None:
 _adjust_rate_history: Dict[int, List[float]] = {}
 
 
+# FLO-432: DXY status snapshot cache (5-minute TTL, process-local)
+_DXY_CACHE: Dict[str, Any] = {"payload": None, "fetched_at": 0.0}
+_DXY_CACHE_TTL_SECS = 300.0  # 5 minutes
+
+
+def _fetch_dxy_status_cached() -> Dict[str, Any]:
+    """FLO-432 helper — fetch DXY snapshot with 5-min cache.
+
+    Returns dict with: current, return_1d_pct, return_5d_pct,
+    correlation_30d, signal (DXY_RISING/FALLING/NEUTRAL/UNKNOWN),
+    symbol, fetched_at_iso.
+
+    Signal thresholds: 5-day return > +0.75% → RISING; < -0.75% →
+    FALLING; otherwise NEUTRAL. Tuned to gold's typical daily noise
+    (~0.3-0.5% on DXY) so a single noisy day doesn't flip the label.
+
+    Network failure / sparse history returns signal=DXY_UNKNOWN with
+    an `error` field. Never raises.
+    """
+    import time as _time
+    now = _time.time()
+    cached = _DXY_CACHE.get("payload")
+    if cached is not None and (now - _DXY_CACHE.get("fetched_at", 0)) < _DXY_CACHE_TTL_SECS:
+        return dict(cached)  # defensive copy
+
+    try:
+        import yfinance as yf
+    except Exception as e:
+        return {
+            "success": False,
+            "signal": "DXY_UNKNOWN",
+            "error": f"yfinance_unavailable: {e}",
+        }
+
+    # Pull 30 trading days of DXY history. Fall through symbols on failure.
+    dxy_hist = None
+    symbol_used = None
+    for sym in ("DX-Y.NYB", "DX=F", "UUP"):
+        try:
+            ticker = yf.Ticker(sym)
+            hist = ticker.history(period="45d")  # ~30 trading days
+            if hist is None or hist.empty or len(hist) < 6:
+                continue
+            dxy_hist = hist
+            symbol_used = sym
+            break
+        except Exception:
+            continue
+
+    if dxy_hist is None:
+        payload = {
+            "success": False,
+            "signal": "DXY_UNKNOWN",
+            "error": "dxy_history_unavailable_all_symbols",
+        }
+        _DXY_CACHE["payload"] = payload
+        _DXY_CACHE["fetched_at"] = now
+        return dict(payload)
+
+    closes = dxy_hist["Close"].dropna()
+    if len(closes) < 6:
+        payload = {
+            "success": False,
+            "signal": "DXY_UNKNOWN",
+            "error": "dxy_history_too_short",
+        }
+        _DXY_CACHE["payload"] = payload
+        _DXY_CACHE["fetched_at"] = now
+        return dict(payload)
+
+    current = float(closes.iloc[-1])
+    prev_1d = float(closes.iloc[-2])
+    prev_5d = float(closes.iloc[-6]) if len(closes) >= 6 else None
+    return_1d = ((current - prev_1d) / prev_1d) * 100 if prev_1d else 0.0
+    return_5d = ((current - prev_5d) / prev_5d) * 100 if prev_5d else 0.0
+
+    # 30-day correlation with gold
+    corr_30d = None
+    try:
+        gold = yf.Ticker("GC=F").history(period="45d")
+        if gold is not None and not gold.empty:
+            g_closes = gold["Close"].dropna()
+            # Align on common index
+            common = closes.index.intersection(g_closes.index)
+            if len(common) >= 10:
+                d = closes.reindex(common).pct_change().dropna()
+                g = g_closes.reindex(common).pct_change().dropna()
+                common2 = d.index.intersection(g.index)
+                if len(common2) >= 10:
+                    corr_30d = round(float(d.reindex(common2).corr(g.reindex(common2))), 2)
+    except Exception:
+        corr_30d = None
+
+    # Signal: 5-day return threshold
+    if return_5d > 0.75:
+        signal = "DXY_RISING"
+    elif return_5d < -0.75:
+        signal = "DXY_FALLING"
+    else:
+        signal = "DXY_NEUTRAL"
+
+    from datetime import datetime, timezone
+    payload = {
+        "success": True,
+        "current": round(current, 2),
+        "return_1d_pct": round(return_1d, 2),
+        "return_5d_pct": round(return_5d, 2),
+        "correlation_30d": corr_30d,
+        "signal": signal,
+        "symbol": symbol_used,
+        "fetched_at_iso": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "cache_ttl_secs": int(_DXY_CACHE_TTL_SECS),
+    }
+    _DXY_CACHE["payload"] = payload
+    _DXY_CACHE["fetched_at"] = now
+    return dict(payload)
+
+
 class AgentTools:
     def __init__(
         self,
@@ -4409,6 +4527,42 @@ class AgentTools:
         except Exception as e:
             self._log_tool("get_market_regime", start, f"error={e}")
             return {"success": False, "reason": f"market_regime_error: {e}"}
+
+    def get_dxy_status(self) -> Dict[str, Any]:
+        """
+        FLO-432: DXY (Dollar Index) snapshot for gold-vs-USD reasoning.
+
+        Returns current price, 1-day return %, 5-day return %, 30-day
+        correlation with gold (XAUUSD), and a coarse signal label
+        (DXY_RISING / DXY_FALLING / DXY_NEUTRAL based on 5-day return).
+
+        DXY rising is historically headwind for gold (typical 30-day
+        correlation -0.85 to -0.97); DXY falling is tailwind. CEO
+        decision 2026-05-17: route this data directly to Floki rather
+        than through Luna's macro brief so the trade decisor sees the
+        primary inverse-correlate without intermediation.
+
+        5-minute in-memory cache. Yahoo Finance (yfinance). Network
+        failure or insufficient history returns a degraded payload with
+        signal=DXY_UNKNOWN and an error field; never raises.
+        """
+        start = time.time()
+        try:
+            payload = _fetch_dxy_status_cached()
+            self._log_tool(
+                "get_dxy_status",
+                start,
+                f"signal={payload.get('signal')} 5d={payload.get('return_5d_pct')} "
+                f"corr30={payload.get('correlation_30d')}",
+            )
+            return payload
+        except Exception as e:
+            self._log_tool("get_dxy_status", start, f"error={e}")
+            return {
+                "success": False,
+                "signal": "DXY_UNKNOWN",
+                "error": f"dxy_status_error: {type(e).__name__}: {e}",
+            }
 
     def get_chart_patterns(self) -> Dict[str, Any]:
         """
