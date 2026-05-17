@@ -1618,10 +1618,169 @@ def _check_give_back_calibration(
     return [msg]
 
 
+_KILLZONE_TIER1_EVENTS = (
+    "nonfarm",
+    "non-farm",
+    "nfp",
+    "consumer price",
+    "cpi",
+    "fomc",
+    "fed funds",
+    "federal funds",
+    "interest rate decision",
+    "producer price",
+    "ppi",
+    "gdp",
+    "gross domestic product",
+)
+
+
+def _check_killzone_gate(plan: Plan) -> list[str]:
+    """FLO-436 — session-based authoring gate.
+
+    Maps the plan's created_at hour (UTC) to a session and rejects
+    setup_types that historically convert poorly in that session.
+
+      07:00-09:00 UTC : LONDON_OPEN     — breakout setups only
+                        (breakout_range, session_open_break)
+      09:00-12:00 UTC : LONDON_MORNING  — all allowed
+      12:00-16:00 UTC : NY_OVERLAP      — all allowed (peak volume)
+      16:00-20:00 UTC : NY_PM           — trend continuation only
+                        (pullback_trend, continuation_momentum)
+      20:00-21:00 UTC : LATE_NY         — all allowed
+      21:00-06:00 UTC : ASIAN           — REJECT unless range play at
+                        a major level (mean_reversion_extreme,
+                        structural_bounce)
+
+    Fail-soft on missing/unparseable created_at.
+    """
+    from logger import log as _log
+    from datetime import datetime
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    setup_type = getattr(getattr(plan, "analysis", None), "setup_type", None)
+    setup_str = str(setup_type) if setup_type is not None else "?"
+
+    created_at = getattr(plan, "created_at", None)
+    if not created_at:
+        _log.info(
+            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
+            f"decision=ALLOW (no_created_at)"
+        )
+        return []
+    try:
+        ts = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+        hour = ts.hour
+    except Exception:
+        _log.info(
+            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
+            f"decision=ALLOW (created_at_unparseable)"
+        )
+        return []
+
+    if 7 <= hour < 9:
+        session = "LONDON_OPEN"
+        allowed = {"breakout_range", "session_open_break"}
+        guidance = "breakouts only"
+    elif 16 <= hour < 20:
+        session = "NY_PM"
+        allowed = {"pullback_trend", "continuation_momentum"}
+        guidance = "trend continuation only"
+    elif hour >= 21 or hour < 6:
+        session = "ASIAN"
+        allowed = {"mean_reversion_extreme", "structural_bounce"}
+        guidance = "range plays at major D1/weekly levels only"
+    else:
+        session = "OPEN_WINDOW" if (9 <= hour < 12 or hour == 20) else "NY_OVERLAP"
+        allowed = None
+        guidance = "all setups allowed"
+
+    if allowed is None or setup_type in allowed or setup_str in allowed:
+        _log.info(
+            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
+            f"session={session} hour={hour} decision=ALLOW ({guidance})"
+        )
+        return []
+
+    msg = (
+        f"killzone_gate: this is a {session} session (UTC {hour:02d}:00 "
+        f"window — {guidance}). setup_type={setup_str} is not in the "
+        f"session's allowed set {sorted(allowed)}. Reauthor with an "
+        f"in-session setup_type, or wait for a more favourable session. "
+        f"FLO-436. Mapping: LONDON_OPEN 07-09 (breakouts), NY_OVERLAP "
+        f"12-16 (all), NY_PM 16-20 (trend continuation), ASIAN 21-06 "
+        f"(range at major levels only)."
+    )
+    _log.info(
+        f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
+        f"session={session} hour={hour} decision=REJECT"
+    )
+    return [msg]
+
+
+def _check_news_blackout_gate(
+    plan: Plan,
+    author_calendar: Optional[list[dict[str, Any]]],
+) -> list[str]:
+    """FLO-436 — reject new plans within ±30 min of Tier-1 macro releases.
+
+    Tier-1 events: NFP, CPI, FOMC/Fed Rate, PPI, GDP. Detection: any
+    event in author_calendar with importance=HIGH AND |minutes_until|
+    <= 30 AND name contains a Tier-1 keyword. Fail-soft when calendar
+    is missing/empty (logs DEGRADED, allows the plan through).
+    """
+    from logger import log as _log
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+
+    if not author_calendar:
+        _log.warning(
+            f"NEWS_BLACKOUT_DEGRADED | plan_id={plan_id} reason=no_calendar | "
+            f"gate inactive this plan (FLO-436)"
+        )
+        return []
+
+    for ev in author_calendar:
+        if not isinstance(ev, dict):
+            continue
+        importance = str(ev.get("importance", "")).upper()
+        if importance != "HIGH":
+            continue
+        try:
+            minutes_until = float(ev.get("minutes_until", 1e9))
+        except (TypeError, ValueError):
+            continue
+        if abs(minutes_until) > 30.0:
+            continue
+        name_lower = str(ev.get("name", "")).lower()
+        if not any(kw in name_lower for kw in _KILLZONE_TIER1_EVENTS):
+            continue
+        msg = (
+            f"news_blackout: {ev.get('name', '?')} (HIGH impact) is "
+            f"{minutes_until:+.0f} minutes from the plan submission "
+            f"time. Tier-1 macro releases (NFP, CPI, FOMC, PPI, GDP) "
+            f"trigger a ±30-minute blackout (FLO-436) because the "
+            f"price action in this window is liquidity-grab + algo-"
+            f"driven, not the structural read your plan thesis relies "
+            f"on. Wait for the release to print and the first 30 min "
+            f"of price action to clear, then reauthor."
+        )
+        _log.info(
+            f"NEWS_BLACKOUT | plan_id={plan_id} event={ev.get('name')!r} "
+            f"impact={importance} minutes_until={minutes_until:.1f} "
+            f"decision=REJECT"
+        )
+        return [msg]
+
+    _log.info(f"NEWS_BLACKOUT | plan_id={plan_id} decision=ALLOW")
+    return []
+
+
 def validate_plan(
     plan_dict: dict[str, Any],
     *,
     author_regime: Optional[dict[str, Any]] = None,
+    author_calendar: Optional[list[dict[str, Any]]] = None,
 ) -> tuple[bool, Optional[Plan], list[str]]:
     """Validate a submitted plan dict.
 
@@ -1681,6 +1840,8 @@ def validate_plan(
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
     errors += _check_give_back_calibration(plan, author_regime)
+    errors += _check_killzone_gate(plan)
+    errors += _check_news_blackout_gate(plan, author_calendar)
 
     if errors:
         return False, plan, errors

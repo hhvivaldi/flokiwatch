@@ -5006,7 +5006,24 @@ class AgentTools:
                 except Exception:
                     _author_regime = None
 
-                ok, parsed, errors = _validate(candidate, author_regime=_author_regime)
+                # FLO-436 — pull last calendar snapshot for news-blackout gate.
+                _author_calendar: Optional[list] = None
+                try:
+                    _cal = getattr(self._bot, "_last_calendar_data", None)
+                    if isinstance(_cal, list):
+                        _author_calendar = _cal
+                    elif isinstance(_cal, dict):
+                        _evs = _cal.get("events") or _cal.get("calendar")
+                        if isinstance(_evs, list):
+                            _author_calendar = _evs
+                except Exception:
+                    _author_calendar = None
+
+                ok, parsed, errors = _validate(
+                    candidate,
+                    author_regime=_author_regime,
+                    author_calendar=_author_calendar,
+                )
                 if not ok:
                     self._log_fail(
                         "submit_plan_to_snow",
