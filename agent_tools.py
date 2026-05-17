@@ -316,6 +316,198 @@ def _fetch_dxy_status_cached() -> Dict[str, Any]:
     return dict(payload)
 
 
+def _mt5_tf(label: str):
+    """FLO-438 helper — resolve timeframe label to mt5 const. None on failure."""
+    try:
+        from mt5_safe import mt5
+    except Exception:
+        return None
+    return {
+        "M1": getattr(mt5, "TIMEFRAME_M1", None),
+        "M5": getattr(mt5, "TIMEFRAME_M5", None),
+        "M15": getattr(mt5, "TIMEFRAME_M15", None),
+        "M30": getattr(mt5, "TIMEFRAME_M30", None),
+        "H1": getattr(mt5, "TIMEFRAME_H1", None),
+        "H4": getattr(mt5, "TIMEFRAME_H4", None),
+        "D1": getattr(mt5, "TIMEFRAME_D1", None),
+    }.get(label)
+
+
+def _scan_fvgs(tf_label: str, tf_const: Any, *, lookback: int = 100,
+               max_results: int = 10) -> list:
+    """FLO-438 — return up to `max_results` unfilled FVGs on `tf` (newest first).
+
+    XAUUSD pip = 0.1 USD; 1 USD = 10 pips. Filled threshold is 50% of gap.
+    """
+    try:
+        from mt5_safe import mt5, mt5_lock
+        from datetime import datetime, timezone
+    except Exception:
+        return []
+    try:
+        with mt5_lock:
+            rates = mt5.copy_rates_from_pos("XAUUSD", tf_const, 0, lookback + 5)
+    except Exception:
+        return []
+    if rates is None or len(rates) < 5:
+        return []
+
+    fvgs = []
+    n = len(rates)
+    for i in range(n - 3):
+        c0 = rates[i]
+        c2 = rates[i + 2]
+        c0_high = float(c0["high"])
+        c0_low = float(c0["low"])
+        c2_high = float(c2["high"])
+        c2_low = float(c2["low"])
+
+        if c0_high < c2_low:
+            direction = "bullish"
+            bottom = c0_high
+            top = c2_low
+        elif c0_low > c2_high:
+            direction = "bearish"
+            bottom = c2_high
+            top = c0_low
+        else:
+            continue
+
+        gap_size = top - bottom
+        if gap_size <= 0:
+            continue
+        midpoint = (top + bottom) / 2.0
+
+        # Filled: scan subsequent candles for retracement >= 50%
+        filled_pct = 0.0
+        for j in range(i + 3, n):
+            r = rates[j]
+            if direction == "bullish":
+                low_j = float(r["low"])
+                if low_j < bottom:
+                    filled_pct = 100.0
+                    break
+                if low_j < top:
+                    pct = (top - low_j) / gap_size * 100.0
+                    if pct > filled_pct:
+                        filled_pct = pct
+            else:
+                high_j = float(r["high"])
+                if high_j > top:
+                    filled_pct = 100.0
+                    break
+                if high_j > bottom:
+                    pct = (high_j - bottom) / gap_size * 100.0
+                    if pct > filled_pct:
+                        filled_pct = pct
+        if filled_pct >= 50.0:
+            continue
+
+        formed_ts = datetime.fromtimestamp(int(c2["time"]), tz=timezone.utc)
+        fvgs.append({
+            "direction": direction,
+            "top": round(top, 2),
+            "bottom": round(bottom, 2),
+            "midpoint": round(midpoint, 2),
+            "size_pips": round(gap_size * 10, 1),
+            "timeframe": tf_label,
+            "age_candles": n - 1 - (i + 2),
+            "filled_pct": round(filled_pct, 1),
+            "formed_at_iso": formed_ts.isoformat().replace("+00:00", "Z"),
+        })
+
+    fvgs.sort(key=lambda f: f["age_candles"])
+    return fvgs[:max_results]
+
+
+def _scan_sweeps(tf_label: str, tf_const: Any, *, lookback: int = 100,
+                 max_results: int = 10, fractal_window: int = 3) -> list:
+    """FLO-438 — return recent liquidity sweeps (newest first).
+
+    A sweep = a candle whose wick pierces a prior swing high/low but
+    whose close is back inside. Fractal swing: a high/low is a swing
+    if it is the extreme over [i-fractal_window, i+fractal_window].
+    """
+    try:
+        from mt5_safe import mt5, mt5_lock
+        from datetime import datetime, timezone
+    except Exception:
+        return []
+    try:
+        with mt5_lock:
+            rates = mt5.copy_rates_from_pos("XAUUSD", tf_const, 0, lookback + 5)
+    except Exception:
+        return []
+    if rates is None or len(rates) < 2 * fractal_window + 2:
+        return []
+
+    n = len(rates)
+    # Identify swing highs and lows
+    swing_highs: list = []
+    swing_lows: list = []
+    for i in range(fractal_window, n - fractal_window):
+        h_i = float(rates[i]["high"])
+        l_i = float(rates[i]["low"])
+        window_high = max(float(rates[j]["high"]) for j in range(i - fractal_window, i + fractal_window + 1))
+        window_low = min(float(rates[j]["low"]) for j in range(i - fractal_window, i + fractal_window + 1))
+        if h_i == window_high:
+            swing_highs.append((i, h_i))
+        if l_i == window_low:
+            swing_lows.append((i, l_i))
+
+    sweeps = []
+    # Sweep high: candle k > some swing_high.idx has wick above swing_high but close <= swing_high
+    for (s_idx, s_high) in swing_highs:
+        for k in range(s_idx + fractal_window + 1, n):
+            r = rates[k]
+            high_k = float(r["high"])
+            close_k = float(r["close"])
+            if high_k > s_high and close_k <= s_high:
+                wick_pips = (high_k - s_high) * 10
+                if wick_pips < 1.0:
+                    continue
+                # recovered_pct = how much of the breach was given back at close
+                breach_size = high_k - s_high
+                recovered = (high_k - close_k) / breach_size * 100.0 if breach_size > 0 else 100.0
+                formed_ts = datetime.fromtimestamp(int(r["time"]), tz=timezone.utc)
+                sweeps.append({
+                    "level": round(s_high, 2),
+                    "direction": "BSL",
+                    "sweep_candle_time_iso": formed_ts.isoformat().replace("+00:00", "Z"),
+                    "wick_size_pips": round(wick_pips, 1),
+                    "recovered_pct": round(min(recovered, 100.0), 1),
+                    "age_candles": n - 1 - k,
+                    "timeframe": tf_label,
+                })
+                break  # one sweep per swing high (the first one)
+
+    for (s_idx, s_low) in swing_lows:
+        for k in range(s_idx + fractal_window + 1, n):
+            r = rates[k]
+            low_k = float(r["low"])
+            close_k = float(r["close"])
+            if low_k < s_low and close_k >= s_low:
+                wick_pips = (s_low - low_k) * 10
+                if wick_pips < 1.0:
+                    continue
+                breach_size = s_low - low_k
+                recovered = (close_k - low_k) / breach_size * 100.0 if breach_size > 0 else 100.0
+                formed_ts = datetime.fromtimestamp(int(r["time"]), tz=timezone.utc)
+                sweeps.append({
+                    "level": round(s_low, 2),
+                    "direction": "SSL",
+                    "sweep_candle_time_iso": formed_ts.isoformat().replace("+00:00", "Z"),
+                    "wick_size_pips": round(wick_pips, 1),
+                    "recovered_pct": round(min(recovered, 100.0), 1),
+                    "age_candles": n - 1 - k,
+                    "timeframe": tf_label,
+                })
+                break
+
+    sweeps.sort(key=lambda s: s["age_candles"])
+    return sweeps[:max_results]
+
+
 class AgentTools:
     def __init__(
         self,
@@ -4253,6 +4445,89 @@ class AgentTools:
                 "signal": "DXY_UNKNOWN",
                 "error": f"dxy_status_error: {type(e).__name__}: {e}",
             }
+
+    def get_fair_value_gaps(self) -> Dict[str, Any]:
+        """
+        FLO-438 — detect unfilled Fair Value Gaps (FVGs) on H4 and H1.
+
+        3-candle FVG rule:
+          Bullish FVG: candle[i].high < candle[i+2].low (gap up — the
+                       region [candle[i].high, candle[i+2].low] was
+                       never traded).
+          Bearish FVG: candle[i].low > candle[i+2].high (gap down).
+
+        Unfilled = no subsequent candle has retraced the gap by ≥ 50%.
+        For each TF, scan the last 100 candles and return up to 10 most
+        recent unfilled FVGs (newest first).
+
+        Output per FVG:
+          direction, top, bottom, midpoint, size_pips, timeframe,
+          age_candles, filled_pct, formed_at_iso
+
+        FVGs are an ICT-framework concept — gaps left by displacement
+        candles. Price tends to return to them because the institutional
+        orders that drove the displacement are partially filled inside
+        the gap. Use as entry zones, not just indicator readings.
+
+        Read-only. Per-cycle MT5 fetch; no caching beyond the call.
+        """
+        start = time.time()
+        try:
+            result: Dict[str, Any] = {"H4": [], "H1": []}
+            for tf_label, tf_const in (("H4", _mt5_tf("H4")), ("H1", _mt5_tf("H1"))):
+                if tf_const is None:
+                    continue
+                fvgs = _scan_fvgs(tf_label, tf_const, lookback=100, max_results=10)
+                result[tf_label] = fvgs
+            count = sum(len(v) for v in result.values())
+            self._log_tool("get_fair_value_gaps", start, f"unfilled_count={count}")
+            return {"success": True, "fvgs": result, "count": count}
+        except Exception as e:
+            self._log_tool("get_fair_value_gaps", start, f"error={e}")
+            return {"success": False, "error": f"fvg_error: {type(e).__name__}: {e}"}
+
+    def get_liquidity_sweeps(self) -> Dict[str, Any]:
+        """
+        FLO-438 — detect recent liquidity sweeps on H4 and H1.
+
+        A sweep is a wick that pierces a prior swing high/low and closes
+        back inside — the classic stop-hunt pattern. The market grabs
+        liquidity (resting stops above/below the swing) then reverses.
+
+        Detection:
+          1. Identify swing highs/lows over `lookback` candles using a
+             fractal: a candle is a swing high if its high is the max
+             over [i-fractal_window, i+fractal_window] (and similarly
+             for swing lows). Default fractal_window=3.
+          2. For each candle AFTER the swing, check if its wick pierced
+             the swing level but its close is back inside.
+          3. Report up to 10 most recent sweeps per timeframe.
+
+        Output per sweep:
+          level, direction (BSL/SSL), sweep_candle_time_iso,
+          wick_size_pips, recovered_pct, timeframe
+
+        Gold sweeps the Asian-range high/low almost every London/NY
+        session — the "first break is often not the truth." Sweeps are
+        the most common reversal precursor; entering inside the sweep
+        wick after a confirmation MSS is a textbook ICT entry.
+
+        Read-only. Per-cycle MT5 fetch; no caching beyond the call.
+        """
+        start = time.time()
+        try:
+            result: Dict[str, Any] = {"H4": [], "H1": []}
+            for tf_label, tf_const in (("H4", _mt5_tf("H4")), ("H1", _mt5_tf("H1"))):
+                if tf_const is None:
+                    continue
+                sweeps = _scan_sweeps(tf_label, tf_const, lookback=100, max_results=10)
+                result[tf_label] = sweeps
+            count = sum(len(v) for v in result.values())
+            self._log_tool("get_liquidity_sweeps", start, f"sweep_count={count}")
+            return {"success": True, "sweeps": result, "count": count}
+        except Exception as e:
+            self._log_tool("get_liquidity_sweeps", start, f"error={e}")
+            return {"success": False, "error": f"sweep_error: {type(e).__name__}: {e}"}
 
     def get_chart_patterns(self) -> Dict[str, Any]:
         """

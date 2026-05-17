@@ -757,6 +757,7 @@ _PARALLEL_SAFE_TOOLS: frozenset = frozenset({
     # --- Price + market state ---
     "get_current_price", "get_candles", "get_market_regime",
     "get_market_context", "get_volume_profile", "get_dxy_status",
+    "get_fair_value_gaps", "get_liquidity_sweeps",
     # --- Indicators + structural (point-in-time reads) ---
     "get_indicators", "get_sr_zones", "get_fibonacci_levels",
     "get_pivot_points", "get_chart_patterns", "get_tick_pressure",
@@ -1624,6 +1625,16 @@ class AIAgent:
             {
                 "name": "get_dxy_status",
                 "description": "DXY (Dollar Index) snapshot — current price, 1-day return %, 5-day return %, 30-day correlation with gold (XAUUSD), and a coarse signal label: DXY_RISING (5d > +0.75%), DXY_FALLING (< -0.75%), or DXY_NEUTRAL. DXY is the primary inverse correlate of gold (typical 30d correlation -0.85 to -0.97 in bearish-gold regimes). 5-minute in-memory cache. Network or sparse-history failures return signal=DXY_UNKNOWN with an error field; never raises. FLO-432.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_fair_value_gaps",
+                "description": "Detect unfilled Fair Value Gaps (FVGs) on H4 and H1 over the last 100 candles. 3-candle rule: bullish FVG when candle[i].high < candle[i+2].low; bearish when candle[i].low > candle[i+2].high. Returns up to 10 most recent unfilled FVGs per timeframe (newest first), each with direction, top, bottom, midpoint, size_pips, age_candles, filled_pct, formed_at_iso. 'Unfilled' = no subsequent candle has retraced ≥ 50% of the gap. FVGs are ICT entry zones — gaps left by displacement candles, often revisited because institutional orders were partially filled inside. FLO-438.",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+            {
+                "name": "get_liquidity_sweeps",
+                "description": "Detect recent liquidity sweeps (stop hunts) on H4 and H1 over the last 100 candles. A sweep is a candle whose wick pierces a prior fractal swing high/low but whose close is back inside the level. Returns up to 10 most recent per timeframe (newest first), each with level, direction (BSL=buy-side liquidity above swing high; SSL=sell-side below swing low), sweep_candle_time_iso, wick_size_pips, recovered_pct, age_candles. Sweeps are the most common reversal precursor on gold (\"first break is often not the truth\"). Combined with an M5/M15 MSS confirmation, they're a textbook ICT entry — inside the sweep wick, against the sweep direction. FLO-438.",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
