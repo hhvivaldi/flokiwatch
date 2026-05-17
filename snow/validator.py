@@ -1776,11 +1776,74 @@ def _check_news_blackout_gate(
     return []
 
 
+def _check_daily_loss_limit(
+    plan: Plan,
+    author_account: Optional[dict[str, Any]],
+) -> list[str]:
+    """FLO-439 — reject new plans when daily P&L is at or below -2% of balance.
+
+    `author_account` shape: {"balance": float, "today_pnl_usd": float}.
+    Fail-soft when missing/zero balance (logs DEGRADED, allows the plan).
+    """
+    from logger import log as _log
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    LIMIT_PCT = 2.0
+
+    if not author_account:
+        _log.warning(
+            f"DAILY_LOSS_LIMIT_DEGRADED | plan_id={plan_id} reason=no_account | "
+            f"gate inactive this plan (FLO-439)"
+        )
+        return []
+
+    try:
+        balance = float(author_account.get("balance", 0))
+        pnl = float(author_account.get("today_pnl_usd", 0))
+    except (TypeError, ValueError):
+        _log.warning(
+            f"DAILY_LOSS_LIMIT_DEGRADED | plan_id={plan_id} reason=parse_error | "
+            f"gate inactive this plan (FLO-439)"
+        )
+        return []
+
+    if balance <= 0:
+        _log.warning(
+            f"DAILY_LOSS_LIMIT_DEGRADED | plan_id={plan_id} reason=zero_balance | "
+            f"gate inactive this plan (FLO-439)"
+        )
+        return []
+
+    pnl_pct = (pnl / balance) * 100.0
+    if pnl_pct > -LIMIT_PCT:
+        _log.info(
+            f"DAILY_LOSS_LIMIT | plan_id={plan_id} balance={balance:.2f} "
+            f"pnl={pnl:+.2f} pnl_pct={pnl_pct:+.2f}% decision=ALLOW"
+        )
+        return []
+
+    msg = (
+        f"daily_loss_limit: today's realized P&L is {pnl:+.2f} USD "
+        f"({pnl_pct:+.2f}% of {balance:.2f} balance), at or below the "
+        f"-{LIMIT_PCT:.1f}% daily loss limit (FLO-439). Stop trading for "
+        f"the rest of the UTC day — the professional discipline is that "
+        f"the worst losing days are the ones that should have stopped at "
+        f"-2% but ended at -6%. New plans are blocked until the day rolls "
+        f"over at 00:00 UTC; review what went wrong and journal the day."
+    )
+    _log.info(
+        f"DAILY_LOSS_LIMIT | plan_id={plan_id} balance={balance:.2f} "
+        f"pnl={pnl:+.2f} pnl_pct={pnl_pct:+.2f}% decision=REJECT"
+    )
+    return [msg]
+
+
 def validate_plan(
     plan_dict: dict[str, Any],
     *,
     author_regime: Optional[dict[str, Any]] = None,
     author_calendar: Optional[list[dict[str, Any]]] = None,
+    author_account: Optional[dict[str, Any]] = None,
 ) -> tuple[bool, Optional[Plan], list[str]]:
     """Validate a submitted plan dict.
 
@@ -1842,6 +1905,7 @@ def validate_plan(
     errors += _check_give_back_calibration(plan, author_regime)
     errors += _check_killzone_gate(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)
+    errors += _check_daily_loss_limit(plan, author_account)
 
     if errors:
         return False, plan, errors

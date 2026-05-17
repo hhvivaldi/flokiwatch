@@ -316,6 +316,34 @@ def _fetch_dxy_status_cached() -> Dict[str, Any]:
     return dict(payload)
 
 
+def _today_realized_pnl_usd() -> float:
+    """FLO-439 helper — sum profit of trades closed today (UTC).
+
+    Reads history.db `trades` table. Returns 0.0 on any error (caller
+    treats this as 'no realized loss yet today').
+    """
+    try:
+        import sqlite3
+        from datetime import datetime, timezone
+        import os
+        db_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "data", "history.db"
+        )
+        if not os.path.exists(db_path):
+            return 0.0
+        today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00")
+        with sqlite3.connect(db_path) as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COALESCE(SUM(profit), 0.0) FROM trades WHERE close_time >= ?",
+                (today_iso,),
+            )
+            row = cur.fetchone()
+            return float(row[0]) if row else 0.0
+    except Exception:
+        return 0.0
+
+
 def _mt5_tf(label: str):
     """FLO-438 helper — resolve timeframe label to mt5 const. None on failure."""
     try:
@@ -5294,10 +5322,27 @@ class AgentTools:
                 except Exception:
                     _author_calendar = None
 
+                # FLO-439 — pull account balance + today's realized P&L for
+                # the daily-loss-limit gate. Fail-soft: any error → None
+                # and the gate logs DEGRADED + allows the plan.
+                _author_account: Optional[Dict[str, Any]] = None
+                try:
+                    _ex = getattr(self, "_executor", None) or getattr(self._bot, "executor", None)
+                    _ai = _ex.get_account_info() if _ex is not None else None
+                    _balance = float(_ai.get("balance", 0)) if isinstance(_ai, dict) else 0.0
+                    _pnl = _today_realized_pnl_usd()
+                    _author_account = {
+                        "balance": _balance,
+                        "today_pnl_usd": _pnl,
+                    }
+                except Exception:
+                    _author_account = None
+
                 ok, parsed, errors = _validate(
                     candidate,
                     author_regime=_author_regime,
                     author_calendar=_author_calendar,
+                    author_account=_author_account,
                 )
                 if not ok:
                     self._log_fail(
