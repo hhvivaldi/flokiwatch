@@ -1385,6 +1385,143 @@ def _check_regime_counter_trend_gate(
     return [msg]
 
 
+def _fetch_m5_atr_pips() -> Optional[float]:
+    """FLO-429 helper — M5 ATR(14) in pips. None on MT5 failure.
+
+    Used by _check_give_back_calibration to scale give-back exits with
+    live volatility. Routes through mt5_safe (Rule 23). One copy_rates
+    call per validation; negligible cost.
+    """
+    try:
+        from mt5_safe import mt5
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M5, 0, 15)
+    except Exception:
+        return None
+    if rates is None or len(rates) < 15:
+        return None
+    try:
+        trs: list[float] = []
+        for i in range(1, len(rates)):
+            r = rates[i]
+            prev = rates[i - 1]
+            tr = max(
+                float(r["high"]) - float(r["low"]),
+                abs(float(r["high"]) - float(prev["close"])),
+                abs(float(r["low"]) - float(prev["close"])),
+            )
+            trs.append(tr)
+        if not trs:
+            return None
+        atr = sum(trs) / len(trs)
+        return round(atr * 10.0, 2)  # XAUUSD: 1 USD = 10 pips
+    except Exception:
+        return None
+
+
+def _check_give_back_calibration(
+    plan: Plan,
+    author_regime: Optional[dict[str, Any]],
+) -> list[str]:
+    """FLO-429 — calibrate give_back (profit_retraced_from_peak) exits.
+
+    Two rules applied to every exit contingency containing at least one
+    `profit_retraced_from_peak` condition:
+
+      (a) In TRENDING_BULLISH / TRENDING_BEARISH regimes the contingency
+          is rejected entirely. Trends are M5-noisy; give-back fires on
+          routine pullbacks and exits otherwise-winning trades. Let SL +
+          duration_cap + (optional) trail_sl handle exits.
+
+      (b) Otherwise (RANGING/TRANSITIONAL/BREAKOUT_IMMINENT/etc.) the
+          give-back threshold must be ≥ 3.0 × M5_ATR(14)_pips — the
+          typical noise envelope. M5 ATR is fetched live via mt5_safe.
+
+    Empirical motivation: PLAN-20260515-010 (SELL, TRENDING_BEARISH,
+    ADX 47) reached +104p MFE, then a single 2-minute 137p reversal
+    spike retraced 150p from peak and fired give_back at -55p; gold
+    subsequently fell to 4529 (+271p favorable from entry).
+
+    Fail-open: missing author_regime or MT5 hiccup logs DEGRADED and
+    allows the plan through. Paralysis risk on transient errors
+    outweighs fail-closed value.
+    """
+    from logger import log as _log
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+
+    # Scan every exit contingency for give-back conditions
+    offenders: list[tuple[str, float]] = []  # (contingency_name, pips)
+    for cont in plan.exit:
+        for cond in cont.conditions:
+            if getattr(cond, "type", None) == "profit_retraced_from_peak":
+                pips = getattr(cond, "pips", None)
+                if pips is not None:
+                    offenders.append((cont.name, float(pips)))
+
+    if not offenders:
+        _log.info(
+            f"GIVE_BACK_CAL | plan_id={plan_id} decision=ALLOW (no_give_back)"
+        )
+        return []
+
+    regime = (author_regime or {}).get("regime") if author_regime else None
+
+    # Rule (a): reject in TRENDING regimes regardless of pips
+    if regime in ("TRENDING_BULLISH", "TRENDING_BEARISH"):
+        names = ", ".join(n for n, _ in offenders)
+        msg = (
+            f"give_back_calibration: profit_retraced_from_peak exits are "
+            f"banned in {regime} regimes (FLO-429). Trending markets are "
+            f"M5-noisy and give-back fires on routine pullbacks. Use SL + "
+            f"duration_cap + (optional) trail_sl instead. Offending "
+            f"contingencies: {names}. Empirical: PLAN-20260515-010 made "
+            f"+104p MFE then a 2-min reversal spike retraced 150p from "
+            f"peak and exited at -55p; gold subsequently fell another "
+            f"215p favorable."
+        )
+        _log.info(
+            f"GIVE_BACK_CAL | plan_id={plan_id} regime={regime} "
+            f"offenders={names} decision=REJECT (trending)"
+        )
+        return [msg]
+
+    # Rule (b): require pips >= 3.0 × M5 ATR(14)
+    m5_atr_pips = _fetch_m5_atr_pips()
+    if m5_atr_pips is None:
+        _log.warning(
+            f"GIVE_BACK_CAL_DEGRADED | plan_id={plan_id} "
+            f"reason=mt5_atr_unavailable | gate inactive this plan (FLO-429)"
+        )
+        return []
+
+    min_required = 3.0 * m5_atr_pips
+    tight = [(n, p) for (n, p) in offenders if p < min_required]
+    if not tight:
+        _log.info(
+            f"GIVE_BACK_CAL | plan_id={plan_id} regime={regime} "
+            f"m5_atr={m5_atr_pips:.1f}p min_req={min_required:.1f}p "
+            f"decision=ALLOW"
+        )
+        return []
+
+    details = "; ".join(
+        f"{n} pips={p:.0f} (need ≥ {min_required:.0f})" for n, p in tight
+    )
+    msg = (
+        f"give_back_calibration: profit_retraced_from_peak threshold too "
+        f"tight for current M5 volatility (FLO-429). M5 ATR(14)="
+        f"{m5_atr_pips:.1f} pips → min give-back must be ≥ 3.0 × ATR = "
+        f"{min_required:.0f} pips. Offenders: {details}. A give-back below "
+        f"this floor fires on routine intraday noise."
+    )
+    _log.info(
+        f"GIVE_BACK_CAL | plan_id={plan_id} regime={regime} "
+        f"m5_atr={m5_atr_pips:.1f}p min_req={min_required:.1f}p "
+        f"tight_count={len(tight)} decision=REJECT (too_tight)"
+    )
+    return [msg]
+
+
 def validate_plan(
     plan_dict: dict[str, Any],
     *,
@@ -1447,6 +1584,7 @@ def validate_plan(
     errors += _check_flo425_geometry_gate(plan)
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
+    errors += _check_give_back_calibration(plan, author_regime)
 
     if errors:
         return False, plan, errors
