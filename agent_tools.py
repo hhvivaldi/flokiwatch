@@ -5228,6 +5228,10 @@ class AgentTools:
                             "regime": _ctx.get("regime"),
                             "confidence": _ctx.get("confidence"),
                             "adx": _ctx.get("adx"),
+                            # FLO-430 — D1/H4 EMA50 alignment for the ADX
+                            # override branch in _check_regime_counter_trend_gate.
+                            "d1_direction": _ctx.get("d1_direction"),
+                            "h4_direction": _ctx.get("h4_direction"),
                         }
                 except Exception:
                     _author_regime = None

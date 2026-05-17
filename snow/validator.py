@@ -1275,17 +1275,100 @@ def _check_active_plan_cap(plan: Plan) -> list[str]:
     return [msg]
 
 
+def _check_adx_override(
+    plan: Plan,
+    author_regime: Optional[dict[str, Any]],
+    plan_id: str,
+    direction: Optional[str],
+) -> list[str]:
+    """FLO-430 — ADX-based counter-trend override (Path B of regime gate).
+
+    Fires when ALL hold:
+      - adx >= 30
+      - d1_direction == h4_direction in {"bullish", "bearish"}
+      - plan direction opposes the D1+H4 EMA50 stack
+        (both bearish → block BUY, both bullish → block SELL)
+
+    Independent of the regime label and the confidence tier. Catches
+    high-ADX trends that regime_detector marks TRANSITIONAL/RANGING
+    with confidence=moderate (production default).
+    """
+    from logger import log as _log
+
+    if not author_regime:
+        return []  # outer gate already logged DEGRADED
+
+    adx_raw = author_regime.get("adx")
+    d1 = author_regime.get("d1_direction")
+    h4 = author_regime.get("h4_direction")
+
+    try:
+        adx_val = float(adx_raw) if adx_raw is not None else 0.0
+    except (TypeError, ValueError):
+        adx_val = 0.0
+
+    if adx_val < 30.0:
+        return []
+    if d1 not in ("bullish", "bearish") or h4 not in ("bullish", "bearish"):
+        return []
+    if d1 != h4:
+        return []  # multi-TF stack not aligned — no override
+    if direction not in ("BUY", "SELL"):
+        return []
+
+    counter = (d1 == "bearish" and direction == "BUY") or (
+        d1 == "bullish" and direction == "SELL"
+    )
+    if not counter:
+        return []
+
+    aligned = "BUY" if d1 == "bullish" else "SELL"
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    msg = (
+        f"regime_gate: {direction} plan blocked — ADX {adx_val:.1f} with "
+        f"D1+H4 EMA50 both {d1} at {ts}. Counter-trend entries are "
+        f"rejected when the multi-TF stack is aligned and ADX ≥ 30 "
+        f"(FLO-430 — Path B / ADX override). The regime label may say "
+        f"TRANSITIONAL or RANGING and the regime confidence may be "
+        f"'moderate', but the EMA50 stack tells you the trend is "
+        f"mechanically real. Author a {aligned} plan aligned with the "
+        f"{d1} stack, or WAIT for ADX to drop below 30 or the EMA stack "
+        f"to break alignment."
+    )
+    _log.info(
+        f"REGIME_GATE | plan_id={plan_id} direction={direction} "
+        f"adx={adx_val:.1f} d1={d1} h4={h4} "
+        f"decision=REJECT (adx_override FLO-430)"
+    )
+    return [msg]
+
+
 def _check_regime_counter_trend_gate(
     plan: Plan,
     author_regime: Optional[dict[str, Any]],
 ) -> list[str]:
-    """FLO-427 — block counter-trend plans in confirmed trending markets.
+    """FLO-427 + FLO-430 — block counter-trend plans in confirmed trending markets.
 
-    Fires when ALL hold:
+    Two independent rejection paths:
+
+    Path A — FLO-427 (regime-label based). Fires when ALL hold:
       - regime in {TRENDING_BULLISH, TRENDING_BEARISH}
       - confidence in {high, strong}
       - adx >= 25
       - plan direction opposes the trend (BULLISH→SELL or BEARISH→BUY)
+
+    Path B — FLO-430 (ADX-override). Fires when ALL hold:
+      - adx >= 30
+      - d1_direction == h4_direction (both "bullish" or both "bearish")
+      - plan direction opposes the D1+H4 EMA50 stack
+    Catches the case where regime_detector returns confidence="moderate"
+    (the production default 64% of the time) but the trend is mechanically
+    obvious from ADX + multi-TF EMA50 alignment. Empirical motivation:
+    PLAN-20260514-009 (BUY, ADX 46.87, full bearish EMA stack) sailed
+    through FLO-427 because Floki self-labelled regime=TRANSITIONAL and
+    regime_detector returned confidence=moderate. -$10.18, direction
+    decisively wrong (gold dropped 122 USD within 4h).
 
     Fail-open: missing/UNKNOWN snapshot returns [] (allow) and emits a
     REGIME_GATE_DEGRADED WARN. Paralysis risk on transient MT5/Brain
@@ -1326,6 +1409,13 @@ def _check_regime_counter_trend_gate(
         return []
 
     if regime not in ("TRENDING_BULLISH", "TRENDING_BEARISH"):
+        # FLO-430 Path B — ADX override. The regime label may be
+        # TRANSITIONAL/RANGING/etc. but ADX + D1+H4 EMA50 alignment can
+        # still prove a mechanical trend the FLO-427 gate would have
+        # caught. Check that before allowing.
+        b_errs = _check_adx_override(plan, author_regime, plan_id, direction)
+        if b_errs:
+            return b_errs
         _log.info(
             f"REGIME_GATE | plan_id={plan_id} direction={direction} "
             f"regime={regime} adx={adx} confidence={confidence} decision=ALLOW"
@@ -1333,6 +1423,12 @@ def _check_regime_counter_trend_gate(
         return []
 
     if confidence not in ("high", "strong"):
+        # FLO-430 Path B — even if the regime label is TRENDING, FLO-427
+        # bails when confidence is below "high". The ADX-override can
+        # still catch obvious counter-trend setups here.
+        b_errs = _check_adx_override(plan, author_regime, plan_id, direction)
+        if b_errs:
+            return b_errs
         _log.info(
             f"REGIME_GATE | plan_id={plan_id} direction={direction} "
             f"regime={regime} adx={adx} confidence={confidence} "

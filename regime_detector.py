@@ -319,6 +319,8 @@ def detect_market_regime(
 
     mtf_d1 = None
     mtf_h4 = None
+    mtf_d1 = None
+    mtf_h4 = None
     try:
         mtf = getattr(brain_result, "mtf_trend", None)
         if isinstance(mtf, dict):
@@ -793,6 +795,11 @@ def _build_result(
         "atr_current": round(atr, 2) if atr else None,
         "atr_ratio": round(atr_ratio, 2),
         "adx": round(adx, 1) if adx else None,
+        # FLO-430 — expose D1/H4 EMA50 alignment for the ADX override
+        # in snow.validator._check_regime_counter_trend_gate. Values are
+        # "bullish" / "bearish" / None per _get_mtf_trend_direction.
+        "d1_direction": mtf_d1,
+        "h4_direction": mtf_h4,
         "bollinger_width_vs_avg": round(bb_width, 2) if bb_width else None,
         "h4_volume_bias": _last_h4_volume_bias,
         "m15_explosive": _last_m15_explosive,
