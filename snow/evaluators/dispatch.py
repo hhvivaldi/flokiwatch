@@ -35,6 +35,7 @@ from snow.evaluators.indicator import (
     evaluate_macd_histogram,
     evaluate_rsi,
     evaluate_stochastic,
+    evaluate_volume_above,
 )
 from snow.evaluators.position import (
     evaluate_mae_reached,
@@ -89,6 +90,8 @@ _DISPATCH: dict[str, Callable[[Any, EvalContext], bool]] = {
     "stochastic":             evaluate_stochastic,
     "price_at_pivot":         evaluate_price_at_pivot,
     "indicator_divergence":   evaluate_indicator_divergence,
+    # FLO-433 — volume gate
+    "volume_above":           evaluate_volume_above,
 }
 
 

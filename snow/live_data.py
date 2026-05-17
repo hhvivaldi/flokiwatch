@@ -171,6 +171,53 @@ class LiveData:
             return self._multi_tf_indicator(tf, "atr")
         return self._tick_cached(("M1", "atr", period), self._compute_atr, period)
 
+    def volume_ratio(self, tf: str = "H1", period: int = 20) -> Optional[float]:
+        """FLO-433 — tick_volume ratio: latest_bar / mean(prior `period` bars).
+
+        Returns None on MT5 failure or insufficient history. XAUUSD has
+        real_volume=0 (broker doesn't publish); tick_volume is the
+        standard FX/CFD proxy. Cached per-tick.
+        """
+        return self._tick_cached(
+            (tf, "volume_ratio", period), self._compute_volume_ratio, tf, period
+        )
+
+    def _compute_volume_ratio(self, tf: str, period: int) -> Optional[float]:
+        try:
+            from mt5_safe import mt5, mt5_lock
+        except Exception:
+            return None
+        tf_map = {
+            "M1": mt5.TIMEFRAME_M1,
+            "M5": mt5.TIMEFRAME_M5,
+            "M15": mt5.TIMEFRAME_M15,
+            "M30": mt5.TIMEFRAME_M30,
+            "H1": mt5.TIMEFRAME_H1,
+            "H4": mt5.TIMEFRAME_H4,
+            "D1": mt5.TIMEFRAME_D1,
+        }
+        mt5_tf = tf_map.get(tf)
+        if mt5_tf is None:
+            return None
+        try:
+            with mt5_lock:
+                rates = mt5.copy_rates_from_pos(self._symbol, mt5_tf, 0, period + 1)
+        except Exception:
+            return None
+        if rates is None or len(rates) < period + 1:
+            return None
+        try:
+            current = float(rates[-1]["tick_volume"])
+            window = [float(r["tick_volume"]) for r in rates[:-1]]
+            if not window:
+                return None
+            avg = sum(window) / len(window)
+            if avg <= 0:
+                return None
+            return current / avg
+        except Exception:
+            return None
+
     # -- Phase 7.3 (FLO-355) Cat A indicator accessors ---------------------
     # All four read from Brain's SemanticCache snapshot; no LiveData
     # computation. Brain currently publishes these on its primary

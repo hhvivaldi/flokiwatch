@@ -99,6 +99,26 @@ class RSI(_Cond):
     threshold: float = Field(ge=0, le=100)
 
 
+# --- §2.5 #3b: volume / tick-volume ratio (FLO-433) ---
+
+class VolumeAbove(_Cond):
+    """Tick-volume ratio gate.
+
+    True when current bar's tick_volume / mean(tick_volume over `period`
+    prior bars) >= `ratio`. XAUUSD broker returns 0 for real_volume on
+    Yahoo/MT5; tick_volume is the standard proxy for FX/CFD flow.
+
+    `tf` is the bar-aggregation timeframe (M5/M15/H1/H4/D1). `period` is
+    the lookback window for the moving average. `ratio` is the multiplier
+    floor (e.g. 0.5 = "at least half average volume", 1.0 = "at least
+    average", 1.5 = "elevated").
+    """
+    type: Literal["volume_above"] = "volume_above"
+    tf: Timeframe
+    period: int = Field(default=20, ge=5, le=200)
+    ratio: float = Field(default=0.5, ge=0.0, le=10.0)
+
+
 # --- §2.5 #4: momentum / MACD histogram ---
 
 class MACDHistogram(_Cond):
@@ -391,6 +411,8 @@ Condition = Annotated[
         BollingerPosition, Stochastic, PriceAtPivot, IndicatorDivergence,
         # Phase 8b (FLO-359) — stateful additions
         IndicatorCrossover, IndicatorWas, PriceCrossedLevel,
+        # FLO-433 — volume gate
+        VolumeAbove,
     ],
     Field(discriminator="type"),
 ]

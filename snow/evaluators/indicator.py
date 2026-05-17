@@ -55,6 +55,17 @@ def evaluate_rsi(cond: RSI, ctx: EvalContext) -> bool:
     return _apply_op(val, cond.op, cond.threshold)
 
 
+def evaluate_volume_above(cond, ctx: EvalContext) -> bool:
+    """FLO-433 — True iff latest-bar tick_volume / mean(prior `period`
+    bars) >= cond.ratio. None → False (missing data is fail-safe)."""
+    val: Optional[float] = ctx.live_data.volume_ratio(
+        tf=cond.tf, period=cond.period
+    )
+    if val is None:
+        return False
+    return val >= cond.ratio
+
+
 def evaluate_macd_histogram(cond: MACDHistogram, ctx: EvalContext) -> bool:
     val: Optional[float] = ctx.live_data.macd_histogram(tf=cond.tf)
     if val is None:
