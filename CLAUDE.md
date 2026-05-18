@@ -299,4 +299,37 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+### 5. Use /goal for Every Task
+
+**Set a completion condition. Let Claude work autonomously until done.**
+
+Every task from the CEO/CTO must be executed via `/goal`, not as plain instructions.
+
+Format:
+```
+/goal [verifiable condition 1] AND [verifiable condition 2] ... or stop after N turns
+```
+
+Rules:
+- Conditions must be VERIFIABLE from the transcript (test output, file exists, grep result)
+- Always include a turn cap: "or stop after N turns" (default: 25)
+- Run in auto mode (no permission prompts)
+- One goal per session; set a new one after completing the previous
+- `/goal clear` to cancel if stuck
+
+Example:
+```
+/goal FLO-445: _check_sl_buffer_from_structure rejects plans with buffer < 1.0×M15_ATR. All validator tests pass (pytest tests/flo445). Prompt updated in agent_prompts.py with sweep education block. CLAUDE.md has FLO-445 entry. Or stop after 25 turns.
+```
+
+Bad conditions (not verifiable):
+- "make the code better" — what does "better" mean?
+- "fix all bugs" — how does the evaluator know all bugs are fixed?
+- "production-ready" — unverifiable from transcript
+
+Good conditions (verifiable):
+- "pytest exits 0" — test output appears in transcript
+- "grep -r 'FLO-445' CLAUDE.md returns a match" — grep output in transcript
+- "python -c 'import agent_prompts' exits 0" — import check in transcript
+
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
