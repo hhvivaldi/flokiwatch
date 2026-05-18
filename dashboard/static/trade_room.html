@@ -1318,86 +1318,15 @@ button:active, .btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 r
 
     <div class="cab-grid">
 
-      <!-- REX (debate lead) -->
-      <article class="agent-card" data-agent="rex" id="rex-card">
-        <div class="ac-head">
-          <div class="ac-avatar avatar-rex"><img class="avatar-img" id="avatar-rex-img" alt="REX" src="/image/rex-video-trade-room.gif"></div>
-          <div class="ac-identity">
-            <div class="ac-name">REX</div>
-            <div class="ac-role">DEBATE · BULL vs BEAR</div>
-          </div>
-          <div class="ac-pill-stack">
-            <span class="ac-pill pill-neutral" id="rex-opinion-pill">NEUTRAL</span>
-            <span class="ac-pill-micro" id="rex-monitor-pill">CLEAR</span>
-            <span class="ac-pill-micro" id="rex-insights-pill" hidden>DIVERGING</span>
-          </div>
-        </div>
-        <div class="ac-body">
-          <div class="rex-split">
-            <span class="rex-vs">VS</span>
-            <div class="rex-side rex-bull" id="rex-bull-card">
-              <div class="rs-head">
-                <span class="rs-label">BULL</span>
-                <span class="rs-conv" id="rex-bull-conv-text">7</span>
-              </div>
-              <div class="rs-dir" id="rex-bull-dir-pill">BUY</div>
-              <div class="rs-case" id="rex-bull-case">4820 floor holds · MACD turning · DXY rolling over</div>
-              <div class="rs-bar"><div id="rex-bull-conv-bar" style="width:70%"></div></div>
-              <div class="rs-foot" id="rex-bull-levels">E 4832 · SL 4818 · TP 4861</div>
-              <span id="rex-bull-conv-pill" hidden></span>
-            </div>
-            <div class="rex-side rex-bear" id="rex-bear-card">
-              <div class="rs-head">
-                <span class="rs-label">BEAR</span>
-                <span class="rs-conv" id="rex-bear-conv-text">5</span>
-              </div>
-              <div class="rs-dir" id="rex-bear-dir-pill">SELL</div>
-              <div class="rs-case" id="rex-bear-case">Fails 4841 three times · H4 RSI divergence · weak volume</div>
-              <div class="rs-bar"><div id="rex-bear-conv-bar" style="width:50%"></div></div>
-              <div class="rs-foot" id="rex-bear-levels">E 4830 · SL 4849 · TP 4801</div>
-              <span id="rex-bear-conv-pill" hidden></span>
-            </div>
-          </div>
-          <div class="rex-agree">
-            <div class="ra-head">
-              <span class="ra-label">AGREEMENT</span>
-              <span class="ra-val" id="rex-agree-text">42%</span>
-            </div>
-            <div class="bar-track"><div id="rex-agree-bar" class="bar-fill" style="width:42%"></div></div>
-            <div class="ra-note" id="rex-debate-summary">Bull edge thin · needs DXY follow-through for confluence</div>
-            <div class="ra-time dim">LAST DEBATE · <span id="rex-last-debate">11:56:14</span></div>
-          </div>
-        </div>
-      </article>
-
-      <!-- ORACLE · RESEARCH MANAGER VERDICT (FLO-194) -->
-      <article class="agent-card agent-card-wide" data-agent="oracle" id="verdict-card">
-        <div class="ac-head">
-          <div class="ac-avatar avatar-oracle"><img class="avatar-img" id="avatar-oracle-img" alt="ORACLE" src="/image/oracle-video-trade-room.gif"></div>
-          <div class="ac-identity">
-            <div class="ac-name">ORACLE</div>
-            <div class="ac-role">RESEARCH MANAGER · VERDICT</div>
-          </div>
-          <div class="ac-pill-stack">
-            <span class="ac-pill pill-neutral" id="verdict-winner-pill">NEUTRAL</span>
-            <span class="ac-pill-micro" id="verdict-rec-pill">WAIT FOR BREAK</span>
-          </div>
-        </div>
-        <div class="ac-body">
-          <div class="verdict-conv">
-            <div class="vc-head"><span>CONVICTION</span><b id="verdict-conv-text">4 / 10</b></div>
-            <div class="bar-track"><div id="verdict-conv-bar" class="bar-fill" style="width:40%"></div></div>
-          </div>
-          <div class="ac-note" id="verdict-reasoning">
-            Bull leans on DXY rollover but lacks momentum confirmation. Bear has structure but weak volume. Oracle holds until confluence forms.
-          </div>
-          <div class="verdict-levels" id="verdict-levels">
-            <div class="vl-row"><span>TRIGGER BUY</span><b class="pos">&gt; 4841</b></div>
-            <div class="vl-row"><span>TRIGGER SELL</span><b class="neg">&lt; 4820</b></div>
-            <div class="vl-row"><span>INVALIDATION</span><b class="dim">4h close &gt; 4850 both sides</b></div>
-          </div>
-        </div>
-      </article>
+      <!-- FLO-444 (CEO 2026-05-18): REX debate panel + ORACLE/Research
+           Manager verdict panel removed. The conversational Rex
+           Bull/Bear debate and the Research Manager verdict path
+           were removed from the Floki cycle in FLO-434 (2026-05-17);
+           state_writer.py no longer populates last_analysis.debate
+           or last_analysis.verdict, so these panels rendered empty.
+           Rex Monitor (deterministic background scan) remains active
+           and its findings are surfaced via get_rex_monitor inside
+           Floki's own tool roster, not via a dedicated panel here. -->
 
       <!-- MARKET REGIME (standalone card) -->
       <article class="agent-card" data-agent="regime" id="regime-card">
