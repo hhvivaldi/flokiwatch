@@ -5338,6 +5338,84 @@ class AgentTools:
                 except Exception:
                     _author_account = None
 
+                # FLO-443 — self-consistency voter (env-gated, default
+                # OFF). When enabled, runs 5 parallel Sonnet votes on
+                # the plan's analysis summary at temperature 0.7. The
+                # majority direction becomes the "real" consensus; we
+                # mutate analysis.confidence to the vote-share %; if
+                # consensus DISAGREE or contradicts the plan's
+                # direction, the plan is rejected with a
+                # `self_consistency:` validator error. Fail-soft on
+                # API errors → original confidence preserved, plan
+                # passes the gate, log emits SELF_CONSISTENCY_DEGRADED.
+                try:
+                    import self_consistency as _sc
+                    if _sc.is_enabled():
+                        _vote = _sc.vote_on_plan(candidate)
+                        if _vote.degraded:
+                            log.warning(
+                                f"SELF_CONSISTENCY_DEGRADED | plan_id="
+                                f"{candidate.get('id', '?')} reason="
+                                f"{_vote.degraded_reason} elapsed_ms="
+                                f"{_vote.elapsed_ms} | gate inactive (FLO-443)"
+                            )
+                        else:
+                            _vote_summary = " ".join(
+                                f"{v.direction}:{v.confidence}" for v in _vote.votes
+                            )
+                            log.info(
+                                f"SELF_CONSISTENCY | plan_id="
+                                f"{candidate.get('id', '?')} "
+                                f"plan_dir={_vote.plan_direction} "
+                                f"consensus={_vote.consensus} "
+                                f"confidence_pct={_vote.confidence_pct} "
+                                f"votes=[{_vote_summary}] "
+                                f"elapsed_ms={_vote.elapsed_ms}"
+                            )
+                            if _vote.consensus == "DISAGREE":
+                                self._log_fail(
+                                    "submit_plan_to_snow", start,
+                                    "self_consistency_disagree",
+                                )
+                                return {
+                                    "success": False, "plan_id": None,
+                                    "validation_errors": [
+                                        f"self_consistency: 5-vote ensemble could "
+                                        f"not reach consensus (votes={_vote_summary}). "
+                                        f"FLO-443: when the voter ensemble splits "
+                                        f"≤50%, the analysis is ambiguous and the "
+                                        f"plan is rejected. Re-check your thesis "
+                                        f"or WAIT."
+                                    ],
+                                }
+                            if not _vote.agreed_with_plan and _vote.consensus in ("BUY", "SELL", "NO_TRADE"):
+                                self._log_fail(
+                                    "submit_plan_to_snow", start,
+                                    f"self_consistency_contradicts plan={_vote.plan_direction} consensus={_vote.consensus}",
+                                )
+                                return {
+                                    "success": False, "plan_id": None,
+                                    "validation_errors": [
+                                        f"self_consistency: plan direction "
+                                        f"{_vote.plan_direction} contradicts the "
+                                        f"5-vote ensemble consensus {_vote.consensus} "
+                                        f"(votes={_vote_summary}). FLO-443: rejected "
+                                        f"because the analysis you wrote, read back, "
+                                        f"does not actually support the direction "
+                                        f"you chose."
+                                    ],
+                                }
+                            # Consensus agrees → mutate confidence to vote-share %
+                            if isinstance(candidate.get("analysis"), dict):
+                                candidate["analysis"]["confidence"] = _vote.confidence_pct
+                except Exception as _sc_err:
+                    log.warning(
+                        f"SELF_CONSISTENCY_DEGRADED | plan_id="
+                        f"{candidate.get('id', '?')} reason="
+                        f"{type(_sc_err).__name__}: {_sc_err} | "
+                        f"gate inactive (FLO-443)"
+                    )
+
                 ok, parsed, errors = _validate(
                     candidate,
                     author_regime=_author_regime,
