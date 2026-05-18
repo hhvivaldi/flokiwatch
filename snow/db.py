@@ -72,6 +72,42 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _connect_read_only() -> sqlite3.Connection:
+    """FLO-441 — read-only connection with autocommit semantics.
+
+    Same underlying file as `_connect()`, but explicitly configures
+    `isolation_level=None` so Python's sqlite3 driver does NOT open an
+    implicit read transaction on the first SELECT. Implicit read txns
+    are the most-likely root cause of the production
+    `list_active_plans` count=0 bug observed overnight 2026-05-14/15
+    (memory 9854): the driver pins the connection's snapshot to the
+    moment the implicit txn was opened, so subsequent SELECTs see the
+    same stale view until `conn.commit()` is called explicitly to
+    release the snapshot.
+
+    The bug could NOT be reproduced in-process during the FLO-441
+    investigation — see `data/_audits/_wal_reproducer.py` — but the
+    failure mode is plausible across the Agent-SDK subprocess boundary
+    (FLO-426) where Floki's tool dispatcher may run in a child python
+    process with its own connection lifecycle. This helper is defensive
+    hardening on the read path; the writer path (`_connect()`) is
+    intentionally left unchanged because the bot has a live trade
+    while this fix is shipped, and altering writer isolation semantics
+    mid-trade is too risky.
+
+    Routes through `_connect()` so test fixtures that monkeypatch
+    `_connect` (snow/tests/tools_test.py:54) transparently affect
+    read-only callers too.
+
+    Use this for read-only queries (list_plans_by_status,
+    get_active_plans, etc.). Do NOT use for writes — autocommit means
+    every UPDATE/INSERT immediately persists with no rollback envelope.
+    """
+    conn = _connect()
+    conn.isolation_level = None  # autocommit — releases implicit-txn snapshot
+    return conn
+
+
 # =============================================================================
 # DDL
 # =============================================================================
@@ -375,14 +411,22 @@ def list_plans_by_status(
 ) -> list[dict[str, Any]]:
     """Return plans whose `status` is in `statuses` (lower-case strings).
 
-    Used by the dashboard/API surface. Ordered by `created_at DESC` so the
-    newest plans show first.
+    Used by the dashboard/API surface AND by Floki's list_active_plans
+    tool AND by the FLO-428 active-plan-cap validator. Ordered by
+    `created_at DESC` so the newest plans show first.
+
+    FLO-441 (2026-05-18): switched to `_connect_read_only()` so the
+    autocommit reader cannot pin a stale snapshot via Python sqlite3's
+    implicit-read-txn behavior. The conn.close() in the finally block
+    independently releases the connection's WAL view either way, but
+    the explicit autocommit eliminates any window where a subsequent
+    SELECT on the same connection would still see the snapshot.
     """
     statuses = tuple(statuses)
     if not statuses:
         return []
     placeholders = ",".join("?" for _ in statuses)
-    conn = _connect()
+    conn = _connect_read_only()
     try:
         rows = conn.execute(
             f"""
