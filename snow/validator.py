@@ -1914,15 +1914,26 @@ def _check_daily_loss_limit(
     plan: Plan,
     author_account: Optional[dict[str, Any]],
 ) -> list[str]:
-    """FLO-439 — reject new plans when daily P&L is at or below -2% of balance.
+    """FLO-439 — reject new plans when today's realized P&L is at or below -$200 (fixed).
+
+    Updated 2026-05-18: changed from percentage-based (-2% of balance) to a
+    fixed-dollar threshold. With the account at ~$2200, the prior -2% rule
+    triggered at -$44 — a single 0.02-lot SL hit could lock out plan
+    creation for the entire day. -$200 is the real catastrophe threshold,
+    only fired when 3-4 trades all hit SL in the same UTC day.
 
     `author_account` shape: {"balance": float, "today_pnl_usd": float}.
-    Fail-soft when missing/zero balance (logs DEGRADED, allows the plan).
+    `balance` is still read for log context (and remains the fail-soft
+    canary for "no account info available") but is no longer used in the
+    threshold calculation.
+
+    Fail-soft when missing author_account or unparseable values (logs
+    DEGRADED, allows the plan).
     """
     from logger import log as _log
 
     plan_id = getattr(plan, "id", None) or "<no-id>"
-    LIMIT_PCT = 2.0
+    LIMIT_USD = 200.00  # fixed-dollar daily loss limit (FLO-439 2026-05-18)
 
     if not author_account:
         _log.warning(
@@ -1941,33 +1952,24 @@ def _check_daily_loss_limit(
         )
         return []
 
-    if balance <= 0:
-        _log.warning(
-            f"DAILY_LOSS_LIMIT_DEGRADED | plan_id={plan_id} reason=zero_balance | "
-            f"gate inactive this plan (FLO-439)"
-        )
-        return []
-
-    pnl_pct = (pnl / balance) * 100.0
-    if pnl_pct > -LIMIT_PCT:
+    if pnl > -LIMIT_USD:
         _log.info(
             f"DAILY_LOSS_LIMIT | plan_id={plan_id} balance={balance:.2f} "
-            f"pnl={pnl:+.2f} pnl_pct={pnl_pct:+.2f}% decision=ALLOW"
+            f"pnl={pnl:+.2f} limit=${LIMIT_USD:.2f} decision=ALLOW"
         )
         return []
 
     msg = (
-        f"daily_loss_limit: today's realized P&L is {pnl:+.2f} USD "
-        f"({pnl_pct:+.2f}% of {balance:.2f} balance), at or below the "
-        f"-{LIMIT_PCT:.1f}% daily loss limit (FLO-439). Stop trading for "
-        f"the rest of the UTC day — the professional discipline is that "
-        f"the worst losing days are the ones that should have stopped at "
-        f"-2% but ended at -6%. New plans are blocked until the day rolls "
-        f"over at 00:00 UTC; review what went wrong and journal the day."
+        f"daily_loss_limit: today's realized P&L is {pnl:+.2f} USD, at or "
+        f"below the -${LIMIT_USD:.2f} fixed daily loss limit (FLO-439). "
+        f"Stop trading for the rest of the UTC day — the worst losing "
+        f"days are the ones that should have stopped at -$200 but ended "
+        f"at -$600. New plans are blocked until the day rolls over at "
+        f"00:00 UTC; review what went wrong and journal the day."
     )
     _log.info(
         f"DAILY_LOSS_LIMIT | plan_id={plan_id} balance={balance:.2f} "
-        f"pnl={pnl:+.2f} pnl_pct={pnl_pct:+.2f}% decision=REJECT"
+        f"pnl={pnl:+.2f} limit=${LIMIT_USD:.2f} decision=REJECT"
     )
     return [msg]
 
