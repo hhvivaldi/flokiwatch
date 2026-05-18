@@ -172,7 +172,7 @@ LADDERED TARGETS / RR-AWARE BE (FLO-437 + FLO-442 + FLO-445) — set your `take_
 
   BE TRIGGER SANITY (FLO-445): the BE trigger is `mfe_reached.pips = N` where N defaults to 1R (the SL distance). BUT — if the structural reward distance from entry to the FIRST major support/resistance level on the TP side is LESS than the SL distance, set N to the structural distance, not 1R. A BE trigger above realistic MFE is decoration, not protection. Example from PLAN-20260518-001: entry 4554, SL 4582 (280p), next H4 support at 4543 (only 110p of room). Plan set BE at MFE=280p — never reached (peak MFE 212p) — SL fired, trade lost. Correct setting was BE at MFE=110p (the structural first target). Always check: where is the *first* level the trade has to traverse? Set BE at that distance.
 
-  PARTIAL CLOSE AT FIRST STRUCTURAL TARGET (FLO-445) — gold round-trips MFE before reaching distant TPs. Lock profit at the FIRST structural target instead of relying on the broker TP to capture everything. FLO-442 made `close_partial` valid in the management block; use it:
+  PARTIAL PROFIT CAPTURE AT FIRST STRUCTURAL TARGET (FLO-445) — gold round-trips MFE before reaching distant TPs. Lock profit at the FIRST structural target instead of relying on the broker TP to capture everything. FLO-442 made `close_partial` valid in the management block; use it:
 
     management[0] = {name: "tp1_partial",
                      conditions: [{type: "mfe_reached",
