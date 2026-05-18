@@ -139,6 +139,24 @@ ICT FLOW TOOLS (FLO-438) — two new read-only scanners for order-flow context. 
 
 STRUCTURAL STOPS (FLO-437) — stop-losses must be placed beyond a structural invalidation level: the swing high/low that, if broken, kills the trade thesis. Never use fixed pip distances for stops — the chart, not a round number, defines invalidation. If the structural stop requires 200 pips, reduce lot size to fit it. If it requires only 30 pips, that's fine — the stop answers a single question: *at what price is my thesis WRONG?* For BUY plans, SL goes below the swing low that anchors the bullish read (the level whose break invalidates the higher-low structure). For SELL plans, SL goes above the swing high that anchors the bearish read (the level whose break invalidates the lower-high structure). On gold the structural distance is commonly 50-150 pips (gold's ATR is 200-500+ pips daily vs 80-120 for EURUSD); position sizing flexes around the stop, never the reverse.
 
+PARTIAL CLOSE AT TP1 (FLO-442) — Snow's management block now accepts the `close_partial` action alongside `move_sl_to_breakeven` and `trail_sl`. Use this to realise the classic TP1-partial pattern: close half (or any fraction) of the position at the first take-profit milestone, lock in profit, and let the runner aim at the bigger structural target.
+
+  Canonical 2-contingency pattern:
+    management[0] = {name: "tp1_partial",
+                     conditions: [{type: "mfe_reached", pips: <1R>}],
+                     action: {type: "close_partial", percent: 50},
+                     fires: "once"}
+    management[1] = {name: "be_after_partial",
+                     conditions: [{type: "mfe_reached", pips: <1R>}],
+                     action: {type: "move_sl_to_breakeven", offset_pips: 0},
+                     fires: "once"}
+
+  Notes:
+    - `percent` must be in (0, 100). 50 is the common default; 33 or 67 are valid alternatives for asymmetric ladders.
+    - Both contingencies count against the Escola-2 max of 2. You cannot do partial + BE + trail in one plan yet (separate ticket if needed).
+    - The `take_profit` price still applies to the remaining position size — at TP, broker closes the runner. So a plan with `close_partial 50%` and `initial_tp=4485` will close 50% at the partial trigger and the other 50% when price reaches 4485.
+    - `close_partial` requires an `mfe_reached` trigger > 0 like the other Escola-2 actions; profit_pips triggers and price triggers are rejected.
+
 LADDERED TARGETS / RR-AWARE BE (FLO-437) — set your `take_profit` at the TP2 or TP3 level — i.e. minimum 1:2 R:R from entry to TP, ideally 1:3 to 1:5 (the published-research professional target on gold is 1:3). Anchor the BE management contingency at the 1:1 R:R MFE distance rather than a fixed pip floor: if SL is 100 pips away, set `move_sl_to_breakeven` with `mfe_reached.pips = 100`; if SL is 40 pips away, set it at 40. This gives the trade breakeven protection at TP1 while letting the runner target TP2/TP3.
 
   Why this shape rather than a literal three-contingency partial ladder: Snow's primitives support `close_partial`, but the FLO-419 Escola 2 validator currently restricts the `management` block to `move_sl_to_breakeven` and/or `trail_sl` only (max 2). Expanding management to allow `close_partial` is a separate ticket; until then, "TP at the bigger level + BE locked at 1:1 R:R" is the structural equivalent — the runner is protected and the target is the bigger move. Use this pattern by default.

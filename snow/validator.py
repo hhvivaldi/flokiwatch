@@ -955,17 +955,23 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
       - Claude picks the rule that fits each setup's geometry
 
     Permitted management contents:
-      (a) empty (plan opts out of all Snow management), OR
+      (a) empty (plan opts out of all Snow management; carved out
+          only when TP-distance-from-entry < 100 pips), OR
       (b) up to TWO contingencies, each one of:
           - move_sl_to_breakeven with mfe_reached.pips > 0
           - trail_sl with mfe_reached.pips > 0 and trail_pips > 0
             (schema enforces trail_pips > 0)
+          - close_partial with mfe_reached.pips > 0 (FLO-442, 2026-05-18 —
+            enables TP1-partial-close-then-BE pattern: e.g. close 50%
+            at 1R MFE and pair with a move_sl_to_breakeven contingency
+            on the runner).
 
     Rejected:
       - adjust_sl / move_sl_to_price (still raw tactical — Claude
-        should express SL intent through BE+trail, not bare price moves)
-      - move_sl_to_breakeven / trail_sl without an mfe_reached condition
-      - move_sl_to_breakeven / trail_sl with mfe_reached.pips <= 0
+        should express SL intent through BE+trail+partial, not bare
+        price moves)
+      - any allowed action without an mfe_reached condition
+      - any allowed action with mfe_reached.pips <= 0
       - more than two management contingencies
 
     Monotonic SL guard at executor.modify_position (FLO-419, commits
@@ -1007,7 +1013,16 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
         return errors
 
     _MAX = 2
-    _ALLOWED = {"move_sl_to_breakeven", "trail_sl"}
+    # FLO-442 (2026-05-18): close_partial added to the Escola 2
+    # allowlist. Use case: a TP1 partial close at 1:1 R:R (close 50%,
+    # move SL to BE on the runner via a sibling contingency) — gives
+    # the trade BE protection at TP1 while letting the runner aim at
+    # TP2/TP3. close_partial.percent is bounded (0, 100) at the schema
+    # level (see snow.schema.ClosePartial). The empty-management
+    # carve-out above does NOT need a paired update because a plan
+    # with a non-empty close_partial contingency is, by construction,
+    # not "empty" — Snow will fire the partial close on MFE.
+    _ALLOWED = {"move_sl_to_breakeven", "trail_sl", "close_partial"}
 
     if len(plan.management) > _MAX:
         names = ", ".join(f"{m.name!r}" for m in plan.management)
@@ -1028,8 +1043,9 @@ def _check_management_hybrid_constraints(plan: Plan) -> list[str]:
             errors.append(
                 f"management[{mi}] ({mgmt.name!r}): action.type="
                 f"{action_type!r} not allowed under Escola 2. Permitted "
-                f"actions are `move_sl_to_breakeven` and `trail_sl`. "
-                f"Express SL intent through BE+trail, not raw "
+                f"actions are `move_sl_to_breakeven`, `trail_sl`, and "
+                f"`close_partial` (FLO-442). Express SL intent through "
+                f"BE/trail/partial-close, not raw "
                 f"adjust_sl/move_sl_to_price."
             )
             continue
