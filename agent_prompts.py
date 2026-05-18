@@ -137,6 +137,17 @@ ICT FLOW TOOLS (FLO-438) — two new read-only scanners for order-flow context. 
 
   Both tools are optional confluence inputs. They are read-only and safe to dispatch in your usual parallel polling batch.
 
+STOP PLACEMENT — BEYOND THE LIQUIDITY POOL (FLO-445) — Gold is heavily stop-hunted. The market routinely sweeps 10-50 pips beyond obvious swing highs/lows before reversing. Your SL must be placed BEYOND where the hunters will reach, not at the obvious level.
+
+  Rule: `SL = structural invalidation level + max(20p, 1.0 × M15 ATR)` as buffer. If the structural level is the H4 resistance cluster top at 4581 and M15 ATR is 50p, your SL goes at 4631 (= 4581 + 5.0 USD = 50p buffer), not at 4582. List the actual structural levels in `analysis.key_levels` — the validator (FLO-445 `sl_buffer:` gate) reads those levels and rejects plans whose SL sits within the sweep envelope. The validator rejection message includes the suggested SL price; if the rejection surprises you, the most-likely fix is to widen SL, not to remove the level from key_levels.
+
+  SWEEP VS BREAK — how to read the wick when price reaches your SL zone (out-of-band guidance for when you're managing manually rather than letting Snow auto-fire):
+    - If price WICKS beyond your SL zone but the M5 candle CLOSES back inside → that is a sweep, your thesis is likely still valid. Hold.
+    - If price CLOSES beyond the level with a large body and follow-through (next 2 M5 bars continue past) → that is a real break, your thesis is dead. Close.
+  The close matters, not the wick. Snow's broker-side SL fires on a tick touch (it cannot distinguish sweep vs break), which is why the FLO-445 buffer rule above pushes the SL beyond the sweep envelope in the first place. The buffer is the bot's substitute for human candle-close judgment.
+
+  Position size flexes around the wider SL, never the reverse. If a 50-pip buffer pushes SL too far for your account risk per trade, reduce volume, do NOT shrink the buffer.
+
 STRUCTURAL STOPS (FLO-437) — stop-losses must be placed beyond a structural invalidation level: the swing high/low that, if broken, kills the trade thesis. Never use fixed pip distances for stops — the chart, not a round number, defines invalidation. If the structural stop requires 200 pips, reduce lot size to fit it. If it requires only 30 pips, that's fine — the stop answers a single question: *at what price is my thesis WRONG?* For BUY plans, SL goes below the swing low that anchors the bullish read (the level whose break invalidates the higher-low structure). For SELL plans, SL goes above the swing high that anchors the bearish read (the level whose break invalidates the lower-high structure). On gold the structural distance is commonly 50-150 pips (gold's ATR is 200-500+ pips daily vs 80-120 for EURUSD); position sizing flexes around the stop, never the reverse.
 
 PARTIAL CLOSE AT TP1 (FLO-442) — Snow's management block now accepts the `close_partial` action alongside `move_sl_to_breakeven` and `trail_sl`. Use this to realise the classic TP1-partial pattern: close half (or any fraction) of the position at the first take-profit milestone, lock in profit, and let the runner aim at the bigger structural target.
@@ -157,9 +168,31 @@ PARTIAL CLOSE AT TP1 (FLO-442) — Snow's management block now accepts the `clos
     - The `take_profit` price still applies to the remaining position size — at TP, broker closes the runner. So a plan with `close_partial 50%` and `initial_tp=4485` will close 50% at the partial trigger and the other 50% when price reaches 4485.
     - `close_partial` requires an `mfe_reached` trigger > 0 like the other Escola-2 actions; profit_pips triggers and price triggers are rejected.
 
-LADDERED TARGETS / RR-AWARE BE (FLO-437) — set your `take_profit` at the TP2 or TP3 level — i.e. minimum 1:2 R:R from entry to TP, ideally 1:3 to 1:5 (the published-research professional target on gold is 1:3). Anchor the BE management contingency at the 1:1 R:R MFE distance rather than a fixed pip floor: if SL is 100 pips away, set `move_sl_to_breakeven` with `mfe_reached.pips = 100`; if SL is 40 pips away, set it at 40. This gives the trade breakeven protection at TP1 while letting the runner target TP2/TP3.
+LADDERED TARGETS / RR-AWARE BE (FLO-437 + FLO-442 + FLO-445) — set your `take_profit` at the TP2 or TP3 level — i.e. minimum 1:2 R:R from entry to TP, ideally 1:3 to 1:5 (the published-research professional target on gold is 1:3).
 
-  Why this shape rather than a literal three-contingency partial ladder: Snow's primitives support `close_partial`, but the FLO-419 Escola 2 validator currently restricts the `management` block to `move_sl_to_breakeven` and/or `trail_sl` only (max 2). Expanding management to allow `close_partial` is a separate ticket; until then, "TP at the bigger level + BE locked at 1:1 R:R" is the structural equivalent — the runner is protected and the target is the bigger move. Use this pattern by default.
+  BE TRIGGER SANITY (FLO-445): the BE trigger is `mfe_reached.pips = N` where N defaults to 1R (the SL distance). BUT — if the structural reward distance from entry to the FIRST major support/resistance level on the TP side is LESS than the SL distance, set N to the structural distance, not 1R. A BE trigger above realistic MFE is decoration, not protection. Example from PLAN-20260518-001: entry 4554, SL 4582 (280p), next H4 support at 4543 (only 110p of room). Plan set BE at MFE=280p — never reached (peak MFE 212p) — SL fired, trade lost. Correct setting was BE at MFE=110p (the structural first target). Always check: where is the *first* level the trade has to traverse? Set BE at that distance.
+
+  PARTIAL CLOSE AT FIRST STRUCTURAL TARGET (FLO-445) — gold round-trips MFE before reaching distant TPs. Lock profit at the FIRST structural target instead of relying on the broker TP to capture everything. FLO-442 made `close_partial` valid in the management block; use it:
+
+    management[0] = {name: "tp1_partial",
+                     conditions: [{type: "mfe_reached",
+                                   pips: <first structural target distance>}],
+                     action: {type: "close_partial", percent: 50},
+                     fires: "once"}
+    management[1] = {name: "be_after_partial",
+                     conditions: [{type: "mfe_reached",
+                                   pips: <same first structural distance>}],
+                     action: {type: "move_sl_to_breakeven", offset_pips: 0},
+                     fires: "once"}
+
+  For PLAN-20260518-001 this would have meant: close_partial 50% at MFE=110p (= structural distance to next H4 support 4543), captures ~$11 of profit + locks the runner at BE. Empirical result with the original "no partial" management: -$58 (SL hit). Empirical result with this pattern: ~+$22 (partial at +110p + runner closes at duration cap with no further damage). The pattern survives stop hunts at the entry zone because half the position is already cashed and the runner is BE-protected.
+
+  When to use which BE anchor:
+    - Structural reward < SL distance → BE at structural distance (the PLAN-001 case).
+    - Structural reward ≈ SL distance → BE at 1R is fine.
+    - Structural reward > SL distance → BE at 1R is fine (you're aiming far; lock in at the round-trip-protection level).
+
+  Why not a literal 3-contingency partial ladder (partial + BE + trail): Snow's `_check_management_hybrid_constraints` caps management at 2 contingencies. Expanding `_MAX` from 2 to 3 to support the full ladder is a separate ticket; until then, `close_partial` + `move_sl_to_breakeven` is the production pattern, and the runner aims at TP via broker close (or duration cap, whichever fires first).
 
 INDICATOR PRIORITY (FLO-435) — most pairs of indicators on the same chart measure the same underlying thing. Default to fewer signals with stronger conviction rather than a wall of indicator readouts.
 

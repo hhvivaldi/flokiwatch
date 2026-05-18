@@ -1530,6 +1530,189 @@ def _fetch_m5_atr_pips() -> Optional[float]:
         return None
 
 
+def _fetch_m15_atr_pips() -> Optional[float]:
+    """FLO-445 helper — M15 ATR(14) in pips. None on MT5 failure.
+
+    Used by _check_sl_buffer_from_structure to size the required SL
+    buffer beyond the structural cluster top/bottom. The research doc
+    establishes that gold sweeps 10-50 pips beyond obvious swing
+    highs/lows before reversing, and the M15 ATR is the right
+    timeframe for sizing the buffer envelope (M5 is too tick-noisy;
+    H1 understates intra-bar volatility).
+    """
+    try:
+        from mt5_safe import mt5
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, 15)
+    except Exception:
+        return None
+    if rates is None or len(rates) < 15:
+        return None
+    try:
+        trs: list[float] = []
+        for i in range(1, len(rates)):
+            r = rates[i]
+            prev = rates[i - 1]
+            tr = max(
+                float(r["high"]) - float(r["low"]),
+                abs(float(r["high"]) - float(prev["close"])),
+                abs(float(r["low"]) - float(prev["close"])),
+            )
+            trs.append(tr)
+        if not trs:
+            return None
+        atr = sum(trs) / len(trs)
+        return round(atr * 10.0, 2)
+    except Exception:
+        return None
+
+
+def _check_sl_buffer_from_structure(plan: Plan) -> list[str]:
+    """FLO-445 — reject plans whose SL sits within the sweep envelope of
+    a structural level the plan itself flagged.
+
+    Geometry:
+      For SELL plans (SL above entry): the relevant structural levels
+        are entries in `plan.analysis.key_levels` that lie strictly
+        between entry and SL (or equal SL). The SL must sit at least
+        `buffer = max(20p, 1.0 × M15_ATR)` ABOVE the highest such level.
+      For BUY plans (SL below entry): mirror — SL must be at least
+        `buffer` BELOW the lowest such level.
+
+    Empirical motivation: PLAN-20260518-001 set SL=4582 with
+    key_levels=[4554, 4582, 4485]. The 4582 was simultaneously listed
+    as a structural anchor AND used as the SL — zero buffer. Two M5
+    wicks pierced 4582 by 2-4 pips at 13:50/13:55 UTC, fired the stop,
+    then price collapsed 52 USD per the thesis. Counterfactual at
+    duration cap: +$34 vs actual -$58.
+
+    Buffer formula:
+      buffer_pips = max(20.0, M15_ATR(14)_pips)
+    At gold's current M15 ATR of 50-80p, this gives 50-80p buffer —
+    matches the research-doc finding that XAUUSD sweeps 10-50p beyond
+    obvious levels before reversing. The 20p floor protects against
+    quiet-session false-negatives.
+
+    Fail-soft when:
+      - plan has no key_levels (nothing to check against)
+      - M15 ATR fetch fails (live MT5 hiccup → log DEGRADED, allow)
+      - direction is missing or invalid
+    """
+    from logger import log as _log
+
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    entry = getattr(plan, "entry", None)
+    if entry is None:
+        return []
+    direction = getattr(entry, "direction", None)
+    direction_str = str(direction) if direction is not None else ""
+    # Pydantic Direction enum repr can be "Direction.SELL" — normalise
+    if direction_str.endswith("SELL"):
+        side = "SELL"
+    elif direction_str.endswith("BUY"):
+        side = "BUY"
+    else:
+        return []
+
+    try:
+        entry_price = float(entry.entry_price) if entry.entry_price is not None else None
+        sl = float(entry.initial_sl)
+    except Exception:
+        return []
+    if entry_price is None:
+        # fall back — use SL distance from initial_tp midpoint? Skip if not derivable.
+        return []
+
+    analysis = getattr(plan, "analysis", None)
+    key_levels: list[float] = []
+    if analysis is not None:
+        raw = getattr(analysis, "key_levels", None) or []
+        try:
+            key_levels = [float(x) for x in raw]
+        except Exception:
+            key_levels = []
+
+    if not key_levels:
+        _log.info(
+            f"SL_BUFFER | plan_id={plan_id} direction={side} "
+            f"decision=ALLOW (no_key_levels)"
+        )
+        return []
+
+    # Find the structural level the SL has to clear
+    if side == "SELL":
+        # Levels between entry and SL (inclusive of SL)
+        relevant = [lv for lv in key_levels if entry_price < lv <= sl]
+        if not relevant:
+            _log.info(
+                f"SL_BUFFER | plan_id={plan_id} direction=SELL "
+                f"entry={entry_price} sl={sl} decision=ALLOW "
+                f"(no levels above entry within SL range)"
+            )
+            return []
+        struct_level = max(relevant)
+        # SL must be ≥ struct_level + buffer
+        gap_pips = (sl - struct_level) * 10.0
+    else:  # BUY
+        relevant = [lv for lv in key_levels if sl <= lv < entry_price]
+        if not relevant:
+            _log.info(
+                f"SL_BUFFER | plan_id={plan_id} direction=BUY "
+                f"entry={entry_price} sl={sl} decision=ALLOW "
+                f"(no levels below entry within SL range)"
+            )
+            return []
+        struct_level = min(relevant)
+        gap_pips = (struct_level - sl) * 10.0
+
+    m15_atr = _fetch_m15_atr_pips()
+    if m15_atr is None:
+        _log.warning(
+            f"SL_BUFFER_DEGRADED | plan_id={plan_id} reason=m15_atr_unavailable | "
+            f"gate inactive this plan (FLO-445)"
+        )
+        return []
+
+    required_buffer = max(20.0, m15_atr)
+
+    if gap_pips >= required_buffer:
+        _log.info(
+            f"SL_BUFFER | plan_id={plan_id} direction={side} "
+            f"struct_level={struct_level} sl={sl} gap_pips={gap_pips:.1f} "
+            f"m15_atr={m15_atr:.1f}p required={required_buffer:.1f}p "
+            f"decision=ALLOW"
+        )
+        return []
+
+    # Compute the SL Floki SHOULD have used
+    suggested_sl = (struct_level + required_buffer / 10.0) if side == "SELL" \
+                   else (struct_level - required_buffer / 10.0)
+    suggested_sl = round(suggested_sl, 2)
+
+    msg = (
+        f"sl_buffer: SL={sl} sits {gap_pips:.0f} pips from the nearest "
+        f"structural level on the SL side ({struct_level}, drawn from "
+        f"plan.analysis.key_levels). Required buffer at current "
+        f"M15 ATR({m15_atr:.0f}p) is max(20p, M15 ATR) = "
+        f"{required_buffer:.0f} pips (FLO-445). XAUUSD routinely "
+        f"sweeps 10-50 pips beyond obvious swing levels before "
+        f"reversing — a stop at the cluster edge is a stop in the "
+        f"liquidity pool, not beyond it. Move SL to "
+        f"{'≥' if side == 'SELL' else '≤'} {suggested_sl} (or revise "
+        f"key_levels if {struct_level} is not actually a structural "
+        f"anchor for this plan). Empirical motivation: "
+        f"PLAN-20260518-001 used SL exactly at the H4 cluster top, "
+        f"two M5 wicks fired the stop, price then fell 52 USD per "
+        f"thesis — counterfactual P&L at duration cap was +$34."
+    )
+    _log.info(
+        f"SL_BUFFER | plan_id={plan_id} direction={side} "
+        f"struct_level={struct_level} sl={sl} gap_pips={gap_pips:.1f} "
+        f"m15_atr={m15_atr:.1f}p required={required_buffer:.1f}p "
+        f"decision=REJECT suggested_sl={suggested_sl}"
+    )
+    return [msg]
+
+
 def _check_give_back_calibration(
     plan: Plan,
     author_regime: Optional[dict[str, Any]],
@@ -1854,6 +2037,7 @@ def validate_plan(
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
     errors += _check_give_back_calibration(plan, author_regime)
+    errors += _check_sl_buffer_from_structure(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)
     errors += _check_daily_loss_limit(plan, author_account)
 
