@@ -155,14 +155,25 @@ class TestGiveBackCalibration:
         )
         assert not any(e.startswith("give_back_calibration:") for e in errors), errors
 
-    def test_no_author_regime_fails_open(
+    def test_no_author_regime_falls_back_to_plan_claim(
         self, valid_plan_dict, patch_atr, patch_active_plans
     ):
-        """No regime snapshot → ATR floor still applies if ATR is fetchable."""
+        """FLO-440 — no live snapshot AND plan claims a non-trending
+        regime → ATR floor still applies (200 >= 90 → allow).
+
+        Earlier behavior (pre-FLO-440) was to no-op the trending-ban
+        whenever the live snapshot was missing, regardless of what the
+        plan's `analysis.regime_assumed` claimed. PLAN-20260517-001
+        showed that produced a contradiction-free pass when the plan
+        claimed TRENDING and the snapshot was DEGRADED. Test now
+        verifies the ATR path with a RANGING claim; the
+        TestGiveBackRegimeFallback class verifies the trending-ban
+        path fires correctly under the same DEGRADED-snapshot condition.
+        """
         patch_atr["atr"] = 30.0
         plan = _plan_with_give_back(valid_plan_dict, pips=200.0)
+        plan["analysis"]["regime_assumed"] = "RANGING"
         ok, _, errors = validate_plan(plan, author_regime=None)
-        # ATR rule still fires (200 > 90), so should allow.
         assert not any(e.startswith("give_back_calibration:") for e in errors), errors
 
     def test_multiple_give_backs_one_offender(
@@ -196,3 +207,62 @@ class TestGiveBackCalibration:
         gb_errs = [e for e in errors if e.startswith("give_back_calibration:")]
         assert gb_errs, errors
         assert "give_back_tight" in gb_errs[0]
+
+
+class TestGiveBackRegimeFallback:
+    """FLO-440 — when the live regime snapshot is DEGRADED, fall back
+    to plan.analysis.regime_assumed for Rule (a) trending-ban check.
+
+    Regression: PLAN-20260517-001 claimed regime_assumed=TRENDING_BEARISH
+    but the live snapshot was DEGRADED, so the trending-ban rule
+    silently no-op'd and a 150p give_back exit slipped through the
+    ATR floor."""
+
+    def test_plan009_reproduction_uses_claimed_regime(
+        self, valid_plan_dict, patch_atr, patch_active_plans
+    ):
+        """Plan self-claims TRENDING_BEARISH; author_regime is None
+        (DEGRADED). Rule (a) must still fire on the claimed regime."""
+        out = _plan_with_give_back(valid_plan_dict, pips=150.0)
+        out["analysis"]["regime_assumed"] = "TRENDING_BEARISH"
+        ok, _, errors = validate_plan(out, author_regime=None)
+        assert ok is False, errors
+        gb_errs = [e for e in errors if e.startswith("give_back_calibration:")]
+        assert gb_errs, errors
+        assert "TRENDING_BEARISH" in gb_errs[0]
+
+    def test_claimed_trending_bullish_also_caught(
+        self, valid_plan_dict, patch_atr, patch_active_plans
+    ):
+        out = _plan_with_give_back(valid_plan_dict, pips=200.0)
+        out["analysis"]["regime_assumed"] = "TRENDING_BULLISH"
+        ok, _, errors = validate_plan(out, author_regime=None)
+        assert ok is False
+        assert any(e.startswith("give_back_calibration:") for e in errors), errors
+
+    def test_claimed_ranging_falls_through_to_atr_floor(
+        self, valid_plan_dict, patch_atr, patch_active_plans
+    ):
+        """Non-trending claimed regime → ATR-floor rule (b) applies."""
+        patch_atr["atr"] = 30.0  # min required = 90 pips
+        out = _plan_with_give_back(valid_plan_dict, pips=200.0)
+        out["analysis"]["regime_assumed"] = "RANGING"
+        ok, _, errors = validate_plan(out, author_regime=None)
+        # 200 >= 90 → allow
+        assert not any(e.startswith("give_back_calibration:") for e in errors), errors
+
+    def test_live_snapshot_still_wins_over_claim(
+        self, valid_plan_dict, patch_atr, patch_active_plans
+    ):
+        """If the live snapshot HAS a regime, it takes precedence over
+        the plan's self-claim (live data is the source of truth when
+        available)."""
+        out = _plan_with_give_back(valid_plan_dict, pips=200.0)
+        out["analysis"]["regime_assumed"] = "TRENDING_BEARISH"
+        # Live snapshot says RANGING; the live value wins.
+        ok, _, errors = validate_plan(
+            out,
+            author_regime={"regime": "RANGING", "confidence": "moderate", "adx": 18.0},
+        )
+        # patch_atr default 30 → min_req 90; 200 >= 90 → allow
+        assert not any(e.startswith("give_back_calibration:") for e in errors), errors

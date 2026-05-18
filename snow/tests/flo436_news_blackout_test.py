@@ -1,4 +1,12 @@
-"""FLO-436 — killzone session gate + news blackout gate tests."""
+"""FLO-436 — Tier-1 news blackout gate tests.
+
+(FLO-440, 2026-05-18: the companion killzone-session gate was removed
+from this file and from the validator after empirical analysis showed
+the killzone allowlists inverted this bot's actual P&L pattern. The
+session signal is now an informational prompt block, not a hard gate.
+News blackout remains a hard gate — Tier-1 macro releases continue to
+have non-discretionary impact on price action.)
+"""
 
 from __future__ import annotations
 
@@ -7,7 +15,6 @@ from typing import Any
 
 import pytest
 
-import snow.validator as validator_mod
 from snow.validator import validate_plan
 
 
@@ -15,111 +22,6 @@ from snow.validator import validate_plan
 def patch_active_plans(monkeypatch):
     import snow.db as snow_db_mod
     monkeypatch.setattr(snow_db_mod, "get_active_plans", lambda: [])
-
-
-def _at(plan: dict[str, Any], iso_hour_utc: str) -> dict[str, Any]:
-    """Return a copy of `plan` with created_at set to the given UTC time."""
-    out = deepcopy(plan)
-    out["created_at"] = iso_hour_utc
-    # bump expires to keep it after created_at
-    out["expires_at"] = "2026-05-18T23:00:00Z"
-    return out
-
-
-def _with_setup(plan: dict[str, Any], setup_type: str) -> dict[str, Any]:
-    out = deepcopy(plan)
-    out["analysis"]["setup_type"] = setup_type
-    return out
-
-
-class TestKillzoneGate:
-
-    def test_london_open_breakout_allowed(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T08:00:00Z"),
-            "breakout_range",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert not any(e.startswith("killzone_gate:") for e in errors), errors
-
-    def test_london_open_pullback_rejected(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T08:00:00Z"),
-            "pullback_trend",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert ok is False
-        assert any(
-            e.startswith("killzone_gate:") and "LONDON_OPEN" in e for e in errors
-        ), errors
-
-    def test_ny_overlap_all_allowed(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        for setup in (
-            "pullback_trend",
-            "breakout_range",
-            "mean_reversion_extreme",
-            "divergence_play",
-        ):
-            plan = _with_setup(
-                _at(valid_plan_dict, "2026-05-19T14:00:00Z"),
-                setup,
-            )
-            ok, _, errors = validate_plan(plan)
-            assert not any(e.startswith("killzone_gate:") for e in errors), (
-                f"{setup} should be allowed in NY_OVERLAP: {errors}"
-            )
-
-    def test_ny_pm_pullback_allowed(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T17:00:00Z"),
-            "pullback_trend",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert not any(e.startswith("killzone_gate:") for e in errors), errors
-
-    def test_ny_pm_breakout_rejected(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T17:00:00Z"),
-            "breakout_range",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert ok is False
-        assert any(
-            e.startswith("killzone_gate:") and "NY_PM" in e for e in errors
-        ), errors
-
-    def test_asian_breakout_rejected(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T02:00:00Z"),
-            "breakout_range",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert ok is False
-        assert any(
-            e.startswith("killzone_gate:") and "ASIAN" in e for e in errors
-        ), errors
-
-    def test_asian_structural_bounce_allowed(
-        self, valid_plan_dict, patch_active_plans
-    ):
-        plan = _with_setup(
-            _at(valid_plan_dict, "2026-05-19T03:00:00Z"),
-            "structural_bounce",
-        )
-        ok, _, errors = validate_plan(plan)
-        assert not any(e.startswith("killzone_gate:") for e in errors), errors
 
 
 class TestNewsBlackoutGate:

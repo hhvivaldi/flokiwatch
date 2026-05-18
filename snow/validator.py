@@ -1561,6 +1561,22 @@ def _check_give_back_calibration(
         return []
 
     regime = (author_regime or {}).get("regime") if author_regime else None
+    # FLO-440 fall-back — when the live snapshot is DEGRADED (no regime
+    # value), use Floki's self-claimed `analysis.regime_assumed` instead.
+    # Rule (a) below is the trending-ban; we want it to fire whenever the
+    # plan's OWN thesis says "this is a trending market" even if the live
+    # snapshot was unavailable at validate-time. Previously the rule
+    # silently no-op'd when snapshot was missing, allowing the plan
+    # through despite the contradiction. PLAN-20260517-001 surfaced this:
+    # plan claimed TRENDING_BEARISH but live snapshot was DEGRADED, so
+    # the give_back 150p exit slipped through the ATR floor instead of
+    # being banned by Rule (a).
+    if regime is None:
+        try:
+            claimed = getattr(getattr(plan, "analysis", None), "regime_assumed", None)
+            regime = str(claimed) if claimed is not None else None
+        except Exception:
+            regime = None
 
     # Rule (a): reject in TRENDING regimes regardless of pips
     if regime in ("TRENDING_BULLISH", "TRENDING_BEARISH"):
@@ -1618,7 +1634,7 @@ def _check_give_back_calibration(
     return [msg]
 
 
-_KILLZONE_TIER1_EVENTS = (
+_TIER1_NEWS_EVENTS = (
     "nonfarm",
     "non-farm",
     "nfp",
@@ -1635,87 +1651,6 @@ _KILLZONE_TIER1_EVENTS = (
 )
 
 
-def _check_killzone_gate(plan: Plan) -> list[str]:
-    """FLO-436 — session-based authoring gate.
-
-    Maps the plan's created_at hour (UTC) to a session and rejects
-    setup_types that historically convert poorly in that session.
-
-      07:00-09:00 UTC : LONDON_OPEN     — breakout setups only
-                        (breakout_range, session_open_break)
-      09:00-12:00 UTC : LONDON_MORNING  — all allowed
-      12:00-16:00 UTC : NY_OVERLAP      — all allowed (peak volume)
-      16:00-20:00 UTC : NY_PM           — trend continuation only
-                        (pullback_trend, continuation_momentum)
-      20:00-21:00 UTC : LATE_NY         — all allowed
-      21:00-06:00 UTC : ASIAN           — REJECT unless range play at
-                        a major level (mean_reversion_extreme,
-                        structural_bounce)
-
-    Fail-soft on missing/unparseable created_at.
-    """
-    from logger import log as _log
-    from datetime import datetime
-
-    plan_id = getattr(plan, "id", None) or "<no-id>"
-    setup_type = getattr(getattr(plan, "analysis", None), "setup_type", None)
-    setup_str = str(setup_type) if setup_type is not None else "?"
-
-    created_at = getattr(plan, "created_at", None)
-    if not created_at:
-        _log.info(
-            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
-            f"decision=ALLOW (no_created_at)"
-        )
-        return []
-    try:
-        ts = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-        hour = ts.hour
-    except Exception:
-        _log.info(
-            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
-            f"decision=ALLOW (created_at_unparseable)"
-        )
-        return []
-
-    if 7 <= hour < 9:
-        session = "LONDON_OPEN"
-        allowed = {"breakout_range", "session_open_break"}
-        guidance = "breakouts only"
-    elif 16 <= hour < 20:
-        session = "NY_PM"
-        allowed = {"pullback_trend", "continuation_momentum"}
-        guidance = "trend continuation only"
-    elif hour >= 21 or hour < 6:
-        session = "ASIAN"
-        allowed = {"mean_reversion_extreme", "structural_bounce"}
-        guidance = "range plays at major D1/weekly levels only"
-    else:
-        session = "OPEN_WINDOW" if (9 <= hour < 12 or hour == 20) else "NY_OVERLAP"
-        allowed = None
-        guidance = "all setups allowed"
-
-    if allowed is None or setup_type in allowed or setup_str in allowed:
-        _log.info(
-            f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
-            f"session={session} hour={hour} decision=ALLOW ({guidance})"
-        )
-        return []
-
-    msg = (
-        f"killzone_gate: this is a {session} session (UTC {hour:02d}:00 "
-        f"window — {guidance}). setup_type={setup_str} is not in the "
-        f"session's allowed set {sorted(allowed)}. Reauthor with an "
-        f"in-session setup_type, or wait for a more favourable session. "
-        f"FLO-436. Mapping: LONDON_OPEN 07-09 (breakouts), NY_OVERLAP "
-        f"12-16 (all), NY_PM 16-20 (trend continuation), ASIAN 21-06 "
-        f"(range at major levels only)."
-    )
-    _log.info(
-        f"KILLZONE_GATE | plan_id={plan_id} setup={setup_str} "
-        f"session={session} hour={hour} decision=REJECT"
-    )
-    return [msg]
 
 
 def _check_news_blackout_gate(
@@ -1753,7 +1688,7 @@ def _check_news_blackout_gate(
         if abs(minutes_until) > 30.0:
             continue
         name_lower = str(ev.get("name", "")).lower()
-        if not any(kw in name_lower for kw in _KILLZONE_TIER1_EVENTS):
+        if not any(kw in name_lower for kw in _TIER1_NEWS_EVENTS):
             continue
         msg = (
             f"news_blackout: {ev.get('name', '?')} (HIGH impact) is "
@@ -1903,7 +1838,6 @@ def validate_plan(
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
     errors += _check_give_back_calibration(plan, author_regime)
-    errors += _check_killzone_gate(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)
     errors += _check_daily_loss_limit(plan, author_account)
 
