@@ -379,7 +379,7 @@ def detect_market_regime(
         regime = "VOLATILE"
         confidence = "high" if len(volatile_signals) >= 2 else "moderate"
         evidence = volatile_signals
-        result = _build_result(regime, confidence, evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, confidence, evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -409,7 +409,7 @@ def detect_market_regime(
     if quiet_signals >= 3:
         regime = "QUIET"
         confidence = "high" if quiet_signals >= 4 else "moderate"
-        result = _build_result(regime, confidence, quiet_evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, confidence, quiet_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -573,7 +573,7 @@ def detect_market_regime(
                 confidence = "high"
                 all_evidence.append(f"Range compression: {_prev_duration_min:.0f}min of {_last_regime}")
         all_evidence.insert(0, f"Fast detection: {fast_trend_score} signals (M5={m5_trending_signals} H1={h1_trending_signals})")
-        result = _build_result(regime, confidence, all_evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, confidence, all_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -584,7 +584,7 @@ def detect_market_regime(
         regime = "BREAKOUT_IMMINENT"
         _breakout_imminent_until = now + 300  # 5-minute hysteresis
         m5_trending_evidence.insert(0, f"M5 fast detection: {m5_trending_signals} signals ({fast_direction})")
-        result = _build_result(regime, "moderate", m5_trending_evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, "moderate", m5_trending_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -619,7 +619,7 @@ def detect_market_regime(
         regime = "BREAKOUT_IMMINENT"
         _breakout_imminent_until = now + 300  # 5-minute hysteresis
         confidence = "high" if breakout_signals >= 3 else "moderate"
-        result = _build_result(regime, confidence, breakout_evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, confidence, breakout_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -650,7 +650,7 @@ def detect_market_regime(
                 supporting += 1
                 evidence.append(f"+DI {plus_di:.1f} > -DI {minus_di:.1f}")
             confidence = "high" if supporting >= 3 else ("moderate" if supporting >= 1 else "low")
-            result = _build_result("TRENDING_BULLISH", confidence, evidence, adx, atr_current, atr_ratio, bb_width)
+            result = _build_result("TRENDING_BULLISH", confidence, evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
             _update_temporal("TRENDING_BULLISH", now)
             _prev_adx = adx
             _prev_bollinger_width = bb_width
@@ -669,7 +669,7 @@ def detect_market_regime(
                 supporting += 1
                 evidence.append(f"-DI {minus_di:.1f} > +DI {plus_di:.1f}")
             confidence = "high" if supporting >= 3 else ("moderate" if supporting >= 1 else "low")
-            result = _build_result("TRENDING_BEARISH", confidence, evidence, adx, atr_current, atr_ratio, bb_width)
+            result = _build_result("TRENDING_BEARISH", confidence, evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
             _update_temporal("TRENDING_BEARISH", now)
             _prev_adx = adx
             _prev_bollinger_width = bb_width
@@ -694,14 +694,14 @@ def detect_market_regime(
         if _breakout_imminent_until and now < _breakout_imminent_until:
             _remaining_m = int((_breakout_imminent_until - now) / 60)
             _hyst_evidence = [f"BREAKOUT_IMMINENT persisting ({_remaining_m}m remaining)"] + ranging_evidence
-            result = _build_result("BREAKOUT_IMMINENT", "moderate", _hyst_evidence, adx, atr_current, atr_ratio, bb_width)
+            result = _build_result("BREAKOUT_IMMINENT", "moderate", _hyst_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
             _update_temporal("BREAKOUT_IMMINENT", now)
             _prev_adx = adx
             _prev_bollinger_width = bb_width
             return result
         regime = "RANGING"
         confidence = "high" if len(ranging_evidence) >= 3 else "moderate"
-        result = _build_result(regime, confidence, ranging_evidence, adx, atr_current, atr_ratio, bb_width)
+        result = _build_result(regime, confidence, ranging_evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
         _update_temporal(regime, now)
         _prev_adx = adx
         _prev_bollinger_width = bb_width
@@ -714,7 +714,7 @@ def detect_market_regime(
     if ema9 and ema21 and ema50:
         evidence.append(f"EMAs: 9={ema9:.0f} 21={ema21:.0f} 50={ema50:.0f}")
     evidence.append("Mixed signals — no clear regime")
-    result = _build_result("TRANSITIONAL", "low", evidence, adx, atr_current, atr_ratio, bb_width)
+    result = _build_result("TRANSITIONAL", "low", evidence, adx, atr_current, atr_ratio, bb_width, mtf_d1=mtf_d1, mtf_h4=mtf_h4)
     _update_temporal("TRANSITIONAL", now)
     _prev_adx = adx
     _prev_bollinger_width = bb_width
@@ -738,6 +738,7 @@ def _sf(val: Any, default: Optional[float] = None) -> Optional[float]:
 def _build_result(
     regime: str, confidence: str, evidence: List[str],
     adx: Optional[float], atr: Optional[float], atr_ratio: float, bb_width: float,
+    mtf_d1: Optional[str] = None, mtf_h4: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the return dict with temporal context."""
     global _last_regime, _last_regime_change_ts, _regime_history
