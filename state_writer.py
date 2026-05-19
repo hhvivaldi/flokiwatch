@@ -46,6 +46,189 @@ def _sanitize_for_json(obj):
     return obj
 
 
+def _recompute_today_pnl_from_db(now) -> float:
+    """FLO-447 — today's realized P&L from authoritative DB sources.
+
+    Sums in order of precedence:
+      1. snow_plans.outcome_usd for plans closed today (correctly
+         aggregates partial + runner OUT deals via the runtime_reconcile
+         path's value-weighted close-price computation).
+      2. trades.profit for trades closed today whose ticket is NOT
+         referenced by any snow_plans.trade_ticket (captures ghost-guard
+         closes and any other non-Snow positions).
+
+    "Today" boundary is UTC 00:00:00 — matches `_today_realized_pnl_usd`
+    in agent_tools.py used by the FLO-439 gate.
+
+    Returns 0.0 on any error; caller falls through to the bot's
+    counter as a fallback.
+    """
+    import os as _os
+    import sqlite3 as _sqlite3
+    db_path = _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)), "data", "history.db"
+    )
+    if not _os.path.exists(db_path):
+        return 0.0
+    today_iso = now.strftime("%Y-%m-%dT00:00:00")
+    total = 0.0
+    snow_tickets: set = set()
+    with _sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        # Plan-linked closes
+        cur.execute(
+            """SELECT trade_ticket, outcome_usd FROM snow_plans
+               WHERE closed_at >= ? AND outcome_usd IS NOT NULL""",
+            (today_iso,),
+        )
+        for ticket, usd in cur.fetchall():
+            try:
+                total += float(usd)
+                if ticket is not None:
+                    snow_tickets.add(int(ticket))
+            except (TypeError, ValueError):
+                continue
+        # Non-Snow closes (ghost guards, manual exits)
+        cur.execute(
+            """SELECT ticket, profit FROM trades
+               WHERE close_time >= ? AND profit IS NOT NULL""",
+            (today_iso,),
+        )
+        for ticket, profit in cur.fetchall():
+            try:
+                t = int(ticket) if ticket is not None else None
+            except (TypeError, ValueError):
+                t = None
+            if t is None or t in snow_tickets:
+                continue
+            try:
+                total += float(profit)
+            except (TypeError, ValueError):
+                continue
+    return total
+
+
+def _build_trade_history(bot_instance: Any, now) -> list:
+    """FLO-447 — return a complete list of today's closed trades.
+
+    Precedence:
+      1. snow_plans.outcome_usd is the authoritative aggregate per ticket
+         (sums partial + runner closes via value-weighted close-price
+         reconciliation). When a ticket has a snow_plans entry today,
+         use ONLY that entry and SUPPRESS any in-memory fragments for
+         the same ticket (the in-memory `closed_trades_today` is
+         monitor-side per-event and can hold a single partial fragment
+         that misleadingly looks like the whole trade's P&L).
+      2. For tickets not covered by snow_plans (ghost-guard closes,
+         non-Snow positions), use the in-memory entry; if absent, use
+         the trades.profit row directly.
+    Output sorted close_time DESC so most recent shows first.
+    """
+    import os as _os
+    import sqlite3 as _sqlite3
+
+    in_memory = list(getattr(bot_instance, "closed_trades_today", None) or [])
+
+    db_path = _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)), "data", "history.db"
+    )
+    today_iso = now.strftime("%Y-%m-%dT00:00:00")
+
+    snow_entries: list = []
+    snow_tickets: set = set()
+    trades_fallback: list = []
+
+    if _os.path.exists(db_path):
+        try:
+            with _sqlite3.connect(db_path) as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """SELECT sp.id, sp.trade_ticket, sp.outcome_usd,
+                              sp.outcome_pips, sp.closed_at,
+                              tr.direction, tr.volume, tr.open_price,
+                              tr.close_price, tr.close_reason
+                       FROM snow_plans sp
+                       LEFT JOIN trades tr ON tr.ticket = sp.trade_ticket
+                       WHERE sp.closed_at >= ? AND sp.outcome_usd IS NOT NULL""",
+                    (today_iso,),
+                )
+                for r in cur.fetchall():
+                    (plan_id, ticket, outcome_usd, outcome_pips, closed_at,
+                     direction, volume, open_price, close_price, reason) = r
+                    if ticket is None:
+                        continue
+                    snow_tickets.add(int(ticket))
+                    snow_entries.append({
+                        "ticket": int(ticket),
+                        "direction": direction,
+                        "volume": volume,
+                        "open_price": open_price,
+                        "close_price": close_price,
+                        "profit": float(outcome_usd) if outcome_usd is not None else None,
+                        "close_time": closed_at,
+                        "reason": reason,
+                        "plan_id": plan_id,
+                        "source": "snow_plans",
+                    })
+
+                cur.execute(
+                    """SELECT ticket, direction, volume, open_price, close_price,
+                              profit, close_reason, close_time
+                       FROM trades
+                       WHERE close_time >= ? AND profit IS NOT NULL""",
+                    (today_iso,),
+                )
+                for r in cur.fetchall():
+                    if r[0] is None:
+                        continue
+                    t = int(r[0])
+                    if t in snow_tickets:
+                        continue
+                    trades_fallback.append({
+                        "ticket": t,
+                        "direction": r[1],
+                        "volume": r[2],
+                        "open_price": r[3],
+                        "close_price": r[4],
+                        "profit": float(r[5]) if r[5] is not None else None,
+                        "close_time": r[7],
+                        "reason": r[6],
+                        "source": "trades",
+                    })
+        except Exception:
+            pass
+
+    # Filter the in-memory list to entries whose ticket is NOT in snow_tickets
+    # (snow_plans is authoritative for plan-linked tickets; in-memory
+    # entries for the same ticket are partial-close fragments).
+    in_memory_filtered = [
+        r for r in in_memory
+        if (lambda t: t is None or t not in snow_tickets)(
+            (lambda x: int(x) if x is not None else None)(r.get("ticket"))
+            if isinstance(r, dict) else None
+        )
+    ]
+
+    # Dedupe in_memory_filtered vs trades_fallback by (ticket, close_time)
+    seen = set()
+    for r in in_memory_filtered:
+        try:
+            seen.add((int(r.get("ticket")), str(r.get("close_time") or "")[:19]))
+        except Exception:
+            continue
+    trades_fallback_deduped = []
+    for e in trades_fallback:
+        key = (e["ticket"], str(e.get("close_time") or "")[:19])
+        if key in seen:
+            continue
+        trades_fallback_deduped.append(e)
+        seen.add(key)
+
+    combined = snow_entries + in_memory_filtered + trades_fallback_deduped
+    combined.sort(key=lambda x: str(x.get("close_time") or ""), reverse=True)
+    return combined
+
+
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
     directory = os.path.dirname(os.path.abspath(path))
     if directory:
@@ -120,7 +303,28 @@ def write_state(bot_instance: Any) -> None:
         else:
             balance_for_pct = float(getattr(config, "CAPITAL_INICIAL", 0) or 0)
 
-        pnl = float(daily_stats.get("pnl", 0.0) or 0.0)
+        # FLO-447 (2026-05-19) — recompute today's realized P&L from
+        # authoritative DB sources instead of the per-event counter the
+        # bot increments in _monitor_cycle. Two failure modes the counter
+        # missed:
+        #   (a) Snow's `close_partial` fires the partial via executor
+        #       directly; monitor_cycle never sees the action, so the
+        #       counter is never incremented for the partial.
+        #   (b) When the same ticket has multiple OUT deals (partial +
+        #       runner-close), the `UPDATE trades SET profit=?` writer
+        #       overwrites the profit on the second close rather than
+        #       accumulating, so `trades.profit` only holds whichever
+        #       close updated last.
+        # Both cases are correctly captured in snow_plans.outcome_usd
+        # via the runtime_reconcile path (sums all OUT deals VW). Sum
+        # that column for today's closed plans, plus trades.profit for
+        # today's closed non-plan-linked trades (e.g. ghost-guard
+        # closes that don't have a snow_plans row). PLAN-20260518-004
+        # surfaced this: actual P&L $+66.51 vs daily_stats.pnl $+40.59.
+        try:
+            pnl = _recompute_today_pnl_from_db(now)
+        except Exception:
+            pnl = float(daily_stats.get("pnl", 0.0) or 0.0)
         pnl_percent = (pnl / balance_for_pct * 100) if balance_for_pct else 0.0
 
         last_analysis = getattr(bot_instance, "last_analysis", None) or {}
@@ -271,7 +475,11 @@ def write_state(bot_instance: Any) -> None:
             "prev_d1_close": prev_d1_close,
             "last_analysis": last_analysis,
             "positions": positions,
-            "trade_history": getattr(bot_instance, "closed_trades_today", []) or [],
+            # FLO-447 — supplement in-memory closed_trades_today with any
+            # DB-confirmed closes today that the bot's monitor missed
+            # (Snow partials/runners + ghost-guard closes). Dedupes by
+            # close_time + ticket so reruns don't double-count.
+            "trade_history": _build_trade_history(bot_instance, now),
             "ea_bridge": _get_ea_bridge_status(),
             "ml_enabled": bool(getattr(config, "ML_ENABLED", False)),  # FLO-187
             "multi_tf_indicators": {},  # FLO-221: populated below from agent data
