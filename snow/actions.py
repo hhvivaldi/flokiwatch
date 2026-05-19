@@ -138,6 +138,12 @@ class SnowActions:
         actions = SnowActions(executor_impl=FakeExecutor())
     """
 
+    # FLO-446 (2026-05-19) — executor-side dedup against double-spawn.
+    # Tracks the monotonic timestamp of the most-recent execute_market
+    # attempt per plan_id. Used by _dispatch_execute_market to reject
+    # a second call within _DEDUP_COOLDOWN_SECS of the first.
+    _DEDUP_COOLDOWN_SECS: float = 5.0
+
     def __init__(self, executor_impl: Any = None, executor_lock_impl: Any = None):
         # Lazy-import the real executor so tests that inject a fake never
         # trigger the executor module's MT5 connect path.
@@ -148,6 +154,8 @@ class SnowActions:
         else:
             self._executor = executor_impl
             self._lock = executor_lock_impl
+        # FLO-446 — per-plan_id last-attempt monotonic ts (in-memory, lost on restart)
+        self._recent_executor_calls: dict = {}
 
     # ----- Public entry point ---------------------------------------------
     def execute_action(self, fire: FireEvent) -> ActionResult:
@@ -317,6 +325,82 @@ class SnowActions:
                     reason=f"awaiting Floki decision (opposing: {opp_summary})",
                     ticket=None,
                 )
+
+        # FLO-446 — executor-side dedup against double-spawn race.
+        # Two checks before transitioning to TRIGGERED:
+        #   (1) Already an MT5 position with comment "snow:{plan_id}"?
+        #       → reject. Plan has already filled; this is a re-fire.
+        #   (2) Was a previous execute_market for this plan_id called
+        #       within _DEDUP_COOLDOWN_SECS? → reject (cool-down).
+        # Both rejections emit EXECUTOR_DEDUP log line and return a
+        # STATUS_SKIPPED_GUARD ActionResult so the loop treats this
+        # as a no-op without marking the plan failed. The plan stays
+        # PENDING (no status transition) so future triggers can still
+        # fire if conditions remain true and the cool-down expires.
+        # GHOST_GUARD_B in executor.py is the post-flight safety net
+        # for the EA-late-arrival race; FLO-446 is the pre-flight
+        # net for any double-evaluation that would otherwise place a
+        # duplicate before MT5 sees it.
+        try:
+            _now_mono = time.monotonic()
+            _existing_ticket = None
+            try:
+                _open = self._executor.get_open_positions() or []
+                for _p in _open:
+                    _comment = str(getattr(_p, "comment", "") or "")
+                    if _comment == f"snow:{fire.plan_id}" or _comment.startswith(f"snow:{fire.plan_id}"):
+                        _existing_ticket = int(getattr(_p, "ticket", 0) or 0)
+                        break
+            except Exception:
+                _existing_ticket = None
+            _last_attempt = self._recent_executor_calls.get(fire.plan_id)
+            _within_cooldown = (
+                _last_attempt is not None
+                and (_now_mono - _last_attempt) < self._DEDUP_COOLDOWN_SECS
+            )
+            if _existing_ticket is not None or _within_cooldown:
+                _reason = (
+                    f"existing_ticket={_existing_ticket}" if _existing_ticket is not None
+                    else f"cooldown {(_now_mono - _last_attempt):.2f}s < {self._DEDUP_COOLDOWN_SECS}s"
+                )
+                log.warning(
+                    f"EXECUTOR_DEDUP | plan_id={fire.plan_id} | "
+                    f"rejected duplicate execute_market | {_reason}"
+                )
+                snow_db.record_trigger(
+                    plan_id=fire.plan_id,
+                    contingency_name="_entry",
+                    contingency_kind="entry",
+                    action_type="execute_market",
+                    execution_status=STATUS_SKIPPED_GUARD,
+                    action_params={
+                        "direction": direction,
+                        "volume": entry.volume,
+                        "sl": entry.initial_sl,
+                        "tp": entry.initial_tp,
+                        "dedup_existing_ticket": _existing_ticket,
+                        "dedup_cooldown_active": bool(_within_cooldown),
+                    },
+                    execution_result={
+                        "success": False,
+                        "error_code": "executor_dedup",
+                        "error_message": _reason,
+                    },
+                )
+                return ActionResult(
+                    status=STATUS_SKIPPED_GUARD,
+                    plan_id=fire.plan_id,
+                    action_type="execute_market",
+                    reason=f"FLO-446 executor dedup: {_reason}",
+                    ticket=_existing_ticket,
+                )
+            # Stamp this attempt's monotonic ts BEFORE the broker call so
+            # a re-entrant call sees the cool-down.
+            self._recent_executor_calls[fire.plan_id] = _now_mono
+        except Exception as _dedup_err:
+            # Fail-open on any dedup-internal error — the GHOST_GUARD_B
+            # post-flight cleanup remains the safety net.
+            log.debug(f"FLO-446 dedup check failed (non-blocking): {_dedup_err}")
 
         # Transition PENDING -> TRIGGERED BEFORE broker call (makes the
         # transient visible; loop will skip further evals while TRIGGERED).
