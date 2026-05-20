@@ -122,3 +122,47 @@ class TestListPlansByStatusVisibility:
             assert conn.isolation_level is None
         finally:
             conn.close()
+
+
+class TestListActivePlansToolVisibility:
+    """FLO-449 — the *tool* surface (AgentTools.list_active_plans), not just
+    list_plans_by_status, surfaces a pending plan in-process.
+
+    SCOPE: this locks the IN-PROCESS contract only. The production
+    `count=0` seen in 16/17 cycles under `LLM_PROVIDER=agent_sdk` is a
+    separate, documented known limitation (CLAUDE.md FLO-441/FLO-449) tied
+    to the Agent SDK subprocess runtime and is NOT reproducible in-process —
+    so this test passing does NOT mean the subprocess bug is fixed. It
+    guards against an in-process regression of the read path the tool uses.
+    """
+
+    def _make_tools(self):
+        from agent_tools import AgentTools
+
+        class _FakeBot:
+            symbol = "XAUUSD"
+            _last_agent_data = None
+            running = True
+
+        _STUB = object()
+        return AgentTools(
+            bot=_FakeBot(), executor=_STUB,
+            safety_checks_module=_STUB, risk_manager_module=_STUB,
+        )
+
+    def test_tool_reports_zero_when_empty(self, tmp_history_db):
+        t = self._make_tools()
+        out = t.list_active_plans()
+        assert out.get("success") is True
+        assert out.get("count") == 0
+
+    def test_tool_surfaces_pending_plan(self, tmp_history_db):
+        """Goal condition (FLO-449 #1b): insert a pending plan ->
+        list_active_plans returns count>=1."""
+        t = self._make_tools()
+        _insert_plan(tmp_history_db, "PLAN-TOOL-001", status="pending")
+        out = t.list_active_plans()
+        assert out.get("success") is True
+        assert out.get("count", 0) >= 1
+        ids = {p.get("plan_id") for p in out.get("plans", [])}
+        assert "PLAN-TOOL-001" in ids
