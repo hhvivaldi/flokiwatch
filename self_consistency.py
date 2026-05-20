@@ -1,8 +1,15 @@
 """FLO-443 — self-consistency voter on Floki's plan analysis.
 
-Runs N parallel Anthropic API calls (Sonnet, temperature 0.7) over a
-compact summary of Floki's analysis, asks each for a directional vote,
-and returns a consensus result.
+Runs N parallel Sonnet calls over a compact summary of Floki's analysis,
+asks each for a directional vote, and returns a consensus result.
+
+FLO-449: the votes route through the Agent SDK (claude-agent-sdk + bundled
+Claude Code CLI, subscription auth) with model claude-sonnet-4-6 — the
+SAME auth Floki's Opus planner uses, no separate ANTHROPIC_API_KEY. The
+original anthropic.Anthropic client path degraded on every call because
+the bot has no API key in env; the voter never cast a real vote. NOTE: the
+SDK does not expose a temperature knob, so vote variance comes from
+Sonnet's default sampling rather than the prior temperature=0.7.
 
 Inversion note: Sonnet voting on Opus output is structurally a variance
 reduction technique (Wang et al. — "Self-Consistency Improves Chain-of-
@@ -16,25 +23,34 @@ Env-gated. OFF by default; flip `FLO443_SELF_CONSISTENCY=on` to enable.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional
 
+# FLO-449: vote through the same Agent SDK path Floki uses (FLO-426) —
+# claude-agent-sdk + the bundled Claude Code CLI billed against the Max
+# subscription pool. NO separate ANTHROPIC_API_KEY needed. The previous
+# anthropic.Anthropic client path degraded on EVERY call (reason=
+# no_anthropic_api_key) because the bot runs on subscription auth with no
+# key in env, so the voter never cast a single real vote in production.
 try:
-    from anthropic import Anthropic
+    import claude_agent_sdk as _claude_agent_sdk  # noqa: F401
+    _SDK_AVAILABLE = True
 except Exception:  # pragma: no cover
-    Anthropic = None  # type: ignore
+    _SDK_AVAILABLE = False
 
 
-_DEFAULT_MODEL = "claude-sonnet-4-6"
+_DEFAULT_MODEL = "claude-sonnet-4-6"  # lighter than Floki's Opus; same subscription
 _N_VOTES = 5
-_TEMPERATURE = 0.7
-_MAX_TOKENS = 200  # short vote response
-_TIMEOUT_SECS = 20.0
+_MAX_TOKENS = 200  # short vote response (advisory; SDK manages output length)
+# SDK spawns a Claude Code CLI subprocess per vote — slower to start than a
+# direct HTTP call, so the budget is wider than the old direct-API 20s.
+_TIMEOUT_SECS = 45.0
 
 
 def is_enabled() -> bool:
@@ -144,20 +160,74 @@ def _parse_vote(text: str) -> Vote:
     return Vote(direction="ERROR", confidence=0, reason="parse_failed", raw=text[:500])
 
 
-def _one_vote(client, model: str, summary: str) -> Vote:
-    try:
-        msg = client.messages.create(
-            model=model,
-            max_tokens=_MAX_TOKENS,
-            temperature=_TEMPERATURE,
-            messages=[{"role": "user", "content": _VOTE_PROMPT.format(summary=summary)}],
-            timeout=_TIMEOUT_SECS,
+async def _sdk_query_text(prompt: str, model: str) -> str:
+    """One-shot text query through the Agent SDK (subscription auth).
+
+    Mirrors the FLO-426 Floki path: bundled Claude Code CLI billed against
+    the Max subscription pool. `env={"ANTHROPIC_API_KEY": ""}` forces
+    subscription auth even if a key leaks into the parent env;
+    `setting_sources=[]` strips Claude Code's project scaffolding so the
+    voter is a clean LLM call (no MCP tools, no filesystem context).
+    """
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ClaudeAgentOptions,
+        ClaudeSDKClient,
+        TextBlock,
+    )
+
+    options = ClaudeAgentOptions(
+        model=model,
+        setting_sources=[],
+        env={"ANTHROPIC_API_KEY": ""},
+        max_turns=1,
+    )
+    parts: List[str] = []
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        async for msg in client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for b in msg.content:
+                    if isinstance(b, TextBlock):
+                        parts.append(b.text)
+    return "".join(parts)
+
+
+def _run_votes(model: str, summary: str, n: int) -> List[Vote]:
+    """Run `n` votes concurrently in ONE dedicated event loop.
+
+    MUST be invoked from a worker thread (never the SDK's event-loop
+    thread): `submit_plan_to_snow` runs inside the FLO-426 SDK event loop
+    (tools are dispatched there, see floki_agent_sdk_path._wrapped), so
+    `run_until_complete` cannot be called on that thread. A fresh worker
+    thread has no running loop. On Windows the default policy hands back a
+    Proactor loop (subprocess-capable) — required for the CLI spawn.
+    """
+    prompt = _VOTE_PROMPT.format(summary=summary)
+
+    async def _gather():
+        return await asyncio.gather(
+            *[_sdk_query_text(prompt, model) for _ in range(n)],
+            return_exceptions=True,
         )
-        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        return _parse_vote(text)
-    except Exception as e:
-        return Vote(direction="ERROR", confidence=0,
-                    reason=f"api_error: {type(e).__name__}", raw=str(e)[:200])
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        raw = loop.run_until_complete(_gather())
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+    votes: List[Vote] = []
+    for r in raw:
+        if isinstance(r, BaseException):
+            votes.append(Vote(direction="ERROR", confidence=0,
+                              reason=f"sdk_error: {type(r).__name__}",
+                              raw=str(r)[:200]))
+        else:
+            votes.append(_parse_vote(r))
+    return votes
 
 
 def vote_on_plan(plan_dict: Dict[str, Any], *, model: Optional[str] = None,
@@ -178,41 +248,34 @@ def vote_on_plan(plan_dict: Dict[str, Any], *, model: Optional[str] = None,
     except Exception:
         plan_conf = 0
 
-    if Anthropic is None:
+    if not _SDK_AVAILABLE:
         return ConsensusResult(
             consensus=plan_direction or "NO_TRADE",
             confidence_pct=plan_conf,
             votes=[], plan_direction=plan_direction, plan_confidence=plan_conf,
             agreed_with_plan=True,
             elapsed_ms=int((time.time() - t0) * 1000),
-            degraded=True, degraded_reason="anthropic_sdk_unavailable",
+            degraded=True, degraded_reason="agent_sdk_unavailable",
         )
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return ConsensusResult(
-            consensus=plan_direction or "NO_TRADE",
-            confidence_pct=plan_conf,
-            votes=[], plan_direction=plan_direction, plan_confidence=plan_conf,
-            agreed_with_plan=True,
-            elapsed_ms=int((time.time() - t0) * 1000),
-            degraded=True, degraded_reason="no_anthropic_api_key",
-        )
-
-    client = Anthropic(api_key=api_key)
     mdl = model or _DEFAULT_MODEL
     summary = _build_summary(plan_dict)
 
+    # vote_on_plan runs inside the SDK event-loop thread (FLO-426 tool
+    # dispatch); offload the 5-way concurrent SDK run to ONE worker thread
+    # so its event loop is independent of the planner's loop.
     votes: List[Vote] = []
-    with ThreadPoolExecutor(max_workers=n_votes) as ex:
-        futs = [ex.submit(_one_vote, client, mdl, summary) for _ in range(n_votes)]
-        for f in as_completed(futs, timeout=_TIMEOUT_SECS + 5):
-            try:
-                votes.append(f.result(timeout=_TIMEOUT_SECS))
-            except Exception as ex_err:
-                votes.append(Vote(direction="ERROR", confidence=0,
-                                  reason=f"future_error: {type(ex_err).__name__}",
-                                  raw=str(ex_err)[:200]))
+    try:
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_run_votes, mdl, summary, n_votes)
+            votes = fut.result(timeout=_TIMEOUT_SECS + 15)
+    except Exception as ex_err:
+        votes = [
+            Vote(direction="ERROR", confidence=0,
+                 reason=f"vote_runner_error: {type(ex_err).__name__}",
+                 raw=str(ex_err)[:200])
+            for _ in range(n_votes)
+        ]
 
     # Tally
     counts: Dict[str, int] = {}
