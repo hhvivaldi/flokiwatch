@@ -452,6 +452,40 @@ def get_active_plans() -> list[dict[str, Any]]:
     return list_plans_by_status(_LIVE_PLAN_STATUSES, limit=10_000)
 
 
+def get_active_plans_read_only() -> list[dict[str, Any]]:
+    """FLO-449 — explicit read-only accessor for AgentTools.list_active_plans.
+
+    Same result as get_active_plans(), but the body opens
+    `_connect_read_only()` DIRECTLY so the tool's read path visibly routes
+    through the FLO-441 autocommit connection (no implicit-read-txn
+    snapshot, never a writer/cached connection). Behaviour is identical
+    in-process — get_active_plans() already routes through
+    `_connect_read_only()` via list_plans_by_status; this names the
+    read-only contract at the tool boundary the FLO-449 review flagged.
+
+    KNOWN LIMITATION: this does NOT address the production count=0 seen in
+    16/17 cycles under LLM_PROVIDER=agent_sdk. That failure is tied to the
+    Agent SDK subprocess runtime and is NOT reproducible in-process (same
+    conclusion FLO-441 reached) — separate deep-dive ticket. It is masked
+    operationally by the FLO-428 active-plan cap + Floki's session memory.
+    """
+    conn = _connect_read_only()
+    try:
+        placeholders = ",".join("?" for _ in _LIVE_PLAN_STATUSES)
+        rows = conn.execute(
+            f"""
+            SELECT * FROM snow_plans
+             WHERE status IN ({placeholders})
+             ORDER BY created_at DESC
+             LIMIT ?
+            """,
+            (*_LIVE_PLAN_STATUSES, 10_000),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def update_plan_status(plan_id: str, new_status: str) -> None:
     """Transition a plan's status column. Does NOT record a trigger —
     callers that also need an audit row should use

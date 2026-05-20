@@ -5976,7 +5976,14 @@ class AgentTools:
             return {"success": False, "reason": f"snow import failed: {e}"}
 
         try:
-            rows = _snow_db.get_active_plans()
+            # FLO-449: route the tool read explicitly through snow.db's
+            # read-only (autocommit) connection helper — never a writer/
+            # cached connection. Behaviourally identical to
+            # get_active_plans() (which already uses _connect_read_only via
+            # list_plans_by_status); the dedicated accessor makes the
+            # read-only contract visible at the tool boundary. Does NOT fix
+            # the agent_sdk-subprocess staleness — see snow.db docstring.
+            rows = _snow_db.get_active_plans_read_only()
             if ticket is not None:
                 try:
                     t = int(ticket)
