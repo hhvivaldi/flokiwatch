@@ -5327,6 +5327,22 @@ class AgentTools:
                 except Exception:
                     _author_regime = None
 
+                # FLO-452 wiring fix: _last_regime_context intermittently lacks
+                # d1_trend_score (a cycle's build returned None at that moment),
+                # which DEGRADED the gate on every real plan today. Fall back to
+                # the score state_writer persisted to bot_state.json — the same
+                # cheap-read pattern as _build_specialist_context's multi_tf read.
+                if _author_d1_trend is None:
+                    try:
+                        _bs_path = os.path.join(
+                            os.path.dirname(os.path.abspath(__file__)),
+                            "data", "bot_state.json",
+                        )
+                        with open(_bs_path, "r", encoding="utf-8") as _bsf:
+                            _author_d1_trend = json.load(_bsf).get("d1_trend_score")
+                    except Exception:
+                        _author_d1_trend = None
+
                 # FLO-436 — pull last calendar snapshot for news-blackout gate.
                 _author_calendar: Optional[list] = None
                 try:

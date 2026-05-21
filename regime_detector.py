@@ -993,16 +993,24 @@ def _d1_adx(df, period=14):
         return None, None, None
 
 
+_LAST_D1_TREND_SCORE = None  # FLO-452 wiring fix: cache last good score so an
+                             # intermittent MT5 None doesn't blank the gate.
+
+
 def build_d1_trend_score():
     """FLO-452 - assemble factor inputs from live D1 candles and return the
-    score dict. Fail-soft -> None on MT5/compute error (gate fails open)."""
+    score dict. On an intermittent MT5/compute failure, returns the LAST GOOD
+    cached score (FLO-452 wiring fix) instead of None, so the D1_TREND_GATE
+    doesn't degrade just because one cycle's D1 fetch hiccuped. Returns None
+    only if no score has ever been computed this process."""
+    global _LAST_D1_TREND_SCORE
     try:
         import pandas as pd
         from mt5_safe import mt5, mt5_lock
         with mt5_lock:
             rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_D1, 0, 250)
         if rates is None or len(rates) < 60:
-            return None
+            return _LAST_D1_TREND_SCORE
         df = pd.DataFrame(rates)
         ema50_s = df["close"].ewm(span=50, adjust=False).mean()
         ema200_s = df["close"].ewm(span=200, adjust=False).mean()
@@ -1035,7 +1043,8 @@ def build_d1_trend_score():
             "bars_below_ema50": bars_below, "bars_above_ema50": bars_above,
             "ema50_slope": slope, "swing": swing,
         }
-        return compute_d1_trend_score(d1)
+        _LAST_D1_TREND_SCORE = compute_d1_trend_score(d1)
+        return _LAST_D1_TREND_SCORE
     except Exception as e:
         log.warning(f"D1_TREND_SCORE build failed: {type(e).__name__}: {e}")
-        return None
+        return _LAST_D1_TREND_SCORE
