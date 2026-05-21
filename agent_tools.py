@@ -89,6 +89,21 @@ def _maybe_persist_author_regime_snapshot(parsed_plan) -> None:
             stage="author",
         )
 
+        # ---- FLO-451: attach author-time multi_tf_indicators ----
+        # The breakout snapshot above captures volatility-regime fields but NOT
+        # the D1/H4 EMA stack. Snapshot the current multi-TF indicator state so
+        # the Technical specialist voter can be retro-validated on this plan
+        # later (faithful point-in-time HTF structure). Cheap read from
+        # bot_state.json (the Brain's latest write); fail-soft -> None.
+        try:
+            _bs = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json"
+            )
+            with open(_bs, "r", encoding="utf-8") as _f:
+                snapshot["multi_tf_indicators"] = json.load(_f).get("multi_tf_indicators")
+        except Exception:
+            snapshot["multi_tf_indicators"] = None
+
         # ---- Persist via UPDATE ----
         _flo422_persist_snapshot(plan_id, snapshot)
 
