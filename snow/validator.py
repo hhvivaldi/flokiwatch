@@ -1985,6 +1985,93 @@ _D1_GATE_THRESHOLD = 55  # FLO-452 (CEO-calibrated 2026-05-21 from the counterfa
                          # score rises >70 naturally and the gate self-tightens.
 
 
+# FLO-453 — setup-type vs regime (H1 ADX) compatibility. continuation/breakout
+# need real momentum (ADX>=22 & rising); range/bounce/mean-reversion need a
+# calm/low-ADX tape. Empirical: PLAN-003 (continuation_momentum, ADX 20 RANGING)
+# lost -$48 because there was no momentum to continue. ADX is gold-H1 (rarely
+# >30). Setups not in the matrix have no rule (allowed).
+SETUP_REGIME_MATRIX: dict[str, dict[str, Any]] = {
+    "continuation_momentum":  {"min_adx": 22, "max_adx": 50, "require_adx_rising": True},
+    "breakout_range":         {"min_adx": 22, "max_adx": 50, "require_adx_rising": False},
+    "session_open_break":     {"min_adx": 22, "max_adx": 50, "require_adx_rising": False},
+    "session_overlap":        {"min_adx": 22, "max_adx": 50, "require_adx_rising": False},
+    # max raised 40->60 from the FLO-453 counterfactual: the two winning pullbacks
+    # (PLAN-004 ADX 43, PLAN-019 ADX 42) sit ABOVE 40 — strong trends are where
+    # pullback entries WIN, so a 40 cap false-rejected the best trades.
+    "pullback_trend":         {"min_adx": 18, "max_adx": 60, "require_adx_rising": False},
+    "structural_bounce":      {"min_adx": None, "max_adx": 25, "require_adx_rising": False},
+    "mean_reversion_extreme": {"min_adx": None, "max_adx": 20, "require_adx_rising": False},
+    "range_tight":            {"min_adx": None, "max_adx": 22, "require_adx_rising": False},
+    "range_wide":             {"min_adx": None, "max_adx": 22, "require_adx_rising": False},
+    "session_thin":           {"min_adx": None, "max_adx": 22, "require_adx_rising": False},
+}
+# FLO-453 — these momentum/expansion setups MUST carry a structural-invalidation
+# exit (price_above for SELL / price_below for BUY) so a reclaimed breakout closes
+# instead of bleeding to SL (PLAN-003 had none → -$48).
+_THESIS_BREAK_SETUPS = ("continuation_momentum", "breakout_range", "session_open_break")
+
+
+def _check_setup_regime_gate(
+    plan: Plan,
+    author_setup_ctx: Optional[dict[str, Any]],
+) -> list[str]:
+    """FLO-453 — reject a plan whose setup_type is incompatible with the live H1
+    ADX (and slope). Fail-open: missing ctx/ADX -> [] + DEGRADED log. setup_type
+    is self-reported by Floki (gameable — he could relabel to dodge); the Stage-2
+    prompt menu is the upstream mitigation."""
+    from logger import log as _log
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    setup = getattr(getattr(plan, "analysis", None), "setup_type", None)
+    rule = SETUP_REGIME_MATRIX.get(setup)
+    if rule is None:
+        return []
+    if not author_setup_ctx or author_setup_ctx.get("adx") is None:
+        _log.warning(f"SETUP_REGIME_GATE_DEGRADED | plan={plan_id} | setup={setup} | "
+                     f"no H1 ADX ctx | gate skipped (FLO-453)")
+        return []
+    adx = float(author_setup_ctx.get("adx"))
+    rising = bool(author_setup_ctx.get("adx_rising"))
+    reasons = []
+    if rule["min_adx"] is not None and adx < rule["min_adx"]:
+        reasons.append(f"ADX {adx:.1f} < min {rule['min_adx']}")
+    if rule["max_adx"] is not None and adx > rule["max_adx"]:
+        reasons.append(f"ADX {adx:.1f} > max {rule['max_adx']}")
+    if rule["require_adx_rising"] and not rising:
+        reasons.append("ADX not rising")
+    decision = "REJECT" if reasons else "ALLOW"
+    _log.info(f"SETUP_REGIME_GATE | plan={plan_id} | setup={setup} | adx={adx:.1f} | "
+              f"adx_rising={rising} | required_min={rule['min_adx']} | decision={decision}")
+    if reasons:
+        return [f"setup_regime_gate: setup_type '{setup}' is incompatible with the live "
+                f"H1 ADX ({'; '.join(reasons)}). Pick a setup whose ADX window fits this "
+                f"regime, or WAIT. (FLO-453)"]
+    return []
+
+
+def _check_thesis_break_exit(plan: Plan) -> list[str]:
+    """FLO-453 — momentum/breakout plans must carry a structural-invalidation exit
+    (price_above for SELL / price_below for BUY) somewhere in management/exit, so a
+    reclaimed level closes the trade instead of riding to SL."""
+    from logger import log as _log
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    setup = getattr(getattr(plan, "analysis", None), "setup_type", None)
+    if setup not in _THESIS_BREAK_SETUPS:
+        return []
+    direction = getattr(getattr(plan, "entry", None), "direction", None)
+    need = "price_above" if direction == "SELL" else "price_below"
+    for block in (plan.management, plan.exit):
+        for cont in (block or []):
+            for cond in (getattr(cont, "conditions", None) or []):
+                if getattr(cond, "type", None) == need:
+                    return []
+    _log.info(f"THESIS_BREAK_MISSING | plan={plan_id} | setup={setup} | "
+              f"direction={direction} | need={need} | decision=REJECT")
+    return [f"thesis_break: a {setup} {direction} plan MUST include a structural "
+            f"invalidation exit ({need} at the broken level + ATR buffer) in "
+            f"management/exit, so a reclaimed breakout closes the trade rather than "
+            f"bleeding to SL. (FLO-453)"]
+
+
 def _check_d1_trend_gate(
     plan: Plan,
     author_d1_trend: Optional[dict[str, Any]],
@@ -2069,6 +2156,7 @@ def validate_plan(
     author_calendar: Optional[list[dict[str, Any]]] = None,
     author_account: Optional[dict[str, Any]] = None,
     author_d1_trend: Optional[dict[str, Any]] = None,
+    author_setup_ctx: Optional[dict[str, Any]] = None,
 ) -> tuple[bool, Optional[Plan], list[str]]:
     """Validate a submitted plan dict.
 
@@ -2128,6 +2216,8 @@ def validate_plan(
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
     errors += _check_d1_trend_gate(plan, author_d1_trend)
+    errors += _check_setup_regime_gate(plan, author_setup_ctx)
+    errors += _check_thesis_break_exit(plan)
     errors += _check_give_back_calibration(plan, author_regime)
     errors += _check_sl_buffer_from_structure(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)

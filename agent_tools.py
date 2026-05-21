@@ -5343,6 +5343,29 @@ class AgentTools:
                     except Exception:
                         _author_d1_trend = None
 
+                # FLO-453 — H1 ADX + slope for the setup-regime matrix gate.
+                # Cheap read from bot_state.json multi_tf_indicators.H1.
+                _author_setup_ctx: Optional[Dict[str, Any]] = None
+                try:
+                    _bs_path2 = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)),
+                        "data", "bot_state.json",
+                    )
+                    with open(_bs_path2, "r", encoding="utf-8") as _bsf2:
+                        _h1 = (json.load(_bsf2).get("multi_tf_indicators") or {}).get("H1") or {}
+                    _adx_obj = _h1.get("adx")
+                    _adx_val = _adx_obj.get("value") if isinstance(_adx_obj, dict) else _adx_obj
+                    # rising: prefer 4-bar change sign, fall back to direction label.
+                    _chg = _h1.get("adx_change_4bars")
+                    if isinstance(_chg, (int, float)):
+                        _rising = _chg > 0
+                    else:
+                        _rising = str(_h1.get("adx_direction", "")).lower() in ("rising", "up", "increasing")
+                    if _adx_val is not None:
+                        _author_setup_ctx = {"adx": _adx_val, "adx_rising": _rising}
+                except Exception:
+                    _author_setup_ctx = None
+
                 # FLO-436 — pull last calendar snapshot for news-blackout gate.
                 _author_calendar: Optional[list] = None
                 try:
@@ -5432,6 +5455,7 @@ class AgentTools:
                     author_calendar=_author_calendar,
                     author_account=_author_account,
                     author_d1_trend=_author_d1_trend,
+                    author_setup_ctx=_author_setup_ctx,
                 )
                 if not ok:
                     self._log_fail(
