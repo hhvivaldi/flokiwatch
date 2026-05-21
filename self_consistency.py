@@ -359,9 +359,13 @@ def vote_on_plan(plan_dict: Dict[str, Any], *, model: Optional[str] = None,
 
 _VOTER_MODE_ENV = "FLO451_VOTER_MODE"
 _VALID_MODES = ("shadow", "confidence", "block")
-_SPECIALIST_TIMEOUT_SECS = 45.0
-_DEVIL_TIMEOUT_SECS = 30.0
-_ORCHESTRATION_TIMEOUT_SECS = 120.0
+# FLO-451 live-run tuning (2026-05-21): web-searching voters need room for the
+# search round-trip + reasoning. First live run timed out MACRO (was 45s) and
+# DEVIL (was 30s) while NEWS/SENTIMENT finished ~45s. Bumped so a web voter can
+# complete a couple of searches before ABSTAIN-on-timeout.
+_SPECIALIST_TIMEOUT_SECS = 75.0
+_DEVIL_TIMEOUT_SECS = 60.0
+_ORCHESTRATION_TIMEOUT_SECS = 180.0
 
 _NEWS_DOMAINS = "reuters.com, apnews.com, cnbc.com, kitco.com, fxstreet.com"
 _MACRO_DOMAINS = "fred.stlouisfed.org, tradingeconomics.com, cnbc.com"
@@ -391,6 +395,7 @@ class SpecialistVote:
     reasoning: str
     evidence: List[Dict[str, str]]
     raw: str
+    timed_out: bool = False   # FLO-451: distinguishes timeout from NO_DATA abstain
 
 
 @dataclass
@@ -507,6 +512,24 @@ def _build_specialist_specs(as_of_iso: str) -> List[SpecialistSpec]:
     ]
 
 
+def _compact_htf(mtf: Any) -> str:
+    """FLO-451 — serialize multi-TF indicators HTF-FIRST so the Technical voter
+    always sees D1/H4/H1 (the live-run bug: a flat str()[:1500] truncated after
+    M1/M5 and starved the flagship voter of higher-timeframe EMAs)."""
+    try:
+        ind = (mtf or {}).get("multi_tf_indicators") or {}
+        reg = (mtf or {}).get("market_regime")
+        lines: List[str] = []
+        if reg:
+            lines.append(f"market_regime: {json.dumps(reg, default=str)[:300]}")
+        for tf in ("D1", "H4", "H1", "M30", "M15", "M5", "M1"):
+            if isinstance(ind, dict) and tf in ind:
+                lines.append(f"{tf}: {json.dumps(ind[tf], default=str)[:450]}")
+        return "\n".join(lines)[:3500] if lines else str(mtf)[:2000]
+    except Exception:
+        return str(mtf)[:2000]
+
+
 def _build_specialist_user_msg(summary: str, context: Optional[Dict[str, Any]],
                                as_of_iso: str) -> str:
     ctx = context or {}
@@ -515,8 +538,8 @@ def _build_specialist_user_msg(summary: str, context: Optional[Dict[str, Any]],
         parts.append(f"Current XAU/USD price: {ctx.get('price')}")
     parts += ["", "PLAN UNDER REVIEW:", summary, ""]
     if ctx.get("multi_tf"):
-        parts += ["MULTI-TIMEFRAME INDICATORS (for the TECHNICAL voter):",
-                  str(ctx.get("multi_tf"))[:1500], ""]
+        parts += ["MULTI-TIMEFRAME INDICATORS (for the TECHNICAL voter — HTF first):",
+                  _compact_htf(ctx.get("multi_tf")), ""]
     if ctx.get("dxy"):
         parts += ["DXY / MACRO (for the MACRO voter):", str(ctx.get("dxy"))[:800], ""]
     if ctx.get("luna"):
@@ -597,7 +620,7 @@ async def _run_specialist(spec: SpecialistSpec, user_msg: str, model: str) -> Sp
         )
         return _parse_specialist(spec.name, text)
     except asyncio.TimeoutError:
-        return SpecialistVote(spec.name, "ABSTAIN", 0, "timeout", [], "")
+        return SpecialistVote(spec.name, "ABSTAIN", 0, "timeout", [], "", timed_out=True)
     except Exception as e:  # pragma: no cover - SDK/runtime errors
         return SpecialistVote(spec.name, "ABSTAIN", 0, f"error: {type(e).__name__}", [], str(e)[:200])
 
@@ -637,11 +660,17 @@ def _aggregate_specialists(votes: List[SpecialistVote], plan_conf: int):
     else NO_MAJORITY_PROCEED (confidence x0.8). 3+ ABSTAIN -> SKIPPED."""
     approve = sum(1 for v in votes if v.vote == "APPROVE")
     reject = sum(1 for v in votes if v.vote == "REJECT")
-    abstain = sum(1 for v in votes if v.vote == "ABSTAIN")
+    timeouts = sum(1 for v in votes if getattr(v, "timed_out", False))
     active = [v for v in votes if v.vote in ("APPROVE", "REJECT")]
 
-    if abstain >= 3 or not active:
-        return "SKIPPED", False, plan_conf, True, f"too_many_abstain ({abstain})"
+    # Per spec (condition 7): 3+ TIMEOUTS skip voting. A NO_DATA / freshness
+    # ABSTAIN is a legitimate "no opinion" — it must NOT force a skip; the
+    # remaining active voters carry the verdict. (Live-run finding: lumping
+    # freshness-abstain with timeout made the ensemble SKIP whenever the web
+    # voters found no same-day sources, which is most of the time.)
+    if timeouts >= 3 or not active:
+        reason = f"too_many_timeouts ({timeouts})" if timeouts >= 3 else "no_active_voters"
+        return "SKIPPED", False, plan_conf, True, reason
 
     avg_active = sum(v.confidence for v in active) / len(active)  # 1-10
     avg_pct = int(round(avg_active * 10))                          # -> 0-100

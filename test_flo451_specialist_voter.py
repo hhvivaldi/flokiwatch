@@ -34,12 +34,22 @@ def test_aggregation():
          V("SENTIMENT", "REJECT", 8), V("DEVIL", "ABSTAIN", 0)], plan_conf=90)
     assert r == "NO_MAJORITY_PROCEED" and block is False, (r, block)
     assert conf == min(90, int(round(8 * 10 * 0.8))), conf   # avg active 8 -> 80 -> *0.8 = 64
-    # 3+ ABSTAIN -> SKIPPED, degraded, original conf preserved
+    # 3+ TIMEOUTS -> SKIPPED (condition 7), original conf preserved
+    def Vt(name):  # timed-out abstain
+        return SpecialistVote(name, "ABSTAIN", 0, "timeout", [], "", timed_out=True)
+    def Va(name):  # no-data / freshness abstain (NOT a timeout)
+        return SpecialistVote(name, "ABSTAIN", 0, "no_data", [], "")
     r, block, conf, deg, reason = _aggregate_specialists(
-        [V("NEWS", "ABSTAIN", 0), V("MACRO", "ABSTAIN", 0), V("TECHNICAL", "ABSTAIN", 0),
-         V("SENTIMENT", "APPROVE", 8), V("DEVIL", "REJECT", 5)], plan_conf=76)
-    assert r == "SKIPPED" and deg is True and conf == 76, (r, deg, conf)
-    print("PASS test_aggregation (APPROVE / REJECT+block / NO_MAJORITY x0.8 / SKIPPED)")
+        [Vt("NEWS"), Vt("MACRO"), Vt("DEVIL"), V("TECHNICAL", "REJECT", 6),
+         V("SENTIMENT", "APPROVE", 7)], plan_conf=76)
+    assert r == "SKIPPED" and deg is True and conf == 76 and "timeout" in reason, (r, deg, conf, reason)
+    # 3 freshness ABSTAINs (NOT timeouts) + 2 active REJECT -> NOT skipped; the
+    # active voters carry it (2 REJECT < 3, so NO_MAJORITY_PROCEED).
+    r, block, conf, deg, reason = _aggregate_specialists(
+        [Va("NEWS"), Va("SENTIMENT"), Va("DEVIL"), V("TECHNICAL", "REJECT", 7),
+         V("MACRO", "REJECT", 8)], plan_conf=76)
+    assert r == "NO_MAJORITY_PROCEED" and deg is False, (r, deg, reason)
+    print("PASS test_aggregation (APPROVE / REJECT+block / NO_MAJORITY x0.8 / 3-TIMEOUT skip / freshness-abstain no-skip)")
 
 
 def test_timeout_returns_abstain():
