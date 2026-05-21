@@ -5368,7 +5368,9 @@ class AgentTools:
                                 f"{candidate.get('id', '?')} "
                                 f"plan_dir={_vote.plan_direction} "
                                 f"consensus={_vote.consensus} "
-                                f"confidence_pct={_vote.confidence_pct} "
+                                f"vote_share={_vote.vote_share_pct} "
+                                f"applied_confidence={_vote.confidence_pct} "
+                                f"plan_conf={_vote.plan_confidence} "
                                 f"votes=[{_vote_summary}] "
                                 f"elapsed_ms={_vote.elapsed_ms}"
                             )

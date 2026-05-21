@@ -70,7 +70,7 @@ class Vote:
 @dataclass
 class ConsensusResult:
     consensus: str   # "BUY" / "SELL" / "NO_TRADE" / "DISAGREE"
-    confidence_pct: int  # 0-100; share of votes for the winning side
+    confidence_pct: int  # FLO-450: APPLIED confidence = min(planner conf, vote share)
     votes: List[Vote]
     plan_direction: str
     plan_confidence: int
@@ -78,6 +78,7 @@ class ConsensusResult:
     elapsed_ms: int
     degraded: bool
     degraded_reason: Optional[str] = None
+    vote_share_pct: int = 0  # FLO-450: raw % of votes for winner (pre-cap, for logs)
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -230,6 +231,22 @@ def _run_votes(model: str, summary: str, n: int) -> List[Vote]:
     return votes
 
 
+def _cap_confidence(plan_conf: int, vote_share_pct: int) -> int:
+    """FLO-450 — the voter may CONFIRM or LOWER the planner's confidence, never
+    inflate it above the planner's own number. Returns min(plan_conf,
+    vote_share_pct). If the planner's confidence is missing/invalid (<= 0),
+    fall back to the raw vote share (nothing valid to cap against).
+
+    Motivation: 4 consecutive plans (two SELL, two BUY, different regimes) were
+    stamped confidence=100 by unanimous 5/5 votes regardless of the planner's
+    own 75-78 self-assessment — the mutation had stopped discriminating and
+    inflated every plan to the ceiling.
+    """
+    if plan_conf and plan_conf > 0:
+        return min(plan_conf, vote_share_pct)
+    return vote_share_pct
+
+
 def vote_on_plan(plan_dict: Dict[str, Any], *, model: Optional[str] = None,
                  n_votes: int = _N_VOTES) -> ConsensusResult:
     """Run N parallel votes and return a ConsensusResult.
@@ -304,11 +321,15 @@ def vote_on_plan(plan_dict: Dict[str, Any], *, model: Optional[str] = None,
     # (i.e. it's tied 2-2 with NO_TRADE as the 5th, etc.), call it
     # DISAGREE so the caller can reject the plan.
     consensus_label = win_direction if win_count > valid_votes / 2 else "DISAGREE"
-    confidence_pct = int(round(win_count / n_votes * 100))
+    vote_share_pct = int(round(win_count / n_votes * 100))
+    # FLO-450: cap the applied confidence at the planner's own number — the
+    # voter confirms or lowers, never inflates. (See _cap_confidence.)
+    applied_confidence = _cap_confidence(plan_conf, vote_share_pct)
 
     return ConsensusResult(
         consensus=consensus_label,
-        confidence_pct=confidence_pct,
+        confidence_pct=applied_confidence,
+        vote_share_pct=vote_share_pct,
         votes=votes,
         plan_direction=plan_direction,
         plan_confidence=plan_conf,

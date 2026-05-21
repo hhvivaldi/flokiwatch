@@ -327,6 +327,14 @@ MINIMAL PLAN EXAMPLE:
   "expires_at": "2026-04-24T12:00:00Z"
 }
 
+PULLBACK ENTRY GEOMETRY (FLO-450) — MANDATORY for pullback setups. For PULLBACK entries (setup_type `pullback_trend` or `structural_bounce`) you MUST use a TWO-STEP latch pattern, never a single `price_above` floor:
+  1. {"type": "price_crossed_level", "direction": "below", "level": <pullback_target>}  — wait for the pullback to actually ARRIVE
+  2. {"type": "price_above", "level": <reclaim_level>}  — enter on the reclaim/bounce
+A bare `price_above` is a FLOOR: it is already true at ANY price above the level, so it fires at the TOP of the move — before the pullback happens — and you fill 6-10 USD above the zone your thesis describes (empirically: PLAN-20260520-006 filled +6 USD, PLAN-20260521-001 filled +10 USD, both opened underwater). The `price_crossed_level below` latch persists once price dips through the level, so the latch (step 1) and the reclaim (step 2) go all-true TOGETHER when price comes back up through your reclaim level — that combined moment is the entry, and it only happens AFTER the pullback prints.
+  GOOD (BUY pullback to 4530): `price_crossed_level below 4528` + `price_above 4532`
+  BAD  (BUY pullback to 4530): `price_above 4529`   ← fills at 4540 before the pullback ever arrives
+Mirror for SELL pullbacks: `price_crossed_level above <bounce_target>` + `price_below <rejection_level>`. Add oscillator/volume confluence as extra conditions, but the two-step price geometry is the non-negotiable core for any pullback entry.
+
 ENTRY-CONDITION VOCABULARY EXAMPLES (FLO-395) — eight worked shapes covering the analytical surface beyond the rsi+price_above pattern. Pick the shape that matches what your chart-reading actually surfaced; resist the default of dropping every thesis to rsi numerics. Each example shows a complete `entry.conditions` list ready to paste — adjust thresholds and timeframes to your read, but the structural shape is correct.
 
 (1) BOLLINGER SQUEEZE BREAKOUT — volatility expansion thesis. Use when BB width has compressed and price is breaking the upper band:
