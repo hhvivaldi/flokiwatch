@@ -5351,71 +5351,45 @@ class AgentTools:
                 try:
                     import self_consistency as _sc
                     if _sc.is_enabled():
-                        _vote = _sc.vote_on_plan(candidate)
-                        if _vote.degraded:
-                            log.warning(
-                                f"SELF_CONSISTENCY_DEGRADED | plan_id="
-                                f"{candidate.get('id', '?')} reason="
-                                f"{_vote.degraded_reason} elapsed_ms="
-                                f"{_vote.elapsed_ms} | gate inactive (FLO-443)"
-                            )
-                        else:
-                            _vote_summary = " ".join(
-                                f"{v.direction}:{v.confidence}" for v in _vote.votes
-                            )
-                            log.info(
-                                f"SELF_CONSISTENCY | plan_id="
-                                f"{candidate.get('id', '?')} "
-                                f"plan_dir={_vote.plan_direction} "
-                                f"consensus={_vote.consensus} "
-                                f"vote_share={_vote.vote_share_pct} "
-                                f"applied_confidence={_vote.confidence_pct} "
-                                f"plan_conf={_vote.plan_confidence} "
-                                f"votes=[{_vote_summary}] "
-                                f"elapsed_ms={_vote.elapsed_ms}"
-                            )
-                            if _vote.consensus == "DISAGREE":
+                        # FLO-451: 5-specialist voter (News, Macro, HTF Technical,
+                        # Sentiment, Devil's Advocate) replaces the FLO-443/450 uniform
+                        # ensemble. Behaviour gated by FLO451_VOTER_MODE
+                        # (shadow|confidence|block, default shadow). run_specialist_vote
+                        # emits the SPECIALIST_VOTE[_SHADOW] log line itself and is
+                        # fail-soft (SKIPPED/degraded on SDK/timeout/3+ABSTAIN).
+                        _mode = _sc.voter_mode()
+                        _ctx = self._build_specialist_context(candidate)
+                        _sv = _sc.run_specialist_vote(candidate, context=_ctx, mode=_mode)
+                        if not _sv.degraded:
+                            # block mode + 3+ REJECT -> reject the submission.
+                            if _mode == "block" and _sv.would_block:
+                                _vs = " ".join(
+                                    f"{v.name}:{v.vote}:{v.confidence}" for v in _sv.votes
+                                )
                                 self._log_fail(
                                     "submit_plan_to_snow", start,
-                                    "self_consistency_disagree",
+                                    f"specialist_block result={_sv.result}",
                                 )
                                 return {
                                     "success": False, "plan_id": None,
                                     "validation_errors": [
-                                        f"self_consistency: 5-vote ensemble could "
-                                        f"not reach consensus (votes={_vote_summary}). "
-                                        f"FLO-443: when the voter ensemble splits "
-                                        f"≤50%, the analysis is ambiguous and the "
-                                        f"plan is rejected. Re-check your thesis "
-                                        f"or WAIT."
+                                        f"specialist_vote: 3+ specialists REJECT this "
+                                        f"plan (votes=[{_vs}]). FLO-451 block mode: "
+                                        f"reauthor against the objections or WAIT."
                                     ],
                                 }
-                            if not _vote.agreed_with_plan and _vote.consensus in ("BUY", "SELL", "NO_TRADE"):
-                                self._log_fail(
-                                    "submit_plan_to_snow", start,
-                                    f"self_consistency_contradicts plan={_vote.plan_direction} consensus={_vote.consensus}",
-                                )
-                                return {
-                                    "success": False, "plan_id": None,
-                                    "validation_errors": [
-                                        f"self_consistency: plan direction "
-                                        f"{_vote.plan_direction} contradicts the "
-                                        f"5-vote ensemble consensus {_vote.consensus} "
-                                        f"(votes={_vote_summary}). FLO-443: rejected "
-                                        f"because the analysis you wrote, read back, "
-                                        f"does not actually support the direction "
-                                        f"you chose."
-                                    ],
-                                }
-                            # Consensus agrees → mutate confidence to vote-share %
-                            if isinstance(candidate.get("analysis"), dict):
-                                candidate["analysis"]["confidence"] = _vote.confidence_pct
+                            # confidence/block mode: apply the capped voter confidence
+                            # (min(plan_conf, voter_avg)). shadow mode: log only, the
+                            # plan proceeds with its original confidence.
+                            if _mode in ("confidence", "block") and isinstance(
+                                candidate.get("analysis"), dict
+                            ):
+                                candidate["analysis"]["confidence"] = _sv.applied_confidence
                 except Exception as _sc_err:
                     log.warning(
-                        f"SELF_CONSISTENCY_DEGRADED | plan_id="
+                        f"SPECIALIST_VOTE_DEGRADED | plan_id="
                         f"{candidate.get('id', '?')} reason="
-                        f"{type(_sc_err).__name__}: {_sc_err} | "
-                        f"gate inactive (FLO-443)"
+                        f"{type(_sc_err).__name__}: {_sc_err} | gate inactive (FLO-451)"
                     )
 
                 ok, parsed, errors = _validate(
@@ -5959,6 +5933,34 @@ class AgentTools:
                 return min_low <= target
         except Exception:
             return None
+
+    def _build_specialist_context(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+        """FLO-451 — assemble CHEAP, cached context for the specialist voters.
+
+        Reads `data/bot_state.json` only (no live tool re-runs, no Luna/Echo LLM
+        calls during submission): the Technical voter gets multi_tf_indicators +
+        market_regime; the Macro voter gets market_context as a starting hint
+        (its web search fills the rest). Price comes from last_known_price.
+        All fail-soft — a missing/corrupt state file yields a minimal context and
+        the web-search voters still function.
+        """
+        from datetime import datetime as _dt, timezone as _tz
+        ctx: Dict[str, Any] = {"as_of_iso": _dt.now(_tz.utc).strftime("%Y-%m-%d %H:%M")}
+        try:
+            bs_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "data", "bot_state.json"
+            )
+            with open(bs_path, "r", encoding="utf-8") as _f:
+                _d = json.load(_f)
+            ctx["price"] = _d.get("last_known_price")
+            ctx["multi_tf"] = {
+                "multi_tf_indicators": _d.get("multi_tf_indicators"),
+                "market_regime": _d.get("market_regime"),
+            }
+            ctx["dxy"] = _d.get("market_context")
+        except Exception:
+            pass
+        return ctx
 
     def list_active_plans(self, ticket: Optional[int] = None) -> Dict[str, Any]:
         """List all Snow plans in non-terminal states.
