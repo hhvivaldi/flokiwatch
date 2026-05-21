@@ -77,6 +77,17 @@ main.py (orchestrator)
 - **Active thesis persistence:** `data/active_thesis.json` — carries between cycles.
 - **Boss notes (FLO-303):** `data/boss_notes.json` — Hermano's directives to Floki. Active notes injected as `<boss_notes>` block at top of user message each cycle. Floki returns `acknowledged_boss_notes: [id, ...]` to stamp them as read. Default 24h auto-expiry, `expires_at:null` for permanent, `ack_dismisses:true` for one-shots. Add notes via `boss_notes.add_note(text, ...)` or edit the file directly. Non-blocking: missing/malformed file is a silent no-op.
 
+## D1 Bearish Trend Score & counter-trend gate (FLO-452, CEO 2026-05-21)
+
+Multi-factor structural-trend gate to stop Floki chasing M15 reversal narratives (double bottoms, RSI divergence) against a bearish daily structure — 3 counter-HTF BUYs (PLAN-006/021/005) lost a net -$39 while price sat ~4.5% below the D1 EMA50, and the FLO-427/430 regime gate missed them (it only fires in CONFIRMED-TRENDING; these were RANGING/TRANSITIONAL-labelled).
+
+- **`regime_detector.compute_d1_trend_score(d1)`** — PURE 8-factor score (each weighted): close<EMA50 (.10), <EMA50 3+ bars (.10), EMA50 slope<0 (.15), close<EMA200 (.15), death cross (.10), (EMA50−close)>0.5×ATR (.10), ADX>25 & −DI>+DI (.15), swing LH+LL (.15). All true → 100. Returns `{direction, score, bearish_score, bullish_score, factors, bullish_factors}`. Symmetric bullish set. `build_d1_trend_score()` assembles inputs from live D1 candles (mt5_safe; ATR/EMA via pandas, Wilder ADX, fractal swings); fail-soft None.
+- **Layer 1 (inject):** `detect_market_regime()` adds `d1_trend_score` to its return → `_last_regime_context` → `state_writer` writes `bot_state.json:d1_trend_score`.
+- **Layer 2 (prompt):** `agent_prompts.py` "STEP 0 — HTF STRUCTURE CHECK" — mandatory pre-authoring; if bearish_score≥70 candidate actions are SELL/HOLD only unless 3+ exceptions cited.
+- **Layer 3 (gate):** `snow/validator._check_d1_trend_gate` — BUY + opposing bearish_score ≥ `_D1_GATE_THRESHOLD` + `<3` cited `analysis.counter_trend_exceptions` → REJECT (`D1_TREND_GATE` log). Wired via `validate_plan(author_d1_trend=...)` ← `agent_tools` reads `_last_regime_context['d1_trend_score']`. Symmetric for SELL.
+- **⚠️ COUNTERFACTUAL FINDING (must tune before it does anything):** with the spec threshold **70 the gate is INERT** on the recent counter-HTF BUYs — gold is ABOVE its rising 200-day EMA (no close<EMA200, no death cross) and ADX<25, so 3 factors (0.40) are FALSE and the score caps at **~60**. At **threshold 55** the 3 losing BUYs REJECT and the 2 SELL winners ALLOW (matches reality: saves -$62, forgoes +$23 = +$39 net). `_D1_GATE_THRESHOLD` is a named constant — **CEO should lower to ~55, or reweight away from the EMA200/death-cross factors** (they encode the multi-year trend, not the medium-term pullback that matters here).
+- **⚠️ GAMEABILITY:** exceptions are Floki-CITED and counted, not deterministically verified — a biased planner can list 3 to bypass. Layers 1+2 add friction; deterministic verification of the 5 exception conditions is the follow-up. Tests: `test_flo452_d1_trend.py` (6 score + 5 gate + counterfactual table). One pre-existing unrelated validator test fails (`get_snow_primitives_reference` not in SYSTEM_PROMPT — strings live in a non-SYSTEM_PROMPT var at agent_prompts.py:707/769; predates FLO-452).
+
 ## Critical Safety Rules
 
 - No simultaneous BUY+SELL (FLO-85 hard gate, `is not None` check not truthiness)

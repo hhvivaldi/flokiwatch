@@ -533,6 +533,10 @@ def write_state(bot_instance: Any) -> None:
                     "transition": _regime.get("transition"),
                     "src": _src,
                 }
+            # FLO-452 — surface the D1 trend score for Floki's STEP-0 check,
+            # the validator gate, and the specialist Technical voter.
+            if isinstance(_regime, dict) and _regime.get("d1_trend_score") is not None:
+                state["d1_trend_score"] = _regime.get("d1_trend_score")
         except Exception as e:
             log.debug(f"state_writer: market_regime error: {e}")
 

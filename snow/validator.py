@@ -1974,12 +1974,99 @@ def _check_daily_loss_limit(
     return [msg]
 
 
+_D1_GATE_THRESHOLD = 70  # FLO-452: opposing-trend score >= this blocks a counter-trend
+                         # plan with <3 exceptions. NOTE (counterfactual 2026-05-21):
+                         # gold is currently above its rising 200-day EMA with no death
+                         # cross + ADX<25, so the 8-factor score caps ~60 on the recent
+                         # counter-HTF BUYs — at 70 the gate is INERT on them. Lower to
+                         # ~55 (or reweight away from the EMA200/death-cross factors) to
+                         # actually catch the medium-term-pullback pattern. CEO decision.
+
+
+def _check_d1_trend_gate(
+    plan: Plan,
+    author_d1_trend: Optional[dict[str, Any]],
+) -> list[str]:
+    """FLO-452 — block counter-trend plans when the D1 trend score is strongly
+    against them and Floki has not cited enough counter-trend exceptions.
+
+    Fires when ALL hold:
+      - d1_trend_score.bearish_score >= 70 (decisively bearish daily structure)
+      - plan direction == BUY (counter to the bearish daily trend)
+      - fewer than 3 counter_trend_exceptions cited on plan.analysis
+
+    Symmetric for SELL vs a strongly bullish (bullish_score >= 70) structure.
+
+    Empirical motivation: 3 counter-HTF BUYs (PLAN-006/021/005) lost a net -$39
+    while price sat ~4.5% below the D1 EMA50; the regime gate (FLO-427/430) only
+    catches CONFIRMED-TRENDING regimes, so these RANGING/TRANSITIONAL-labelled
+    BUYs sailed through. Fail-open: missing/None score -> [] + DEGRADED WARN.
+
+    NOTE (gameability): exceptions are Floki-cited and counted, not verified.
+    Deterministic verification of the 5 exception conditions is a follow-up.
+    """
+    from logger import log as _log
+    plan_id = getattr(plan, "id", None) or "<no-id>"
+    direction = getattr(getattr(plan, "entry", None), "direction", None)
+
+    if not author_d1_trend:
+        _log.warning(
+            f"D1_TREND_GATE_DEGRADED | plan_id={plan_id} | no d1_trend_score "
+            f"snapshot | gate skipped (FLO-452)"
+        )
+        return []
+
+    bear = author_d1_trend.get("bearish_score")
+    bull = author_d1_trend.get("bullish_score")
+    analysis = getattr(plan, "analysis", None)
+    exceptions = getattr(analysis, "counter_trend_exceptions", None) or []
+    n_exc = len(exceptions) if isinstance(exceptions, (list, tuple)) else 0
+
+    # Determine the opposing-score for this direction.
+    opp_score = None
+    if direction == "BUY" and isinstance(bear, (int, float)):
+        opp_score = bear
+    elif direction == "SELL" and isinstance(bull, (int, float)):
+        opp_score = bull
+
+    if opp_score is None or opp_score < _D1_GATE_THRESHOLD:
+        _log.info(
+            f"D1_TREND_GATE | plan={plan_id} | dir={direction} | "
+            f"opp_score={opp_score} | threshold={_D1_GATE_THRESHOLD} | "
+            f"exceptions={n_exc} | decision=ALLOW"
+        )
+        return []
+
+    if n_exc >= 3:
+        _log.info(
+            f"D1_TREND_GATE | plan={plan_id} | dir={direction} | "
+            f"opp_score={opp_score} | exceptions={n_exc} | required=3 | "
+            f"decision=ALLOW (exceptions_met)"
+        )
+        return []
+
+    _log.info(
+        f"D1_TREND_GATE | plan={plan_id} | score={opp_score} | "
+        f"exceptions={n_exc} | required=3 | decision=REJECT"
+    )
+    return [
+        f"d1_trend_gate: D1 structure is decisively against this {direction} "
+        f"(opposing trend score {opp_score}/100 >= 70) and you cited only "
+        f"{n_exc} of the 3+ counter-trend exceptions required (FLO-452). "
+        f"Either author a trend-aligned plan, or cite 3+ of: D1 closed above "
+        f"EMA21 / H4 HH-after-HL confirmed / H1 volume 1.5x on reversal / major "
+        f"HTF support tested+rejected / ADX<20 and falling — in "
+        f"analysis.counter_trend_exceptions."
+    ]
+
+
 def validate_plan(
     plan_dict: dict[str, Any],
     *,
     author_regime: Optional[dict[str, Any]] = None,
     author_calendar: Optional[list[dict[str, Any]]] = None,
     author_account: Optional[dict[str, Any]] = None,
+    author_d1_trend: Optional[dict[str, Any]] = None,
 ) -> tuple[bool, Optional[Plan], list[str]]:
     """Validate a submitted plan dict.
 
@@ -2038,6 +2125,7 @@ def validate_plan(
     errors += _check_flo425_geometry_gate(plan)
     errors += _check_active_plan_cap(plan)
     errors += _check_regime_counter_trend_gate(plan, author_regime)
+    errors += _check_d1_trend_gate(plan, author_d1_trend)
     errors += _check_give_back_calibration(plan, author_regime)
     errors += _check_sl_buffer_from_structure(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)

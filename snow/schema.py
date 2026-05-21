@@ -669,6 +669,16 @@ class PlanAnalysis(BaseModel):
                     "fit on his first production cycle. 500 chars fits "
                     "all four checks comfortably.",
     )
+    counter_trend_exceptions: Optional[list[str]] = Field(
+        default=None,
+        max_length=10,
+        description="FLO-452: when D1_TREND_SCORE >= 70 AGAINST the plan "
+                    "direction, list the counter-trend exceptions you rely on "
+                    "(e.g. 'D1 closed above EMA21', 'H4 HH-after-HL confirmed', "
+                    "'H1 volume 1.5x on reversal', 'major HTF support tested+"
+                    "rejected', 'ADX<20 and falling'). The D1_TREND_GATE rejects "
+                    "a counter-trend BUY with fewer than 3 cited exceptions.",
+    )
 
 
 class EntryBlock(BaseModel):

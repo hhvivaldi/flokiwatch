@@ -801,6 +801,9 @@ def _build_result(
         # "bullish" / "bearish" / None per _get_mtf_trend_direction.
         "d1_direction": mtf_d1,
         "h4_direction": mtf_h4,
+        # FLO-452 — 8-factor D1 trend score for the counter-trend gate + Floki
+        # STEP-0 check. Fail-soft None on MT5 hiccup (gate fails open).
+        "d1_trend_score": build_d1_trend_score(),
         "bollinger_width_vs_avg": round(bb_width, 2) if bb_width else None,
         "h4_volume_bias": _last_h4_volume_bias,
         "m15_explosive": _last_m15_explosive,
@@ -861,3 +864,178 @@ def _transition_text(previous: Optional[str], current: str, duration: int) -> st
     if previous is None:
         return "First detection this session"
     return _TRANSITION_TEXTS.get((previous, current), f"Transitioned from {previous}")
+
+
+# =============================================================================
+# FLO-452 — D1 Bearish/Bullish Trend Score (8 weighted factors)
+# =============================================================================
+# Multi-factor structural-trend score on the daily timeframe, to catch the
+# documented bias where Floki overrides HTF structure (price far below D1 EMA50)
+# with narrative-rich M15 reversals. 3 counter-HTF BUYs lost a net -$39 in a
+# market 4.5% below the D1 EMA50. compute_d1_trend_score is PURE (testable);
+# build_d1_trend_score assembles the inputs from live D1 candles.
+
+_D1_FACTOR_WEIGHTS = [
+    ("close_below_ema50", 0.10),
+    ("below_ema50_3bars", 0.10),
+    ("ema50_slope_down", 0.15),
+    ("close_below_ema200", 0.15),
+    ("death_cross", 0.10),
+    ("distance_gt_half_atr", 0.10),
+    ("adx_bear", 0.15),
+    ("structure_lh_ll", 0.15),
+]
+_D1_BULL_WEIGHTS = [
+    ("close_above_ema50", 0.10),
+    ("above_ema50_3bars", 0.10),
+    ("ema50_slope_up", 0.15),
+    ("close_above_ema200", 0.15),
+    ("golden_cross", 0.10),
+    ("distance_gt_half_atr_up", 0.10),
+    ("adx_bull", 0.15),
+    ("structure_hh_hl", 0.15),
+]
+
+
+def compute_d1_trend_score(d1):
+    """FLO-452 - pure 8-factor D1 trend score. Returns dict with direction,
+    score, bearish_score, bullish_score, factors, bullish_factors. Missing
+    fields make their factor False (fail-soft). All 8 bearish true -> 100."""
+    def _f(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    close = _f(d1.get("close")); ema50 = _f(d1.get("ema50")); ema200 = _f(d1.get("ema200"))
+    atr = _f(d1.get("atr")); adx = _f(d1.get("adx"))
+    pdi = _f(d1.get("plus_di")); mdi = _f(d1.get("minus_di"))
+    bars_below = d1.get("bars_below_ema50") or 0
+    bars_above = d1.get("bars_above_ema50") or 0
+    slope = _f(d1.get("ema50_slope")); swing = d1.get("swing")
+
+    bear = {
+        "close_below_ema50": close is not None and ema50 is not None and close < ema50,
+        "below_ema50_3bars": bars_below >= 3,
+        "ema50_slope_down": slope is not None and slope < 0,
+        "close_below_ema200": close is not None and ema200 is not None and close < ema200,
+        "death_cross": ema50 is not None and ema200 is not None and ema50 < ema200,
+        "distance_gt_half_atr": (close is not None and ema50 is not None and atr is not None
+                                 and (ema50 - close) > 0.5 * atr),
+        "adx_bear": (adx is not None and adx > 25 and pdi is not None and mdi is not None and mdi > pdi),
+        "structure_lh_ll": swing == "LH_LL",
+    }
+    bull = {
+        "close_above_ema50": close is not None and ema50 is not None and close > ema50,
+        "above_ema50_3bars": bars_above >= 3,
+        "ema50_slope_up": slope is not None and slope > 0,
+        "close_above_ema200": close is not None and ema200 is not None and close > ema200,
+        "golden_cross": ema50 is not None and ema200 is not None and ema50 > ema200,
+        "distance_gt_half_atr_up": (close is not None and ema50 is not None and atr is not None
+                                    and (close - ema50) > 0.5 * atr),
+        "adx_bull": (adx is not None and adx > 25 and pdi is not None and mdi is not None and pdi > mdi),
+        "structure_hh_hl": swing == "HH_HL",
+    }
+    bear_score = int(round(sum(w for k, w in _D1_FACTOR_WEIGHTS if bear[k]) * 100))
+    bull_score = int(round(sum(w for k, w in _D1_BULL_WEIGHTS if bull[k]) * 100))
+    if bear_score > bull_score:
+        direction = "BEARISH"
+    elif bull_score > bear_score:
+        direction = "BULLISH"
+    else:
+        direction = "NEUTRAL"
+    return {
+        "direction": direction,
+        "score": max(bear_score, bull_score),
+        "bearish_score": bear_score,
+        "bullish_score": bull_score,
+        "factors": [k for k, w in _D1_FACTOR_WEIGHTS if bear[k]],
+        "bullish_factors": [k for k, w in _D1_BULL_WEIGHTS if bull[k]],
+    }
+
+
+def _d1_swing_structure(df):
+    """Last-two-swing structure from 3-bar fractals: LH_LL (bearish) / HH_HL
+    (bullish) / None."""
+    try:
+        h = df["high"].values; l = df["low"].values; n = len(df)
+        highs = [h[i] for i in range(2, n - 2)
+                 if h[i] > h[i - 1] and h[i] > h[i - 2] and h[i] > h[i + 1] and h[i] > h[i + 2]]
+        lows = [l[i] for i in range(2, n - 2)
+                if l[i] < l[i - 1] and l[i] < l[i - 2] and l[i] < l[i + 1] and l[i] < l[i + 2]]
+        if len(highs) >= 2 and len(lows) >= 2:
+            if highs[-1] < highs[-2] and lows[-1] < lows[-2]:
+                return "LH_LL"
+            if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
+                return "HH_HL"
+        return None
+    except Exception:
+        return None
+
+
+def _d1_adx(df, period=14):
+    """Wilder ADX(14) + DI from a candle DataFrame. (adx, +DI, -DI) or Nones."""
+    try:
+        import pandas as pd
+        h, l, c = df["high"], df["low"], df["close"]
+        up = h.diff(); dn = -l.diff()
+        plus_dm = ((up > dn) & (up > 0)) * up
+        minus_dm = ((dn > up) & (dn > 0)) * dn
+        prev_c = c.shift(1)
+        tr = pd.concat([(h - l), (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
+        atr = tr.ewm(alpha=1 / period, adjust=False).mean()
+        pdi = 100 * plus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
+        mdi = 100 * minus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
+        dx = 100 * (pdi - mdi).abs() / (pdi + mdi)
+        adx = dx.ewm(alpha=1 / period, adjust=False).mean()
+        return float(adx.iloc[-1]), float(pdi.iloc[-1]), float(mdi.iloc[-1])
+    except Exception:
+        return None, None, None
+
+
+def build_d1_trend_score():
+    """FLO-452 - assemble factor inputs from live D1 candles and return the
+    score dict. Fail-soft -> None on MT5/compute error (gate fails open)."""
+    try:
+        import pandas as pd
+        from mt5_safe import mt5, mt5_lock
+        with mt5_lock:
+            rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_D1, 0, 250)
+        if rates is None or len(rates) < 60:
+            return None
+        df = pd.DataFrame(rates)
+        ema50_s = df["close"].ewm(span=50, adjust=False).mean()
+        ema200_s = df["close"].ewm(span=200, adjust=False).mean()
+        close = float(df["close"].iloc[-1])
+        ema50 = float(ema50_s.iloc[-1])
+        ema200 = float(ema200_s.iloc[-1]) if len(df) >= 200 else None
+        h, l, c = df["high"], df["low"], df["close"]
+        prev_c = c.shift(1)
+        tr = pd.concat([(h - l), (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
+        atr = float(tr.rolling(14).mean().iloc[-1])
+        below = (df["close"] < ema50_s).tolist()
+        bars_below = 0
+        for v in reversed(below):
+            if v:
+                bars_below += 1
+            else:
+                break
+        bars_above = 0
+        for v in reversed(below):
+            if not v:
+                bars_above += 1
+            else:
+                break
+        slope = float(ema50_s.diff().iloc[-5:].mean())
+        swing = _d1_swing_structure(df)
+        adx, pdi, mdi = _d1_adx(df)
+        d1 = {
+            "close": close, "ema50": ema50, "ema200": ema200, "atr": atr,
+            "adx": adx, "plus_di": pdi, "minus_di": mdi,
+            "bars_below_ema50": bars_below, "bars_above_ema50": bars_above,
+            "ema50_slope": slope, "swing": swing,
+        }
+        return compute_d1_trend_score(d1)
+    except Exception as e:
+        log.warning(f"D1_TREND_SCORE build failed: {type(e).__name__}: {e}")
+        return None

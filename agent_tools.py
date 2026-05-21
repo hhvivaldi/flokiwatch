@@ -5309,6 +5309,7 @@ class AgentTools:
                 # counter-trend gate can read it without re-computing.
                 # Cheap dict-read from bot's in-memory state; fail-soft.
                 _author_regime: Optional[Dict[str, Any]] = None
+                _author_d1_trend: Optional[Dict[str, Any]] = None
                 try:
                     _ctx = getattr(self._bot, "_last_regime_context", None)
                     if isinstance(_ctx, dict):
@@ -5321,6 +5322,8 @@ class AgentTools:
                             "d1_direction": _ctx.get("d1_direction"),
                             "h4_direction": _ctx.get("h4_direction"),
                         }
+                        # FLO-452 — D1 trend score for the D1_TREND_GATE.
+                        _author_d1_trend = _ctx.get("d1_trend_score")
                 except Exception:
                     _author_regime = None
 
@@ -5412,6 +5415,7 @@ class AgentTools:
                     author_regime=_author_regime,
                     author_calendar=_author_calendar,
                     author_account=_author_account,
+                    author_d1_trend=_author_d1_trend,
                 )
                 if not ok:
                     self._log_fail(
