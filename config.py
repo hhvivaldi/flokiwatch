@@ -460,6 +460,9 @@ CHART_SCREENSHOT_WIDTH = 1920
 CHART_SCREENSHOT_HEIGHT = 1080
 CHART_SCREENSHOT_TIMEOUT = 10  # seconds to wait for EA to produce screenshots
 _MQL5_FILES = r"C:\Users\Hermano\AppData\Roaming\MetaQuotes\Terminal\4C230EB692C96360065CCBB721258414\MQL5\Files"
+# FLO-455 Phase 1 — ICT zones bridge (mirrors SR_ZONES_JSON_PATH). The Brain writes
+# unmitigated OB/FVG/sweep zones here; ICTZoneDrawer.mq5 (Phase 2) reads + draws.
+ICT_ZONES_JSON_PATH = os.environ.get("ICT_ZONES_JSON_PATH", os.path.join(_MQL5_FILES, "ict_zones.json"))
 SCREENSHOT_REQUEST_JSON_PATH = os.environ.get("SCREENSHOT_REQUEST_JSON_PATH", os.path.join(_MQL5_FILES, "screenshot_request.json"))
 SCREENSHOT_READY_JSON_PATH = os.environ.get("SCREENSHOT_READY_JSON_PATH", os.path.join(_MQL5_FILES, "screenshot_ready.json"))
 CHART_D1_PNG_PATH = os.environ.get("CHART_D1_PNG_PATH", os.path.join(_MQL5_FILES, "chart_d1.png"))

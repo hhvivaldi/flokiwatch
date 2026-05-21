@@ -1566,7 +1566,16 @@ def analyze_with_brain(tech_data: Dict, ml_data: Dict, momentum_data: Dict,
         "sr": sr_data,
         "current_price": current_price,
     }
-    
+
+    # FLO-455 Phase 1 — additive ICT zone detection (H1 OB/FVG/sweeps -> ict_zones.json
+    # for ICTZoneDrawer.mq5). Fully fail-soft: never blocks the Brain result. Does NOT
+    # touch the S/R zone system. Zero AI cost.
+    try:
+        import ict_zones as _ict
+        _ict.build_and_write_ict_zones()
+    except Exception:
+        pass
+
     return BrainResult(
         decision=decision,
         final_score=final_score,
