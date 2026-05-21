@@ -2214,11 +2214,25 @@ def validate_plan(
     errors += _check_flo424_safety_circuit(plan)
     errors += _check_flo425_geometry_gate(plan)
     errors += _check_active_plan_cap(plan)
-    errors += _check_regime_counter_trend_gate(plan, author_regime)
+    # FLO-454 — HARD gates (block). D1 trend gate is the hard counter-trend
+    # backstop; thesis_break is deterministic plan completeness.
     errors += _check_d1_trend_gate(plan, author_d1_trend)
-    errors += _check_setup_regime_gate(plan, author_setup_ctx)
     errors += _check_thesis_break_exit(plan)
-    errors += _check_give_back_calibration(plan, author_regime)
+    # FLO-454 — SOFT / advisory gates: run + log a *_SOFT_WARNING when they
+    # object, but do NOT block. CEO philosophy (CFA/FTMO + "LLMs are
+    # probabilistic reasoning engines, not enforcement"): regime / ADX-override
+    # / setup-regime-fit / give-back are judgment inputs, surfaced to Floki and
+    # weighed in his CONFLUENCE COUNT, not hard-coded vetoes. Counter-trend
+    # still has the hard FLO-452 D1 backstop above.
+    from logger import log as _vlog
+    for _gname, _gerrs in (
+        ("REGIME", _check_regime_counter_trend_gate(plan, author_regime)),       # FLO-427/430
+        ("SETUP_REGIME", _check_setup_regime_gate(plan, author_setup_ctx)),       # FLO-453
+        ("GIVE_BACK", _check_give_back_calibration(plan, author_regime)),         # FLO-429
+    ):
+        if _gerrs:
+            _vlog.warning(f"{_gname}_SOFT_WARNING | advisory only (FLO-454), not "
+                          f"blocking | {_gerrs[0][:180]}")
     errors += _check_sl_buffer_from_structure(plan)
     errors += _check_news_blackout_gate(plan, author_calendar)
     errors += _check_daily_loss_limit(plan, author_account)

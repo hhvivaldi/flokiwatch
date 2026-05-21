@@ -7356,13 +7356,12 @@ class TradingBot:
             log.debug(f"AB_TEST | resolve error: {e}")
 
     # FLO-262 / FLO-304: Timeframe-to-config mapping for chart screenshots
+    # FLO-454: cut to 3 TFs (H4 bias / H1 setup / M15 entry). D1/M5/M1 PNGs are
+    # no longer requested from the EA or sent to Floki (fewer, cleaner visuals).
     _CHART_TF_MAP = {
-        "D1":  ("CHART_D1_PNG_PATH",  "d1_ok",  "d1_b64"),
         "H4":  ("CHART_H4_PNG_PATH",  "h4_ok",  "h4_b64"),
         "H1":  ("CHART_H1_PNG_PATH",  "h1_ok",  "h1_b64"),
         "M15": ("CHART_M15_PNG_PATH", "m15_ok", "m15_b64"),
-        "M5":  ("CHART_M5_PNG_PATH",  "m5_ok",  "m5_b64"),
-        "M1":  ("CHART_M1_PNG_PATH",  "m1_ok",  "m1_b64"),  # FLO-304
     }
 
     def _request_chart_screenshots(self, timeout: float = 10.0) -> dict:

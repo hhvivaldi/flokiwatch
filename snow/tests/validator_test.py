@@ -476,36 +476,25 @@ class TestPromptV3_3ChartSuite:
     timeframes and skipped get_luna_brief. These guards prevent the
     tightening from being silently softened later."""
 
-    def test_all_six_chart_timeframes_enumerated(self):
-        """Prompt must name all 6 TFs (D1, H4, H1, M15, M5, M1) in the
-        context of get_chart_screenshots — not just 'multi-TF'."""
+    def test_three_chart_timeframes_enumerated(self):
+        """FLO-454: prompt now names exactly the 3 working TFs (H4, H1, M15) in
+        the get_chart_screenshots context — D1/M5/M1 were cut (Context-Rot:
+        fewer, cleaner visuals). Updated from the old 6-TF mandate."""
         from agent_prompts import SYSTEM_PROMPT
-        # Must mention get_chart_screenshots AND each of the 6 TF tokens
-        # in a proximity consistent with the requirement (all 6 named).
         assert "get_chart_screenshots" in SYSTEM_PROMPT
-        for tf in ("D1", "H4", "H1", "M15", "M5", "M1"):
-            assert tf in SYSTEM_PROMPT, (
-                f"v3.3 chart-suite mandate missing timeframe {tf!r}"
-            )
-        # Explicit "ALL 6 timeframes" anchor — catches a soft edit that
-        # keeps the TF list but drops the enumeration imperative.
-        assert ("ALL 6 timeframes" in SYSTEM_PROMPT
-                or "all 6 timeframes" in SYSTEM_PROMPT), (
-            "v3.3 chart-suite mandate missing the 'all 6 timeframes' anchor"
+        for tf in ("H4", "H1", "M15"):
+            assert tf in SYSTEM_PROMPT, f"FLO-454 chart suite missing timeframe {tf!r}"
+        assert "all 3 timeframes (H4, H1, M15)" in SYSTEM_PROMPT, (
+            "FLO-454 chart suite missing the 'all 3 timeframes (H4, H1, M15)' anchor"
         )
 
     def test_chart_endpoints_explicitly_called_out(self):
-        """D1 (week's structural frame) and M1 (live test of level) MUST
-        be mentioned as rationale, not left to inference. Catches an edit
-        that lists the 6 TFs but doesn't explain why endpoints matter."""
+        """FLO-454: the 3-TF roles must be explained — H4 sets the bias, M15
+        times the entry — not left to inference. Updated from the old D1/M1
+        endpoint rationale."""
         from agent_prompts import SYSTEM_PROMPT
-        assert ("week's structural frame" in SYSTEM_PROMPT
-                or "week" in SYSTEM_PROMPT and "structural" in SYSTEM_PROMPT), (
-            "v3.3: D1 rationale (week's structural frame) missing"
-        )
-        assert ("live test" in SYSTEM_PROMPT or "level under" in SYSTEM_PROMPT), (
-            "v3.3: M1 rationale (live test of level) missing"
-        )
+        assert "sets the bias" in SYSTEM_PROMPT, "FLO-454: H4 bias rationale missing"
+        assert "times the entry" in SYSTEM_PROMPT, "FLO-454: M15 entry rationale missing"
 
     def test_luna_distinctness_from_market_context_called_out(self):
         """Luna is NOT a price feed. v3.3 adds an explicit note so Floki

@@ -4720,7 +4720,11 @@ class AgentTools:
             return {"success": False, "reason": f"rex_monitor_error: {e}", "latency_ms": elapsed}
 
     # FLO-262: Available timeframes for chart screenshots
-    _CHART_TFS = ["D1", "H4", "H1", "M15", "M5", "M1"]  # FLO-304: added M1
+    _CHART_TFS = ["H4", "H1", "M15"]  # FLO-454: cut from 6 (was D1/H4/H1/M15/M5/M1)
+    # to 3 — H4 bias / H1 setup / M15 entry. Fewer, cleaner visual inputs (Chroma
+    # Context-Rot: vision accuracy degrades with more panels). Indicator-panel
+    # cleanup (MACD/BB/Stoch off) is a MANUAL MT5 chart-template change — the EA
+    # ChartScreenShot()s whatever the terminal template shows; not code-settable.
 
     def get_chart_screenshots(self, timeframes: list = None) -> Dict[str, Any]:
         """Return chart screenshots for requested timeframes. Images injected by caller.
