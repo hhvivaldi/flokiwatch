@@ -1974,13 +1974,15 @@ def _check_daily_loss_limit(
     return [msg]
 
 
-_D1_GATE_THRESHOLD = 70  # FLO-452: opposing-trend score >= this blocks a counter-trend
-                         # plan with <3 exceptions. NOTE (counterfactual 2026-05-21):
-                         # gold is currently above its rising 200-day EMA with no death
-                         # cross + ADX<25, so the 8-factor score caps ~60 on the recent
-                         # counter-HTF BUYs — at 70 the gate is INERT on them. Lower to
-                         # ~55 (or reweight away from the EMA200/death-cross factors) to
-                         # actually catch the medium-term-pullback pattern. CEO decision.
+_D1_GATE_THRESHOLD = 55  # FLO-452 (CEO-calibrated 2026-05-21 from the counterfactual):
+                         # opposing-trend score >= this blocks a counter-trend plan with
+                         # <3 exceptions. Set to 55 (not the original 70) because gold is
+                         # in a MEDIUM-TERM pullback within a LONG-TERM uptrend (above the
+                         # rising 200-day EMA, no death cross, ADX<25), so the 8-factor
+                         # score caps ~60 — 55 catches the recent counter-HTF BUYs
+                         # (PLAN-006/021/005) while allowing the SELL winners. If gold
+                         # enters a full bear market (below EMA200 + death cross), the
+                         # score rises >70 naturally and the gate self-tightens.
 
 
 def _check_d1_trend_gate(
