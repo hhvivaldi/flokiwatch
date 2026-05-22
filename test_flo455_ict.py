@@ -67,6 +67,20 @@ def test_sweep_nearest_filter():
     print("PASS test_sweep_nearest_filter (8 sweeps -> 5 nearest current price)")
 
 
+def test_broker_to_utc_conversion():
+    # FLO-438 emits broker-wall-clock mislabeled 'Z'. With broker offset +3h
+    # (10800s), candle_time must shift back 3h to true UTC.
+    p = I.build_ict_zones_payload(_FVGS, _SWEEPS, "H1", broker_offset_s=10800)
+    fvg = next(z for z in p["zones"] if z["type"] == "FVG")
+    assert fvg["candle_time"] == "2026-05-22T01:00:00Z", fvg["candle_time"]  # 04:00 - 3h
+    sweep = next(z for z in p["zones"] if z["type"] == "SWEEP")
+    assert sweep["candle_time"] == "2026-05-22T02:00:00Z", sweep["candle_time"]  # 05:00 - 3h
+    # offset 0 leaves it unchanged (test-mode / already-UTC inputs)
+    p0 = I.build_ict_zones_payload(_FVGS, _SWEEPS, "H1", broker_offset_s=0)
+    assert next(z for z in p0["zones"] if z["type"] == "FVG")["candle_time"] == "2026-05-22T04:00:00Z"
+    print("PASS test_broker_to_utc_conversion (offset 10800 -> candle_time -3h to true UTC)")
+
+
 def test_write_json_atomic_and_valid():
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "ict_zones.json")
@@ -81,5 +95,6 @@ if __name__ == "__main__":
     test_mapping_to_schema()
     test_failsoft_empty()
     test_sweep_nearest_filter()
+    test_broker_to_utc_conversion()
     test_write_json_atomic_and_valid()
     print("\nALL FLO-455 PHASE 1 TESTS PASSED (Option A — Floki's own detectors)")

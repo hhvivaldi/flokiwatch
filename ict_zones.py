@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from logger import log
@@ -37,7 +38,32 @@ _MAX_PER_TYPE = 15
 _MAX_SWEEPS = 5   # FLO-455 follow-up: cap drawn sweeps to the 5 nearest current price
 
 
-def _map_fvg(f: Dict[str, Any], tf: str) -> Dict[str, Any]:
+def _broker_offset_s() -> int:
+    """Broker server time minus true UTC, in seconds (FLO-96; ~+10800 for UTC+3).
+    The FLO-438 scanners label MT5's broker-local candle epoch as 'Z' WITHOUT
+    subtracting this, so their *_iso fields are broker wall-clock mislabeled UTC.
+    We subtract this offset to get true UTC for ict_zones.json (Rule 22)."""
+    try:
+        from regime_detector import _broker_offset_s as _f
+        off = int(_f())
+        return off if off != 0 else 10800   # 0 == helper failed -> FLO-96 default +3h
+    except Exception:
+        return 10800
+
+
+def _to_true_utc(iso: Optional[str], offset_s: int) -> Optional[str]:
+    """Convert a broker-wall-clock-mislabeled-'Z' timestamp to true UTC by
+    subtracting the broker offset. Fail-soft: returns the input unchanged."""
+    if not iso:
+        return iso
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00")) - timedelta(seconds=offset_s)
+        return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        return iso
+
+
+def _map_fvg(f: Dict[str, Any], tf: str, offset_s: int) -> Dict[str, Any]:
     return {
         "type": "FVG",
         "direction": f.get("direction"),          # "bullish" / "bearish"
@@ -45,11 +71,11 @@ def _map_fvg(f: Dict[str, Any], tf: str) -> Dict[str, Any]:
         "top": f.get("top"),
         "bottom": f.get("bottom"),
         "status": "unmitigated",                  # _scan_fvgs returns unfilled only
-        "candle_time": f.get("formed_at_iso"),
+        "candle_time": _to_true_utc(f.get("formed_at_iso"), offset_s),
     }
 
 
-def _map_sweep(s: Dict[str, Any], tf: str) -> Dict[str, Any]:
+def _map_sweep(s: Dict[str, Any], tf: str, offset_s: int) -> Dict[str, Any]:
     # BSL = buy-side liquidity (resting above the highs) -> "high";
     # SSL = sell-side (below the lows) -> "low".
     return {
@@ -57,28 +83,30 @@ def _map_sweep(s: Dict[str, Any], tf: str) -> Dict[str, Any]:
         "direction": "high" if s.get("direction") == "BSL" else "low",
         "timeframe": tf,
         "level": s.get("level"),
-        "candle_time": s.get("sweep_candle_time_iso"),
+        "candle_time": _to_true_utc(s.get("sweep_candle_time_iso"), offset_s),
     }
 
 
 def build_ict_zones_payload(fvgs: Optional[List[dict]], sweeps: Optional[List[dict]],
                             timeframe: str = _TIMEFRAME, current_price: Optional[float] = None,
-                            max_sweeps: int = _MAX_SWEEPS) -> Dict[str, Any]:
+                            max_sweeps: int = _MAX_SWEEPS, broker_offset_s: int = 0) -> Dict[str, Any]:
     """Pure mapping: FLO-438 scanner output -> FLO-455 ict_zones.json payload.
 
     Sweeps are decluttered (FLO-455 follow-up — 11 markers was chart noise): keep
-    only the `max_sweeps` NEAREST to `current_price`. FVGs are kept as-is."""
+    only the `max_sweeps` NEAREST to `current_price`. FVGs are kept as-is.
+    `broker_offset_s` converts the scanners' broker-mislabeled candle times to
+    true UTC (Rule 22); 0 = no conversion (for tests with already-UTC inputs)."""
     zones: List[Dict[str, Any]] = []
     for f in (fvgs or []):
         if f.get("top") is not None and f.get("bottom") is not None:
-            zones.append(_map_fvg(f, timeframe))
+            zones.append(_map_fvg(f, timeframe, broker_offset_s))
 
     sw = [s for s in (sweeps or []) if s.get("level") is not None]
     if current_price is not None:
         sw.sort(key=lambda s: abs(float(s["level"]) - current_price))  # nearest first
     sw = sw[:max_sweeps]
     for s in sw:
-        zones.append(_map_sweep(s, timeframe))
+        zones.append(_map_sweep(s, timeframe, broker_offset_s))
     return {"timestamp": utc_iso(), "zones": zones}
 
 
@@ -127,7 +155,8 @@ def build_and_write_ict_zones(path: Optional[str] = None) -> Optional[Dict[str, 
     try:
         fvgs, sweeps = _scan_h1()
         payload = build_ict_zones_payload(fvgs, sweeps, _TIMEFRAME,
-                                          current_price=_current_price())
+                                          current_price=_current_price(),
+                                          broker_offset_s=_broker_offset_s())
         _write_json(payload, path)
         _f = sum(1 for z in payload["zones"] if z["type"] == "FVG")
         _s = sum(1 for z in payload["zones"] if z["type"] == "SWEEP")
