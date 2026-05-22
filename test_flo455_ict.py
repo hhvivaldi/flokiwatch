@@ -54,6 +54,19 @@ def test_failsoft_empty():
     print("PASS test_failsoft_empty (None/[]/malformed -> empty, no crash)")
 
 
+def test_sweep_nearest_filter():
+    # 8 sweeps at varying levels; current price 4500 -> keep the 5 NEAREST.
+    levels = [4400, 4450, 4490, 4505, 4510, 4540, 4600, 4700]
+    sweeps = [{"level": float(lv), "direction": "high",
+               "sweep_candle_time_iso": "2026-05-22T00:00:00Z"} for lv in levels]
+    p = I.build_ict_zones_payload([], sweeps, "H1", current_price=4500.0, max_sweeps=5)
+    kept = sorted(z["level"] for z in p["zones"] if z["type"] == "SWEEP")
+    assert len(kept) == 5, kept
+    # nearest 5 to 4500: 4490,4505,4510,4450,4540
+    assert kept == [4450.0, 4490.0, 4505.0, 4510.0, 4540.0], kept
+    print("PASS test_sweep_nearest_filter (8 sweeps -> 5 nearest current price)")
+
+
 def test_write_json_atomic_and_valid():
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "ict_zones.json")
@@ -67,5 +80,6 @@ def test_write_json_atomic_and_valid():
 if __name__ == "__main__":
     test_mapping_to_schema()
     test_failsoft_empty()
+    test_sweep_nearest_filter()
     test_write_json_atomic_and_valid()
     print("\nALL FLO-455 PHASE 1 TESTS PASSED (Option A — Floki's own detectors)")

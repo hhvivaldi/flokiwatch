@@ -22,7 +22,8 @@ input string ObjectPrefix    = "ICT_";      // Prefix — ONLY these objects get
 input bool   ShowLabels      = true;        // Draw a small label per zone
 input int    LabelFontSize   = 7;           // Label font size
 input string LabelFont       = "Arial";     // Label font
-input int    RightExtendBars = 6;           // Bars to extend zones to the right of now
+input int    RightExtendBars = 6;           // Bars to extend FVG rectangles right of now
+input int    SweepSegmentBars = 8;          // Length of the short sweep segment (bars)
 
 //--- Colors (per FLO-455 spec)
 input color  ColorFVGBull    = clrLimeGreen;  // Bullish FVG rectangle (green)
@@ -150,23 +151,26 @@ void ReadAndDraw()
             continue;
          bool   bsl = (dir == "high");                  // "high" = buy-side liquidity (BSL)
          color  col = bsl ? ColorSweepBSL : ColorSweepSSL;
-         // Horizontal dotted segment from the sweep candle to the right edge.
+         // SHORT horizontal dotted segment AT the sweep candle (not to the right
+         // edge) — anchored on the bar where the sweep actually occurred.
+         datetime seg_end = ct + (datetime)(PeriodSeconds(PERIOD_CURRENT) * SweepSegmentBars);
          string ln = ObjectPrefix + "SWP_" + IntegerToString(i);
-         ObjectCreate(0, ln, OBJ_TREND, 0, ct, lvl, right_edge, lvl);
+         ObjectCreate(0, ln, OBJ_TREND, 0, ct, lvl, seg_end, lvl);
          ObjectSetInteger(0, ln, OBJPROP_COLOR, col);
          ObjectSetInteger(0, ln, OBJPROP_STYLE, STYLE_DOT);
          ObjectSetInteger(0, ln, OBJPROP_WIDTH, 1);
          ObjectSetInteger(0, ln, OBJPROP_RAY_RIGHT, false);
          ObjectSetInteger(0, ln, OBJPROP_SELECTABLE, false);
-         // Arrow at the right edge: BSL = up (red), SSL = down (green).
+         // Arrow ON the sweep candle (not stacked at the right edge):
+         // BSL = up (red), SSL = down (green).
          string ar = ObjectPrefix + "ARR_" + IntegerToString(i);
-         ObjectCreate(0, ar, bsl ? OBJ_ARROW_UP : OBJ_ARROW_DOWN, 0, right_edge, lvl);
+         ObjectCreate(0, ar, bsl ? OBJ_ARROW_UP : OBJ_ARROW_DOWN, 0, ct, lvl);
          ObjectSetInteger(0, ar, OBJPROP_COLOR, col);
          ObjectSetInteger(0, ar, OBJPROP_WIDTH, 2);
          ObjectSetInteger(0, ar, OBJPROP_SELECTABLE, false);
          if(ShowLabels)
-            DrawLabel(ObjectPrefix + "SWPL_" + IntegerToString(i), right_edge, lvl,
-                      "H1 SWEEP " + (bsl ? "BSL" : "SSL"), col);
+            DrawLabel(ObjectPrefix + "SWPL_" + IntegerToString(i), seg_end, lvl,
+                      "SWEEP " + (bsl ? "BSL" : "SSL"), col);
         }
      }
 

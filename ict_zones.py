@@ -34,6 +34,7 @@ import config
 
 _TIMEFRAME = "H1"
 _MAX_PER_TYPE = 15
+_MAX_SWEEPS = 5   # FLO-455 follow-up: cap drawn sweeps to the 5 nearest current price
 
 
 def _map_fvg(f: Dict[str, Any], tf: str) -> Dict[str, Any]:
@@ -61,16 +62,37 @@ def _map_sweep(s: Dict[str, Any], tf: str) -> Dict[str, Any]:
 
 
 def build_ict_zones_payload(fvgs: Optional[List[dict]], sweeps: Optional[List[dict]],
-                            timeframe: str = _TIMEFRAME) -> Dict[str, Any]:
-    """Pure mapping: FLO-438 scanner output -> FLO-455 ict_zones.json payload."""
+                            timeframe: str = _TIMEFRAME, current_price: Optional[float] = None,
+                            max_sweeps: int = _MAX_SWEEPS) -> Dict[str, Any]:
+    """Pure mapping: FLO-438 scanner output -> FLO-455 ict_zones.json payload.
+
+    Sweeps are decluttered (FLO-455 follow-up — 11 markers was chart noise): keep
+    only the `max_sweeps` NEAREST to `current_price`. FVGs are kept as-is."""
     zones: List[Dict[str, Any]] = []
     for f in (fvgs or []):
         if f.get("top") is not None and f.get("bottom") is not None:
             zones.append(_map_fvg(f, timeframe))
-    for s in (sweeps or []):
-        if s.get("level") is not None:
-            zones.append(_map_sweep(s, timeframe))
+
+    sw = [s for s in (sweeps or []) if s.get("level") is not None]
+    if current_price is not None:
+        sw.sort(key=lambda s: abs(float(s["level"]) - current_price))  # nearest first
+    sw = sw[:max_sweeps]
+    for s in sw:
+        zones.append(_map_sweep(s, timeframe))
     return {"timestamp": utc_iso(), "zones": zones}
+
+
+def _current_price() -> Optional[float]:
+    """Mid price from MT5 (for the nearest-sweep filter). None on failure."""
+    try:
+        from mt5_safe import mt5, mt5_lock
+        with mt5_lock:
+            t = mt5.symbol_info_tick("XAUUSD")
+        if t and t.bid and t.ask:
+            return (float(t.bid) + float(t.ask)) / 2.0
+    except Exception:
+        pass
+    return None
 
 
 def _scan_h1():
@@ -104,7 +126,8 @@ def build_and_write_ict_zones(path: Optional[str] = None) -> Optional[Dict[str, 
         return None
     try:
         fvgs, sweeps = _scan_h1()
-        payload = build_ict_zones_payload(fvgs, sweeps, _TIMEFRAME)
+        payload = build_ict_zones_payload(fvgs, sweeps, _TIMEFRAME,
+                                          current_price=_current_price())
         _write_json(payload, path)
         _f = sum(1 for z in payload["zones"] if z["type"] == "FVG")
         _s = sum(1 for z in payload["zones"] if z["type"] == "SWEEP")
