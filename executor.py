@@ -5,6 +5,8 @@ Automatically sends orders to MetaTrader 5
 
 # FLO-348: thread-safe MT5 proxy; every mt5.* call auto-locks via mt5_safe.mt5_lock
 from mt5_safe import mt5, mt5_lock
+import os  # FLO-291 fix: os.path.exists at L416 NameError'd every signal write,
+           # leaving the signal-ID duplicate-prevention gate silently inert.
 import threading
 import time
 from dataclasses import dataclass
