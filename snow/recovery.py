@@ -23,8 +23,10 @@ Five buckets, processed in order
    MT5 error (None responses for all retries) → leave ACTIVE,
    re-check next startup.
 5. **ACTIVE remaining (position confirmed).**  Reseed
-   PerPlanTracker with `position.open_price` (broker-authoritative),
-   not from a snow_plans column — there is no `entry_price` column
+   PerPlanTracker with `position.price_open` (broker-authoritative — MT5
+   TradePosition uses `price_open`, NOT `open_price`; the latter is the
+   monitor.py wrapper's field. FLO-455 follow-up fix), not from a
+   snow_plans column — there is no `entry_price` column
    yet (FLO-353 doesn't add one either; that ticket scopes only
    outcome_pips/outcome_usd).
 
@@ -482,7 +484,7 @@ def _reconcile_triggered(
             event="recovery_triggered_to_active",
             conditions_snapshot={
                 "ticket": int(ticket),
-                "open_price": float(pos.open_price),
+                "open_price": float(pos.price_open),
                 "reconciled_at": utc_iso(),
             },
         )
@@ -491,7 +493,7 @@ def _reconcile_triggered(
             _seed_tracker(tracker, plan_id, row, pos, summary)
         log.info(
             f"snow.recovery.triggered_to_active plan_id={plan_id} "
-            f"ticket={ticket} open_price={pos.open_price}"
+            f"ticket={ticket} open_price={pos.price_open}"
         )
         return
 
@@ -659,7 +661,7 @@ def _seed_tracker(
     tracker, plan_id: str, row: dict, pos, summary: ReconcileSummary,
 ) -> None:
     """Seed/reseed PerPlanTracker for a plan whose MT5 position is
-    confirmed open. Uses MT5's broker-authoritative `pos.open_price`,
+    confirmed open. Uses MT5's broker-authoritative `pos.price_open`,
     not a snow_plans column (no `entry_price` column exists yet)."""
     direction = _extract_direction(row)
     if direction is None:
@@ -669,7 +671,7 @@ def _seed_tracker(
         )
         return
     try:
-        tracker.seed(plan_id, float(pos.open_price), direction)
+        tracker.seed(plan_id, float(pos.price_open), direction)
     except Exception as e:
         log.warning(
             f"snow.recovery.tracker_seed_failed plan_id={plan_id} "

@@ -47,7 +47,7 @@ class FakePosition:
     ticket: int
     symbol: str = "XAUUSD"
     magic: int = 123456
-    open_price: float = 4720.0
+    price_open: float = 4720.0
 
 
 @dataclass
@@ -301,7 +301,7 @@ class TestTriggered:
             status=PlanStatus.TRIGGERED.value,
             trade_ticket=11111,
         )
-        pos = FakePosition(ticket=11111, open_price=4731.5, magic=123456)
+        pos = FakePosition(ticket=11111, price_open=4731.5, magic=123456)
         summary = reconcile_on_startup(
             tracker=tracker,
             mt5_proxy=FakeMT5(positions=(pos,)),
@@ -311,7 +311,7 @@ class TestTriggered:
         assert _read_status("PLAN-20260424-301") == PlanStatus.ACTIVE.value
         assert summary.triggered_to_active == 1
         assert summary.tracker_reseeds == 1
-        # Tracker seed used MT5 open_price, not a column.
+        # Tracker seed used MT5 price_open, not a column.
         seeded = tracker.seeds[0]
         assert seeded[0] == "PLAN-20260424-301"
         assert seeded[1] == 4731.5
@@ -373,7 +373,7 @@ class TestClosing:
             status=PlanStatus.CLOSING.value,
             trade_ticket=44441,
         )
-        pos = FakePosition(ticket=44441, open_price=4730.0)
+        pos = FakePosition(ticket=44441, price_open=4730.0)
         summary = reconcile_on_startup(
             tracker=tracker,
             mt5_proxy=FakeMT5(positions=(pos,)),
@@ -422,7 +422,7 @@ class TestActive:
             status=PlanStatus.ACTIVE.value,
             trade_ticket=55551,
         )
-        pos = FakePosition(ticket=55551, open_price=4729.25)
+        pos = FakePosition(ticket=55551, price_open=4729.25)
         summary = reconcile_on_startup(
             tracker=tracker,
             mt5_proxy=FakeMT5(positions=(pos,)),
@@ -546,7 +546,7 @@ class TestActiveReseedsRealTracker:
             status=PlanStatus.ACTIVE.value,
             trade_ticket=99001,
         )
-        pos = FakePosition(ticket=99001, open_price=4590.43)
+        pos = FakePosition(ticket=99001, price_open=4590.43)
         summary = reconcile_on_startup(
             tracker=real_tracker,
             mt5_proxy=FakeMT5(positions=(pos,)),
@@ -563,7 +563,7 @@ class TestActiveReseedsRealTracker:
         )
         # MFE must be 0.0 (initial) not None (unseeded).
         assert real_tracker.mfe_pips("PLAN-20260504-901") == 0.0
-        # And entry_price must match the broker's open_price (recovery
+        # And entry_price must match the broker's price_open (recovery
         # uses MT5 as authority). Exercise profit_pips to confirm the
         # entry_price was actually persisted to the tracker (not just
         # tracker.has() returning True with a stub state).
@@ -591,7 +591,7 @@ class TestActiveReseedsRealTracker:
             status=PlanStatus.ACTIVE.value,
             trade_ticket=99002,
         )
-        pos = FakePosition(ticket=99002, open_price=4600.0)
+        pos = FakePosition(ticket=99002, price_open=4600.0)
         summary = reconcile_on_startup(
             tracker=None,
             mt5_proxy=FakeMT5(positions=(pos,)),
@@ -727,7 +727,7 @@ class TestStartupContract:
         monkeypatch.setattr(snow_db, "mark_plan_terminal", _picky)
         # Second plan's MT5 position exists, so it's expected to
         # transition to ACTIVE.
-        pos = FakePosition(ticket=77772, open_price=4720.0)
+        pos = FakePosition(ticket=77772, price_open=4720.0)
         summary = reconcile_on_startup(
             tracker=tracker, mt5_proxy=FakeMT5(positions=(pos,)),
             magic=123456,
