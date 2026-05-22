@@ -45,6 +45,3 @@ chromadb>=1.0.0
 
 # Utilities
 pytz>=2024.1
-
-# ICT Smart Money Concepts zones (FLO-455 — OB/FVG/liquidity on the MT5 chart)
-smartmoneyconcepts==0.0.27
