@@ -6,8 +6,15 @@
 //|        a separate ICT_ object prefix, never touches SR_ objects.  |
 //+------------------------------------------------------------------+
 #property copyright "XAU/USD Trading Bot"
-#property version   "1.00"
+#property version   "1.10"
 #property description "Draws ICT FVG rectangles + liquidity sweep lines from ict_zones.json"
+// FLO-455 Phase 2: a CHART INDICATOR (not an EA) so it coexists with the
+// SRZoneDrawer EA on the same chart — MT5 allows only one EA per chart, but
+// indicators run alongside an EA and each other. No buffers/plots; it only
+// draws objects, driven by OnTimer.
+#property indicator_chart_window
+#property indicator_buffers 0
+#property indicator_plots   0
 
 //--- Inputs
 input int    RefreshSeconds  = 10;          // Check JSON every N seconds (match SRZoneDrawer)
@@ -58,6 +65,25 @@ void OnDeinit(const int reason)
 void OnTimer()
   {
    ReadAndDraw();
+  }
+
+//+------------------------------------------------------------------+
+//| Calculate — required by the indicator interface. Drawing is fully |
+//| timer-driven (OnTimer), so this is a no-op that just reports the  |
+//| series as processed.                                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+  {
+   return(rates_total);
   }
 
 //+------------------------------------------------------------------+
